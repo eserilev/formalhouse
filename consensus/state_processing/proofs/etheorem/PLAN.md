@@ -93,8 +93,9 @@ the steps before it.
   check. Fulu removed it. Example: `deposit_requests_start_index = 10`,
   `eth1_deposit_index = 5`, one pending deposit at slot 1, finalized, inside the churn. pyspec
   applies it. Etheorem stops the scan and keeps the deposit pending. Lighthouse and our spec
-  follow pyspec. The step proof needs `eth1_deposit_index ≥ deposit_requests_start_index` or
-  deposits at slot 0.
+  follow pyspec. Fixed on the fork: `eserilev/etheorem` branch `formalhouse-pin` removes the
+  check, the start index setter and in-block deposits, as consensus-specs v1.7.0-alpha.9 did.
+  The step proof has no bridge condition.
 - F3 (b). Etheorem's `compute_balance_weighted_selection` stops after 10^7 passes. pyspec loops
   until it has `size` items. Example: every candidate has effective balance 0. A pass selects
   only when `random_value = 0`, one time in 65536. A sync committee then needs about 33.5M

@@ -132,9 +132,8 @@ def Before (k : Nat) (e e' : EState) : Prop := StepsOk (epochSteps.take k) e e'
 
 State facts:
 - `finalized`: the finalized epoch is below `FAR_FUTURE_EPOCH` before the registry update.
-- `depositLens`, `depositRoom`, `depositBridge`: before the pending deposits, the registry
-  lists have the same length, each pending deposit has room for a new validator, and every
-  pending deposit is at slot 0 or `deposit_requests_start_index ≤ eth1_deposit_index` (F2).
+- `depositLens`, `depositRoom`: before the pending deposits, the registry lists have the same
+  length, and each pending deposit has room for a new validator.
 - `consolidationLens`: one balance for each validator before the pending consolidations.
 - `builderRoom`: the new builder withdrawals fit under Etheorem's list limit (F6).
 - `summariesRoom`: the historical summaries list has room for one more item (F6).
@@ -148,8 +147,6 @@ structure EtheoremEpochConds (e : EState) : Prop where
   depositLens : ∀ e', Before 6 e e' → LensEq e'
   depositRoom : ∀ e', Before 6 e e' → e'.validators.val.size + e'.pendingDeposits.val.size ≤
     EthCLSpecs.Gloas.Const.validatorRegistryLimit
-  depositBridge : ∀ e', Before 6 e e' → ∀ d ∈ e'.pendingDeposits.val.toList,
-    d.slot = 0 ∨ e'.depositRequestsStartIndex ≤ e'.eth1DepositIndex
   consolidationLens : ∀ e', Before 7 e e' → e'.balances.val.size = e'.validators.val.size
   builderRoom : ∀ e', Before 8 e e' →
     e'.builderPendingWithdrawals.val.size + (qualifyingBuilderWithdrawals e').length ≤
@@ -243,7 +240,7 @@ theorem process_epoch_etheorem (o : Spec.Oracle) (ho : OracleAgrees o)
   obtain ⟨t7, ht7, h⟩ := Spec.specM_bind_ok h
   obtain ⟨s7, h7, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e7, r7, rfl⟩ := process_pending_deposits_etheorem hb hp.queues o ho e6 ht7
-    (hc.depositLens e6 b6) (hc.depositRoom e6 b6) (hc.depositBridge e6 b6) h7
+    (hc.depositLens e6 b6) (hc.depositRoom e6 b6) h7
   have b7 : StepsOk (epochSteps.take 7) e e7 := b6.snoc r7
   -- 8. pending consolidations
   obtain ⟨s8, h8, h⟩ := Spec.specM_bind_ok h

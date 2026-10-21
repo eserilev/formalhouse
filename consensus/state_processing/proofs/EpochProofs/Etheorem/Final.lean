@@ -27,8 +27,8 @@ variable [HasherTag] [CryptoBackend]
 - `hin`: the reachable-state invariants at the epoch boundary (`EpochInputOk''`).
 - `hpre`: the epoch runs at the last slot, the next slot fits in a `u64`, and
   `historical_summaries` is below the Lighthouse limit (`TailPre`).
-- `hcond`: room for the pending deposits (F10), the eth1 bridge (F2), and room in the builder
-  withdrawals and the historical summaries (F6), all at the epoch start (`EpochCondsIn`).
+- `hcond`: room for the pending deposits (F10), and room in the builder withdrawals and the
+  historical summaries (F6), all at the epoch start (`EpochCondsIn`).
 - `hsel`: Etheorem's balance weighted selections return all their items (F3).
 - `ho`, `hsha`: the oracle is Etheorem's hash and BLS functions, and SHA-256 returns 32 bytes. -/
 theorem lighthouse_order_epoch_etheorem_reachable (o : Spec.Oracle) (ho : OracleAgrees o)

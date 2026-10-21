@@ -249,7 +249,6 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Etheorem.queuesPresetAgrees_mainnet
 #print axioms EpochProofs.Etheorem.queuesPresetAgrees_minimal
 #print axioms EpochProofs.Etheorem.apply_pending_deposit_etheorem
-#print axioms EpochProofs.Etheorem.ppdStep_bridge_stop
 #print axioms EpochProofs.Etheorem.process_pending_deposits_etheorem
 #print axioms EpochProofs.Etheorem.process_pending_consolidations_etheorem
 #print axioms EpochProofs.Etheorem.epochPresetAgrees_mainnet

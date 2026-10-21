@@ -10,22 +10,14 @@ start of the epoch, on mainnet.
 - Proved from the reachable-state invariants (`EpochInputOk''`): the finalized epoch is below
   `FAR_FUTURE_EPOCH` before the registry update, and the registry lists have equal lengths
   before the pending deposits and the pending consolidations.
-- Moved to the epoch start by frame lemmas (`EpochCondsIn`): room for the pending deposits, the
-  eth1 bridge condition (F2), room in the builder withdrawals and in the historical summaries
-  (F6). The steps before each of these reads do not write the fields it reads.
+- Moved to the epoch start by frame lemmas (`EpochCondsIn`): room for the pending deposits,
+  room in the builder withdrawals and in the historical summaries (F6). The steps before each of these reads do not write the fields it reads.
 - Kept as they are (`SelectionsFull`): Etheorem's balance weighted selections return all their
   items (F3). These are facts about Etheorem's own output.
 
-F2: Etheorem keeps two Electra lines that Fulu removed: the eth1 bridge check in
-`process_pending_deposits` and the start index setter in `process_deposit_request`.
-On a pyspec state the two epoch functions differ. Electra genesis and `upgrade_to_electra` set
-`deposit_requests_start_index` to `UNSET` (`2^64 - 1`), and the pyspec never sets it after Fulu.
-So a chain with no deposit request before Fulu keeps `UNSET`, for example a devnet with Fulu or
-Gloas at genesis. On that state the pyspec applies a deposit request, and Etheorem's epoch stops
-its scan at it. Etheorem's own block processing sets the index at the first request, so a whole
-Etheorem chain differs only if `eth1_deposit_index` is below that first request index. That case
-is not shown reachable. The EF vectors miss both: the Fulu test genesis sets the start index to
-the deposit count.
+F2 is fixed on the Etheorem fork that this project requires (`eserilev/etheorem`, branch
+`formalhouse-pin`). That fork has no eth1 bridge check in `process_pending_deposits`, as in the
+pyspec since v1.7.0-alpha.9, so no bridge condition is needed.
 -/
 
 namespace EpochProofs.Spec
@@ -285,12 +277,6 @@ theorem lensEq_of_rowsOk {e : EState} (h : Spec.RowsOk (absEState e)) : LensEq e
     length_map_toList] at r1 r2 r3 r4
   exact ⟨r1, by simpa using r3, by simpa using r4, r2⟩
 
-theorem uint64_eq_zero_of_toNat {x : UInt64} (h : x.toNat = 0) : x = 0 :=
-  UInt64.toNat_inj.mp (by simpa using h)
-
-theorem uint64_le_of_toNat {x y : UInt64} (h : x.toNat ≤ y.toNat) : x ≤ y :=
-  UInt64.le_iff_toNat_le.mpr h
-
 /-! ## The conditions at the epoch start -/
 
 /-- Facts about the state at the epoch start. The steps before each read do not write these
@@ -298,9 +284,6 @@ fields, so each fact still holds when its step reads it.
 
 - `depositRoom`: Etheorem's registry limit `2^40` has room for every pending deposit. Etheorem
   drops a new validator past this limit (F10). The pyspec raises.
-- `depositBridge`: each pending deposit is at slot 0, or the eth1 bridge is done (F2). Etheorem
-  keeps the Electra bridge stop. The pyspec removed it in Fulu. The reference spec has no write
-  to either index, so the second case holds on a chain from its start or never.
 - `builderRoom`: the builder withdrawals have room for `SLOTS_PER_EPOCH` more items under
   Etheorem's alpha.11 limit (F6). Beta.2 has no limit.
 - `summariesRoom`: the historical summaries have room for one more item under the alpha.11
@@ -308,8 +291,6 @@ fields, so each fact still holds when its step reads it.
 structure EpochCondsIn (e : EState) : Prop where
   depositRoom : (absEState e).validators.length + (absEState e).pending_deposits.length ≤
     EthCLSpecs.Gloas.Const.validatorRegistryLimit
-  depositBridge : ∀ d ∈ (absEState e).pending_deposits,
-    d.slot = 0 ∨ (absEState e).deposit_requests_start_index ≤ (absEState e).eth1_deposit_index
   builderRoom : (absEState e).builder_pending_withdrawals.length +
       EthCLSpecs.Gloas.Const.slotsPerEpoch ≤ EthCLSpecs.Gloas.Const.builderPendingWithdrawalsLimit
   summariesRoom : (absEState e).historical_summaries.length <
@@ -421,25 +402,12 @@ theorem process_epoch_etheorem_in (o : Spec.Oracle) (ho : OracleAgrees o)
     have hr := hin.depositRoom
     simp only [absEState_validators, absEState_pending_deposits, length_map_toList] at hv hd hr
     omega
-  have hbridge : ∀ d ∈ e6.pendingDeposits.val.toList,
-      d.slot = 0 ∨ e6.depositRequestsStartIndex ≤ e6.eth1DepositIndex := by
-    intro d hd
-    have hmem : absPendingDeposit d ∈ (absEState e).pending_deposits := by
-      rw [← F6.2, absEState_pending_deposits]
-      exact List.mem_map_of_mem hd
-    have hst : e6.depositRequestsStartIndex.toNat = e.depositRequestsStartIndex.toNat := F6.1.2.1
-    have het : e6.eth1DepositIndex.toNat = e.eth1DepositIndex.toNat := F6.1.1
-    rcases hin.depositBridge _ hmem with h0 | h0
-    · exact .inl (uint64_eq_zero_of_toNat h0)
-    · refine .inr (uint64_le_of_toNat ?_)
-      have h0' : e.depositRequestsStartIndex.toNat ≤ e.eth1DepositIndex.toNat := h0
-      omega
   obtain ⟨t7, ht7, h⟩ := Spec.specM_bind_ok h
   obtain ⟨s7, h7, h⟩ := Spec.specM_bind_ok h
   have q7 := Spec.process_pending_deposits_qframe _ _ _ _ _ h7
   have rows7 := Spec.process_pending_deposits_rowsOk _ _ _ _ _ h7 rows6
   obtain ⟨e7, r7, rfl⟩ := process_pending_deposits_etheorem hb hp.queues o ho e6 ht7
-    (lensEq_of_rowsOk rows6) hroom hbridge h7
+    (lensEq_of_rowsOk rows6) hroom h7
   have b7 : StepsOk (epochSteps.take 7) e e7 := b6.snoc r7
   -- 8. pending consolidations
   have hlens7 : e7.balances.val.size = e7.validators.val.size := by
@@ -519,8 +487,8 @@ of a reachable run, on mainnet.
 
 `hin` is the fact that `reachable_state_transition_sameOk'''` proves at each epoch boundary.
 The conditions that remain:
-- `hcond`: room for the pending deposits (F10), the eth1 bridge (F2), and room in the builder
-  withdrawals and the historical summaries (F6). Each is a fact about the epoch start state.
+- `hcond`: room for the pending deposits (F10), and room in the builder withdrawals and the
+  historical summaries (F6). Each is a fact about the epoch start state.
 - `hsel`: Etheorem's balance weighted selections return all their items (F3).
 - `ho`, `hsha`: the oracle is Etheorem's hash and BLS functions, and SHA-256 returns 32 bytes. -/
 theorem lighthouse_epoch_etheorem_reachable (o : Spec.Oracle) (ho : OracleAgrees o)

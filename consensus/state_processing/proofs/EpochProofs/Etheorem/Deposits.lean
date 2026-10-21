@@ -17,9 +17,6 @@ Conditions:
 - `hlens`: the registry lists have the same length.
 - `hroom`: the validators fit under `VALIDATOR_REGISTRY_LIMIT` after one new validator for
   each pending deposit. Etheorem drops a validator past the limit.
-- `hbridge`: each pending deposit has slot 0, or `eth1_deposit_index` has reached
-  `deposit_requests_start_index`. Etheorem keeps the Electra eth1 bridge stop, and pyspec
-  removed it in Fulu (finding F2, `ppdStep_bridge_stop`).
 -/
 
 namespace EpochProofs.Etheorem
@@ -255,10 +252,6 @@ theorem apply_pending_deposit_etheorem (o : Spec.Oracle) (ho : OracleAgrees o) (
 
 end Deposit
 
-/-- The eth1 bridge stop in Etheorem's `ppdLoop` (F2). pyspec has no such stop since Fulu. -/
-def ppdBridge (v : EState) (deposit : EthCLSpecs.Gloas.PendingDeposit) : Bool :=
-  deposit.slot > EthCLSpecs.Gloas.Const.genesisSlot && v.eth1DepositIndex < v.depositRequestsStartIndex
-
 /-- Whether the validator of a deposit is withdrawn and whether it has exited. -/
 def ppdStatus (v : EState) (deposit : EthCLSpecs.Gloas.PendingDeposit) (nextEpoch : UInt64) :
     Bool × Bool :=
@@ -275,7 +268,6 @@ def ppdStep (deposits : Array EthCLSpecs.Gloas.PendingDeposit) (finalizedSlot av
   if s.ndi ≥ deposits.size then return .done s
   let state ← get
   let deposit := deposits[s.ndi]!
-  if ppdBridge state.view deposit then return .done s
   if deposit.slot > finalizedSlot then return .done s
   if s.ndi ≥ EthCLSpecs.Gloas.Const.maxPendingDepositsPerEpoch then return .done s
   let advance (processed : UInt64) (postpone : Array EthCLSpecs.Gloas.PendingDeposit) :
@@ -336,20 +328,6 @@ theorem process_pending_deposits_eqP (q : Spec.Preset)
       let r ← forIn s.pending_deposits ⟨[], false, 0, 0, s⟩ (depBodyP q apd fs avail next_epoch)
       Spec.depFinish avail r) := by
   rfl
-
-/-- Finding F2. Etheorem stops the deposit scan at a deposit with `slot > 0` when
-`eth1_deposit_index < deposit_requests_start_index`. pyspec removed this stop in Fulu, so pyspec
-goes on and can apply the deposit. -/
-theorem ppdStep_bridge_stop (deposits : Array EthCLSpecs.Gloas.PendingDeposit)
-    (fsU availU neU : UInt64) (sc : EthCLSpecs.Gloas.DepositScan) (e : EState)
-    (hk : sc.ndi < deposits.size) (hslot : deposits[sc.ndi]!.slot > 0)
-    (hidx : e.eth1DepositIndex < e.depositRequestsStartIndex) :
-    (ppdStep deposits fsU availU neU sc).run (pureState e) = .ok (.done sc, pureState e) := by
-  have hbr : ppdBridge e deposits[sc.ndi]! = true := by
-    simp [ppdBridge, hslot, hidx, EthCLSpecs.Gloas.Const.genesisSlot]
-  unfold ppdStep
-  rw [if_neg (by omega)]
-  simp only [run_bind, run_get_gloas, run_pure, except_bind_ok, view_uncachedBox, hbr, if_true]
 
 /-- The reference loop state `acc` and the Etheorem scan `sc` on state `e` agree. -/
 structure DepRel (e0 : EState) (acc : Spec.DepAcc) (sc : EthCLSpecs.Gloas.DepositScan)
@@ -436,7 +414,6 @@ theorem ppdStep_ok (o : Spec.Oracle) (ho : OracleAgrees o)
     (sc : EthCLSpecs.Gloas.DepositScan) (hrel : DepRel e0 acc sc e) (hndi : sc.ndi = k)
     (hch : sc.churnReached = false)
     (hroom : e0.validators.val.size + deposits.size ≤ EthCLSpecs.Gloas.Const.validatorRegistryLimit)
-    (hbridge : deposits[k]!.slot = 0 ∨ e0.depositRequestsStartIndex ≤ e0.eth1DepositIndex)
     {res : ForInStep Spec.DepAcc}
     (h : depBodyP p (Spec.apply_pending_deposit p o) fsU.toNat availU.toNat neU.toNat
       (absPendingDeposit deposits[k]!) acc = .ok res) :
@@ -444,19 +421,10 @@ theorem ppdStep_ok (o : Spec.Oracle) (ho : OracleAgrees o)
       StepOut e0 deposits.size k res st e' := by
   have hrel0 := hrel
   obtain ⟨hpost, hchurn, hn, hproc, hstate, hlens, hwrite, hsize, hple⟩ := hrel
-  generalize hd : deposits[k]! = d at h hbridge
-  have hbr : ppdBridge e d = false := by
-    unfold ppdBridge
-    obtain ⟨V, B, P1, P2, I, rfl⟩ := hwrite
-    rcases hbridge with h0 | h0
-    · simp [h0, EthCLSpecs.Gloas.Const.genesisSlot]
-    · simp only [Bool.and_eq_false_iff, decide_eq_false_iff_not]
-      right
-      exact Nat.not_lt.mpr h0
+  generalize hd : deposits[k]! = d at h
   unfold ppdStep
   rw [if_neg (by omega)]
-  simp only [run_bind, run_get_gloas, run_pure, except_bind_ok, view_uncachedBox, hndi, hd, hbr,
-    Bool.false_eq_true, if_false]
+  simp only [run_bind, run_get_gloas, run_pure, except_bind_ok, view_uncachedBox, hndi, hd]
   by_cases hs : d.slot > fsU
   · have hs' : (absPendingDeposit d).slot > fsU.toNat := UInt64.lt_iff_toNat_lt.mp hs
     unfold depBodyP at h
@@ -539,9 +507,7 @@ theorem ppdStep_ok (o : Spec.Oracle) (ho : OracleAgrees o)
 
 theorem ppdLoop_fuel (o : Spec.Oracle) (ho : OracleAgrees o)
     (deposits : Array EthCLSpecs.Gloas.PendingDeposit) (fsU availU neU : UInt64) (e0 : EState)
-    (hroom : e0.validators.val.size + deposits.size ≤ EthCLSpecs.Gloas.Const.validatorRegistryLimit)
-    (hbridge : ∀ k < deposits.size,
-      deposits[k]!.slot = 0 ∨ e0.depositRequestsStartIndex ≤ e0.eth1DepositIndex) :
+    (hroom : e0.validators.val.size + deposits.size ≤ EthCLSpecs.Gloas.Const.validatorRegistryLimit) :
     ∀ (j k : Nat) (acc : Spec.DepAcc) (sc : EthCLSpecs.Gloas.DepositScan) (e : EState)
       {racc : Spec.DepAcc}, k + j = deposits.size → DepRel e0 acc sc e → sc.ndi = k →
       sc.churnReached = false →
@@ -572,7 +538,7 @@ theorem ppdLoop_fuel (o : Spec.Oracle) (ho : OracleAgrees o)
     rw [hdrop, List.map_cons, List.forIn_cons] at h
     obtain ⟨res, hres, h⟩ := Spec.specM_bind_ok h
     obtain ⟨st, e1, hrun1, hout⟩ := ppdStep_ok hp hq o ho deposits fsU availU neU e0 e k hlt acc sc
-      hrel hndi hch hroom (hbridge k hlt) hres
+      hrel hndi hch hroom hres
     rw [fuelLoop_succ_run, hrun1, except_bind_ok]
     cases res with
     | done racc' =>
@@ -595,8 +561,6 @@ theorem process_pending_deposits_etheorem (o : Spec.Oracle) (ho : OracleAgrees o
     (htab : Spec.get_total_active_balance p (absEState e) = .ok tab) (hlens : LensEq e)
     (hroom : e.validators.val.size + e.pendingDeposits.val.size ≤
       EthCLSpecs.Gloas.Const.validatorRegistryLimit)
-    (hbridge : ∀ d ∈ e.pendingDeposits.val.toList,
-      d.slot = 0 ∨ e.depositRequestsStartIndex ≤ e.eth1DepositIndex)
     (h : Spec.process_pending_deposits p tab (Spec.apply_pending_deposit p o) (absEState e) =
       .ok s') :
     ∃ e' : EState,
@@ -627,12 +591,6 @@ theorem process_pending_deposits_etheorem (o : Spec.Oracle) (ho : OracleAgrees o
   have hrel0 : DepRel e ⟨[], false, 0, 0, absEState e⟩ {} e :=
     ⟨rfl, rfl, rfl, rfl, rfl, hlens, .refl e, by simp, by simp⟩
   obtain ⟨sc, e1, hrun, hrel, hndi⟩ := ppdLoop_fuel hp hq o ho deposits _ _ _ e (by omega)
-    (by
-      intro k hk
-      apply hbridge
-      rw [← hdeps] at hk ⊢
-      rw [getElem!_pos _ k hk]
-      simp [SSZList.toArray])
     deposits.size 0 _ {} e (by omega) hrel0 rfl rfl hloop
   obtain ⟨hpost, hchurn, hn, hproc, hstate, hlens1, hwrite, -, hple⟩ := hrel
   subst hdeps
