@@ -99,4 +99,6 @@ import EpochProofs.Etheorem.Oracle
 import EpochProofs.Etheorem.Resets
 import EpochProofs.Etheorem.EffectiveBalance
 import EpochProofs.Etheorem.HistoricalSummaries
+import EpochProofs.Etheorem.Shuffle
+import EpochProofs.Etheorem.Committees
 import EpochProofs.Axioms
