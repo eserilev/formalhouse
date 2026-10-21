@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Prepares the Etheorem dependency for `lake build`.
 #
-# 1. Fetch the Lake packages.
-# 2. Apply `lean-v4.31.0.patch`. Etheorem pins Lean v4.29.1. The patch fixes four proofs
-#    that break on v4.31.0 and removes `-march=native`, so a cached build runs on any CPU.
-# 3. Vendor the C libraries that the Etheorem FFI packages link. The revisions are the
+# 1. Fetch the Lake packages. The Etheorem fork at the pinned commit already builds on our
+#    Lean version (see README.md).
+# 2. Vendor the C libraries that the Etheorem FFI packages link. The revisions are the
 #    pins in Etheorem's Justfile. ISA-L needs `nasm`.
 set -euo pipefail
 
@@ -12,15 +11,6 @@ cd "$(dirname "$0")/.."
 lake env true
 
 pkg=.lake/packages/EthCLSpecs
-patch="$PWD/etheorem/lean-v4.31.0.patch"
-
-if git -C "$pkg" apply --reverse --check "$patch" 2>/dev/null; then
-  echo "Etheorem patch already applied"
-else
-  git -C "$pkg" apply "$patch"
-  echo "Etheorem patch applied"
-fi
-
 vendor() {
   local dir="$pkg/packages/hazmat/$1" url=$2 tag=$3 rev=$4
   if [ "$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)" != "$rev" ]; then

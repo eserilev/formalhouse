@@ -355,9 +355,9 @@ Gloas epoch. The reference is then no longer trusted for the epoch.
 
 `Etheorem/Conditions.lean` proves three step conditions from the reachable-state invariants: the
 finalized epoch is below `FAR_FUTURE_EPOCH`, and the registry lists have equal lengths before
-the deposits and the consolidations. Frame lemmas move four conditions to the epoch start:
-room for the pending deposits, the eth1 bridge (F2), and room in the builder withdrawals and
-the historical summaries (F6). The F3 conditions are facts about Etheorem's own output and stay.
+the deposits and the consolidations. Frame lemmas move three conditions to the epoch start:
+room for the pending deposits, and room in the builder withdrawals and the historical summaries
+(F6). The F3 conditions are facts about Etheorem's own output and stay.
 
 The 17 step theorems are in `Etheorem/<Step>.lean`. `etheorem/PLAN.md` lists the conditions of
 `process_epoch_etheorem` and the findings.
@@ -383,10 +383,16 @@ The shared parts:
   steps call, from epoch helpers to `initiate_validator_exit`.
 - `Etheorem/Oracle.lean`: `OracleAgrees`, the Oracle fields that equal Etheorem functions.
 
-Etheorem pins Lean v4.29.1. `etheorem/setup.sh` applies `etheorem/lean-v4.31.0.patch`: four
-proof fixes for v4.31.0, no `-march=native`, and a KZG lakefile fix that finds the BLS library
-when Etheorem is a dependency. The script also fetches blst, c-kzg-4844 and ISA-L at
-Etheorem's pins. ISA-L needs `nasm`.
+The dependency is the fork `eserilev/etheorem`, branch `formalhouse-pin`, at the commit in
+`lakefile.toml`. The fork is upstream Etheorem plus these changes:
+
+- The v1.7.0-alpha.9 deposit change (F2): no eth1 bridge check in `process_pending_deposits`, no
+  start index write in `process_deposit_request`, and no in-block deposits in
+  `process_operations`.
+- A port to Lean v4.31.0: four proof fixes, no `-march=native`, and a KZG lakefile fix that
+  finds the BLS library when Etheorem is a dependency.
+
+`etheorem/setup.sh` fetches blst, c-kzg-4844 and ISA-L at Etheorem's pins. ISA-L needs `nasm`.
 
 ## Building
 
@@ -457,7 +463,8 @@ copies the rest of the body into each branch, and the generated code grows expon
 ## Trusted base
 
 - Charon and Aeneas.
-- Etheorem, for the steps in `EpochProofs/Etheorem/`. It passes the EF vectors.
+- Etheorem, for the steps in `EpochProofs/Etheorem/`. It passes the EF vectors. The bridge
+  targets the patched fork described in the "Etheorem" section, not upstream Etheorem.
 - The Aeneas Lean library. Its four `sorry` warnings are not reachable from these theorems.
 - The glue in `single_pass.rs`. It copies the milhouse vector, calls the module, and writes the
   results back. `lighthouseBuilderPendingPayments` models it by hand.
