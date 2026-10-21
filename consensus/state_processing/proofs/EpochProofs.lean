@@ -123,4 +123,7 @@ import EpochProofs.Sanity.Invariants.LighthouseOrderEth1
 import EpochProofs.Sanity.Invariants.LighthouseOrder
 import EpochProofs.Etheorem.LighthouseOrder
 import EpochProofs.Etheorem.Final
+import EpochProofs.Trusted.RegistryRows
+import EpochProofs.Equiv.SinglePassLoop
+import EpochProofs.Equiv.SinglePassLoopModel
 import EpochProofs.Axioms

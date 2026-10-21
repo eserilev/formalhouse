@@ -43,7 +43,7 @@ It is not joined to the main result.
 | Step (Lighthouse order) | Aeneas-checked Rust | Glue (by hand) | Cache (trusted here) |
 |---|---|---|---|
 | Justification and finalization | `justification.rs` (#53) | read the bits and roots, write the checkpoints | progressive balances totals (#27) |
-| Inactivity, rewards, registry, slashings, deposit top-up, effective balance | `single_pass_step.rs` and the step modules (#5 to #12, #22) | the milhouse loop in `single_pass.rs` calls the step once per validator, in order | base reward and total active balance (#26, #27), exit cache (#24), activation queue (#25) |
+| Inactivity, rewards, registry, slashings, deposit top-up, effective balance | `single_pass_step.rs`, the step modules (#5 to #12, #22) and the loop `registry_rows.rs` | `RowsContract` (`Trusted/RegistryRows.lean`): `StateRows::apply_step` in `single_pass.rs` reads row `i`, runs the step and writes the row back | base reward and total active balance (#26, #27), exit cache (#24), activation queue (#25) |
 | Pending deposits | `pending_deposits.rs` (#10) | the pubkey map; `Validator::from_deposit` and `add_validator_to_registry` (`types` crate, not translated) | pubkey cache |
 | Pending consolidations | `pending_consolidations.rs` (#11) | the index table and the balance write back | none |
 | Builder pending payments | `builder_pending_payments.rs` (#4) | the list writes | total active balance |
@@ -163,6 +163,18 @@ the rewards and registry conditions above, if the base reward from the epoch cac
 
 Not covered yet: pending deposits and consolidations, which run between slashings and effective
 balance updates.
+
+## The single-pass loop
+
+`single_pass.rs` runs the per-validator loop after Electra through `single_pass_rows` in
+`registry_rows.rs`. The loop is generic over the trait `RegistryRows`, so Aeneas translates it
+without the milhouse lists. `single_pass_rows_eq_passM` shows that the loop returns `Ok` with the
+churn and rows of one `passM` of `lhRowStepFull`, and an error exactly when that `passM` fails.
+`single_pass_rows_model` states this for the rows and inputs of `process_epoch_lh_full`.
+
+The only trusted part is `RowsContract`: what `StateRows`, the trait implementation in
+`single_pass.rs`, does for one row. `StateRows` reads the base reward only for an eligible
+validator, as before. `lhRowStepFull_base_reward` shows that the steps read it only then.
 
 ## Justification and finalization
 
@@ -482,8 +494,10 @@ copies the rest of the body into each branch, and the generated code grows expon
   reference, in index order, and maps each index to its position in the table. The moves read
   and write only these rows, so the table run equals the full-registry run of
   `process_pending_consolidations_eq`. The glue writes the new balances back.
-- The loop in `single_pass.rs` calls `single_pass_step` once for each validator, in index order,
-  and writes back each changed field.
+- `RowsContract` (`EpochProofs/Trusted/RegistryRows.lean`): `StateRows::apply_step` in
+  `single_pass.rs` reads row `i` from the milhouse lists and the caches, runs `single_pass_step`
+  on it, writes the changed fields back and changes no other row. A row read or write never
+  fails. The loop itself (`registry_rows.rs`) is translated.
 - `weigh_justification_and_finalization.rs` reads the four bits, calls `weigh_justification`,
   reads the block roots and writes the checkpoints. `lhWeighJustificationAndFinalization`
   models it by hand.
