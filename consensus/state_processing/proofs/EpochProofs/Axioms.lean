@@ -84,6 +84,7 @@ import EpochProofs.Sanity.FuluSinglePass
 import EpochProofs.Sanity.FuluEpoch
 import EpochProofs.Sanity.Invariants.FuluOrder
 import EpochProofs.Etheorem.Fulu.Epoch
+import EpochProofs.Formalhouse
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -454,3 +455,4 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Etheorem.Fulu.epochPresetAgrees_mainnet
 #print axioms EpochProofs.Etheorem.Fulu.epochPresetAgrees_minimal
 #print axioms EpochProofs.Etheorem.Fulu.process_epoch_fulu_etheorem
+#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch

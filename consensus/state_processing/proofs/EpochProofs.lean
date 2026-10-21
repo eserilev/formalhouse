@@ -165,3 +165,4 @@ import EpochProofs.Etheorem.Fulu.Registry
 import EpochProofs.Etheorem.Fulu.Consolidations
 import EpochProofs.Etheorem.Fulu.Deposits
 import EpochProofs.Etheorem.Fulu.Epoch
+import EpochProofs.Formalhouse
