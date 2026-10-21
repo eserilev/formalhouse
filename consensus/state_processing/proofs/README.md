@@ -355,9 +355,12 @@ Gloas epoch. The reference is then no longer trusted for the epoch.
 
 `Etheorem/Conditions.lean` proves three step conditions from the reachable-state invariants: the
 finalized epoch is below `FAR_FUTURE_EPOCH`, and the registry lists have equal lengths before
-the deposits and the consolidations. Frame lemmas move three conditions to the epoch start:
-room for the pending deposits, and room in the builder withdrawals and the historical summaries
-(F6). The F3 conditions are facts about Etheorem's own output and stay.
+the deposits and the consolidations. Frame lemmas move two conditions to the epoch start: room
+in the registry for the `MAX_PENDING_DEPOSITS_PER_EPOCH` new validators of one epoch (F10), and
+room in the builder withdrawals under Etheorem's alpha.11 limit (F6). The historical summaries
+room is `HistRoom` in `TailPre`: beta.2 keeps the `HISTORICAL_ROOTS_LIMIT` cap, so it is a spec
+condition, not an Etheorem one. The F3 conditions are facts about Etheorem's own output and
+stay.
 
 The 17 step theorems are in `Etheorem/<Step>.lean`. `etheorem/PLAN.md` lists the conditions of
 `process_epoch_etheorem` and the findings.

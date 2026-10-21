@@ -15,8 +15,9 @@ deposit signature check reads the same SSZ roots and BLS check.
 
 Conditions:
 - `hlens`: the registry lists have the same length.
-- `hroom`: the validators fit under `VALIDATOR_REGISTRY_LIMIT` after one new validator for
-  each pending deposit. Etheorem drops a validator past the limit.
+- `hroom`: the validators fit under `VALIDATOR_REGISTRY_LIMIT` after
+  `MAX_PENDING_DEPOSITS_PER_EPOCH` new validators. The step applies at most that many deposits.
+  Etheorem drops a validator past the limit.
 -/
 
 namespace EpochProofs.Etheorem
@@ -413,7 +414,8 @@ theorem ppdStep_ok (o : Spec.Oracle) (ho : OracleAgrees o)
     (e0 e : EState) (k : Nat) (hk : k < deposits.size) (acc : Spec.DepAcc)
     (sc : EthCLSpecs.Gloas.DepositScan) (hrel : DepRel e0 acc sc e) (hndi : sc.ndi = k)
     (hch : sc.churnReached = false)
-    (hroom : e0.validators.val.size + deposits.size ≤ EthCLSpecs.Gloas.Const.validatorRegistryLimit)
+    (hroom : e0.validators.val.size + EthCLSpecs.Gloas.Const.maxPendingDepositsPerEpoch ≤
+      EthCLSpecs.Gloas.Const.validatorRegistryLimit)
     {res : ForInStep Spec.DepAcc}
     (h : depBodyP p (Spec.apply_pending_deposit p o) fsU.toNat availU.toNat neU.toNat
       (absPendingDeposit deposits[k]!) acc = .ok res) :
@@ -507,7 +509,8 @@ theorem ppdStep_ok (o : Spec.Oracle) (ho : OracleAgrees o)
 
 theorem ppdLoop_fuel (o : Spec.Oracle) (ho : OracleAgrees o)
     (deposits : Array EthCLSpecs.Gloas.PendingDeposit) (fsU availU neU : UInt64) (e0 : EState)
-    (hroom : e0.validators.val.size + deposits.size ≤ EthCLSpecs.Gloas.Const.validatorRegistryLimit) :
+    (hroom : e0.validators.val.size + EthCLSpecs.Gloas.Const.maxPendingDepositsPerEpoch ≤
+      EthCLSpecs.Gloas.Const.validatorRegistryLimit) :
     ∀ (j k : Nat) (acc : Spec.DepAcc) (sc : EthCLSpecs.Gloas.DepositScan) (e : EState)
       {racc : Spec.DepAcc}, k + j = deposits.size → DepRel e0 acc sc e → sc.ndi = k →
       sc.churnReached = false →
@@ -559,7 +562,7 @@ theorem ppdLoop_fuel (o : Spec.Oracle) (ho : OracleAgrees o)
 theorem process_pending_deposits_etheorem (o : Spec.Oracle) (ho : OracleAgrees o) (e : EState)
     {tab : Nat} {s' : Spec.BeaconState}
     (htab : Spec.get_total_active_balance p (absEState e) = .ok tab) (hlens : LensEq e)
-    (hroom : e.validators.val.size + e.pendingDeposits.val.size ≤
+    (hroom : e.validators.val.size + EthCLSpecs.Gloas.Const.maxPendingDepositsPerEpoch ≤
       EthCLSpecs.Gloas.Const.validatorRegistryLimit)
     (h : Spec.process_pending_deposits p tab (Spec.apply_pending_deposit p o) (absEState e) =
       .ok s') :
@@ -590,7 +593,7 @@ theorem process_pending_deposits_etheorem (o : Spec.Oracle) (ho : OracleAgrees o
   have hsize : deposits.size = e.pendingDeposits.val.size := by rw [← hdeps]
   have hrel0 : DepRel e ⟨[], false, 0, 0, absEState e⟩ {} e :=
     ⟨rfl, rfl, rfl, rfl, rfl, hlens, .refl e, by simp, by simp⟩
-  obtain ⟨sc, e1, hrun, hrel, hndi⟩ := ppdLoop_fuel hp hq o ho deposits _ _ _ e (by omega)
+  obtain ⟨sc, e1, hrun, hrel, hndi⟩ := ppdLoop_fuel hp hq o ho deposits _ _ _ e hroom
     deposits.size 0 _ {} e (by omega) hrel0 rfl rfl hloop
   obtain ⟨hpost, hchurn, hn, hproc, hstate, hlens1, hwrite, -, hple⟩ := hrel
   subst hdeps

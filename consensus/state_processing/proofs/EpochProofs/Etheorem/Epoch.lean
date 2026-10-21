@@ -133,10 +133,11 @@ def Before (k : Nat) (e e' : EState) : Prop := StepsOk (epochSteps.take k) e e'
 State facts:
 - `finalized`: the finalized epoch is below `FAR_FUTURE_EPOCH` before the registry update.
 - `depositLens`, `depositRoom`: before the pending deposits, the registry lists have the same
-  length, and each pending deposit has room for a new validator.
+  length, and the registry has room for `MAX_PENDING_DEPOSITS_PER_EPOCH` new validators.
 - `consolidationLens`: one balance for each validator before the pending consolidations.
 - `builderRoom`: the new builder withdrawals fit under Etheorem's list limit (F6).
-- `summariesRoom`: the historical summaries list has room for one more item (F6).
+- `summariesRoom`: the historical summaries list has room for one more item. Beta.2 keeps
+  this `HISTORICAL_ROOTS_LIMIT` cap.
 
 Facts about Etheorem's output (F3):
 - `syncFull`, `proposersFull`, `ptcFull`: each balance weighted selection returns `size`
@@ -145,8 +146,8 @@ structure EtheoremEpochConds (e : EState) : Prop where
   finalized : ∀ e', Before 3 e e' →
     (absEState e').finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH
   depositLens : ∀ e', Before 6 e e' → LensEq e'
-  depositRoom : ∀ e', Before 6 e e' → e'.validators.val.size + e'.pendingDeposits.val.size ≤
-    EthCLSpecs.Gloas.Const.validatorRegistryLimit
+  depositRoom : ∀ e', Before 6 e e' → e'.validators.val.size +
+    EthCLSpecs.Gloas.Const.maxPendingDepositsPerEpoch ≤ EthCLSpecs.Gloas.Const.validatorRegistryLimit
   consolidationLens : ∀ e', Before 7 e e' → e'.balances.val.size = e'.validators.val.size
   builderRoom : ∀ e', Before 8 e e' →
     e'.builderPendingWithdrawals.val.size + (qualifyingBuilderWithdrawals e').length ≤
