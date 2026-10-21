@@ -1,6 +1,7 @@
 import EpochProofs.Sanity.Invariants.LighthouseEpoch
 import EpochProofs.Sanity.Invariants.PubkeysUnique
 import EpochProofs.Sanity.LighthouseRow
+import EpochProofs.Spec.JustificationLighthouse
 
 /-!
 # The Lighthouse epoch tail: the model
@@ -11,7 +12,8 @@ the registry update. Inside the pass each row gets the sum of its top-ups and, u
 consolidation names it, its effective balance update. After the pass it writes the deposit
 queue, adds the new validators, updates their effective balances, runs the consolidations,
 redoes the effective balance update for each validator that a consolidation names, and runs the
-builder payments. `process_epoch_lh_full` models these steps on mainnet.
+builder payments. `process_epoch_lh_full` models these steps on mainnet. It runs the Lighthouse
+justification and finalization, `lhJustificationAndFinalization`, before the single pass.
 -/
 
 namespace EpochProofs.Spec
@@ -120,7 +122,7 @@ and rewards steps; Lighthouse skips them too, and this one epoch uses the spec p
 def process_epoch_lh_full (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
   if s.slot / Preset.mainnet.SLOTS_PER_EPOCH = GENESIS_EPOCH then process_epoch Preset.mainnet o s
   else do
-    let s1 ← process_justification_and_finalization Preset.mainnet s
+    let s1 ← lhJustificationAndFinalization Preset.mainnet s
     lhFullTail o s1
 
 /-! ## Helpers for the proofs -/

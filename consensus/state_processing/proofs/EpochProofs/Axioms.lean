@@ -61,6 +61,8 @@ import EpochProofs.Etheorem.Deposits
 import EpochProofs.Etheorem.Consolidations
 import EpochProofs.Etheorem.Epoch
 import EpochProofs.Etheorem.Conditions
+import EpochProofs.Equiv.Justification
+import EpochProofs.Sanity.LighthouseJustification
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -260,3 +262,7 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Etheorem.qualifyingBuilderWithdrawals_length
 #print axioms EpochProofs.Etheorem.process_epoch_etheorem_in
 #print axioms EpochProofs.Etheorem.lighthouse_epoch_etheorem_reachable
+#print axioms EpochProofs.finalize_step_equiv
+#print axioms EpochProofs.weigh_justification_equiv
+#print axioms EpochProofs.Spec.lhWeigh_sameOk
+#print axioms EpochProofs.Spec.lhJustificationAndFinalization_sameOk

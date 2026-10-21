@@ -111,4 +111,7 @@ import EpochProofs.Etheorem.Deposits
 import EpochProofs.Etheorem.Consolidations
 import EpochProofs.Etheorem.Epoch
 import EpochProofs.Etheorem.Conditions
+import EpochProofs.Spec.JustificationLighthouse
+import EpochProofs.Sanity.LighthouseJustification
+import EpochProofs.Equiv.Justification
 import EpochProofs.Axioms
