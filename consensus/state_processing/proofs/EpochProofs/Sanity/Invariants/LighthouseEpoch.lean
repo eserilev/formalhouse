@@ -150,7 +150,8 @@ theorem process_registry_updates_activeKey (p : Preset) (total_active_balance : 
 has at most `k` times the active increments, for any `k ≤ 2^60 / 10^9`. A total effective
 balance below `2^60` Gwei gives such a `k`. In exchange the row has a balance below `2^62` and
 an effective balance at most `MAX_EFFECTIVE_BALANCE_ELECTRA`. -/
-theorem lhRowStep_eq_singlePassStep_of_supply (ctx : LhStepContext) (rctx : RewardsContext)
+theorem lhRowStep_eq_singlePassStep_of_supply (ctx : LhStepContext)
+    (hgen : ctx.after_genesis = true) (rctx : RewardsContext)
     (r : Row) (churn : Epoch × Gwei) (base_reward : Gwei) (activation_epoch : Epoch)
     (hprev : rctx.previous_epoch = ctx.previous_epoch)
     (hleak : rctx.in_leak = ctx.in_leak)
@@ -179,7 +180,7 @@ theorem lhRowStep_eq_singlePassStep_of_supply (ctx : LhStepContext) (rctx : Rewa
         ctx.previous_epoch ctx.in_leak rctx ctx.current_epoch ctx.finalized_epoch
         activation_epoch ctx.slashings_target ctx.penalty_per_increment ((((), ()), churn), ())
         r := by
-  refine lhRowStep_eq_singlePassStep_flags Preset.mainnet ctx rctx r churn base_reward
+  refine lhRowStep_eq_singlePassStep_flags Preset.mainnet ctx hgen rctx r churn base_reward
     activation_epoch hprev hleak hsource htarget hhead hactive hbase ?_ (by decide)
     hfinalized hcurrent hactivation hexit
   intro r' deltas hi hd
@@ -455,6 +456,104 @@ theorem rewardsContextOf_bounds (p : Preset) (total_active_balance : Gwei) (s : 
   simp [rewardsContextOf, hprevious, hs, ht, hh, hb, uint64Div, hinc, bind, Except.bind, pure,
     Except.pure]
 
+/-! ## The rewards context at the genesis epoch -/
+
+/-- The current participation at the index of a row is the field of the row. -/
+private theorem current_participation_row {state : BeaconState} {r : Row}
+    (h : r ∈ rowsOf state) :
+    state.current_epoch_participation.getD r.index 0 = r.current_participation := by
+  obtain ⟨i, hi, rfl⟩ := mem_rowsOf_iff h
+  simp [rowsOf_getElem]
+
+/-- `get_unslashed_participating_indices` for the current epoch is the indices of the rows that
+have the flag in the current participation. -/
+private theorem participating_current_ok (p : Preset) (state : BeaconState) (hrows : RowsOk state)
+    (current_epoch previous_epoch : Epoch) (flag_index : Nat)
+    (hcurrent : get_current_epoch p state = .ok current_epoch)
+    (hprevious : get_previous_epoch p state = .ok previous_epoch)
+    (hflag : 2 ^ flag_index < 256) :
+    get_unslashed_participating_indices p state flag_index current_epoch =
+      .ok (((rowsOf state).filter fun r => is_active_validator r.validator current_epoch
+        && rewardsHasFlag r.current_participation flag_index && !r.validator.slashed).map
+        (·.index)) := by
+  unfold get_unslashed_participating_indices
+  simp only [bind, Except.bind, hprevious, hcurrent, BEq.rfl, Bool.or_true, Bool.not_true,
+    Bool.false_eq_true, if_false, if_true, pure, Except.pure]
+  rw [get_active_validator_indices_rows]
+  rw [forIn_filter_ok
+    (fun i => do has_flag (← listGet state.current_epoch_participation i) flag_index)
+    (fun i => rewardsHasFlag (state.current_epoch_participation.getD i 0) flag_index) id]
+  rotate_left
+  · intro i acc
+    simp only [bind, Except.bind]
+    cases listGet state.current_epoch_participation i with
+    | error e => rfl
+    | ok f =>
+      cases hf : has_flag f flag_index with
+      | error e => simp [hf, Functor.map, Except.map]
+      | ok b => cases b <;> simp [hf, Functor.map, Except.map]
+  · intro i hi
+    obtain ⟨r, hr, rfl⟩ := List.mem_map.mp hi
+    have hr' := (List.mem_filter.mp hr).1
+    rw [getD_row _ 0 state.validators.length hrows.2.2.2 rfl hr']
+    exact has_flag_eq _ _ hflag
+  dsimp only
+  rw [forIn_filter_ok (fun i => (fun v => !v.slashed) <$> listGet state.validators i)
+    (fun i => ((state.validators[i]?).map (!·.slashed)).getD false) id]
+  rotate_left
+  · intro i acc
+    cases listGet state.validators i with
+    | error e => rfl
+    | ok v => cases hs : v.slashed <;> simp [hs, Functor.map, Except.map]
+  · intro i hi
+    simp only [List.nil_append, List.map_id_fun, id_eq, List.mem_filter, List.mem_map] at hi
+    obtain ⟨⟨r, hr, rfl⟩, -⟩ := hi
+    have hlt := rowsOf_index_lt hr.1
+    simp [listGet, hlt, pure, Except.pure, Functor.map, Except.map]
+  simp only [List.nil_append, List.map_id_fun, id_eq, List.filter_map, List.filter_filter,
+    Function.comp_def]
+  congr 2
+  apply List.filter_congr
+  intro r hr
+  have hlt := rowsOf_index_lt hr
+  rw [current_participation_row hr]
+  obtain ⟨i, hi, rfl⟩ := mem_rowsOf_iff hr
+  simp only [rowsOf_getElem] at hlt ⊢
+  simp only [hlt, getElem?_pos, Option.map_some, Option.getD_some]
+  cases is_active_validator state.validators[i] current_epoch <;>
+    cases rewardsHasFlag (state.current_epoch_participation.getD i 0) flag_index <;>
+    cases state.validators[i].slashed <;> rfl
+
+/-- At the genesis epoch, below the supply bound, the rewards context succeeds, and its previous
+epoch is the genesis epoch. The flags read the current participation there. -/
+theorem rewardsContextOf_genesis (p : Preset) (total_active_balance : Gwei) (s : BeaconState)
+    (hrows : RowsOk s) (hcurrent : get_current_epoch p s = .ok GENESIS_EPOCH)
+    (hinc : p.EFFECTIVE_BALANCE_INCREMENT ≠ 0) (hsupply : totalEffectiveBalance s < 2 ^ 64)
+    (hfinalized : s.finalized_checkpoint.epoch = GENESIS_EPOCH) :
+    ∃ rctx, rewardsContextOf p total_active_balance s = .ok rctx ∧
+      rctx.previous_epoch = GENESIS_EPOCH := by
+  have hprev : get_previous_epoch p s = .ok GENESIS_EPOCH := by
+    simp only [get_previous_epoch, hcurrent, bind, Except.bind]
+    rfl
+  have hflag : ∀ f, 2 ^ f < 256 → ∃ inc, rewardsFlagIncrements p s GENESIS_EPOCH f = .ok inc := by
+    intro f hf
+    unfold rewardsFlagIncrements
+    rw [participating_current_ok p s hrows _ _ f hcurrent hprev hf]
+    simp only [bind, Except.bind]
+    rw [get_total_balance_rows p s _ hsupply]
+    simp [uint64Div, hinc, pure, Except.pure]
+  obtain ⟨si, hs⟩ := hflag TIMELY_SOURCE_FLAG_INDEX (by decide)
+  obtain ⟨ti, ht⟩ := hflag TIMELY_TARGET_FLAG_INDEX (by decide)
+  obtain ⟨hi, hh⟩ := hflag TIMELY_HEAD_FLAG_INDEX (by decide)
+  have hleak : ∃ b, is_in_inactivity_leak p s = .ok b := by
+    simp [is_in_inactivity_leak, get_finality_delay, hprev, uint64Sub, hfinalized, bind,
+      Except.bind, pure, Except.pure]
+  obtain ⟨b, hb⟩ := hleak
+  refine ⟨⟨GENESIS_EPOCH, b, total_active_balance, si, ti, hi,
+    total_active_balance / p.EFFECTIVE_BALANCE_INCREMENT⟩, ?_, rfl⟩
+  simp [rewardsContextOf, hprev, hs, ht, hh, hb, uint64Div, hinc, bind, Except.bind, pure,
+    Except.pure]
+
 /-! ## The single pass with the supply bound -/
 
 /-- `lighthouse_single_pass_eq_spec` with the supply facts in place of `hincrements` and of the
@@ -519,7 +618,8 @@ theorem lighthouse_single_pass_eq_spec_supply (total_active_balance : Gwei) (sta
     have hrow := rowsOf_getElem state i hi
     rw [hri] at hrow
     subst hrow
-    exact lhRowStep_eq_singlePassStep_of_supply _ rctx _ churn (base_reward _) activation_epoch
+    exact lhRowStep_eq_singlePassStep_of_supply _ (by simpa [lhContextOf] using hgenesis) rctx _
+      churn (base_reward _) activation_epoch
       rfl rfl rfl rfl rfl rfl
       (by rw [htab]; exact hbase _ hr) (by rw [htab]; exact htotal) k hk hincrements
       (heffective i hiv) (hmax _ (List.getElem_mem hiv)) (hbalance i hiv) hfinalized hcurrent64

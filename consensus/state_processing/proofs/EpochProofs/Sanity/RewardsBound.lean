@@ -322,6 +322,7 @@ three flag penalties fit in the balance, not the inactivity penalty. It also ask
 of all four penalties fits in a `u64`, because Lighthouse adds them with a checked addition.
 The other hypotheses are the same as in `lhRowStep_eq_singlePassStep`. -/
 theorem lhRowStep_eq_singlePassStep_flags (p : Preset) (ctx : LhStepContext)
+    (hgen : ctx.after_genesis = true)
     (rctx : RewardsContext) (r : Row) (churn : Epoch × Gwei) (base_reward : Gwei)
     (activation_epoch : Epoch)
     (hprev : rctx.previous_epoch = ctx.previous_epoch)
@@ -346,7 +347,7 @@ theorem lhRowStep_eq_singlePassStep_flags (p : Preset) (ctx : LhStepContext)
       (fun x => (x.1.1.2, x.2)) <$> singlePassStep p ctx.total_active_balance ctx.previous_epoch
         ctx.in_leak rctx ctx.current_epoch ctx.finalized_epoch activation_epoch
         ctx.slashings_target ctx.penalty_per_increment ((((), ()), churn), ()) r := by
-  refine lhRowStep_eq_singlePassStep_of_combined p ctx rctx r churn base_reward activation_epoch
+  refine lhRowStep_eq_singlePassStep_of_combined p ctx hgen rctx r churn base_reward activation_epoch
     hprev hleak hsource htarget hhead hactive hbase ?_ ?_ hbalances hfinalized hcurrent
     hactivation hexit
   · intro helig
@@ -387,7 +388,8 @@ Hypotheses that replace `hrewards`, and why they hold on real states:
 
 The other hypotheses are the same as in `lhRowStep_eq_singlePassStep`. `hbalances` is true on
 mainnet, so it is not a hypothesis. -/
-theorem lhRowStep_eq_singlePassStep_of_bounds (ctx : LhStepContext) (rctx : RewardsContext)
+theorem lhRowStep_eq_singlePassStep_of_bounds (ctx : LhStepContext)
+    (hgen : ctx.after_genesis = true) (rctx : RewardsContext)
     (r : Row) (churn : Epoch × Gwei) (base_reward : Gwei) (activation_epoch : Epoch)
     (hprev : rctx.previous_epoch = ctx.previous_epoch)
     (hleak : rctx.in_leak = ctx.in_leak)
@@ -414,7 +416,7 @@ theorem lhRowStep_eq_singlePassStep_of_bounds (ctx : LhStepContext) (rctx : Rewa
         ctx.previous_epoch ctx.in_leak rctx ctx.current_epoch ctx.finalized_epoch
         activation_epoch ctx.slashings_target ctx.penalty_per_increment ((((), ()), churn), ())
         r := by
-  refine lhRowStep_eq_singlePassStep_flags Preset.mainnet ctx rctx r churn base_reward
+  refine lhRowStep_eq_singlePassStep_flags Preset.mainnet ctx hgen rctx r churn base_reward
     activation_epoch hprev hleak hsource htarget hhead hactive hbase ?_ (by decide)
     hfinalized hcurrent hactivation hexit
   intro r' deltas hi hd

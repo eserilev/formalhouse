@@ -70,6 +70,7 @@ import EpochProofs.Sanity.Invariants.Lengths
 import EpochProofs.Sanity.Invariants.ExitEpochs
 import EpochProofs.Sanity.Invariants.Reachable
 import EpochProofs.Sanity.Invariants.LighthouseEpoch
+import EpochProofs.Sanity.Invariants.LighthouseGenesis
 import EpochProofs.Sanity.Invariants.Capstone
 import EpochProofs.Sanity.Invariants.ConsolidationIndices
 import EpochProofs.Sanity.Invariants.LighthouseTailDeposits

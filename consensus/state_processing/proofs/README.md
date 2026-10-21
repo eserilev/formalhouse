@@ -51,7 +51,7 @@ It is not joined to the main result.
 | Eth1, slashings and randao resets, historical summaries | `tail_updates.rs` (#56) | the vector writes (`LighthouseResets.lean`); the summary root is `hash_tree_root` in the Oracle | none |
 | Participation flag rotation | none | the whole step | none |
 | Step order | not Rust | `process_epoch_lh_order` follows `altair.rs` and `single_pass.rs`; `LighthouseOrder*.lean` proves the order safe | none |
-| Genesis epoch | none | the model uses the spec `process_epoch` | none |
+| Genesis epoch | `single_pass_step.rs` with `after_genesis` false (`SinglePassStep.lean`) | same as the other epochs; `LighthouseGenesis.lean` proves the genesis single pass | same as the other epochs |
 
 For the committee steps, the theorems of #54 show that the Rust returns the spec result under the
 glue conditions. The model calls the spec function at that step. The glue conditions are not
@@ -497,9 +497,6 @@ copies the rest of the body into each branch, and the generated code grows expon
   one zero flag for each validator, as the spec does. It has no translated module.
 - `Validator::from_deposit` and `BeaconState::add_validator_to_registry` (in the `types` crate)
   are not translated. The Charon run is on `state_processing` and reaches only its own modules.
-- At the genesis epoch, `process_epoch_lh_full` and `process_epoch_lh_order` are the spec
-  `process_epoch`. Lighthouse runs the single pass with `after_genesis` false there. This path
-  runs once per chain, at the end of epoch 0, and a chain that forks into Gloas never takes it.
 - `apply_pending_deposit` is a parameter of the reference. It verifies a BLS signature.
 - The registry proof covers Electra and later. The pre-Electra path is unchanged and not proved.
 - Lighthouse computes the slashings target epoch once per epoch. The spec computes it once per

@@ -25,19 +25,22 @@ structure LhStepContext where
   total_active_balance : Gwei
   slashings_target : Uint64
   penalty_per_increment : Uint64
+  /-- False in the genesis epoch, where the spec skips the inactivity and rewards steps. -/
+  after_genesis : Bool := true
 
 /-- Inactivity update, rewards and penalties, registry update and slashings penalty for one
-row, in the Lighthouse order. `base_reward` is only read if the row is eligible. -/
+row, in the Lighthouse order. `base_reward` is only read if the row is eligible. In the genesis
+epoch the inactivity and rewards steps do nothing. -/
 def lhRowStep (p : Preset) (ctx : LhStepContext) (base_reward : Gwei) (churn : Epoch × Gwei)
     (r : Row) : SpecM ((Epoch × Gwei) × Row) := do
   let eligible ← validatorEligible ctx.previous_epoch r.validator
   let inactivity_score ←
-    if eligible then
+    if ctx.after_genesis && eligible then
       inactivityScoreStep p (rowHitsTarget ctx.previous_epoch r) ctx.in_leak r.inactivity_score
     else pure r.inactivity_score
   let r := { r with inactivity_score }
   let balance ←
-    if eligible then do
+    if ctx.after_genesis && eligible then do
       let deltas ← rewardDeltas p base_reward r.validator.effective_balance r.inactivity_score
         (rewardsParticipating ctx.previous_epoch r TIMELY_SOURCE_FLAG_INDEX)
         (rewardsParticipating ctx.previous_epoch r TIMELY_TARGET_FLAG_INDEX)

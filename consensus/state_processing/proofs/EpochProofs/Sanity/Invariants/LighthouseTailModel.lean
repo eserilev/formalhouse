@@ -90,7 +90,7 @@ def epochRest2 (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
   let state ← process_proposer_lookahead Preset.mainnet o state
   process_ptc_window Preset.mainnet o state
 
-/-- The Lighthouse steps after justification and finalization, away from the genesis epoch. -/
+/-- The Lighthouse steps after justification and finalization. -/
 def lhFullTail (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
   let current_epoch ← get_current_epoch Preset.mainnet s
   let total_active_balance ← get_total_active_balance Preset.mainnet s
@@ -117,13 +117,11 @@ def lhFullTail (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
   epochRest2 o s7
 
 /-- The Gloas `process_epoch` on mainnet as Lighthouse runs it, with the pending deposits and the
-effective balance updates in the single pass. At the genesis epoch the spec skips the inactivity
-and rewards steps; Lighthouse skips them too, and this one epoch uses the spec path. -/
-def process_epoch_lh_full (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
-  if s.slot / Preset.mainnet.SLOTS_PER_EPOCH = GENESIS_EPOCH then process_epoch Preset.mainnet o s
-  else do
-    let s1 ← lhJustificationAndFinalization Preset.mainnet s
-    lhFullTail o s1
+effective balance updates in the single pass. At the genesis epoch the single pass skips the
+inactivity and rewards steps, through `after_genesis` in the context, as Lighthouse does. -/
+def process_epoch_lh_full (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
+  let s1 ← lhJustificationAndFinalization Preset.mainnet s
+  lhFullTail o s1
 
 /-! ## Helpers for the proofs -/
 
