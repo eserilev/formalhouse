@@ -662,6 +662,251 @@ def per_epoch_processing.inactivity_updates.new_inactivity_score
           Std.U64 (core.convert.FromSame safe_arith.ArithError) residual
   else ok (core.result.Result.Ok inactivity_score)
 
+/-- [state_processing::per_epoch_processing::justification::JustificationBits]
+    Source: 'consensus/state_processing/src/per_epoch_processing/justification.rs', lines 10:0-15:1
+    Visibility: public -/
+structure per_epoch_processing.justification.JustificationBits where
+  bit0 : Bool
+  bit1 : Bool
+  bit2 : Bool
+  bit3 : Bool
+
+/-- [state_processing::per_epoch_processing::justification::{impl core::clone::Clone for state_processing::per_epoch_processing::justification::JustificationBits}::clone]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/justification.rs', lines 9:9-9:14
+    Visibility: public -/
+def
+  per_epoch_processing.justification.JustificationBits.Insts.CoreCloneClone.clone
+  (self : per_epoch_processing.justification.JustificationBits) :
+  Result per_epoch_processing.justification.JustificationBits
+  := do
+  ok self
+
+/-- Trait implementation: [state_processing::per_epoch_processing::justification::{impl core::clone::Clone for state_processing::per_epoch_processing::justification::JustificationBits}]
+    Source: 'consensus/state_processing/src/per_epoch_processing/justification.rs', lines 9:9-9:14 -/
+@[reducible]
+def per_epoch_processing.justification.JustificationBits.Insts.CoreCloneClone :
+  core.clone.Clone per_epoch_processing.justification.JustificationBits := {
+  clone :=
+    per_epoch_processing.justification.JustificationBits.Insts.CoreCloneClone.clone
+}
+
+/-- Trait implementation: [state_processing::per_epoch_processing::justification::{impl core::marker::Copy for state_processing::per_epoch_processing::justification::JustificationBits}]
+    Source: 'consensus/state_processing/src/per_epoch_processing/justification.rs', lines 9:16-9:20 -/
+@[reducible]
+def per_epoch_processing.justification.JustificationBits.Insts.CoreMarkerCopy :
+  core.marker.Copy per_epoch_processing.justification.JustificationBits := {
+  cloneInst :=
+    per_epoch_processing.justification.JustificationBits.Insts.CoreCloneClone
+}
+
+/-- [state_processing::per_epoch_processing::justification::NewFinalized]
+    Source: 'consensus/state_processing/src/per_epoch_processing/justification.rs', lines 19:0-23:1
+    Visibility: public -/
+@[discriminant isize]
+inductive per_epoch_processing.justification.NewFinalized where
+| Unchanged : per_epoch_processing.justification.NewFinalized
+| OldPreviousJustified : per_epoch_processing.justification.NewFinalized
+| OldCurrentJustified : per_epoch_processing.justification.NewFinalized
+
+/-- [state_processing::per_epoch_processing::justification::{impl core::clone::Clone for state_processing::per_epoch_processing::justification::NewFinalized}::clone]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/justification.rs', lines 18:9-18:14
+    Visibility: public -/
+def per_epoch_processing.justification.NewFinalized.Insts.CoreCloneClone.clone
+  (self : per_epoch_processing.justification.NewFinalized) :
+  Result per_epoch_processing.justification.NewFinalized
+  := do
+  ok self
+
+/-- Trait implementation: [state_processing::per_epoch_processing::justification::{impl core::clone::Clone for state_processing::per_epoch_processing::justification::NewFinalized}]
+    Source: 'consensus/state_processing/src/per_epoch_processing/justification.rs', lines 18:9-18:14 -/
+@[reducible]
+def per_epoch_processing.justification.NewFinalized.Insts.CoreCloneClone :
+  core.clone.Clone per_epoch_processing.justification.NewFinalized := {
+  clone :=
+    per_epoch_processing.justification.NewFinalized.Insts.CoreCloneClone.clone
+}
+
+/-- Trait implementation: [state_processing::per_epoch_processing::justification::{impl core::marker::Copy for state_processing::per_epoch_processing::justification::NewFinalized}]
+    Source: 'consensus/state_processing/src/per_epoch_processing/justification.rs', lines 18:16-18:20 -/
+@[reducible]
+def per_epoch_processing.justification.NewFinalized.Insts.CoreMarkerCopy :
+  core.marker.Copy per_epoch_processing.justification.NewFinalized := {
+  cloneInst :=
+    per_epoch_processing.justification.NewFinalized.Insts.CoreCloneClone
+}
+
+/-- [state_processing::per_epoch_processing::justification::JustificationOutcome]
+    Source: 'consensus/state_processing/src/per_epoch_processing/justification.rs', lines 26:0-31:1
+    Visibility: public -/
+structure per_epoch_processing.justification.JustificationOutcome where
+  justify_previous : Bool
+  justify_current : Bool
+  bits : per_epoch_processing.justification.JustificationBits
+  finalized : per_epoch_processing.justification.NewFinalized
+
+/-- [state_processing::per_epoch_processing::justification::{impl core::clone::Clone for state_processing::per_epoch_processing::justification::JustificationOutcome}::clone]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/justification.rs', lines 25:9-25:14
+    Visibility: public -/
+def
+  per_epoch_processing.justification.JustificationOutcome.Insts.CoreCloneClone.clone
+  (self : per_epoch_processing.justification.JustificationOutcome) :
+  Result per_epoch_processing.justification.JustificationOutcome
+  := do
+  ok self
+
+/-- Trait implementation: [state_processing::per_epoch_processing::justification::{impl core::clone::Clone for state_processing::per_epoch_processing::justification::JustificationOutcome}]
+    Source: 'consensus/state_processing/src/per_epoch_processing/justification.rs', lines 25:9-25:14 -/
+@[reducible]
+def
+  per_epoch_processing.justification.JustificationOutcome.Insts.CoreCloneClone
+  : core.clone.Clone per_epoch_processing.justification.JustificationOutcome
+  := {
+  clone :=
+    per_epoch_processing.justification.JustificationOutcome.Insts.CoreCloneClone.clone
+}
+
+/-- Trait implementation: [state_processing::per_epoch_processing::justification::{impl core::marker::Copy for state_processing::per_epoch_processing::justification::JustificationOutcome}]
+    Source: 'consensus/state_processing/src/per_epoch_processing/justification.rs', lines 25:16-25:20 -/
+@[reducible]
+def
+  per_epoch_processing.justification.JustificationOutcome.Insts.CoreMarkerCopy
+  : core.marker.Copy per_epoch_processing.justification.JustificationOutcome
+  := {
+  cloneInst :=
+    per_epoch_processing.justification.JustificationOutcome.Insts.CoreCloneClone
+}
+
+/-- [state_processing::per_epoch_processing::justification::finalize_step]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/justification.rs', lines 35:0-48:1 -/
+def per_epoch_processing.justification.finalize_step
+  (enabled : Bool) (source_epoch : Std.U64) (offset : Std.U64)
+  (current_epoch : Std.U64)
+  (choice : per_epoch_processing.justification.NewFinalized)
+  (finalized : per_epoch_processing.justification.NewFinalized) :
+  Result (core.result.Result per_epoch_processing.justification.NewFinalized
+    safe_arith.ArithError)
+  := do
+  if enabled
+  then
+    let r ← U64.Insts.Safe_arithSafeArithU64.safe_add source_epoch offset
+    let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+    match cf with
+    | core.ops.control_flow.ControlFlow.Continue val =>
+      if val = current_epoch
+      then ok (core.result.Result.Ok choice)
+      else ok (core.result.Result.Ok finalized)
+    | core.ops.control_flow.ControlFlow.Break residual =>
+      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+        per_epoch_processing.justification.NewFinalized (core.convert.FromSame
+        safe_arith.ArithError) residual
+  else ok (core.result.Result.Ok finalized)
+
+/-- [state_processing::per_epoch_processing::justification::weigh_justification]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/justification.rs', lines 50:0-108:1
+    Visibility: public -/
+def per_epoch_processing.justification.weigh_justification
+  (current_epoch : Std.U64) (old_previous_justified_epoch : Std.U64)
+  (old_current_justified_epoch : Std.U64)
+  (bits : per_epoch_processing.justification.JustificationBits)
+  (total_active_balance : Std.U64) (previous_target_balance : Std.U64)
+  (current_target_balance : Std.U64) :
+  Result (core.result.Result
+    per_epoch_processing.justification.JustificationOutcome
+    safe_arith.ArithError)
+  := do
+  let r ←
+    U64.Insts.Safe_arithSafeArithU64.safe_mul total_active_balance 2#u64
+  let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
+    let r1 ←
+      U64.Insts.Safe_arithSafeArithU64.safe_mul previous_target_balance 3#u64
+    let cf1 ← core.result.Result.Insts.CoreOpsTry.branch r1
+    match cf1 with
+    | core.ops.control_flow.ControlFlow.Continue val1 =>
+      let r2 ←
+        U64.Insts.Safe_arithSafeArithU64.safe_mul current_target_balance 3#u64
+      let cf2 ← core.result.Result.Insts.CoreOpsTry.branch r2
+      match cf2 with
+      | core.ops.control_flow.ControlFlow.Continue val2 =>
+        let r3 ←
+          per_epoch_processing.justification.finalize_step (((bits.bit0 ||
+            (val1 >= val)) && bits.bit1) && bits.bit2)
+            old_previous_justified_epoch 3#u64 current_epoch
+            per_epoch_processing.justification.NewFinalized.OldPreviousJustified
+            per_epoch_processing.justification.NewFinalized.Unchanged
+        let cf3 ← core.result.Result.Insts.CoreOpsTry.branch r3
+        match cf3 with
+        | core.ops.control_flow.ControlFlow.Continue val3 =>
+          let r4 ←
+            per_epoch_processing.justification.finalize_step ((bits.bit0 ||
+              (val1 >= val)) && bits.bit1) old_previous_justified_epoch 2#u64
+              current_epoch
+              per_epoch_processing.justification.NewFinalized.OldPreviousJustified
+              val3
+          let cf4 ← core.result.Result.Insts.CoreOpsTry.branch r4
+          match cf4 with
+          | core.ops.control_flow.ControlFlow.Continue val4 =>
+            let r5 ←
+              per_epoch_processing.justification.finalize_step (((val2 >= val)
+                && (bits.bit0 || (val1 >= val))) && bits.bit1)
+                old_current_justified_epoch 2#u64 current_epoch
+                per_epoch_processing.justification.NewFinalized.OldCurrentJustified
+                val4
+            let cf5 ← core.result.Result.Insts.CoreOpsTry.branch r5
+            match cf5 with
+            | core.ops.control_flow.ControlFlow.Continue val5 =>
+              let r6 ←
+                per_epoch_processing.justification.finalize_step ((val2 >= val)
+                  && (bits.bit0 || (val1 >= val))) old_current_justified_epoch
+                  1#u64 current_epoch
+                  per_epoch_processing.justification.NewFinalized.OldCurrentJustified
+                  val5
+              let cf6 ← core.result.Result.Insts.CoreOpsTry.branch r6
+              match cf6 with
+              | core.ops.control_flow.ControlFlow.Continue val6 =>
+                ok (core.result.Result.Ok
+                  {
+                    justify_previous := (val1 >= val),
+                    justify_current := (val2 >= val),
+                    bits :=
+                      {
+                        bit0 := (val2 >= val),
+                        bit1 := (bits.bit0 || (val1 >= val)),
+                        bit2 := bits.bit1,
+                        bit3 := bits.bit2
+                      },
+                    finalized := val6
+                  })
+              | core.ops.control_flow.ControlFlow.Break residual =>
+                core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+                  per_epoch_processing.justification.JustificationOutcome
+                  (core.convert.FromSame safe_arith.ArithError) residual
+            | core.ops.control_flow.ControlFlow.Break residual =>
+              core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+                per_epoch_processing.justification.JustificationOutcome
+                (core.convert.FromSame safe_arith.ArithError) residual
+          | core.ops.control_flow.ControlFlow.Break residual =>
+            core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+              per_epoch_processing.justification.JustificationOutcome
+              (core.convert.FromSame safe_arith.ArithError) residual
+        | core.ops.control_flow.ControlFlow.Break residual =>
+          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+            per_epoch_processing.justification.JustificationOutcome
+            (core.convert.FromSame safe_arith.ArithError) residual
+      | core.ops.control_flow.ControlFlow.Break residual =>
+        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+          per_epoch_processing.justification.JustificationOutcome
+          (core.convert.FromSame safe_arith.ArithError) residual
+    | core.ops.control_flow.ControlFlow.Break residual =>
+      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+        per_epoch_processing.justification.JustificationOutcome
+        (core.convert.FromSame safe_arith.ArithError) residual
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+      per_epoch_processing.justification.JustificationOutcome
+      (core.convert.FromSame safe_arith.ArithError) residual
+
 /-- [state_processing::per_epoch_processing::pending_consolidations::ConsolidationView]
     Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 10:0-13:1
     Visibility: public -/

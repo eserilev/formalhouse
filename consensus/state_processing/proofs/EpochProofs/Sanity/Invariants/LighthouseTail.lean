@@ -2,6 +2,7 @@ import EpochProofs.Sanity.Invariants.LighthouseTailLhNF
 import EpochProofs.Sanity.Invariants.LighthouseTailSpecNF
 import EpochProofs.Sanity.Invariants.ConsolidationIndices
 import EpochProofs.Sanity.Invariants.WithdrawableEpochs
+import EpochProofs.Sanity.LighthouseJustification
 
 /-!
 # The Lighthouse epoch tail equals the spec
@@ -171,7 +172,8 @@ theorem process_epoch_lh_full_sameOk' (o : Oracle) (t : BeaconState) (hb : Bound
   generalize hce : t.slot / Preset.mainnet.SLOTS_PER_EPOCH = current_epoch
   rw [hce] at hcurrent hepoch hgen heffective
   rw [process_epoch_parts]
-  refine SameOk.bind (SameOk.refl _) (fun s1 h1 => ?_)
+  refine SameOk.bind (lhJustificationAndFinalization_sameOk _ _) (fun s1 h1 => ?_)
+  replace h1 := (lhJustificationAndFinalization_sameOk _ _ s1).mp h1
   obtain ⟨_, _, _, _, hs1⟩ := process_justification_and_finalization_shape _ _ _ h1
   have hcur1 : get_current_epoch Preset.mainnet s1 = .ok current_epoch := by
     rw [hs1]; exact hcurrent

@@ -5,7 +5,7 @@ Goal: prove that Lighthouse's Gloas epoch processing equals the consensus spec f
 ```
 ../src/per_epoch_processing/{builder_pending_payments,effective_balance,inactivity_updates,slashings_penalty,
    rewards_penalties,registry_update,pending_deposits,pending_consolidations,
-   single_pass_step}.rs
+   single_pass_step,justification}.rs
    --charon--> .llbc --aeneas--> EpochProofs/Generated.lean
                                           |
                      EpochProofs/Equiv/*.lean (equivalence proof)
@@ -25,6 +25,7 @@ EpochProofs/Spec/*.lean  <-- written by hand from the consensus specs
 | `process_registry_updates` (per validator, after Electra) | Done | Done | Done, with conditions |
 | `process_pending_deposits` (decisions) | Done | Done | Done |
 | `process_pending_consolidations` (balance moves) | Done | Done | Done |
+| `process_justification_and_finalization` | Done | Done | Done |
 
 ## The theorems
 
@@ -116,6 +117,16 @@ the rewards and registry conditions above, if the base reward from the epoch cac
 
 Not covered yet: pending deposits and consolidations, which run between slashings and effective
 balance updates.
+
+## Justification and finalization
+
+`justification.rs` holds the arithmetic and the decisions of
+`weigh_justification_and_finalization`. `weigh_justification_equiv` shows that the generated
+code equals `Spec.lhWeighJustification`. `lhJustificationAndFinalization` models the caller: it
+reads the bits, runs the module, then reads the block roots and writes the checkpoints.
+`lhJustificationAndFinalization_sameOk` shows that the model has the same `ok` results as the
+spec. Lighthouse does the arithmetic before it reads the block roots, so the two can fail at
+different steps. `process_epoch_lh_full` runs this model.
 
 ## State conditions
 
@@ -327,6 +338,7 @@ charon cargo --preset=aeneas \
   --start-from 'state_processing::per_epoch_processing::pending_deposits' \
   --start-from 'state_processing::per_epoch_processing::pending_consolidations' \
   --start-from 'state_processing::per_epoch_processing::single_pass_step' \
+  --start-from 'state_processing::per_epoch_processing::justification' \
   --include safe_arith --include types::builder --include alloy_primitives::bits \
   --include types::core::consts \
   --dest-file "$out/pure.llbc" -- --lib
@@ -387,6 +399,12 @@ copies the rest of the body into each branch, and the generated code grows expon
   `process_pending_consolidations_eq`. The glue writes the new balances back.
 - The loop in `single_pass.rs` calls `single_pass_step` once for each validator, in index order,
   and writes back each changed field.
+- `weigh_justification_and_finalization.rs` reads the four bits, calls `weigh_justification`,
+  reads the block roots and writes the checkpoints. `lhWeighJustificationAndFinalization`
+  models it by hand.
+- The progressive balances cache gives the previous and current target balances, and the total
+  active balance cache gives the total. `lhJustificationAndFinalization` takes the spec values.
+  The cache stack (#27) proves that the progressive balances cache holds them.
 - `apply_pending_deposit` is a parameter of the reference. It verifies a BLS signature.
 - The registry proof covers Electra and later. The pre-Electra path is unchanged and not proved.
 - Lighthouse computes the slashings target epoch once per epoch. The spec computes it once per

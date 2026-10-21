@@ -22,6 +22,7 @@ pub mod epoch_processing_summary;
 pub mod errors;
 pub mod historical_roots_update;
 pub mod inactivity_updates;
+pub mod justification;
 pub mod justification_and_finalization_state;
 pub mod pending_consolidations;
 pub mod pending_deposits;
