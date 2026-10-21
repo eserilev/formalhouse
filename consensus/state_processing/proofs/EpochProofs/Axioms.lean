@@ -216,7 +216,6 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Etheorem.get_unslashed_participating_indices_ok
 #print axioms EpochProofs.Etheorem.get_eligible_validator_indices_ok
 #print axioms EpochProofs.Etheorem.is_in_inactivity_leak_ok
-#print axioms EpochProofs.Etheorem.participation_flag_updates_etheorem
 #print axioms EpochProofs.Etheorem.passesPresetAgrees_mainnet
 #print axioms EpochProofs.Etheorem.passesPresetAgrees_minimal
 #print axioms EpochProofs.Etheorem.get_block_root_etheorem

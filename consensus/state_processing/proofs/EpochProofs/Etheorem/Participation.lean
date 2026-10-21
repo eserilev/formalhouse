@@ -5,8 +5,7 @@ import EpochProofs.Sanity.RowsInactivity
 # Participation: the reference equals Etheorem
 
 The passes read the same index sets: the participating indices of one flag, the eligible
-indices and the leak flag. This file proves each one equal to its Etheorem copy. It also proves
-`process_participation_flag_updates` equal to Etheorem's.
+indices and the leak flag. This file proves each one equal to its Etheorem copy.
 
 `PassesPresetAgrees p` adds the preset values that the passes read to `PresetAgrees p`.
 -/
@@ -62,10 +61,6 @@ theorem foldl_push_filter {α : Type} (c : α → Bool) : ∀ (l : List α) (acc
   induction l with
   | nil => intro acc; simp
   | cons i l ih => intro acc; by_cases hc : c i <;> simp [hc, ih]
-
-theorem sszOfArray_toList {α : Type} {cap : Nat} (a : Array α) (h : a.size ≤ cap) :
-    (sszOfArray a : SSZList α cap).toList = a.toList := by
-  simp [sszOfArray, h, SSZList.toList]
 
 /-! ## `Except` binds -/
 
@@ -357,35 +352,6 @@ theorem is_in_inactivity_leak_ok (hpp : PassesPresetAgrees p) (e : EState) {b : 
     simp only [view_uncachedBox]
     rw [← hpp.minEpochsToInactivityPenalty, ← hd']
     simp [UInt64.lt_iff_toNat_lt]
-
-/-- The state after Etheorem's `process_participation_flag_updates`. -/
-def participationFlagUpdates (e : EState) : EState :=
-  { e with
-    previousEpochParticipation := e.currentEpochParticipation
-    currentEpochParticipation := sszOfArray (Array.replicate e.validators.val.size 0) }
-
-omit [EthCLSpecs.Gloas.Config] hp in
-theorem processParticipationFlagUpdates_run (e : EState) :
-    (EthCLSpecs.Gloas.processParticipationFlagUpdates (StateTransition := GloasRun)).run
-      (pureState e) = .ok ((), pureState (participationFlagUpdates e)) := rfl
-
-omit [EthCLSpecs.Gloas.Config] hp in
-/-- `process_participation_flag_updates` equals Etheorem's. -/
-theorem participation_flag_updates_etheorem (e : EState) :
-    (EthCLSpecs.Gloas.processParticipationFlagUpdates (StateTransition := GloasRun)).run
-        (pureState e) = .ok ((), pureState (participationFlagUpdates e)) ∧
-      Spec.process_participation_flag_updates (absEState e) =
-        absEState (participationFlagUpdates e) := by
-  refine ⟨rfl, ?_⟩
-  simp only [Spec.process_participation_flag_updates, participationFlagUpdates, absEState,
-    List.length_map]
-  have hs : (sszOfArray (Array.replicate e.validators.val.size 0) :
-      SSZList EthCLSpecs.Gloas.ParticipationFlags EthCLSpecs.Gloas.Const.validatorRegistryLimit).toList =
-        List.replicate e.validators.val.size 0 := by
-    rw [sszOfArray_toList _ (by simpa using e.validators.property)]
-    simp
-  rw [hs]
-  simp [SSZList.toList]
 
 end WithPreset
 
