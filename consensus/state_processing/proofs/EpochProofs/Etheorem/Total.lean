@@ -1,5 +1,6 @@
 import EpochProofs.Etheorem.Final
 import EpochProofs.Sanity.Invariants.TotalityCommittees
+import EpochProofs.Sanity.Invariants.TotalityRows
 
 /-!
 # Lighthouse returns `ok` and equals Etheorem
@@ -27,7 +28,8 @@ The conditions beyond `lighthouse_order_epoch_etheorem_reachable`:
 - `hslot`: the slot is at least `8192` below `2^64`. Near `2^64` the pyspec `get_block_root`
   raises on `slot + SLOTS_PER_HISTORICAL_ROOT`.
 - `hvec`: the vector fields have their SSZ lengths. The Lean state holds them as lists.
-- `hopen`: the steps that `Totality.lean` does not prove yet (`TotalityOpen`).
+- `hrb`: the time and supply bounds of `RowBounds` (`TotalityRows.lean`): inactivity scores,
+  supply, exit queue, registry size, and participation against the active balance.
 - `hcomm`: at the committee steps, the state conditions (`CommConds`) and the pyspec
   preconditions (`CommPreconds`: a sync candidate, a proposer candidate (F4), at least 32 active
   validators for the PTC, and selections that end within `2^64` passes). -/
@@ -37,15 +39,15 @@ theorem lighthouse_epoch_total_etheorem (o : Spec.Oracle) (ho : OracleAgrees o)
     (hpre : Spec.TailPre (absEState e)) (hcond : EpochCondsIn e) (hsel : SelectionsFull e)
     (hslot : (absEState e).slot + 8192 < 2 ^ 64)
     (hvec : (absEState e).VectorLengths Spec.Preset.mainnet)
-    (hopen : Spec.TotalityOpen o (absEState e))
+    (hrb : Spec.RowBounds (absEState e))
     (hcomm : ∀ s, Spec.CommFrame (absEState e) s → Spec.CommConds o s ∧ Spec.CommPreconds o s) :
     ∃ s', Spec.process_epoch_lh_order o (absEState e) = .ok s' ∧
       ∃ e', (EthCLSpecs.Gloas.processEpoch (StateTransition := GloasRun)).run (pureState e) =
         .ok ((), pureState e') ∧ absEState e' = s' := by
   have hin' := hin
   obtain ⟨⟨⟨hb, hslot64, heb, hexit, hsup⟩, -, hcons⟩, -, hvalid⟩ := hin'
-  obtain ⟨s', hs'⟩ := Spec.process_epoch_total o (absEState e) hb.2.1 hslot hpre.1 hvec hb.1
-    hsup.2.1 hopen (Spec.committeesOk_of o _ hslot hcomm)
+  obtain ⟨s', hs'⟩ := Spec.process_epoch_total_rows o (absEState e) hb.2.1 hslot hpre.1 hvec hb.1
+    heb hcons hsup.2.2 hrb (Spec.committeesOk_of o _ hslot hcomm)
   have hfull := (Spec.process_epoch_lh_full_sameOk' o (absEState e) hb hslot64 heb hexit hsup
     hvalid hcons s').mpr hs'
   have hlh := (Spec.process_epoch_lh_order_sameOk o (absEState e) hpre s').mpr hfull

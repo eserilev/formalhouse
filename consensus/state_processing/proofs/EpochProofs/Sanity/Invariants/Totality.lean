@@ -8,8 +8,9 @@ file proves the other half of liveness: the spec `process_epoch` returns `ok` at
 of an epoch, on mainnet.
 
 Each step gets a lemma of the form "the step returns `ok`, and the facts that the next steps
-read still hold". `process_epoch_total` chains them. The steps in `TotalityOpen` are not proved
-yet. They are hypotheses of the chain, not conditions on the state.
+read still hold". `process_epoch_total` chains them. The per-validator steps and the pending
+deposits are the hypotheses `MidOk` and `DepOk`, which `TotalityRows.lean` proves. The committee
+steps are the hypothesis `CommitteesOk`, which `TotalityCommittees.lean` proves.
 
 Error sources and why they do not fire:
 - `get_block_root` computes `start_slot + SLOTS_PER_HISTORICAL_ROOT`. This raises when the slot
@@ -739,19 +740,28 @@ structure CommFrame (t s : BeaconState) : Prop where
   rows : RowsOk s
   randao : s.randao_mixes.length = 65536
 
-/-- The steps that this file does not prove yet. Each one is stated for every state that has
-the facts the earlier steps keep.
+/-- The facts that `process_pending_deposits` reads from the state after the per-validator
+steps, besides `TailFrame`: the deposit queue and the churn left from the last epoch, the
+number of validators, the balance sum after the rewards, and the finalized epoch. -/
+structure DepFrame (t s : BeaconState) : Prop where
+  pend : s.pending_deposits = t.pending_deposits
+  dbtc : s.deposit_balance_to_consume = t.deposit_balance_to_consume
+  vlen : s.validators.length = t.validators.length
+  bsum : s.balances.sum ≤ t.balances.sum + 4 * totalEffectiveBalance t
+  teb : totalEffectiveBalance s = totalEffectiveBalance t
+  fin : s.finalized_checkpoint.epoch ≤ t.slot / 32
 
-- `middle`: inactivity, rewards, registry and slashings. The error sources are `u64`
-  arithmetic on balances, inactivity scores (F5: `effective_balance * inactivity_score`) and
-  exit churn.
-- `deposits`: `process_pending_deposits` with `apply_pending_deposit`. The error sources are the
-  churn sums and `increase_balance`.
+/-- The inactivity, rewards, registry and slashings steps succeed after justification and
+finalization. `TotalityRows.lean` proves it (`midOk_of_rowBounds`). -/
+def MidOk (t : BeaconState) : Prop :=
+  ∀ s1, JFShape t s1 → s1.finalized_checkpoint.epoch ≤ t.slot / 32 →
+    (t.slot / 32 ≠ 0 → s1.finalized_checkpoint.epoch + 1 ≤ t.slot / 32) →
+    OkWith (specFourSteps Preset.mainnet s1) (fun s => TailFrame t s ∧ DepFrame t s)
 
-The committee steps are `CommitteesOk`, proved in `TotalityCommittees.lean`. -/
-structure TotalityOpen (o : Oracle) (t : BeaconState) : Prop where
-  middle : ∀ s1, JFShape t s1 → OkWith (specFourSteps Preset.mainnet s1) (TailFrame t)
-  deposits : ∀ s tab, TailFrame t s → get_total_active_balance Preset.mainnet s = .ok tab →
+/-- `process_pending_deposits` succeeds after the eth1 data reset. `TotalityRows.lean` proves it
+(`depOk_of_rowBounds`). -/
+def DepOk (o : Oracle) (t : BeaconState) : Prop :=
+  ∀ s tab, TailFrame t s → DepFrame t s → get_total_active_balance Preset.mainnet s = .ok tab →
     OkWith (process_pending_deposits Preset.mainnet tab (apply_pending_deposit Preset.mainnet o) s)
       (TailFrame t)
 
@@ -796,7 +806,7 @@ reachable-state facts at its input and the open steps. -/
 theorem process_epoch_total (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
     (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % 32 = 0)
     (hvec : t.VectorLengths Preset.mainnet) (hffg : FfgInvariant Preset.mainnet t)
-    (hsup : totalEffectiveBalance t < 2 ^ 60) (hopen : TotalityOpen o t)
+    (hsup : totalEffectiveBalance t < 2 ^ 60) (hmid : MidOk t) (hdep : DepOk o t)
     (hcomm : CommitteesOk o t) :
     ∃ s', process_epoch Preset.mainnet o t = .ok s' := by
   have hslot64 : t.slot < 2 ^ 64 := Nat.lt_of_le_of_lt (Nat.le_add_right _ _) hslot
@@ -806,20 +816,30 @@ theorem process_epoch_total (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
   obtain ⟨s1, h1, -⟩ := process_justification_and_finalization_total t hrows hslot hlast hbr hbits
     hcp hsup
   rw [h1, tot_bind_ok]
-  obtain ⟨s5, h5, f5⟩ := hopen.middle s1 (process_justification_and_finalization_shape _ t s1 h1)
+  have hfin : t.slot / 32 ≠ 0 → s1.finalized_checkpoint.epoch + 1 ≤ t.slot / 32 := fun hne =>
+    process_justification_and_finalization_finalized _ t s1 _ (tot_current_epoch t)
+      (by simpa [GENESIS_EPOCH] using hne) hffg h1
+  have hfin0 : s1.finalized_checkpoint.epoch ≤ t.slot / 32 := by
+    rcases process_justification_and_finalization_step _ t s1 h1 with rfl | ⟨h2, -⟩
+    · exact hffg.finalized_le
+    · have h2' : 2 ≤ t.slot / 32 := h2
+      exact Nat.le_of_succ_le (hfin (Nat.pos_iff_ne_zero.mp (Nat.lt_of_lt_of_le (by decide) h2')))
+  obtain ⟨s5, h5, f5, d5⟩ := hmid s1 (process_justification_and_finalization_shape _ t s1 h1)
+    hfin0 hfin
   rw [h5, tot_bind_ok]
   unfold epochRest
   -- eth1 data reset
   obtain ⟨s6, h6, e6⟩ := process_eth1_data_reset_total s5 (f5.slot ▸ hslot64)
-  have f6 : TailFrame t s6 := by
+  have f6 : TailFrame t s6 ∧ DepFrame t s6 := by
     rcases e6 with rfl | rfl
-    · exact f5
-    · exact ⟨f5.slot, f5.rows, f5.randao, f5.slashings, f5.cons, f5.bsum, f5.ebs, f5.teb⟩
+    · exact ⟨f5, d5⟩
+    · exact ⟨⟨f5.slot, f5.rows, f5.randao, f5.slashings, f5.cons, f5.bsum, f5.ebs, f5.teb⟩,
+        ⟨d5.pend, d5.dbtc, d5.vlen, d5.bsum, d5.teb, d5.fin⟩⟩
   rw [h6, tot_bind_ok]
   -- pending deposits
-  obtain ⟨tab6, ht6, -⟩ := tot_tab_lt s6 f6.teb
+  obtain ⟨tab6, ht6, -⟩ := tot_tab_lt s6 f6.1.teb
   rw [ht6, tot_bind_ok]
-  obtain ⟨s7, h7, f7⟩ := hopen.deposits s6 tab6 f6 ht6
+  obtain ⟨s7, h7, f7⟩ := hdep s6 tab6 f6.1 f6.2 ht6
   rw [h7, tot_bind_ok]
   -- pending consolidations
   obtain ⟨s8, h8, B, k, rfl, hBl, hBs⟩ := process_pending_consolidations_total s7 f7.rows

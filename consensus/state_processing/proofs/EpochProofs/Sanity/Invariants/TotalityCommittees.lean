@@ -894,7 +894,7 @@ theorem process_ptc_window_few_active_error (o : Oracle) (s : BeaconState)
       (s.slot / 32 + 2) (ep_bound hslot 2 (by decide)) hr hreg hfew]
   rfl
 
-/-! ## The open field of `TotalityOpen` -/
+/-! ## `CommitteesOk` -/
 
 /-- The state facts that the three committee steps read beyond `CommFrame`. Each one is an
 invariant of reachable states: the registry limit is `VALIDATOR_REGISTRY_LIMIT`, the effective

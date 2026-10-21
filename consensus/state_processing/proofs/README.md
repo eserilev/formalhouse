@@ -218,9 +218,9 @@ Etheorem's.
 | Step | Status |
 |---|---|
 | Justification and finalization | Proved (`process_justification_and_finalization_total`) |
-| Inactivity, rewards, registry, slashings | Open (`TotalityOpen.middle`) |
+| Inactivity, rewards, registry, slashings | Proved (`midOk_of_rowBounds`, `RowBounds`) |
 | Eth1 data reset | Proved |
-| Pending deposits | Open (`TotalityOpen.deposits`). One deposit is proved (`apply_pending_deposit_total`). |
+| Pending deposits | Proved (`depOk_of_rowBounds`, `RowBounds`) |
 | Pending consolidations | Proved. The balance sum does not grow. |
 | Builder pending payments | Proved |
 | Effective balance updates | Proved |
@@ -244,6 +244,21 @@ at the state before them:
 `process_ptc_window_few_active_error` proves the third one is a real pyspec halt: with fewer than
 `SLOTS_PER_EPOCH` validators active at `current + 2`, the first slot of that epoch has no
 committee members, and `compute_ptc` raises at `assert total > 0`.
+
+`Sanity/Invariants/TotalityRows.lean` proves the per-validator steps and the pending deposits
+under `RowBounds`, a set of time and supply bounds on the epoch input. The pyspec raises
+without them too:
+- Inactivity scores below `2^22`. Above about `2^23`, `effective_balance * inactivity_score`
+  overflows (F5). Scores grow by 4 per epoch of leak.
+- Effective balances sum below `2^57` Gwei (about 144M ETH). Above that, the flag reward
+  numerator `base_reward * weight * participating_increments` can overflow.
+- Balances, pending deposits and `deposit_balance_to_consume` sum below `2^61` Gwei.
+- The earliest exit epoch below `2^62`, the exit churn below `2^61`, and fewer than `2^40`
+  validators.
+- Each flag's previous-epoch participating increments at most `1024` times the current active
+  increments. This bounds the sum of the rewards.
+`process_epoch_total_rows` and `lighthouse_epoch_total_etheorem` take `RowBounds` and the
+committee step conditions (`CommConds`, `CommPreconds`).
 
 ## The whole state transition
 

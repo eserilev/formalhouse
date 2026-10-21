@@ -71,6 +71,7 @@ import EpochProofs.Etheorem.LighthouseOrder
 import EpochProofs.Etheorem.Final
 import EpochProofs.Sanity.Invariants.Totality
 import EpochProofs.Sanity.Invariants.TotalityCommittees
+import EpochProofs.Sanity.Invariants.TotalityRows
 import EpochProofs.Etheorem.Total
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
@@ -323,3 +324,9 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.committee_steps_total
 #print axioms EpochProofs.Spec.committeesOk_of
 #print axioms EpochProofs.Spec.process_ptc_window_few_active_error
+#print axioms EpochProofs.Spec.rewardsRowStep_total
+#print axioms EpochProofs.Spec.registryRowStep_total
+#print axioms EpochProofs.Spec.slashingsRowStep_total
+#print axioms EpochProofs.Spec.midOk_of_rowBounds
+#print axioms EpochProofs.Spec.depOk_of_rowBounds
+#print axioms EpochProofs.Spec.process_epoch_total_rows

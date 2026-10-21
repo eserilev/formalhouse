@@ -125,5 +125,6 @@ import EpochProofs.Etheorem.LighthouseOrder
 import EpochProofs.Etheorem.Final
 import EpochProofs.Sanity.Invariants.Totality
 import EpochProofs.Sanity.Invariants.TotalityCommittees
+import EpochProofs.Sanity.Invariants.TotalityRows
 import EpochProofs.Etheorem.Total
 import EpochProofs.Axioms
