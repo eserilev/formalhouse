@@ -50,6 +50,7 @@ import EpochProofs.Etheorem.Oracle
 import EpochProofs.Etheorem.Resets
 import EpochProofs.Etheorem.EffectiveBalance
 import EpochProofs.Etheorem.HistoricalSummaries
+import EpochProofs.Etheorem.Committees
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -191,3 +192,19 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Etheorem.tailPresetAgrees_minimal
 #print axioms EpochProofs.Etheorem.effective_balance_updates_etheorem
 #print axioms EpochProofs.Etheorem.historical_summaries_update_etheorem
+#print axioms EpochProofs.Etheorem.compute_shuffled_permutation_ok
+#print axioms EpochProofs.Etheorem.compute_shuffled_index_ok
+#print axioms EpochProofs.Etheorem.compute_balance_weighted_selection_ok
+#print axioms EpochProofs.Etheorem.get_seed_ok
+#print axioms EpochProofs.Etheorem.get_committee_count_per_slot_ok
+#print axioms EpochProofs.Etheorem.compute_committee_ok
+#print axioms EpochProofs.Etheorem.get_beacon_committee_ok
+#print axioms EpochProofs.Etheorem.get_beacon_proposer_indices_ok
+#print axioms EpochProofs.Etheorem.process_proposer_lookahead_etheorem
+#print axioms EpochProofs.Etheorem.get_next_sync_committee_ok
+#print axioms EpochProofs.Etheorem.process_sync_committee_updates_etheorem
+#print axioms EpochProofs.Etheorem.compute_ptc_ok
+#print axioms EpochProofs.Etheorem.process_ptc_window_etheorem
+#print axioms EpochProofs.Etheorem.committeePresetAgrees_mainnet
+#print axioms EpochProofs.Etheorem.committeePresetAgrees_minimal
+#print axioms EpochProofs.Etheorem.sha_size_pure
