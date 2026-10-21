@@ -15,6 +15,14 @@ start of the epoch, on mainnet.
   (F6). The steps before each of these reads do not write the fields it reads.
 - Kept as they are (`SelectionsFull`): Etheorem's balance weighted selections return all their
   items (F3). These are facts about Etheorem's own output.
+
+F2 is a real difference on reachable states. Electra genesis and `upgrade_to_electra` set
+`deposit_requests_start_index` to `UNSET` (`2^64 - 1`). Fulu removed the line of
+`process_deposit_request` that sets it. So a chain with no deposit request before Fulu keeps
+`UNSET` forever, for example a devnet with Fulu or Gloas at genesis. Each deposit request then
+adds a pending deposit with a slot above 0. The pyspec applies it. Etheorem stops its scan at it
+in every epoch. The EF vectors miss this: the Fulu test genesis sets the start index to the
+deposit count.
 -/
 
 namespace EpochProofs.Spec
@@ -288,8 +296,8 @@ fields, so each fact still holds when its step reads it.
 - `depositRoom`: Etheorem's registry limit `2^40` has room for every pending deposit. Etheorem
   drops a new validator past this limit (F10). The pyspec raises.
 - `depositBridge`: each pending deposit is at slot 0, or the eth1 bridge is done (F2). Etheorem
-  keeps the Electra bridge stop. The pyspec removed it in Fulu. No Fulu or Gloas function writes
-  either index, so this fact holds on a chain from its start or never.
+  keeps the Electra bridge stop. The pyspec removed it in Fulu. The reference spec has no write
+  to either index, so the second case holds on a chain from its start or never.
 - `builderRoom`: the builder withdrawals have room for `SLOTS_PER_EPOCH` more items under
   Etheorem's alpha.11 limit (F6). Beta.2 has no limit.
 - `summariesRoom`: the historical summaries have room for one more item under the alpha.11
