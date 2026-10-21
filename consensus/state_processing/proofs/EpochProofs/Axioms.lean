@@ -70,6 +70,7 @@ import EpochProofs.Sanity.Invariants.LighthouseOrder
 import EpochProofs.Etheorem.LighthouseOrder
 import EpochProofs.Etheorem.Final
 import EpochProofs.CacheBridge.Capstone
+import EpochProofs.CacheBridge.CapstoneCommittees
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -319,3 +320,14 @@ open EpochProofs.Spec
 #print axioms EpochProofs.CacheBridge.lh_base_reward_eq
 #print axioms EpochProofs.CacheBridge.lh_cache_reads_mainnet
 #print axioms EpochProofs.CacheBridge.lighthouse_order_epoch_etheorem_reachable_cached
+#print axioms EpochProofs.CacheBridge.csiFold_eq
+#print axioms EpochProofs.CacheBridge.epoch_shuffled_at
+#print axioms EpochProofs.CacheBridge.epoch_compute_committee_slice
+#print axioms EpochProofs.CacheBridge.epoch_cps_eq
+#print axioms EpochProofs.CacheBridge.epoch_get_beacon_committee_slice
+#print axioms EpochProofs.CacheBridge.lh_committee_eq
+#print axioms EpochProofs.CacheBridge.ptcIndices_of_cache
+#print axioms EpochProofs.CacheBridge.committeeCacheBuilt_of_rust
+#print axioms EpochProofs.CacheBridge.hcomm_of_cache
+#print axioms EpochProofs.CacheBridge.lh_ptc_window_from_cache
+#print axioms EpochProofs.CacheBridge.lighthouse_order_epoch_etheorem_reachable_cached_ptc
