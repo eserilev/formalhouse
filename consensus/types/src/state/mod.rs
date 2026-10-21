@@ -15,6 +15,7 @@ mod iter;
 pub mod participation_totals;
 mod progressive_balances_cache;
 mod pubkey_cache;
+pub mod pubkey_index;
 mod slashings_cache;
 pub mod total_active_balance;
 
