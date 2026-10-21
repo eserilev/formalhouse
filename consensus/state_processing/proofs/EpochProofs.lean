@@ -101,4 +101,9 @@ import EpochProofs.Etheorem.EffectiveBalance
 import EpochProofs.Etheorem.HistoricalSummaries
 import EpochProofs.Etheorem.Shuffle
 import EpochProofs.Etheorem.Committees
+import EpochProofs.Etheorem.Participation
+import EpochProofs.Etheorem.Justification
+import EpochProofs.Etheorem.Inactivity
+import EpochProofs.Etheorem.Rewards
+import EpochProofs.Etheorem.Slashings
 import EpochProofs.Axioms
