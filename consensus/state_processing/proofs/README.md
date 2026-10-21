@@ -246,8 +246,15 @@ functions that differ from Gloas. `Sanity/Fulu.lean` reduces them to the Gloas f
   step in Fulu. `LighthouseFulu.lean` proves `process_epoch_lh_full_fulu_sameOk'`, and
   `LighthouseFuluOrder.lean` proves `lighthouse_fulu_epoch_sameOk` for Lighthouse's Fulu order.
 
-Not yet done for Fulu: totality, and the Fulu invariants from genesis (the Lean spec has no Fulu
-block processing).
+- Block: `Spec/Block/Fulu*.lean` transcribe the Fulu block functions that differ from Gloas:
+  the Electra `process_withdrawals` (from the payload), `process_execution_payload`, the
+  operations with the Fulu churn, the Electra `process_attestation`, `process_operations` and
+  `process_block`. `FuluState` is the Gloas `BeaconState` plus the payload header, and
+  `FuluOracle` holds the Fulu roots and the execution engine. The shared functions come from
+  the Gloas files. `Sanity/Block/FuluBlock.lean` has the first facts about them.
+
+Not yet done for Fulu: totality, and the Fulu invariants from genesis (the Fulu block functions
+have no preservation proofs yet).
 
 ## Separate passes and the single pass
 

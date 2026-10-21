@@ -86,6 +86,7 @@ import EpochProofs.Sanity.Invariants.FuluOrder
 import EpochProofs.Etheorem.Fulu.Epoch
 import EpochProofs.Formalhouse
 import EpochProofs.FormalhouseFulu
+import EpochProofs.Sanity.Block.FuluBlock
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -470,3 +471,10 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.process_epoch_lh_order_fulu_sameOk
 #print axioms EpochProofs.Spec.lighthouse_fulu_epoch_sameOk
 #print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch
+#print axioms EpochProofs.Spec.process_operations_fulu_deposits
+#print axioms EpochProofs.Spec.process_operations_fulu_ok_deposits
+#print axioms EpochProofs.Spec.apply_withdrawals_fulu_ok
+#print axioms EpochProofs.Spec.process_withdrawals_fulu_expected
+#print axioms EpochProofs.Spec.process_execution_payload_fulu_ok
+#print axioms EpochProofs.Spec.process_attestation_fulu_validators
+#print axioms EpochProofs.Spec.process_block_fulu_header
