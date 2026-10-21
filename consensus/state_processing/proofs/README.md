@@ -5,7 +5,9 @@ Goal: prove that Lighthouse's Gloas epoch processing equals the consensus spec f
 ```
 ../src/per_epoch_processing/{builder_pending_payments,effective_balance,inactivity_updates,slashings_penalty,
    rewards_penalties,registry_update,pending_deposits,pending_consolidations,
-   single_pass_step,justification}.rs
+   single_pass_step,justification,epoch_committees,tail_updates}.rs
+../../types/src/state/balance_weighted_selection.rs
+../../swap_or_not_shuffle/src/{shuffle_hash,compute_shuffled_index_with}.rs
    --charon--> .llbc --aeneas--> EpochProofs/Generated.lean
                                           |
                      EpochProofs/Equiv/*.lean (equivalence proof)
@@ -26,6 +28,34 @@ EpochProofs/Spec/*.lean  <-- written by hand from the consensus specs
 | `process_pending_deposits` (decisions) | Done | Done | Done |
 | `process_pending_consolidations` (balance moves) | Done | Done | Done |
 | `process_justification_and_finalization` | Done | Done | Done |
+| `process_proposer_lookahead`, `process_ptc_window`, sync committee selection (Gloas) | Done | Done | Done, with glue conditions |
+| eth1, slashings and randao resets, historical summaries (checks) | Done | Done | Done |
+
+## Each epoch step and what checks it
+
+The main result is `lighthouse_order_epoch_etheorem_reachable`. It is a theorem about the model
+`process_epoch_lh_order`. The table says, for each step of the model, which Lighthouse Rust
+Aeneas translates, and what the model takes on trust. "Glue" is Rust that reads or writes the
+state around a translated function, modeled by hand in Lean. "Cache" is a Lighthouse cache whose
+value the model takes from the spec. The cache stack (#24 to #29) proves the caches separately.
+It is not joined to the main result.
+
+| Step (Lighthouse order) | Aeneas-checked Rust | Glue (by hand) | Cache (trusted here) |
+|---|---|---|---|
+| Justification and finalization | `justification.rs` (#53) | read the bits and roots, write the checkpoints | progressive balances totals (#27) |
+| Inactivity, rewards, registry, slashings, deposit top-up, effective balance | `single_pass_step.rs` and the step modules (#5 to #12, #22) | the milhouse loop in `single_pass.rs` calls the step once per validator, in order | base reward and total active balance (#26, #27), exit cache (#24), activation queue (#25) |
+| Pending deposits | `pending_deposits.rs` (#10) | the pubkey map; `Validator::from_deposit` and `add_validator_to_registry` (`types` crate, not translated) | pubkey cache |
+| Pending consolidations | `pending_consolidations.rs` (#11) | the index table and the balance write back | none |
+| Builder pending payments | `builder_pending_payments.rs` (#4) | the list writes | total active balance |
+| Proposer lookahead, PTC window, next sync committee | `epoch_committees.rs`, `balance_weighted_selection.rs`, `compute_shuffled_index_with.rs` (#54) | `SeedMixLink`, `EBLink`, the index lists, the milhouse PTC shift, the sync committee keys and aggregate key | committee cache (#28), shuffle (#29) |
+| Eth1, slashings and randao resets, historical summaries | `tail_updates.rs` (#56) | the vector writes (`LighthouseResets.lean`); the summary root is `hash_tree_root` in the Oracle | none |
+| Participation flag rotation | none | the whole step | none |
+| Step order | not Rust | `process_epoch_lh_order` follows `altair.rs` and `single_pass.rs`; `LighthouseOrder*.lean` proves the order safe | none |
+| Genesis epoch | none | the model uses the spec `process_epoch` | none |
+
+For the committee steps, the theorems of #54 show that the Rust returns the spec result under the
+glue conditions. The model calls the spec function at that step. The glue conditions are not
+hypotheses of the main result.
 
 ## The theorems
 
@@ -320,13 +350,14 @@ Gloas epoch. The reference is then no longer trusted for the epoch.
 | `process_epoch_etheorem` | If `Spec.process_epoch` returns `s'`, Etheorem's `processEpoch` succeeds and `absEState` of its result is `s'`. |
 | `lighthouse_epoch_etheorem` | The same for `process_epoch_lh_full`, the Lighthouse epoch model, on mainnet. |
 | `lighthouse_epoch_etheorem_reachable` | The same at each epoch boundary of a reachable run, with the step conditions read from the epoch start state. |
+| `lighthouse_order_epoch_etheorem` | The same for `process_epoch_lh_order`, the Lighthouse epoch in the Lighthouse order. |
+| `lighthouse_order_epoch_etheorem_reachable` | The Lighthouse order at each epoch boundary of a reachable run. This is the main result. |
 
 `Etheorem/Conditions.lean` proves three step conditions from the reachable-state invariants: the
 finalized epoch is below `FAR_FUTURE_EPOCH`, and the registry lists have equal lengths before
 the deposits and the consolidations. Frame lemmas move four conditions to the epoch start:
 room for the pending deposits, the eth1 bridge (F2), and room in the builder withdrawals and
 the historical summaries (F6). The F3 conditions are facts about Etheorem's own output and stay.
-| `lighthouse_order_epoch_etheorem` | The same for `process_epoch_lh_order`, the Lighthouse epoch in the Lighthouse order. |
 
 The 17 step theorems are in `Etheorem/<Step>.lean`. `etheorem/PLAN.md` lists the conditions of
 `process_epoch_etheorem` and the findings.
