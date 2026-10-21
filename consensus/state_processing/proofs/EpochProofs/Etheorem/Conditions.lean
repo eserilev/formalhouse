@@ -16,13 +16,16 @@ start of the epoch, on mainnet.
 - Kept as they are (`SelectionsFull`): Etheorem's balance weighted selections return all their
   items (F3). These are facts about Etheorem's own output.
 
-F2 is a real difference on reachable states. Electra genesis and `upgrade_to_electra` set
-`deposit_requests_start_index` to `UNSET` (`2^64 - 1`). Fulu removed the line of
-`process_deposit_request` that sets it. So a chain with no deposit request before Fulu keeps
-`UNSET` forever, for example a devnet with Fulu or Gloas at genesis. Each deposit request then
-adds a pending deposit with a slot above 0. The pyspec applies it. Etheorem stops its scan at it
-in every epoch. The EF vectors miss this: the Fulu test genesis sets the start index to the
-deposit count.
+F2: Etheorem keeps two Electra lines that Fulu removed: the eth1 bridge check in
+`process_pending_deposits` and the start index setter in `process_deposit_request`.
+On a pyspec state the two epoch functions differ. Electra genesis and `upgrade_to_electra` set
+`deposit_requests_start_index` to `UNSET` (`2^64 - 1`), and the pyspec never sets it after Fulu.
+So a chain with no deposit request before Fulu keeps `UNSET`, for example a devnet with Fulu or
+Gloas at genesis. On that state the pyspec applies a deposit request, and Etheorem's epoch stops
+its scan at it. Etheorem's own block processing sets the index at the first request, so a whole
+Etheorem chain differs only if `eth1_deposit_index` is below that first request index. That case
+is not shown reachable. The EF vectors miss both: the Fulu test genesis sets the start index to
+the deposit count.
 -/
 
 namespace EpochProofs.Spec
