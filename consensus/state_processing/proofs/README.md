@@ -44,7 +44,7 @@ It is not joined to the main result.
 |---|---|---|---|
 | Justification and finalization | `justification.rs` (#53) | read the bits and roots, write the checkpoints | progressive balances totals (#27) |
 | Inactivity, rewards, registry, slashings, deposit top-up, effective balance | `single_pass_step.rs` and the step modules (#5 to #12, #22) | the milhouse loop in `single_pass.rs` calls the step once per validator, in order | base reward and total active balance (#26, #27), exit cache (#24), activation queue (#25) |
-| Pending deposits | `pending_deposits.rs` (#10) | the pubkey map; `Validator::from_deposit` and `add_validator_to_registry` (`types` crate, not translated) | pubkey cache |
+| Pending deposits | `pending_deposits.rs` (#10); the effective balance of a new validator, `deposit_balance.rs` | the pubkey map; the `Validator` struct build and the list pushes of `add_validator_to_registry` | pubkey cache |
 | Pending consolidations | `pending_consolidations.rs` (#11) | the index table and the balance write back | none |
 | Builder pending payments | `builder_pending_payments.rs` (#4) | the list writes | total active balance |
 | Proposer lookahead, PTC window, next sync committee | `epoch_committees.rs`, `balance_weighted_selection.rs`, `compute_shuffled_index_with.rs` (#54) | `SeedMixLink`, `EBLink`, the index lists, the milhouse PTC shift, the sync committee keys and aggregate key | committee cache (#28), shuffle (#29) |
@@ -485,7 +485,8 @@ charon cargo --preset=aeneas \
   --start-from 'state_processing::per_epoch_processing::justification' \
   --start-from 'state_processing::per_epoch_processing::epoch_committees' \
   --start-from 'state_processing::per_epoch_processing::tail_updates' \
-  --include safe_arith --include types::state::balance_weighted_selection \
+  --include safe_arith --include types::validator::deposit_balance \
+  --include types::state::balance_weighted_selection \
   --include swap_or_not_shuffle::shuffle_hash --include swap_or_not_shuffle::compute_shuffled_index_with \
   --include types::builder --include alloy_primitives::bits \
   --include types::core::consts \
@@ -527,8 +528,11 @@ copies the rest of the body into each branch, and the generated code grows expon
   results back. `lighthouseBuilderPendingPayments` models it by hand.
 - `ChainSpec` sets the payment threshold to 6/10. The glue model uses these values.
 - `state_ctxt.total_active_balance` equals `get_total_active_balance(state)`.
-- `Validator::get_max_effective_balance` equals the spec `get_max_effective_balance` after
-  Electra. `single_pass.rs` passes its result to `new_effective_balance`.
+- After Electra, `Validator::get_max_effective_balance` calls `max_effective_balance_electra`
+  of `deposit_balance.rs` (`max_effective_balance_electra_equiv`). The input
+  `has_compounding_withdrawal_credential` compares the first credential byte with
+  `COMPOUNDING_WITHDRAWAL_PREFIX`, as the spec does. `single_pass.rs` passes the result to
+  `new_effective_balance`.
 - `single_pass.rs` passes three flags to `new_inactivity_score`: `is_eligible`, the timely
   target check, and `is_in_inactivity_leak`. Each equals its spec predicate.
 - `single_pass.rs` sums `state.slashings` with `safe_sum`. The theorem takes the sum as an input.
@@ -559,8 +563,13 @@ copies the rest of the body into each branch, and the generated code grows expon
   `HistoricalSummary::new` hashes the block and state roots, as `hash_tree_root` in the Oracle.
 - `rotate_participation_flags` moves the current participation to the previous one and writes
   one zero flag for each validator, as the spec does. It has no translated module.
-- `Validator::from_deposit` and `BeaconState::add_validator_to_registry` (in the `types` crate)
-  are not translated. The Charon run is on `state_processing` and reaches only its own modules.
+- `Validator::from_deposit` computes the effective balance with the two functions of
+  `deposit_balance.rs` in the `types` crate (`deposit_effective_balance_equiv`). Charon reaches
+  them from `new_validator_effective_balance` in `pending_deposits.rs`. The rest of
+  `Validator::from_deposit` copies the inputs and sets the four epochs to `FAR_FUTURE_EPOCH`.
+  `BeaconState::add_validator_to_registry` pushes one entry onto each of the five lists.
+  `lhApplyPendingDeposit` models both, and `lhApplyPendingDeposit_eq` shows that it equals
+  `apply_pending_deposit` when the increment is not 0.
 - At the genesis epoch, `process_epoch_lh_full` and `process_epoch_lh_order` are the spec
   `process_epoch`. Lighthouse runs the single pass with `after_genesis` false there. This path
   runs once per chain, at the end of epoch 0, and a chain that forks into Gloas never takes it.

@@ -73,6 +73,8 @@ import EpochProofs.Sanity.Invariants.Totality
 import EpochProofs.Sanity.Invariants.TotalityCommittees
 import EpochProofs.Sanity.Invariants.TotalityRows
 import EpochProofs.Etheorem.Total
+import EpochProofs.Equiv.DepositBalance
+import EpochProofs.Equiv.SelectionEmpty
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -330,3 +332,10 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.midOk_of_rowBounds
 #print axioms EpochProofs.Spec.depOk_of_rowBounds
 #print axioms EpochProofs.Spec.process_epoch_total_rows
+#print axioms EpochProofs.max_effective_balance_electra_equiv
+#print axioms EpochProofs.deposit_effective_balance_equiv
+#print axioms EpochProofs.new_validator_effective_balance_equiv
+#print axioms EpochProofs.Spec.get_validator_from_deposit_lh
+#print axioms EpochProofs.Spec.lhApplyPendingDeposit_mainnet
+#print axioms EpochProofs.compute_balance_weighted_selection_empty
+#print axioms EpochProofs.spec_compute_balance_weighted_selection_empty

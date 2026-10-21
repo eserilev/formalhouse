@@ -127,4 +127,7 @@ import EpochProofs.Sanity.Invariants.Totality
 import EpochProofs.Sanity.Invariants.TotalityCommittees
 import EpochProofs.Sanity.Invariants.TotalityRows
 import EpochProofs.Etheorem.Total
+import EpochProofs.Sanity.LighthouseNewValidator
+import EpochProofs.Equiv.DepositBalance
+import EpochProofs.Equiv.SelectionEmpty
 import EpochProofs.Axioms

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use ssz_derive::{Decode, Encode};
 use tree_hash_derive::TreeHash;
 
+use super::deposit_balance;
 use crate::{
     attestation::Checkpoint,
     core::{Address, ChainSpec, Epoch, EthSpec, Hash256},
@@ -31,7 +32,6 @@ pub struct Validator {
 }
 
 impl Validator {
-    #[allow(clippy::arithmetic_side_effects)]
     pub fn from_deposit(
         pubkey: PublicKeyBytes,
         withdrawal_credentials: Hash256,
@@ -51,9 +51,9 @@ impl Validator {
         };
 
         let max_effective_balance = validator.get_max_effective_balance(spec, fork_name);
-        // safe math is unnecessary here since the spec.effective_balance_increment is never <= 0
-        validator.effective_balance = std::cmp::min(
-            amount - (amount % spec.effective_balance_increment),
+        validator.effective_balance = deposit_balance::deposit_effective_balance(
+            amount,
+            spec.effective_balance_increment,
             max_effective_balance,
         );
 
@@ -277,11 +277,11 @@ impl Validator {
     /// Returns the max effective balance for a validator in gwei.
     pub fn get_max_effective_balance(&self, spec: &ChainSpec, current_fork: ForkName) -> u64 {
         if current_fork >= ForkName::Electra {
-            if self.has_compounding_withdrawal_credential(spec) {
-                spec.max_effective_balance_electra
-            } else {
-                spec.min_activation_balance
-            }
+            deposit_balance::max_effective_balance_electra(
+                self.has_compounding_withdrawal_credential(spec),
+                spec.max_effective_balance_electra,
+                spec.min_activation_balance,
+            )
         } else {
             spec.max_effective_balance
         }
