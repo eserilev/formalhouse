@@ -64,6 +64,10 @@ import EpochProofs.Etheorem.Conditions
 import EpochProofs.Equiv.Justification
 import EpochProofs.Sanity.LighthouseJustification
 import EpochProofs.Equiv.EpochCommittees
+import EpochProofs.Equiv.TailUpdates
+import EpochProofs.Sanity.Invariants.LighthouseResets
+import EpochProofs.Sanity.Invariants.LighthouseOrder
+import EpochProofs.Etheorem.LighthouseOrder
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -283,3 +287,18 @@ open EpochProofs.Spec
 #print axioms EpochProofs.next_proposer_lookahead_spec
 #print axioms EpochProofs.compute_ptc_spec
 #print axioms EpochProofs.ptc_for_epoch_spec
+#print axioms EpochProofs.eth1_data_votes_reset_due_equiv
+#print axioms EpochProofs.historical_summary_due_equiv
+#print axioms EpochProofs.epoch_vector_index_equiv
+#print axioms EpochProofs.slashings_reset_index_equiv
+#print axioms EpochProofs.randao_mixes_reset_indices_equiv
+#print axioms EpochProofs.Spec.lhEth1DataReset_eq
+#print axioms EpochProofs.Spec.lhSlashingsReset_eq
+#print axioms EpochProofs.Spec.lhRandaoMixesReset_eq
+#print axioms EpochProofs.Spec.lhHistoricalSummariesUpdate_eq
+#print axioms EpochProofs.Spec.specOrder_lhOrder
+#print axioms EpochProofs.Spec.lhAfterPassOrder_sameOk
+#print axioms EpochProofs.Spec.process_epoch_lh_order_sameOk
+#print axioms EpochProofs.Spec.reachable_state_transition_sameOk_last
+#print axioms EpochProofs.Spec.lighthouse_order_epoch_state_transition_sameOk
+#print axioms EpochProofs.Etheorem.lighthouse_order_epoch_etheorem
