@@ -44,6 +44,7 @@ import EpochProofs.Sanity.Invariants.LighthouseTailTopups
 import EpochProofs.Sanity.Invariants.LighthouseTailViews
 import EpochProofs.Sanity.Invariants.PubkeysUnique
 import EpochProofs.Sanity.Invariants.WithdrawableEpochs
+import EpochProofs.Etheorem.BuilderPendingPayments
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -56,6 +57,8 @@ open EpochProofs.Spec
 #print axioms EpochProofs.quorum_equiv
 #print axioms EpochProofs.absPayment_default
 #print axioms EpochProofs.builder_pending_payments_equiv
+#print axioms EpochProofs.Etheorem.builder_pending_payments_etheorem
+#print axioms EpochProofs.Etheorem.lighthouse_builder_pending_payments_etheorem
 #print axioms EpochProofs.Spec.process_effective_balance_updates_eq
 #print axioms EpochProofs.Spec.hysteresisThresholds_mainnet
 #print axioms EpochProofs.Spec.newEffectiveBalance_le_max

@@ -93,4 +93,5 @@ import EpochProofs.Equiv.RegistryUpdates
 import EpochProofs.Equiv.PendingDeposits
 import EpochProofs.Equiv.PendingConsolidations
 import EpochProofs.Equiv.SinglePassStep
+import EpochProofs.Etheorem.BuilderPendingPayments
 import EpochProofs.Axioms
