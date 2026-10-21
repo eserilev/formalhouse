@@ -62,6 +62,8 @@ import EpochProofs.Sanity.Block.SyncAggregate
 import EpochProofs.Sanity.JustificationFinalization
 import EpochProofs.Sanity.EpochCommittees
 import EpochProofs.Spec.Block.Block
+import EpochProofs.Spec.Block.FuluBlock
+import EpochProofs.Sanity.Block.FuluBlock
 import EpochProofs.Sanity.Driver
 import EpochProofs.Sanity.Invariants.ExitDelay
 import EpochProofs.Sanity.Invariants.BalanceFloor
