@@ -74,6 +74,7 @@ import EpochProofs.Equiv.FuluRegistry
 import EpochProofs.Sanity.FuluSinglePass
 import EpochProofs.Sanity.FuluEpoch
 import EpochProofs.Sanity.Invariants.FuluOrder
+import EpochProofs.Etheorem.Fulu.Epoch
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -360,3 +361,31 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.process_proposer_lookahead_fulu_eq
 #print axioms EpochProofs.Spec.plFuluNew_congr
 #print axioms EpochProofs.Spec.specOrderFulu_lhOrderFulu
+#print axioms EpochProofs.Etheorem.Fulu.get_activation_exit_churn_limit_ok
+#print axioms EpochProofs.Etheorem.Fulu.get_exit_churn_limit_ok
+#print axioms EpochProofs.Etheorem.Fulu.get_activation_churn_limit_ok
+#print axioms EpochProofs.Etheorem.Fulu.compute_exit_epoch_and_update_churn_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.initiate_validator_exit_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.presetAgrees_mainnet
+#print axioms EpochProofs.Etheorem.Fulu.presetAgrees_minimal
+#print axioms EpochProofs.Etheorem.Fulu.fuluChurnAgrees_mainnet
+#print axioms EpochProofs.Etheorem.Fulu.fuluChurnAgrees_minimal
+#print axioms EpochProofs.Etheorem.Fulu.justification_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.inactivity_updates_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.rewards_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.slashings_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.process_registry_updates_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.process_pending_deposits_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.process_pending_consolidations_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.eth1_data_reset_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.effective_balance_updates_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.slashings_reset_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.randao_mixes_reset_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.historical_summaries_update_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.participation_flag_updates_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.get_beacon_proposer_indices_ok
+#print axioms EpochProofs.Etheorem.Fulu.process_proposer_lookahead_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.process_sync_committee_updates_fulu_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.epochPresetAgrees_mainnet
+#print axioms EpochProofs.Etheorem.Fulu.epochPresetAgrees_minimal
+#print axioms EpochProofs.Etheorem.Fulu.process_epoch_fulu_etheorem
