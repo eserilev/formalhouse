@@ -51,6 +51,11 @@ import EpochProofs.Etheorem.Resets
 import EpochProofs.Etheorem.EffectiveBalance
 import EpochProofs.Etheorem.HistoricalSummaries
 import EpochProofs.Etheorem.Committees
+import EpochProofs.Etheorem.Participation
+import EpochProofs.Etheorem.Justification
+import EpochProofs.Etheorem.Inactivity
+import EpochProofs.Etheorem.Rewards
+import EpochProofs.Etheorem.Slashings
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -208,3 +213,22 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Etheorem.committeePresetAgrees_mainnet
 #print axioms EpochProofs.Etheorem.committeePresetAgrees_minimal
 #print axioms EpochProofs.Etheorem.sha_size_pure
+#print axioms EpochProofs.Etheorem.get_unslashed_participating_indices_ok
+#print axioms EpochProofs.Etheorem.get_eligible_validator_indices_ok
+#print axioms EpochProofs.Etheorem.is_in_inactivity_leak_ok
+#print axioms EpochProofs.Etheorem.passesPresetAgrees_mainnet
+#print axioms EpochProofs.Etheorem.passesPresetAgrees_minimal
+#print axioms EpochProofs.Etheorem.get_block_root_etheorem
+#print axioms EpochProofs.Etheorem.weigh_run
+#print axioms EpochProofs.Etheorem.weigh_etheorem
+#print axioms EpochProofs.Etheorem.justification_etheorem
+#print axioms EpochProofs.Etheorem.processInactivityUpdates_run
+#print axioms EpochProofs.Etheorem.inactivity_updates_etheorem
+#print axioms EpochProofs.Etheorem.processSlashings_run
+#print axioms EpochProofs.Etheorem.slashings_etheorem
+#print axioms EpochProofs.Etheorem.getFlagIndexDeltas_eq
+#print axioms EpochProofs.Etheorem.flag_deltas_etheorem
+#print axioms EpochProofs.Etheorem.getInactivityPenaltyDeltas_eq
+#print axioms EpochProofs.Etheorem.inact_deltas_etheorem
+#print axioms EpochProofs.Etheorem.applyDeltas_run
+#print axioms EpochProofs.Etheorem.rewards_etheorem
