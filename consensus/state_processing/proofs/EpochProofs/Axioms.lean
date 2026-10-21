@@ -60,6 +60,7 @@ import EpochProofs.Etheorem.Registry
 import EpochProofs.Etheorem.Deposits
 import EpochProofs.Etheorem.Consolidations
 import EpochProofs.Etheorem.Epoch
+import EpochProofs.Etheorem.Conditions
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -250,3 +251,12 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Etheorem.builder_pending_payments_etheorem'
 #print axioms EpochProofs.Etheorem.process_epoch_etheorem
 #print axioms EpochProofs.Etheorem.lighthouse_epoch_etheorem
+#print axioms EpochProofs.Spec.process_justification_and_finalization_pframe
+#print axioms EpochProofs.Spec.process_registry_updates_pframe
+#print axioms EpochProofs.Spec.process_pending_deposits_qframe
+#print axioms EpochProofs.Spec.process_pending_consolidations_pframe
+#print axioms EpochProofs.Spec.process_builder_pending_payments_summaries
+#print axioms EpochProofs.Etheorem.lensEq_of_rowsOk
+#print axioms EpochProofs.Etheorem.qualifyingBuilderWithdrawals_length
+#print axioms EpochProofs.Etheorem.process_epoch_etheorem_in
+#print axioms EpochProofs.Etheorem.lighthouse_epoch_etheorem_reachable

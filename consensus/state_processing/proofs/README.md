@@ -259,6 +259,13 @@ Gloas epoch. The reference is then no longer trusted for the epoch.
 |---|---|
 | `process_epoch_etheorem` | If `Spec.process_epoch` returns `s'`, Etheorem's `processEpoch` succeeds and `absEState` of its result is `s'`. |
 | `lighthouse_epoch_etheorem` | The same for `process_epoch_lh_full`, the Lighthouse epoch model, on mainnet. |
+| `lighthouse_epoch_etheorem_reachable` | The same at each epoch boundary of a reachable run, with the step conditions read from the epoch start state. |
+
+`Etheorem/Conditions.lean` proves three step conditions from the reachable-state invariants: the
+finalized epoch is below `FAR_FUTURE_EPOCH`, and the registry lists have equal lengths before
+the deposits and the consolidations. Frame lemmas move four conditions to the epoch start:
+room for the pending deposits, the eth1 bridge (F2), and room in the builder withdrawals and
+the historical summaries (F6). The F3 conditions are facts about Etheorem's own output and stay.
 
 The 17 step theorems are in `Etheorem/<Step>.lean`. `etheorem/PLAN.md` lists the conditions of
 `process_epoch_etheorem` and the findings.
