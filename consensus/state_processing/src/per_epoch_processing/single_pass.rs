@@ -4,8 +4,8 @@ use crate::{
     per_block_processing::is_valid_deposit_signature,
     per_epoch_processing::{
         Error, ParticipationEpochSummary, builder_pending_payments, effective_balance,
-        inactivity_updates, pending_consolidations, pending_deposits, registry_update,
-        rewards_penalties, single_pass_step, slashings_penalty,
+        epoch_committees, inactivity_updates, pending_consolidations, pending_deposits,
+        registry_update, rewards_penalties, single_pass_step, slashings_penalty,
     },
 };
 use itertools::izip;
@@ -14,12 +14,13 @@ use safe_arith::{SafeArith, SafeArithIter};
 use std::cmp::max;
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
+use swap_or_not_shuffle::Sha256Hash;
 use tracing::instrument;
 use typenum::Unsigned;
 use types::{
-    ActivationQueue, BeaconState, BeaconStateError, ChainSpec, CommitteeCache, DepositData, Epoch,
-    EthSpec, ExitCache, ForkName, ParticipationFlags, PendingDeposit, ProgressiveBalancesCache,
-    RelativeEpoch, Validator,
+    ActivationQueue, BeaconState, BeaconStateError, ChainSpec, CommitteeCache, DepositData, Domain,
+    Epoch, EthSpec, ExitCache, ForkName, ParticipationFlags, PendingDeposit,
+    ProgressiveBalancesCache, RelativeEpoch, Validator,
     consts::altair::{
         NUM_FLAG_INDICES, TIMELY_HEAD_FLAG_INDEX, TIMELY_SOURCE_FLAG_INDEX,
         TIMELY_TARGET_FLAG_INDEX,
@@ -619,29 +620,62 @@ pub fn process_proposer_lookahead<E: EthSpec>(
     state: &mut BeaconState<E>,
     spec: &ChainSpec,
 ) -> Result<(), Error> {
-    let mut lookahead = state.proposer_lookahead()?.clone().to_vec();
-
-    // Shift out proposers in the first epoch
-    lookahead.copy_within((E::slots_per_epoch() as usize).., 0);
+    let lookahead = state.proposer_lookahead()?.clone().to_vec();
 
     let next_epoch = state
         .current_epoch()
         .safe_add(spec.min_seed_lookahead.as_u64())?
         .safe_add(1)?;
-    let last_epoch_proposers = state.get_beacon_proposer_indices(next_epoch, spec)?;
 
-    // Fill in the last epoch with new proposer indices
-    let last_epoch_start = E::proposer_lookahead_slots().safe_sub(E::slots_per_epoch() as usize)?;
-    for (i, proposer) in last_epoch_proposers.into_iter().enumerate() {
-        let index = last_epoch_start.safe_add(i)?;
-        *lookahead
-            .get_mut(index)
-            .ok_or(Error::ProposerLookaheadOutOfBounds(index))? = proposer as u64;
-    }
+    // Shift out proposers in the first epoch and fill in the last epoch.
+    let lookahead = if state.fork_name_unchecked().gloas_enabled() {
+        // Post-Gloas, slashed validators are excluded from proposer selection.
+        let indices: Vec<usize> = state
+            .validators()
+            .iter()
+            .enumerate()
+            .filter(|(_, validator)| validator.is_active_at(next_epoch) && !validator.slashed)
+            .map(|(index, _)| index)
+            .collect();
+        let mix = *state.get_seed_mix(next_epoch, spec)?;
+        epoch_committees::next_proposer_lookahead::<Sha256Hash, _>(
+            &*state,
+            &lookahead,
+            &indices,
+            &spec
+                .get_domain_constant(Domain::BeaconProposer)
+                .to_le_bytes(),
+            next_epoch.as_u64(),
+            &mix.0,
+            next_epoch.start_slot(E::slots_per_epoch()).as_u64(),
+            &selection_constants(state, spec),
+        )
+        .map_err(BeaconStateError::from)?
+    } else {
+        let last_epoch_proposers = state.get_beacon_proposer_indices(next_epoch, spec)?;
+        epoch_committees::shift_lookahead(
+            &lookahead,
+            E::slots_per_epoch() as usize,
+            &last_epoch_proposers,
+        )
+        .ok_or(Error::ProposerLookaheadOutOfBounds(lookahead.len()))?
+    };
 
     *state.proposer_lookahead_mut()? = Vector::new(lookahead)?;
 
     Ok(())
+}
+
+/// The chain constants of the balance-weighted selection.
+pub(crate) fn selection_constants<E: EthSpec>(
+    state: &BeaconState<E>,
+    spec: &ChainSpec,
+) -> epoch_committees::SelectionConstants {
+    epoch_committees::SelectionConstants {
+        shuffle_round_count: spec.shuffle_round_count,
+        max_effective_balance: spec.max_effective_balance_for_fork(state.fork_name_unchecked()),
+        slots_per_epoch: E::slots_per_epoch(),
+    }
 }
 
 /// Process the PTC window, returning the committee cache built for the lookahead epoch.
@@ -673,9 +707,30 @@ pub fn process_ptc_window<E: EthSpec>(
     // Build a committee cache for the lookahead epoch (beyond the normal Next bound)
     let committee_cache = state.initialize_committee_cache_for_lookahead(next_epoch, spec)?;
 
+    let mut committees = Vec::with_capacity(slots_per_epoch);
     for i in 0..slots_per_epoch {
         let slot = start_slot.safe_add(i as u64)?;
-        let ptc = state.compute_ptc_with_cache(slot, &committee_cache, spec)?;
+        let committee_indices: Vec<usize> = committee_cache
+            .get_beacon_committees_at_slot(slot)?
+            .iter()
+            .flat_map(|committee| committee.committee.iter().copied())
+            .collect();
+        committees.push(committee_indices);
+    }
+    let mix = *state.get_seed_mix(next_epoch, spec)?;
+    let ptcs = epoch_committees::ptc_for_epoch::<Sha256Hash, _>(
+        &*state,
+        &committees,
+        &spec.get_domain_constant(Domain::PTCAttester).to_le_bytes(),
+        next_epoch.as_u64(),
+        &mix.0,
+        start_slot.as_u64(),
+        E::ptc_size(),
+        &selection_constants(state, spec),
+    )
+    .map_err(BeaconStateError::from)?;
+
+    for ptc in ptcs {
         let ptc_u64: Vec<u64> = ptc.into_iter().map(|v| v as u64).collect();
         let entry = ssz_types::FixedVector::new(ptc_u64)
             .map_err(|e| Error::BeaconStateError(BeaconStateError::SszTypesError(e)))?;

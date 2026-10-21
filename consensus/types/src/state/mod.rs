@@ -1,5 +1,6 @@
 mod activation_queue;
 mod balance;
+pub mod balance_weighted_selection;
 mod beacon_state;
 #[macro_use]
 mod committee_cache;

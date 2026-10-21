@@ -95,6 +95,22 @@ error. Lighthouse runs on a local table of the validators that consolidations re
 `process_pending_consolidations_eq` shows that the reference equals `stepLoop consolidationStep`
 on the full registry, then a drop of the processed consolidations.
 
+## Gloas committee steps
+
+`EpochProofs/Equiv/EpochCommittees.lean` proves the pure functions that the Gloas proposer
+lookahead, PTC window and sync committee steps call equal to the reference:
+
+- `next_proposer_lookahead_spec`: `epoch_committees::next_proposer_lookahead` returns the
+  `proposer_lookahead` of `process_proposer_lookahead`.
+- `ptc_for_epoch_spec`: `epoch_committees::ptc_for_epoch` returns the PTCs that
+  `process_ptc_window` appends.
+- `next_sync_committee_indices_spec`: `epoch_committees::next_sync_committee_indices` returns
+  `get_next_sync_committee_indices`.
+
+They rest on `compute_balance_weighted_selection_spec` (`Equiv/BalanceWeightedSelection.lean`)
+and `compute_shuffled_index_with_eq` (`Equiv/ShuffledIndex.lean`). The closed form of the spec
+shuffle (`Sanity/ShuffleClosedForm.lean`) is ported from the committee shuffle proof (#29).
+
 ## Separate passes and the single pass
 
 The spec runs each epoch step as its own pass over the validators. Lighthouse runs all steps
@@ -414,4 +430,14 @@ copies the rest of the body into each branch, and the generated code grows expon
   proved.
 - Lighthouse computes the hysteresis thresholds once per epoch. The spec computes them once per
   validator. The values are the same.
+- The Gloas committee steps (`EpochProofs/Equiv/EpochCommittees.lean`) take the glue facts of
+  `single_pass.rs` and `sync_committee_updates.rs` as hypotheses:
+  - `SeedMixLink`: `BeaconState::get_seed_mix` reads the RANDAO mix that `get_seed` reads.
+  - The index lists: the active validators of the epoch, the active and unslashed validators
+    for the proposers, and for the PTC the beacon committees of each slot that the committee
+    cache holds (see the committee cache proofs, eserilev/lighthouse-aeneas #28).
+  - `EBLink`: `BeaconState::get_effective_balance` reads the registry.
+  - `HashLink`: `Sha256Hash` computes SHA-256.
+  - The shuffle takes at most `2^24` indices, and `usize` has 64 bits.
+  - The sync committee pubkeys, the aggregate key and the milhouse PTC window shift stay glue.
 - The reference matches pyspec.
