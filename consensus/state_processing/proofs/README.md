@@ -206,6 +206,45 @@ None of these breaks the effective balance floor, but no proof covers this argum
 
 `absState` maps Aeneas types to reference types. Rust `Default` maps to spec `empty()`.
 
+## The epoch succeeds
+
+`SameOk` gives "Lighthouse returns `ok v` exactly when the spec returns `ok v`". It does not say
+that either one returns `ok`. `Sanity/Invariants/Totality.lean` proves that the spec epoch
+returns `ok` at the last slot of an epoch on mainnet (`process_epoch_total`).
+`Etheorem/Total.lean` combines it with `SameOk` and the Etheorem bridge
+(`lighthouse_epoch_total_etheorem`): the Lighthouse model returns `ok`, and its state equals
+Etheorem's.
+
+| Step | Status |
+|---|---|
+| Justification and finalization | Proved (`process_justification_and_finalization_total`) |
+| Inactivity, rewards, registry, slashings | Open (`TotalityOpen.middle`) |
+| Eth1 data reset | Proved |
+| Pending deposits | Open (`TotalityOpen.deposits`). One deposit is proved (`apply_pending_deposit_total`). |
+| Pending consolidations | Proved. The balance sum does not grow. |
+| Builder pending payments | Proved |
+| Effective balance updates | Proved |
+| Slashings reset, RANDAO mixes reset, historical summaries, participation | Proved |
+| Sync committee, proposer lookahead, PTC window | Proved (`committee_steps_total`), from `CommConds` and `CommPreconds` |
+
+Conditions beyond the reachable-state invariants: `slot + 8192 < 2^64` (the pyspec
+`get_block_root` adds `SLOTS_PER_HISTORICAL_ROOT` to a slot), and the SSZ vector lengths
+(`VectorLengths`).
+
+The committee steps (`Sanity/Invariants/TotalityCommittees.lean`) read two more sets of facts
+at the state before them:
+- `CommConds`: at most `2^40` validators, `effective_balance ≤ MAX_EFFECTIVE_BALANCE_ELECTRA`,
+  the lengths of `proposer_lookahead` and `ptc_window`, and valid public keys. These are
+  invariants of reachable states. No proof carries them through the earlier epoch steps yet.
+- `CommPreconds`: the pyspec raises without them. A validator is active at the next epoch (sync
+  committee). An active validator at `current + 2` is not slashed (F4). At least
+  `SLOTS_PER_EPOCH` validators are active at `current + 2`. Each balance weighted selection
+  ends within `2^64` passes (a fact about the hash values, like F3).
+
+`process_ptc_window_few_active_error` proves the third one is a real pyspec halt: with fewer than
+`SLOTS_PER_EPOCH` validators active at `current + 2`, the first slot of that epoch has no
+committee members, and `compute_ptc` raises at `assert total > 0`.
+
 ## The whole state transition
 
 `lighthouse_state_transition_sameOk` (in `Sanity/Invariants/Capstone.lean`) is the main result.

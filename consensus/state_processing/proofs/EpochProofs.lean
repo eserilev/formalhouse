@@ -123,4 +123,7 @@ import EpochProofs.Sanity.Invariants.LighthouseOrderEth1
 import EpochProofs.Sanity.Invariants.LighthouseOrder
 import EpochProofs.Etheorem.LighthouseOrder
 import EpochProofs.Etheorem.Final
+import EpochProofs.Sanity.Invariants.Totality
+import EpochProofs.Sanity.Invariants.TotalityCommittees
+import EpochProofs.Etheorem.Total
 import EpochProofs.Axioms

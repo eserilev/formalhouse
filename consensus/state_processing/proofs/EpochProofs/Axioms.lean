@@ -69,6 +69,9 @@ import EpochProofs.Sanity.Invariants.LighthouseResets
 import EpochProofs.Sanity.Invariants.LighthouseOrder
 import EpochProofs.Etheorem.LighthouseOrder
 import EpochProofs.Etheorem.Final
+import EpochProofs.Sanity.Invariants.Totality
+import EpochProofs.Sanity.Invariants.TotalityCommittees
+import EpochProofs.Etheorem.Total
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -303,3 +306,20 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.lighthouse_order_epoch_state_transition_sameOk
 #print axioms EpochProofs.Etheorem.lighthouse_order_epoch_etheorem
 #print axioms EpochProofs.Etheorem.lighthouse_order_epoch_etheorem_reachable
+#print axioms EpochProofs.Spec.process_justification_and_finalization_total
+#print axioms EpochProofs.Spec.process_pending_consolidations_total
+#print axioms EpochProofs.Spec.process_effective_balance_updates_total
+#print axioms EpochProofs.Spec.process_builder_pending_payments_total
+#print axioms EpochProofs.Spec.apply_pending_deposit_total
+#print axioms EpochProofs.Spec.process_epoch_total
+#print axioms EpochProofs.Etheorem.lighthouse_epoch_total_etheorem
+#print axioms EpochProofs.Spec.compute_balance_weighted_selection_total
+#print axioms EpochProofs.Spec.ptcIndices_total
+#print axioms EpochProofs.Spec.get_next_sync_committee_total
+#print axioms EpochProofs.Spec.get_beacon_proposer_indices_total
+#print axioms EpochProofs.Spec.process_sync_committee_updates_total
+#print axioms EpochProofs.Spec.process_proposer_lookahead_total
+#print axioms EpochProofs.Spec.process_ptc_window_total
+#print axioms EpochProofs.Spec.committee_steps_total
+#print axioms EpochProofs.Spec.committeesOk_of
+#print axioms EpochProofs.Spec.process_ptc_window_few_active_error
