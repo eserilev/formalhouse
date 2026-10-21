@@ -1,4 +1,5 @@
 import EpochProofs.Equiv.BuilderPendingPayments
+import EpochProofs.Etheorem.State
 import EthCLSpecs.Proofs.Gloas.BuilderPendingPayments
 
 /-!
@@ -9,8 +10,8 @@ The main theorem is `builder_pending_payments_etheorem`. Etheorem
 `lighthouse_builder_pending_payments_etheorem` joins the theorem to
 `builder_pending_payments_equiv`, so Lighthouse equals Etheorem.
 
-Etheorem uses `UInt64` and the reference uses `Nat`. The `abs*` functions read an Etheorem
-value as a reference value. `Agrees` relates the two fields that the step reads and writes.
+`Agrees` relates the two fields that the step reads and writes. The `abs*` functions are in
+`EpochProofs.Etheorem.State`.
 -/
 
 namespace EpochProofs.Etheorem
@@ -18,20 +19,6 @@ namespace EpochProofs.Etheorem
 open EthCLLib.Spec EthCLLib.Proofs EthCLSpecs.Proofs.Gloas
 
 variable [EthCLSpecs.Gloas.Preset] [HasherTag]
-
-abbrev EWithdrawal := EthCLSpecs.Gloas.BuilderPendingWithdrawal
-abbrev EPayment := EthCLSpecs.Gloas.BuilderPendingPayment
-abbrev EState := EthCLSpecs.Gloas.BeaconState
-
-def absWithdrawal (w : EWithdrawal) : Spec.BuilderPendingWithdrawal :=
-  { fee_recipient := w.feeRecipient
-    amount := w.amount.toNat
-    builder_index := w.builderIndex.toNat }
-
-def absPayment (p : EPayment) : Spec.BuilderPendingPayment :=
-  { weight := p.weight.toNat
-    withdrawal := absWithdrawal p.withdrawal
-    proposer_index := p.proposerIndex.toNat }
 
 /-- The builder payment fields of the two states agree. -/
 def Agrees (e : EState) (s : Spec.BeaconState) : Prop :=

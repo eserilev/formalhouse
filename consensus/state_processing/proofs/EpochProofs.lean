@@ -94,4 +94,6 @@ import EpochProofs.Equiv.PendingDeposits
 import EpochProofs.Equiv.PendingConsolidations
 import EpochProofs.Equiv.SinglePassStep
 import EpochProofs.Etheorem.BuilderPendingPayments
+import EpochProofs.Etheorem.Helpers
+import EpochProofs.Etheorem.Oracle
 import EpochProofs.Axioms
