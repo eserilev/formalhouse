@@ -72,6 +72,7 @@ import EpochProofs.Etheorem.Final
 import EpochProofs.Sanity.Invariants.Totality
 import EpochProofs.Sanity.Invariants.TotalityCommittees
 import EpochProofs.Sanity.Invariants.TotalityRows
+import EpochProofs.Sanity.Invariants.TotalityFulu
 import EpochProofs.Etheorem.Total
 import EpochProofs.Equiv.DepositBalance
 import EpochProofs.Equiv.SelectionEmpty
@@ -342,6 +343,9 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.slashingsRowStep_total
 #print axioms EpochProofs.Spec.midOk_of_rowBounds
 #print axioms EpochProofs.Spec.depOk_of_rowBounds
+#print axioms EpochProofs.Spec.regSlash_total_g
+#print axioms EpochProofs.Spec.midCore_of_rowBounds
+#print axioms EpochProofs.Spec.depCore_of_rowBounds
 #print axioms EpochProofs.Spec.process_epoch_total_rows
 #print axioms EpochProofs.max_effective_balance_electra_equiv
 #print axioms EpochProofs.deposit_effective_balance_equiv
@@ -470,3 +474,11 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.process_epoch_lh_order_fulu_sameOk
 #print axioms EpochProofs.Spec.lighthouse_fulu_epoch_sameOk
 #print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch
+#print axioms EpochProofs.Spec.fuluTabM_lt
+#print axioms EpochProofs.Spec.midOkFulu_of_rowBounds
+#print axioms EpochProofs.Spec.compute_proposer_indices_total
+#print axioms EpochProofs.Spec.get_beacon_proposer_indices_fulu_total
+#print axioms EpochProofs.Spec.process_proposer_lookahead_fulu_total
+#print axioms EpochProofs.Spec.committeesOkFulu_of
+#print axioms EpochProofs.Spec.process_epoch_fulu_total
+#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_total

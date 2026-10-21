@@ -629,26 +629,28 @@ def RegSlashOut (s3 s5 : BeaconState) : Prop :=
     s5 = { s3.withRows ys with earliest_exit_epoch := E, exit_balance_to_consume := B } ∧
     RowRel (fun a c => ∃ b, PReg a b ∧ PSlash b c) (rowsOf s3) ys
 
-theorem regSlash_total (s3 : BeaconState) (tab : Gwei) (hrows : RowsOk s3)
-    (hslot : s3.slot + 8192 < 2 ^ 64) (htab : tab < 2 ^ 60) (htab_lo : 1000000000 ≤ tab)
+/-- The registry update at the churn total `rtab`, then the slashings at `tab`. Fulu runs the
+registry update at a different churn total than the slashings. -/
+theorem regSlash_total_g (s3 : BeaconState) (tab rtab : Gwei) (hrows : RowsOk s3)
+    (hslot : s3.slot + 8192 < 2 ^ 64) (hrtab : rtab < 2 ^ 60) (htab_lo : 1000000000 ≤ tab)
     (heb : ∀ v ∈ s3.validators, v.effective_balance ≤ 2048000000000)
     (hn : s3.validators.length < 2 ^ 40) (hE : s3.earliest_exit_epoch < 2 ^ 62)
     (hB : s3.exit_balance_to_consume < 2 ^ 61) (hsl : s3.slashings.sum * 3 < 2 ^ 64) :
     OkWith (do
-      let s4 ← process_registry_updates Preset.mainnet tab s3
+      let s4 ← process_registry_updates Preset.mainnet rtab s3
       process_slashings Preset.mainnet tab s4) (RegSlashOut s3) := by
   have hcur := tot_current_epoch s3
   have hslot' : @LT.lt Nat _ (s3.slot + 8192) (2 ^ 64) := hslot
   have he5 : @LT.lt Nat _ (s3.slot / 32 + 5) (2 ^ 62) := by omega
   have hact := compute_activation_exit_epoch_of_lt Preset.mainnet (s3.slot / 32)
     (by show @LT.lt Nat _ (s3.slot / 32 + 1 + 4) (2 ^ 64); omega)
-  obtain ⟨c, hc, hc1, hc2⟩ := exit_churn_total tab htab
-  obtain ⟨E', B', ys4, hp4, hr4⟩ := registry_pass_total (rowsOf s3) tab (s3.slot / 32)
+  obtain ⟨c, hc, hc1, hc2⟩ := exit_churn_total rtab hrtab
+  obtain ⟨E', B', ys4, hp4, hr4⟩ := registry_pass_total (rowsOf s3) rtab (s3.slot / 32)
     s3.finalized_checkpoint.epoch _ c hc hc1 hc2 he5 s3.earliest_exit_epoch
     s3.exit_balance_to_consume hE hB (by rw [rowsOf_length]; exact hn)
   let s4 : BeaconState :=
     { s3.withRows ys4 with earliest_exit_epoch := E', exit_balance_to_consume := B' }
-  have hreg := (process_registry_updates_rows Preset.mainnet tab s3 _ _ hrows hcur hact s4).mpr
+  have hreg := (process_registry_updates_rows Preset.mainnet rtab s3 _ _ hrows hcur hact s4).mpr
     (by rw [hp4]; rfl)
   refine OkWith.bind (OkWith.of_eq hreg rfl) (fun s4' hs4 => ?_)
   subst hs4
@@ -676,6 +678,16 @@ theorem regSlash_total (s3 : BeaconState) (tab : Gwei) (hrows : RowsOk s3)
   have h4096 : Preset.mainnet.EPOCHS_PER_SLASHINGS_VECTOR / 2 = 4096 := rfl
   rw [h4096, hp5]
   exact OkWith.of_eq rfl ⟨ys5, E', B', rfl, RowRel.comp hr4 hr5⟩
+
+theorem regSlash_total (s3 : BeaconState) (tab : Gwei) (hrows : RowsOk s3)
+    (hslot : s3.slot + 8192 < 2 ^ 64) (htab : tab < 2 ^ 60) (htab_lo : 1000000000 ≤ tab)
+    (heb : ∀ v ∈ s3.validators, v.effective_balance ≤ 2048000000000)
+    (hn : s3.validators.length < 2 ^ 40) (hE : s3.earliest_exit_epoch < 2 ^ 62)
+    (hB : s3.exit_balance_to_consume < 2 ^ 61) (hsl : s3.slashings.sum * 3 < 2 ^ 64) :
+    OkWith (do
+      let s4 ← process_registry_updates Preset.mainnet tab s3
+      process_slashings Preset.mainnet tab s4) (RegSlashOut s3) :=
+  regSlash_total_g s3 tab tab hrows hslot htab htab_lo heb hn hE hB hsl
 
 /-! ## The four steps -/
 
@@ -747,7 +759,8 @@ theorem trw_sum_map_mul (l : List Row) (g : Row → Nat) (k : Nat) :
   | nil => simp
   | cons x xs ih => simp only [List.map_cons, List.sum_cons, ih, Nat.mul_add]
 
-theorem post_of_regSlash (t s1 s3 s5 : BeaconState) (hvec : t.VectorLengths Preset.mainnet)
+theorem post_of_regSlash (t s1 s3 s5 : BeaconState) (hrl : t.randao_mixes.length = 65536)
+    (hsll : t.slashings.length = 8192)
     (heb : EBOk Preset.mainnet t) (hcons : ConsolidationsInRange t) (hrb : RowBounds t)
     (hfin0 : s1.finalized_checkpoint.epoch ≤ t.slot / 32) (h3 : S3Facts t s1 s3)
     (h5 : RegSlashOut s3 s5) : TailFrame t s5 ∧ DepFrame t s5 := by
@@ -796,9 +809,9 @@ theorem post_of_regSlash (t s1 s3 s5 : BeaconState) (hvec : t.VectorLengths Pres
   refine ⟨⟨h3.slot, hrows5, ?_, ?_, ?_, ?_, ?_, ?_⟩,
     ⟨h3.pend, h3.dbtc, ?_, hbsum, hteb, h3.fin ▸ hfin0⟩⟩
   · show s3.randao_mixes.length = 65536
-    rw [h3.randao]; exact hvec.2.2.1
+    rw [h3.randao]; exact hrl
   · show s3.slashings.length = 8192
-    rw [h3.slashings]; exact hvec.2.2.2.1
+    rw [h3.slashings]; exact hsll
   · intro c hc
     have hc' : c ∈ t.pending_consolidations := h3.cons ▸ hc
     have := hcons c hc'
@@ -826,13 +839,28 @@ theorem trw_rewards_genesis (tab : Gwei) (s : BeaconState) (h : s.slot / 32 = 0)
   rw [tot_current_epoch, trw_bind_ok, h]
   rfl
 
+/-- The inactivity, rewards, registry and slashings steps after justification and
+finalization, with one total active balance `tab` and the registry update at the churn total
+`g tab`. Gloas uses `g = id`. Fulu uses `fuluTabM`. -/
+def MidCore (g : Gwei → Gwei) (t : BeaconState) : Prop :=
+  ∀ s1, JFShape t s1 → s1.finalized_checkpoint.epoch ≤ t.slot / 32 →
+    (t.slot / 32 ≠ 0 → s1.finalized_checkpoint.epoch + 1 ≤ t.slot / 32) →
+    ∀ tab, get_total_active_balance Preset.mainnet s1 = .ok tab →
+    OkWith (do
+      let s2 ← process_inactivity_updates Preset.mainnet s1
+      let s3 ← process_rewards_and_penalties Preset.mainnet tab s2
+      let s4 ← process_registry_updates Preset.mainnet (g tab) s3
+      process_slashings Preset.mainnet tab s4) (fun s => TailFrame t s ∧ DepFrame t s)
+
 /-- On mainnet, the inactivity, rewards, registry and slashings steps succeed after
-justification and finalization, under `RowBounds`. -/
-theorem midOk_of_rowBounds (t : BeaconState) (hrows : RowsOk t) (hslot : t.slot + 8192 < 2 ^ 64)
-    (heb : EBOk Preset.mainnet t) (hvec : t.VectorLengths Preset.mainnet)
+justification and finalization, under `RowBounds`, for any churn total `g tab` below `2^60`. -/
+theorem midCore_of_rowBounds (g : Gwei → Gwei) (hg : ∀ x, x < 2 ^ 57 → g x < 2 ^ 60)
+    (t : BeaconState) (hrows : RowsOk t) (hslot : t.slot + 8192 < 2 ^ 64)
+    (heb : EBOk Preset.mainnet t) (hrl : t.randao_mixes.length = 65536)
+    (hsll : t.slashings.length = 8192)
     (hcons : ConsolidationsInRange t) (hsl : t.slashings.sum * 3 < 2 ^ 64)
-    (hrb : RowBounds t) : MidOk t := by
-  intro s1 hshape hfin0 hfin
+    (hrb : RowBounds t) : MidCore g t := by
+  intro s1 hshape hfin0 hfin tab htab
   obtain ⟨cp1, cp2, cp3, bits, hs1⟩ := hshape
   have hv1 : s1.validators = t.validators := by rw [hs1]
   have hrows1 : RowsOk s1 := by rw [hs1]; exact hrows
@@ -848,40 +876,29 @@ theorem midOk_of_rowBounds (t : BeaconState) (hrows : RowsOk t) (hslot : t.slot 
       t.deposit_balance_to_consume) (2 ^ 61) := hrb.funds
   have hcur : get_current_epoch Preset.mainnet s1 = .ok (t.slot / 32) := by
     rw [← hslot1]; exact tot_current_epoch s1
-  obtain ⟨tab, htab, htab_lo, htab_hi⟩ := get_total_active_balance_bounds Preset.mainnet s1
+  obtain ⟨tab', htab', htab_lo, htab_hi⟩ := get_total_active_balance_bounds Preset.mainnet s1
     (t.slot / 32) hcur (by rw [hteb1]; exact Nat.lt_trans hsup (by decide))
+  rw [htab] at htab'
+  cases htab'
   have htab_lo' : @LE.le Nat _ 1000000000 tab := htab_lo
   have htab57 : @LT.lt Nat _ tab (2 ^ 57) := by
     have h' : @LE.le Nat _ tab (max 1000000000 (totalEffectiveBalance t)) := by
       rw [← hteb1]; exact htab_hi
     exact Nat.lt_of_le_of_lt h' (Nat.max_lt.mpr ⟨by decide, hsup⟩)
-  have hact := compute_activation_exit_epoch_of_lt Preset.mainnet (t.slot / 32)
-    (by show @LT.lt Nat _ (t.slot / 32 + 1 + 4) (2 ^ 64); omega)
-  have hfar : t.slot / 32 < FAR_FUTURE_EPOCH := by
-    show @LT.lt Nat _ (t.slot / 32) (2 ^ 64 - 1); omega
-  have hsame := specFourSteps_sameOk Preset.mainnet s1 tab htab hrows1 (t.slot / 32) _ hcur
-    hact hfar
   have hn : t.validators.length < 2 ^ 40 := hrb.count
   have hebmax : ∀ v ∈ t.validators, v.effective_balance ≤ 2048000000000 :=
     fun v hv => (heb v hv).2
   -- the last two steps from a state with the facts `S3Facts`
   have hlast : ∀ s3, S3Facts t s1 s3 → OkWith (do
-      let s4 ← process_registry_updates Preset.mainnet tab s3
+      let s4 ← process_registry_updates Preset.mainnet (g tab) s3
       process_slashings Preset.mainnet tab s4) (fun s => TailFrame t s ∧ DepFrame t s) := by
     intro s3 h3
-    refine OkWith.mono (regSlash_total s3 tab h3.rows (by rw [h3.slot]; exact hslot)
-      (Nat.lt_trans htab57 (by decide)) htab_lo' (by rw [h3.vals]; exact hebmax)
+    refine OkWith.mono (regSlash_total_g s3 tab (g tab) h3.rows (by rw [h3.slot]; exact hslot)
+      (hg tab htab57) htab_lo' (by rw [h3.vals]; exact hebmax)
       (by rw [h3.vals]; exact hn) (by rw [h3.eee]; exact hrb.earliest)
       (by rw [h3.ebtc]; exact hrb.exit_balance) (by rw [h3.slashings]; exact hsl)) ?_
     intro s5 h5
-    exact post_of_regSlash t s1 s3 s5 hvec heb hcons hrb hfin0 h3 h5
-  suffices hR : OkWith (do
-      let s2 ← process_inactivity_updates Preset.mainnet s1
-      let s3 ← process_rewards_and_penalties Preset.mainnet tab s2
-      let s4 ← process_registry_updates Preset.mainnet tab s3
-      process_slashings Preset.mainnet tab s4) (fun s => TailFrame t s ∧ DepFrame t s) by
-    obtain ⟨v, hv, hp⟩ := hR
-    exact ⟨v, (hsame v).mpr hv, hp⟩
+    exact post_of_regSlash t s1 s3 s5 hrl hsll heb hcons hrb hfin0 h3 h5
   have hb1 : s1.balances = t.balances := by rw [hs1]
   have hbase : S3Facts t s1 s1 := by
     refine ⟨hslot1, hrows1, hv1, ?_, by rw [hs1], by rw [hs1], by rw [hs1], by rw [hs1],
@@ -1003,6 +1020,33 @@ theorem midOk_of_rowBounds (t : BeaconState) (hrows : RowsOk t) (hslot : t.slot 
       rw [hbr2, h4, hb1] at hb3
       exact hb3
 
+/-- On mainnet, the inactivity, rewards, registry and slashings steps succeed after
+justification and finalization, under `RowBounds`. -/
+theorem midOk_of_rowBounds (t : BeaconState) (hrows : RowsOk t) (hslot : t.slot + 8192 < 2 ^ 64)
+    (heb : EBOk Preset.mainnet t) (hvec : t.VectorLengths Preset.mainnet)
+    (hcons : ConsolidationsInRange t) (hsl : t.slashings.sum * 3 < 2 ^ 64)
+    (hrb : RowBounds t) : MidOk t := by
+  intro s1 hshape hfin0 hfin
+  have hcore := midCore_of_rowBounds id (fun x hx => Nat.lt_trans hx (by decide)) t hrows hslot
+    heb hvec.2.2.1 hvec.2.2.2.1 hcons hsl hrb s1 hshape hfin0 hfin
+  obtain ⟨cp1, cp2, cp3, bits, hs1⟩ := hshape
+  have hrows1 : RowsOk s1 := by rw [hs1]; exact hrows
+  have hslot1 : s1.slot = t.slot := by rw [hs1]
+  have hteb1 : totalEffectiveBalance s1 = totalEffectiveBalance t := by rw [hs1]; rfl
+  have hslot' : @LT.lt Nat _ (t.slot + 8192) (2 ^ 64) := hslot
+  have hcur : get_current_epoch Preset.mainnet s1 = .ok (t.slot / 32) := by
+    rw [← hslot1]; exact tot_current_epoch s1
+  obtain ⟨tab, htab, -, -⟩ := get_total_active_balance_bounds Preset.mainnet s1
+    (t.slot / 32) hcur (by rw [hteb1]; exact Nat.lt_trans hrb.supply (by decide))
+  have hact := compute_activation_exit_epoch_of_lt Preset.mainnet (t.slot / 32)
+    (by show @LT.lt Nat _ (t.slot / 32 + 1 + 4) (2 ^ 64); omega)
+  have hfar : t.slot / 32 < FAR_FUTURE_EPOCH := by
+    show @LT.lt Nat _ (t.slot / 32) (2 ^ 64 - 1); omega
+  have hsame := specFourSteps_sameOk Preset.mainnet s1 tab htab hrows1 (t.slot / 32) _ hcur
+    hact hfar
+  obtain ⟨v, hv, hp⟩ := hcore tab htab
+  exact ⟨v, (hsame v).mpr hv, hp⟩
+
 /-! ## Pending deposits -/
 
 /-- A `for` loop with an invariant on the rest of the list. `F` holds at the end, whether the
@@ -1095,8 +1139,15 @@ theorem DepInv.skip {s : BeaconState} {avail : Nat} {a : PendingDeposit}
   simp only [List.map_cons, List.sum_cons] at h2 h3
   exact ⟨h1, by dsimp only; omega, by dsimp only; omega, h4⟩
 
-theorem depOk_of_rowBounds (o : Oracle) (t : BeaconState) (hslot0 : t.slot + 8192 < 2 ^ 64)
-    (hrb : RowBounds t) : DepOk o t := by
+/-- `process_pending_deposits` at the churn total `g tab` succeeds after the eth1 data reset.
+Gloas uses `g = id`. Fulu uses `fuluTabM`. -/
+def DepCore (g : Gwei → Gwei) (o : Oracle) (t : BeaconState) : Prop :=
+  ∀ s tab, TailFrame t s → DepFrame t s → get_total_active_balance Preset.mainnet s = .ok tab →
+    OkWith (process_pending_deposits Preset.mainnet (g tab) (apply_pending_deposit Preset.mainnet o)
+      s) (TailFrame t)
+
+theorem depCore_of_rowBounds (g : Gwei → Gwei) (o : Oracle) (t : BeaconState)
+    (hslot0 : t.slot + 8192 < 2 ^ 64) (hrb : RowBounds t) : DepCore g o t := by
   intro s tab hf hd htab
   have hteb : @LT.lt Nat _ (totalEffectiveBalance t) (2 ^ 57) := hrb.supply
   have hfunds : @LT.lt Nat _ (t.balances.sum + (t.pending_deposits.map (·.amount)).sum +
@@ -1115,7 +1166,7 @@ theorem depOk_of_rowBounds (o : Oracle) (t : BeaconState) (hslot0 : t.slot + 819
     rw [hf.slot]; exact hd.fin
   unfold process_pending_deposits
   rw [tot_current_epoch, tot_bind_ok, tot_add (by omega), tot_bind_ok]
-  obtain ⟨c, hc, hcle⟩ := act_churn_total tab
+  obtain ⟨c, hc, hcle⟩ := act_churn_total (g tab)
   rw [hc, trw_bind_ok,
     tot_add (show @LT.lt Nat _ (s.deposit_balance_to_consume + c) (2 ^ 64) by omega), trw_bind_ok]
   dsimp only
@@ -1232,6 +1283,10 @@ theorem depOk_of_rowBounds (o : Oracle) (t : BeaconState) (hslot0 : t.slot + 819
       try simp only [pure_bind]
       exact OkWith.pure (hframe _ rfl rfl rfl rfl rfl rfl rfl rfl rfl)
     · exact OkWith.pure (hframe _ rfl rfl rfl rfl rfl rfl rfl rfl rfl)
+
+theorem depOk_of_rowBounds (o : Oracle) (t : BeaconState) (hslot0 : t.slot + 8192 < 2 ^ 64)
+    (hrb : RowBounds t) : DepOk o t :=
+  depCore_of_rowBounds id o t hslot0 hrb
 
 /-! ## The whole epoch -/
 
