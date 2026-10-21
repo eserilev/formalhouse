@@ -282,19 +282,19 @@ theorem lensEq_of_rowsOk {e : EState} (h : Spec.RowsOk (absEState e)) : LensEq e
 /-- Facts about the state at the epoch start. The steps before each read do not write these
 fields, so each fact still holds when its step reads it.
 
-- `depositRoom`: Etheorem's registry limit `2^40` has room for every pending deposit. Etheorem
-  drops a new validator past this limit (F10). The pyspec raises.
+- `depositRoom`: Etheorem's registry limit `2^40` has room for `MAX_PENDING_DEPOSITS_PER_EPOCH`
+  new validators, the most that one epoch adds. Etheorem drops a new validator past this limit
+  (F10). Beta.2 has no registry limit. Lighthouse keeps the `2^40` limit.
 - `builderRoom`: the builder withdrawals have room for `SLOTS_PER_EPOCH` more items under
   Etheorem's alpha.11 limit (F6). Beta.2 has no limit.
-- `summariesRoom`: the historical summaries have room for one more item under the alpha.11
-  limit (F6). The list grows by one item every 8192 slots. -/
+
+The historical summaries room is not here: beta.2 keeps the `HISTORICAL_ROOTS_LIMIT` cap, so it
+is a spec condition. `process_epoch_etheorem_in` takes it as `hhist`. -/
 structure EpochCondsIn (e : EState) : Prop where
-  depositRoom : (absEState e).validators.length + (absEState e).pending_deposits.length ≤
-    EthCLSpecs.Gloas.Const.validatorRegistryLimit
+  depositRoom : (absEState e).validators.length +
+    EthCLSpecs.Gloas.Const.maxPendingDepositsPerEpoch ≤ EthCLSpecs.Gloas.Const.validatorRegistryLimit
   builderRoom : (absEState e).builder_pending_withdrawals.length +
       EthCLSpecs.Gloas.Const.slotsPerEpoch ≤ EthCLSpecs.Gloas.Const.builderPendingWithdrawalsLimit
-  summariesRoom : (absEState e).historical_summaries.length <
-    EthCLSpecs.Gloas.Const.historicalRootsLimit
 
 variable [HasherTag] [CryptoBackend]
 
@@ -317,11 +317,15 @@ about the state at the epoch start.
 
 `hb0` and `hslot` hold at each epoch boundary of a reachable run (`EpochInputOk''`). They give
 the finalized epoch condition and the equal list lengths. `hin` holds the facts that frame
-lemmas carry to the step that reads them. `hsel` holds the facts about Etheorem's output. -/
+lemmas carry to the step that reads them. `hhist`: the historical summaries are below
+`HISTORICAL_ROOTS_LIMIT`, a cap that beta.2 keeps. `hsel` holds the facts about Etheorem's
+output. -/
 theorem process_epoch_etheorem_in (o : Spec.Oracle) (ho : OracleAgrees o)
     (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState)
     (hb0 : Spec.BoundaryOk (absEState e)) (hslot : (absEState e).slot < 2 ^ 64)
-    (hin : EpochCondsIn e) (hsel : SelectionsFull e)
+    (hin : EpochCondsIn e)
+    (hhist : (absEState e).historical_summaries.length < EthCLSpecs.Gloas.Const.historicalRootsLimit)
+    (hsel : SelectionsFull e)
     {s' : Spec.BeaconState} (h : Spec.process_epoch Spec.Preset.mainnet o (absEState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processEpoch (StateTransition := GloasRun)).run (pureState e) =
       .ok ((), pureState e') ∧ absEState e' = s' := by
@@ -395,12 +399,11 @@ theorem process_epoch_etheorem_in (o : Spec.Oracle) (ho : OracleAgrees o)
   have L6 : Spec.LenStep (absEState e) (absEState e6) :=
     l1.trans (l2.trans (l3.trans (l4.trans (l5.trans l6))))
   have rows6 : Spec.RowsOk (absEState e6) := L6.rowsOk hb0.2.1
-  have hroom : e6.validators.val.size + e6.pendingDeposits.val.size ≤
+  have hroom : e6.validators.val.size + EthCLSpecs.Gloas.Const.maxPendingDepositsPerEpoch ≤
       EthCLSpecs.Gloas.Const.validatorRegistryLimit := by
     have hv := L6.1
-    have hd := congrArg List.length F6.2
     have hr := hin.depositRoom
-    simp only [absEState_validators, absEState_pending_deposits, length_map_toList] at hv hd hr
+    simp only [absEState_validators, length_map_toList] at hv hr
     omega
   obtain ⟨t7, ht7, h⟩ := Spec.specM_bind_ok h
   obtain ⟨s7, h7, h⟩ := Spec.specM_bind_ok h
@@ -455,7 +458,7 @@ theorem process_epoch_etheorem_in (o : Spec.Oracle) (ho : OracleAgrees o)
     have heq : (absEState e12).historical_summaries = (absEState e).historical_summaries := by
       rw [f12.1.2.2.2, f11.1.2.2.2, f10.1.2.2.2, hs9, Q8.2.2.2]
     have hw := congrArg List.length heq
-    have hr := hin.summariesRoom
+    have hr := hhist
     simp only [absEState_historical_summaries, length_map_toList] at hw hr
     omega
   obtain ⟨s13, h13, h⟩ := Spec.specM_bind_ok h
@@ -487,13 +490,15 @@ of a reachable run, on mainnet.
 
 `hin` is the fact that `reachable_state_transition_sameOk'''` proves at each epoch boundary.
 The conditions that remain:
-- `hcond`: room for the pending deposits (F10), and room in the builder withdrawals and the
-  historical summaries (F6). Each is a fact about the epoch start state.
+- `hcond`: room in the registry for the new validators of one epoch (F10), and room in the
+  builder withdrawals (F6). Each is a fact about the epoch start state.
+- `hhist`: the historical summaries are below `HISTORICAL_ROOTS_LIMIT`. Beta.2 keeps this cap.
 - `hsel`: Etheorem's balance weighted selections return all their items (F3).
 - `ho`, `hsha`: the oracle is Etheorem's hash and BLS functions, and SHA-256 returns 32 bytes. -/
 theorem lighthouse_epoch_etheorem_reachable (o : Spec.Oracle) (ho : OracleAgrees o)
     (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState)
     (hin : Spec.EpochInputOk'' Spec.EpochSupply (absEState e)) (hcond : EpochCondsIn e)
+    (hhist : (absEState e).historical_summaries.length < EthCLSpecs.Gloas.Const.historicalRootsLimit)
     (hsel : SelectionsFull e)
     {s' : Spec.BeaconState} (h : Spec.process_epoch_lh_full o (absEState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processEpoch (StateTransition := GloasRun)).run (pureState e) =
@@ -501,7 +506,7 @@ theorem lighthouse_epoch_etheorem_reachable (o : Spec.Oracle) (ho : OracleAgrees
   obtain ⟨⟨⟨hb, hslot, heb, hexit, hsup⟩, _, hcons⟩, _, hvalid⟩ := hin
   have hsame := Spec.process_epoch_lh_full_sameOk' o (absEState e) hb hslot heb hexit hsup hvalid
     hcons
-  exact process_epoch_etheorem_in o ho hsha e hb hslot hcond hsel ((hsame s').mp h)
+  exact process_epoch_etheorem_in o ho hsha e hb hslot hcond hhist hsel ((hsame s').mp h)
 
 end Mainnet
 
