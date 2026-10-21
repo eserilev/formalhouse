@@ -32,6 +32,7 @@ EpochProofs/Spec/*.lean  <-- written by hand from the consensus specs
 | eth1, slashings and randao resets, historical summaries (checks) | Done | Done | Done |
 | Fulu: exit and activation churn, proposer lookahead, sync committee selection | Done | Done (shared with Gloas) | Done, with glue conditions |
 | Fulu: registry update and single pass | Done (shared with Gloas) | Done (shared with Gloas) | Done |
+| Fulu: whole epoch against Etheorem's Fulu `processEpoch` | Done | - | Done, with conditions |
 
 ## Each epoch step and what checks it
 
@@ -187,7 +188,7 @@ functions that differ from Gloas. `Sanity/Fulu.lean` reduces them to the Gloas f
   `process_sync_committee_updates_fulu_sameOk` relates its sync committee update to the Gloas one.
 
 Not yet done for Fulu: the whole-epoch model `process_epoch_lh_order` and its capstones for Fulu,
-the Etheorem bridge for Fulu, and Fulu totality. The tail proofs (`LighthouseTail*.lean`) take one
+and Fulu totality. The Etheorem bridge for Fulu is done (see Etheorem below). The tail proofs (`LighthouseTail*.lean`) take one
 total for the rewards, the slashings, the registry churn and the deposit churn, and they include
 the builder payments and the PTC window. Fulu needs the churn total `fuluTab` apart from the
 rewards total, and no builder payments or PTC window.
@@ -426,6 +427,29 @@ fields. The conditions:
 Etheorem pins spec v1.7.0-alpha.11. Every Gloas epoch function in alpha.11 has the same meaning
 as in beta.2. Only type casts and syntax differ. The `BeaconState` lists have limits in
 alpha.11 and none in beta.2.
+
+### Fulu
+
+`Etheorem/Fulu/` proves the reference Fulu `process_epoch` equal to Etheorem's Fulu
+`processEpoch`: `process_epoch_fulu_etheorem`. Etheorem's Gloas steps replay the Fulu bodies, so
+the Fulu files are copies of the Gloas ones over the Fulu state. The differences:
+
+- `Fulu/State.lean`: the Gloas-only reference fields read as empty, and `latest_block_hash` reads
+  the block hash of the latest execution payload header. No Fulu epoch step reads them.
+- Churn: `FuluChurnAgrees` holds the Fulu config values and `FuluCompat`. Etheorem's Fulu
+  `get_activation_exit_churn_limit` then equals the Gloas exit and activation churn at
+  `fuluTab`, so the registry and deposits theorems run at `fuluTab`, as
+  `process_epoch_fulu_eq_tab` writes them.
+- Proposer lookahead: every active validator is a candidate. The reference uses the Electra loop
+  and Etheorem the balance weighted selection. They agree when the loop ends before its last
+  pass (`Spec.ProposerFin`, a condition in `FuluEpochConds`).
+- Sync committee: the Electra loop gives the same `ok` results as the selection
+  (`process_sync_committee_updates_fulu_sameOk`).
+- No builder payments and no PTC window: 15 steps.
+
+`FuluEpochConds` holds the step conditions: the Gloas ones without the builder withdrawals and
+PTC conditions, plus `proposerFin`. The F2 condition stays, because this Etheorem pin keeps the
+eth1 bridge check in its Fulu `process_pending_deposits` too.
 
 The shared parts:
 
