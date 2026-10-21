@@ -747,15 +747,18 @@ the facts the earlier steps keep.
   exit churn.
 - `deposits`: `process_pending_deposits` with `apply_pending_deposit`. The error sources are the
   churn sums and `increase_balance`.
-- `committees`: the sync committee, the proposer lookahead and the PTC window. The pyspec
-  itself raises when no active unslashed validator is left for the lookahead (F4), and the
-  weighted selection has a `u64` counter (a probability fact, like F3). -/
+
+The committee steps are `CommitteesOk`, proved in `TotalityCommittees.lean`. -/
 structure TotalityOpen (o : Oracle) (t : BeaconState) : Prop where
   middle : ∀ s1, JFShape t s1 → OkWith (specFourSteps Preset.mainnet s1) (TailFrame t)
   deposits : ∀ s tab, TailFrame t s → get_total_active_balance Preset.mainnet s = .ok tab →
     OkWith (process_pending_deposits Preset.mainnet tab (apply_pending_deposit Preset.mainnet o) s)
       (TailFrame t)
-  committees : ∀ s, CommFrame t s → OkWith (do
+
+/-- The sync committee, proposer lookahead and PTC window steps succeed on every state with the
+facts that the earlier steps keep. `committeesOk_of` proves it. -/
+def CommitteesOk (o : Oracle) (t : BeaconState) : Prop :=
+  ∀ s, CommFrame t s → OkWith (do
       let s ← process_sync_committee_updates Preset.mainnet o s
       let s ← process_proposer_lookahead Preset.mainnet o s
       process_ptc_window Preset.mainnet o s) (fun _ => True)
@@ -793,7 +796,8 @@ reachable-state facts at its input and the open steps. -/
 theorem process_epoch_total (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
     (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % 32 = 0)
     (hvec : t.VectorLengths Preset.mainnet) (hffg : FfgInvariant Preset.mainnet t)
-    (hsup : totalEffectiveBalance t < 2 ^ 60) (hopen : TotalityOpen o t) :
+    (hsup : totalEffectiveBalance t < 2 ^ 60) (hopen : TotalityOpen o t)
+    (hcomm : CommitteesOk o t) :
     ∃ s', process_epoch Preset.mainnet o t = .ok s' := by
   have hslot64 : t.slot < 2 ^ 64 := Nat.lt_of_le_of_lt (Nat.le_add_right _ _) hslot
   obtain ⟨hbr, -, -, -, hbits, -⟩ := hvec
@@ -863,7 +867,7 @@ theorem process_epoch_total (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
   have k13 : RowsOk s13 ∧ s13.slot = t.slot ∧ s13.randao_mixes.length = 65536 := by
     subst e13; exact k12
   -- participation flags, then the committee steps
-  obtain ⟨s', hs', -⟩ := hopen.committees (process_participation_flag_updates s13)
+  obtain ⟨s', hs', -⟩ := hcomm (process_participation_flag_updates s13)
     ⟨k13.2.1, ⟨k13.1.1, k13.1.2.1, k13.1.2.2.2, by simp [process_participation_flag_updates]⟩,
       k13.2.2⟩
   exact ⟨s', hs'⟩
