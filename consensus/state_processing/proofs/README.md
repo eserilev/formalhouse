@@ -388,12 +388,26 @@ proof fixes for v4.31.0, no `-march=native`, and a KZG lakefile fix that finds t
 when Etheorem is a dependency. The script also fetches blst, c-kzg-4844 and ISA-L at
 Etheorem's pins. ISA-L needs `nasm`.
 
+## The cache proofs
+
+`lakefile.toml` requires `cache_proofs` (`consensus/types/proofs`) by path.
+`EpochProofs/Caches.lean` imports `CacheProofs` with the epoch proofs, so the build checks that
+the two libraries load together. The bridges from the cache theorems to the epoch hypotheses
+go there.
+
+Both `Generated.lean` files translate `safe_arith::ArithError`. The Aeneas `discriminant`
+attribute names its instance after the short type name, so the two files clash.
+`aeneas/setup.sh` applies `aeneas/discriminant-instance-name.patch`, which names the instance
+after the full type name. It changes no definition and no proof.
+
 ## Building
+
+`setup.sh` runs `etheorem/setup.sh` and `aeneas/setup.sh`.
 
 ```sh
 cd consensus/state_processing/proofs
 lake exe cache get
-./etheorem/setup.sh
+./setup.sh
 lake build
 lake lean EpochProofs/Axioms.lean
 ```

@@ -34,8 +34,9 @@
       "consensus/state_processing/src/per_epoch_processing/tail_updates.rs",
       "consensus/types/src/state/balance_weighted_selection.rs",
       "consensus/swap_or_not_shuffle/src/compute_shuffled_index_with.rs",
-      "consensus/swap_or_not_shuffle/src/shuffle_hash.rs"
+      "consensus/swap_or_not_shuffle/src/shuffle_hash.rs",
+      "consensus/types/proofs/**"
     ],
-    "setup": "etheorem/setup.sh"
+    "setup": "setup.sh"
   }
 ]
