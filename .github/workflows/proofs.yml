@@ -137,13 +137,20 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ matrix.proofs }}/.lake
-          key: lake-${{ runner.os }}-${{ matrix.name }}-${{ hashFiles(format('{0}/lakefile.toml', matrix.proofs), format('{0}/lean-toolchain', matrix.proofs)) }}
+          key: lake-${{ runner.os }}-${{ matrix.name }}-${{ hashFiles(format('{0}/lakefile.toml', matrix.proofs), format('{0}/lean-toolchain', matrix.proofs), format('{0}/etheorem/**', matrix.proofs)) }}
 
       - name: Build the proofs
         working-directory: ${{ matrix.proofs }}
+        env:
+          SETUP: ${{ matrix.setup }}
         run: |
           set -o pipefail
           lake exe cache get
+          # A project can name a script that prepares its dependencies (see proofs.json).
+          if [ -n "$SETUP" ]; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq nasm libssl-dev pkg-config
+            "./$SETUP"
+          fi
           lake build 2>&1 | tee build.log
 
       - name: Fail on sorry
@@ -166,8 +173,9 @@ jobs:
           set -euo pipefail
           # `#print axioms` only reports, so assert on it. Stronger than the grep above: a
           # `sorry` under any audited theorem shows as `sorryAx`. Run the file directly --
-          # Lake may replay cached logs rather than re-elaborate.
-          lake env lean "$LIB/Axioms.lean" 2>&1 | tee axioms.log
+          # Lake may replay cached logs rather than re-elaborate. `lake lean`, not
+          # `lake env lean`: it loads the native code of precompiled dependencies.
+          lake lean "$LIB/Axioms.lean" 2>&1 | tee axioms.log
 
           allowed='propext|Classical.choice|Quot.sound'
 
@@ -180,7 +188,8 @@ jobs:
           fi
 
           # A subset of the allowed axioms passes. Any other axiom fails.
-          extra=$(grep -o 'depends on axioms: \[[^]]*\]' axioms.log \
+          # Lean wraps a long axiom list over lines, so join the lines first.
+          extra=$(tr '\n' ' ' < axioms.log | grep -o 'depends on axioms: \[[^]]*\]' \
                     | sed 's/.*\[\(.*\)\]/\1/' | tr ',' '\n' | tr -d ' ' \
                     | grep -vxE "$allowed" || true)
           if [ -n "$extra" ]; then

@@ -249,14 +249,45 @@ Rules:
 field is a parameter, not an axiom. A theorem for every `Oracle` does not depend on hash or
 signature values. `process_slots` takes `process_epoch` as the parameter `processEpoch`.
 
+## Etheorem
+
+[Etheorem](https://github.com/etheorem/etheorem) is a Lean spec of the consensus specs that
+passes the EF vectors. `EpochProofs/Etheorem/` proves our reference equal to it. The reference
+is then no longer trusted for that step.
+
+| Function | Theorem |
+|---|---|
+| `process_builder_pending_payments` | `builder_pending_payments_etheorem` |
+
+`lighthouse_builder_pending_payments_etheorem` joins it to `builder_pending_payments_equiv`:
+Lighthouse returns `Ok`, Etheorem's run succeeds, and the results agree on the builder payment
+fields. The conditions:
+
+- `SLOTS_PER_EPOCH ≥ 6` (both presets), so the quorum does not overflow.
+- The new withdrawals fit under the list limit. Etheorem's `SSZList.push` drops an item past
+  the limit, and the spec raises an error.
+- Lighthouse's total active balance equals Etheorem's `get_total_active_balance`.
+
+Etheorem pins spec v1.7.0-alpha.11. Every Gloas epoch function in alpha.11 has the same meaning
+as in beta.2. Only type casts and syntax differ.
+
+Etheorem pins Lean v4.29.1. `etheorem/setup.sh` applies `etheorem/lean-v4.31.0.patch`: four
+proof fixes for v4.31.0, no `-march=native`, and a KZG lakefile fix that finds the BLS library
+when Etheorem is a dependency. The script also fetches blst, c-kzg-4844 and ISA-L at
+Etheorem's pins. ISA-L needs `nasm`.
+
 ## Building
 
 ```sh
 cd consensus/state_processing/proofs
 lake exe cache get
+./etheorem/setup.sh
 lake build
-lake env lean EpochProofs/Axioms.lean
+lake lean EpochProofs/Axioms.lean
 ```
+
+Use `lake lean`, not `lake env lean`. Etheorem's modules are precompiled, and only `lake lean`
+loads their native code.
 
 ## Regenerating after a change to a translated module
 
@@ -309,6 +340,7 @@ copies the rest of the body into each branch, and the generated code grows expon
 ## Trusted base
 
 - Charon and Aeneas.
+- Etheorem, for the steps in `EpochProofs/Etheorem/`. It passes the EF vectors.
 - The Aeneas Lean library. Its four `sorry` warnings are not reachable from these theorems.
 - The glue in `single_pass.rs`. It copies the milhouse vector, calls the module, and writes the
   results back. `lighthouseBuilderPendingPayments` models it by hand.

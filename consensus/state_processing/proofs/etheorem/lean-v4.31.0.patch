@@ -1,0 +1,206 @@
+diff --git a/packages/EthCLLib/lakefile.toml b/packages/EthCLLib/lakefile.toml
+index 7238b0e..118bc2e 100644
+--- a/packages/EthCLLib/lakefile.toml
++++ b/packages/EthCLLib/lakefile.toml
+@@ -12,7 +12,7 @@ defaultTargets = ["EthCLLib"]
+ # `-lcrypto` (not `-l:libcrypto.so.3`) resolves via the unversioned symlink
+ # every platform's `-dev`/Homebrew package provides, so it works on both.
+ moreLinkArgs = ["-L/usr/lib/x86_64-linux-gnu", "-L/usr/lib64", "-L/opt/homebrew/opt/openssl@3/lib", "-L/usr/local/opt/openssl@3/lib", "-lcrypto"]
+-moreLeancArgs = ["-march=native"]
++moreLeancArgs = []
+ 
+ # SizzLean supplies the SSZ machinery (SSZRepr, Box, the cache, sszGet /
+ # sszUpdate, the Hasher class with the Sha256 / Sha256Spec tags). It
+diff --git a/packages/EthCLSpecs/lakefile.toml b/packages/EthCLSpecs/lakefile.toml
+index b628aed..1a20acb 100644
+--- a/packages/EthCLSpecs/lakefile.toml
++++ b/packages/EthCLSpecs/lakefile.toml
+@@ -9,7 +9,7 @@ defaultTargets = ["EthCLSpecs"]
+ # `-lcrypto` (not `-l:libcrypto.so.3`) resolves via the unversioned symlink
+ # every platform's `-dev`/Homebrew package provides, so it works on both.
+ moreLinkArgs = ["-L/usr/lib/x86_64-linux-gnu", "-L/usr/lib64", "-L/opt/homebrew/opt/openssl@3/lib", "-L/usr/local/opt/openssl@3/lib", "-lcrypto"]
+-moreLeancArgs = ["-march=native"]
++moreLeancArgs = []
+ 
+ # The framework. Pulls in SizzLean (SSZ), LeanHazmatBls / LeanHazmatKzg (crypto)
+ # transitively.
+diff --git a/packages/LeanSha256/lakefile.toml b/packages/LeanSha256/lakefile.toml
+index 645de62..e199ae4 100644
+--- a/packages/LeanSha256/lakefile.toml
++++ b/packages/LeanSha256/lakefile.toml
+@@ -20,7 +20,7 @@ defaultTargets = ["LeanSha256"]
+ # compression loops in `LeanSha256.Core` is the main win. Cascades
+ # to both `lean_lib`s in this package. Same `-march=native` caveat as
+ # elsewhere — bakes in the build host's ISA.
+-moreLeancArgs = ["-march=native"]
++moreLeancArgs = []
+ 
+ [[lean_lib]]
+ name = "LeanSha256"
+diff --git a/packages/SizzLean/SizzLean/Proofs/Merkle/Naive.lean b/packages/SizzLean/SizzLean/Proofs/Merkle/Naive.lean
+index fad6652..6a2ce32 100644
+--- a/packages/SizzLean/SizzLean/Proofs/Merkle/Naive.lean
++++ b/packages/SizzLean/SizzLean/Proofs/Merkle/Naive.lean
+@@ -171,9 +171,12 @@ theorem combineLayerAt_eq_pairLayer (H : Type) [Hasher H] (lvl : Nat)
+   rw [Spec.combineLayerAt, Hasher.batchCombine_eq]
+   rw [Array.toList_zipWith, Array.toList_ofFn, Array.toList_ofFn,
+       zipWith_ofFn]
+-  simpa using
+-    ofFn_node_eq_pairLayer H lvl cs.length cs (Nat.le_refl _)
+-      ((cs.length + 1) / 2) (by simp)
++  have h := ofFn_node_eq_pairLayer H lvl cs.length cs (Nat.le_refl _)
++    ((cs.length + 1) / 2) rfl
++  refine Eq.trans ?_ h
++  refine congrArg List.ofFn ?_
++  funext i
++  simp [getElem!_def]
+ 
+ /-- One pairing step halves the length, rounding up. Length
+ induction, because `pairLayer`'s own recursion skips one cons. -/
+diff --git a/packages/SizzLean/SizzLean/Proofs/UInt.lean b/packages/SizzLean/SizzLean/Proofs/UInt.lean
+index 3cbf83b..591c74d 100644
+--- a/packages/SizzLean/SizzLean/Proofs/UInt.lean
++++ b/packages/SizzLean/SizzLean/Proofs/UInt.lean
+@@ -456,7 +456,7 @@ theorem decode_encode_uintN16 : ∀ (x : UInt16),
+       .ok (x, (SSZType.serialize (.uintN 16) x).size) := by
+   intro x
+   rw [serialize_uintN16_eq_natToLEBytes]
+-  unfold SSZType.deserialize
++  simp only [SSZType.deserialize]
+   rw [readUInt16LE_natToLEBytes, size_natToLEBytes]
+   simp
+ 
+@@ -467,7 +467,7 @@ theorem decode_encode_uintN32 : ∀ (x : UInt32),
+       .ok (x, (SSZType.serialize (.uintN 32) x).size) := by
+   intro x
+   rw [serialize_uintN32_eq_natToLEBytes]
+-  unfold SSZType.deserialize
++  simp only [SSZType.deserialize]
+   rw [readUInt32LE_natToLEBytes, size_natToLEBytes]
+   simp
+ 
+@@ -478,7 +478,7 @@ theorem decode_encode_uintN64 : ∀ (x : UInt64),
+       .ok (x, (SSZType.serialize (.uintN 64) x).size) := by
+   intro x
+   rw [serialize_uintN64_eq_natToLEBytes]
+-  unfold SSZType.deserialize
++  simp only [SSZType.deserialize]
+   rw [readUInt64LE_natToLEBytes, size_natToLEBytes]
+   simp
+ 
+diff --git a/packages/SizzLean/SizzLean/Spec/Deserialize.lean b/packages/SizzLean/SizzLean/Spec/Deserialize.lean
+index 987e090..cd70490 100644
+--- a/packages/SizzLean/SizzLean/Spec/Deserialize.lean
++++ b/packages/SizzLean/SizzLean/Spec/Deserialize.lean
+@@ -662,7 +662,7 @@ private def roundTripVarContainer
+   match SSZType.deserialize s (SSZType.serialize s v) with
+   | .ok (y, n) =>
+       let yv : SSZType.interpFields [.bool, .list .bool 8, .uintN 32] := y
+-      decide (yv.1 = a) && decide (yv.2.1.val = bs.val) && decide (yv.2.2.1 = c) &&
++      decide (yv.1 = a) && decide (yv.2.1.val = bs.val) && decide (@Eq UInt32 yv.2.2.1 c) &&
+         decide (n = (SSZType.serialize s v).size)
+   | .error _   => false
+ 
+diff --git a/packages/SizzLean/SizzLean/Spec/MaxByteLength.lean b/packages/SizzLean/SizzLean/Spec/MaxByteLength.lean
+index 8581bcc..1428b04 100644
+--- a/packages/SizzLean/SizzLean/Spec/MaxByteLength.lean
++++ b/packages/SizzLean/SizzLean/Spec/MaxByteLength.lean
+@@ -106,7 +106,7 @@ def EncodedFits (s : SSZType) (x : s.interp) : Prop :=
+ is `2`: the kernel reduces the serialized bytes through the
+ encoder equations, which `simp` lines up. -/
+ example : (SSZType.serialize (.container [.uintN 8, .uintN 8])
+-        (1, 2, PUnit.unit)).size = 2 := by
++        ((1 : UInt8), (2 : UInt8), PUnit.unit)).size = 2 := by
+   simp [SSZType.serialize, SSZType.serializeFieldsAux,
+     SSZType.fixedSectionSizeFields, SSZType.isFixedSize]
+ 
+@@ -114,9 +114,9 @@ example : (SSZType.serialize (.container [.uintN 8, .uintN 8])
+ encoded size is the `2` the example above computes, and `2 < 2 ^ 32`
+ is arithmetic. -/
+ example : EncodedFits (.container [.uintN 8, .uintN 8])
+-    (1, 2, PUnit.unit) := by
++    ((1 : UInt8), (2 : UInt8), PUnit.unit) := by
+   have h2 : (SSZType.serialize (.container [.uintN 8, .uintN 8])
+-      (1, 2, PUnit.unit)).size = 2 := by
++      ((1 : UInt8), (2 : UInt8), PUnit.unit)).size = 2 := by
+     simp [SSZType.serialize, SSZType.serializeFieldsAux,
+       SSZType.fixedSectionSizeFields, SSZType.isFixedSize]
+   have hML : MAX_LENGTH = 2 ^ 32 := rfl
+diff --git a/packages/SizzLean/lakefile.lean b/packages/SizzLean/lakefile.lean
+index 24b296b..f18a5af 100644
+--- a/packages/SizzLean/lakefile.lean
++++ b/packages/SizzLean/lakefile.lean
+@@ -123,7 +123,7 @@ package SizzLean where
+   -- Same `-march=native` caveat as the C-shim flags: bakes in the
+   -- build host's ISA, fine for local dev and bench; for a shipped
+   -- binary switch to a portable baseline (`-march=x86-64-v3`).
+-  moreLeancArgs := #["-march=native"]
++  moreLeancArgs := #[]
+ 
+ -- The pure-Lean SHA-256 spec. SizzLean is the layer that imports
+ -- both this and the FFI binding below, and holds the equivalence
+diff --git a/packages/hazmat/LeanHazmatKzg/lakefile.lean b/packages/hazmat/LeanHazmatKzg/lakefile.lean
+index f966eed..d9d5d42 100644
+--- a/packages/hazmat/LeanHazmatKzg/lakefile.lean
++++ b/packages/hazmat/LeanHazmatKzg/lakefile.lean
+@@ -20,25 +20,10 @@ import Lake
+ open Lake DSL System
+ 
+ /-- Absolute path to LeanHazmatBls's build lib directory (where Lake puts
+-`libleanhazmat_bls.{a,so}`), computed at lakefile-load time. The repo root
+-is found by walking up from the CWD (the repo root for an umbrella build,
+-or this package's dir for a standalone build) to the directory containing
+-`packages/hazmat/LeanHazmatBls`. The artefacts need not exist yet at load time,
+-LeanHazmatBls builds first as a `require`d dependency. -/
+-unsafe def blsLibDir : String := Id.run <| unsafeBaseIO do
+-  let rel : FilePath :=
+-    "packages" / "hazmat" / "LeanHazmatBls" / ".lake" / "build" / "lib"
+-  let marker : FilePath := "packages" / "hazmat" / "LeanHazmatBls"
+-  let cwd ← (IO.currentDir).toBaseIO
+-  let mut dir : FilePath := cwd.toOption.getD "."
+-  for _ in [0:8] do
+-    if (← (dir / marker).pathExists) then
+-      return (dir / rel).toString
+-    match dir.parent with
+-    | some p => dir := p
+-    | none   => break
+-  -- Fallback: relative to CWD (correct when building from the repo root).
+-  return rel.toString
++`libleanhazmat_bls.{a,so}`), relative to this lakefile, so it also resolves when
++the package is a dependency of another workspace. -/
++def blsLibDir : String :=
++  (__dir__ / ".." / "LeanHazmatBls" / ".lake" / "build" / "lib").toString
+ 
+ package LeanHazmatKzg where
+   license := "LGPL-3.0-only"
+@@ -54,7 +39,7 @@ package LeanHazmatKzg where
+   -- duplicate symbols. (Monorepo path; a standalone Kzg mirror resolves
+   -- Bls through its git `require`.)
+   moreLinkArgs := Id.run do
+-    let d := unsafe blsLibDir
++    let d := blsLibDir
+     if Platform.isOSX then
+       #["-L" ++ d, "-lleanhazmat_bls", "-Wl,-rpath," ++ d]
+     else
+diff --git a/packages/hazmat/LeanHazmatSha256/lakefile.lean b/packages/hazmat/LeanHazmatSha256/lakefile.lean
+index 56546f9..bd0a0bc 100644
+--- a/packages/hazmat/LeanHazmatSha256/lakefile.lean
++++ b/packages/hazmat/LeanHazmatSha256/lakefile.lean
+@@ -97,7 +97,7 @@ package LeanHazmatSha256 where
+   -- matching the rest of the monorepo. Bakes in the build host's ISA
+   -- (fine for local dev / CI); for a portable artefact switch to
+   -- `-march=x86-64-v3`.
+-  moreLeancArgs := #["-march=native"]
++  moreLeancArgs := #[]
+ 
+ -- C optimisation flags for the SHA-256 shims. `-O3` enables full
+ -- optimisation (default `cc` is `-O0`); `-march=native` lets the
+@@ -110,7 +110,7 @@ package LeanHazmatSha256 where
+ -- find `<openssl/evp.h>` on macOS Homebrew / Nix) stay in the untraced
+ -- `weakArgs` position; they vary by system without changing what the
+ -- code means.
+-def cShimTraceFlags : Array String := #["-fPIC", "-O3", "-march=native"]
++def cShimTraceFlags : Array String := #["-fPIC", "-O3"]
+ 
+ def cShimIncludeArgs (leanInclude : FilePath) : Array String :=
+   #["-I", leanInclude.toString] ++ (unsafe opensslCFlags)
