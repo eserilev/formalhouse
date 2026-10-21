@@ -68,9 +68,10 @@ that `processEpoch` is the 17 steps in sequence.
   SHA-256).
 - `EtheoremEpochConds e`. Each field reads the Etheorem state right before its step.
   - State facts: the finalized epoch is below `FAR_FUTURE_EPOCH` (registry), the registry lists
-    have equal length, there is room for the pending deposits, and the F2 condition holds
-    (deposits), one balance for each validator (consolidations), the builder withdrawals fit
-    (F6), the historical summaries fit (F6).
+    have equal length, and the registry has room for `MAX_PENDING_DEPOSITS_PER_EPOCH` new
+    validators (deposits), one balance for each validator (consolidations), the builder
+    withdrawals fit (F6), the historical summaries fit (`HISTORICAL_ROOTS_LIMIT`, kept in
+    beta.2).
   - Facts about Etheorem's own output (F3): its sync committee, proposer and PTC selections
     return `size` items.
 
@@ -93,8 +94,13 @@ the steps before it.
   check. Fulu removed it. Example: `deposit_requests_start_index = 10`,
   `eth1_deposit_index = 5`, one pending deposit at slot 1, finalized, inside the churn. pyspec
   applies it. Etheorem stops the scan and keeps the deposit pending. Lighthouse and our spec
-  follow pyspec. The step proof needs `eth1_deposit_index ≥ deposit_requests_start_index` or
-  deposits at slot 0.
+  follow pyspec. Fixed on the fork: `eserilev/etheorem` branch `formalhouse-pin` removes the
+  check, the start index setter and in-block deposits, as consensus-specs v1.7.0-alpha.9 did.
+  The Gloas and Fulu step proofs have no bridge condition. On a pyspec state where the start
+  index stays `UNSET` (no deposit request before Fulu), upstream Etheorem's epoch never applies
+  a deposit request. A whole upstream Etheorem chain also sets the index at the first request,
+  so it differs from pyspec only when `eth1_deposit_index` is below that index. That case is not
+  shown reachable.
 - F3 (b). Etheorem's `compute_balance_weighted_selection` stops after 10^7 passes. pyspec loops
   until it has `size` items. Example: every candidate has effective balance 0. A pass selects
   only when `random_value = 0`, one time in 65536. A sync committee then needs about 33.5M
@@ -111,10 +117,13 @@ the steps before it.
 - F5 (c). `get_inactivity_penalty_deltas` multiplies `effective_balance * inactivity_score`.
   pyspec raises when the product reaches 2^64. That needs a score of 2^23 at 2048 ETH, about
   2.1M epochs of leak. Etheorem computes in `Nat` and does not raise.
-- F6 (version). Etheorem pins alpha.11. In beta.2 every `BeaconState` list is a
-  `ProgressiveList` with no limit. Etheorem keeps the alpha.11 limits and drops items past them
-  (`builder_pending_withdrawals` 2^20, `historical_summaries` 2^24). The proofs need the lists
-  to stay under these limits. Three block-only values also changed:
+- F6 (version). Etheorem pins alpha.11. In beta.2 the registry, participation, pending-queue
+  and builder lists are `ProgressiveList`s with no limit. `historical_roots`, `eth1_data_votes`
+  and `historical_summaries` keep their caps. Etheorem keeps the alpha.11 limits and drops items
+  past them. The epoch proofs need one of them: `builder_pending_withdrawals` (2^20), as
+  `builderRoom`. The `historical_summaries` cap (2^24) is a beta.2 cap too, so it is a spec
+  condition (`HistRoom`). Only the Etheorem fork moving to progressive lists removes
+  `builderRoom`. Three block-only values also changed:
   `MIN_BUILDER_WITHDRAWABILITY_DELAY` (8192 to 64), `BUILDER_WITHDRAWAL_PREFIX` (0x03 to 0xB0)
   and `MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD` (256 to 64).
 - F7 (b, unreachable). Etheorem's `get_next_sync_committee` does not check `KeyValidate` on
@@ -130,10 +139,17 @@ the steps before it.
   uses `if`/`elif`. They differ only when the finalized epoch is `FAR_FUTURE_EPOCH`. Lighthouse
   has the same shape (`registry_update_equiv`).
 - F10 (b, unreachable). Etheorem drops a new validator when the registry is at
-  `VALIDATOR_REGISTRY_LIMIT`. pyspec raises. The deposits theorem assumes room.
+  `VALIDATOR_REGISTRY_LIMIT`. pyspec raises. The deposits theorem assumes room for
+  `MAX_PENDING_DEPOSITS_PER_EPOCH` (16) new validators, the most that one epoch adds. Beta.2 has
+  no registry limit. Lighthouse keeps the `2^40` limit.
 - F11 (b, unreachable). Etheorem reads participation, inactivity scores, deltas and balances
   with `[i]!`, which gives 0 past the end of the list. pyspec raises. They differ only when a
   per-validator list is shorter than `validators`.
+- F12 (c, proved: `process_ptc_window_few_active_error`). With fewer than `SLOTS_PER_EPOCH`
+  validators active at `current + 2`, some slot of that epoch has an empty beacon committee.
+  `compute_ptc` then fails `assert total > 0` (gloas:1213, unchanged in beta.4), and
+  `process_epoch` raises. A Gloas chain with fewer than 32 active validators (8 on minimal)
+  halts. Lighthouse halts the same way. `CommPreconds` takes at least 32 active validators.
 
 ## The Oracle
 

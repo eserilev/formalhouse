@@ -1,5 +1,6 @@
 import EpochProofs.Sanity.Invariants.LighthouseOrderEth1
 import EpochProofs.Sanity.Invariants.Capstone
+import EpochProofs.Sanity.LighthouseNewValidator
 
 /-!
 # The Lighthouse epoch in the Lighthouse order
@@ -29,10 +30,11 @@ def lhQueueWrite (s : BeaconState) (plan : LhDepositPlan) (s1 : BeaconState) : B
     pending_deposits := s.pending_deposits.drop plan.next_deposit_index ++ plan.postponed
     deposit_balance_to_consume := plan.deposit_balance_to_consume }
 
-/-- The new validators and their effective balance updates. -/
+/-- The new validators and their effective balance updates. A new validator gets the effective
+balance of `deposit_balance.rs` (`lhApplyPendingDeposit`). -/
 def lhNewValidators (o : Oracle) (plan : LhDepositPlan) (s2 : BeaconState) :
     SpecM BeaconState := do
-  let s3 ← plan.new_validator_deposits.foldlM (apply_pending_deposit Preset.mainnet o) s2
+  let s3 ← plan.new_validator_deposits.foldlM (lhApplyPendingDeposit Preset.mainnet o) s2
   (List.range' s2.validators.length (s3.validators.length - s2.validators.length)).foldlM
     ebUpdateAt s3
 
@@ -49,12 +51,14 @@ theorem lhAfterPass_eq (o : Oracle) (s : BeaconState) (total_active_balance : Gw
     lhAfterPass o s total_active_balance plan x =
       (process_eth1_data_reset Preset.mainnet (s.withRowsChurn x.1 x.2) >>= fun s1 =>
         lhMid o s total_active_balance plan s1 >>= epochRest2 o) := by
-  simp only [lhAfterPass, lhMid, lhNewValidators, lhQueueWrite, bind_assoc]
+  simp only [lhAfterPass, lhMid, lhNewValidators, lhQueueWrite, bind_assoc,
+    lhApplyPendingDeposit_mainnet]
 
 theorem lhNewValidators_votesBlind (o : Oracle) (plan : LhDepositPlan) :
     VotesBlind (lhNewValidators o plan) := by
   intro t
   unfold lhNewValidators
+  rw [lhApplyPendingDeposit_mainnet]
   have h3 := votesBlind_foldlM (fun t x => apply_pending_deposit Preset.mainnet o t x)
     (apply_votesBlind o) plan.new_validator_deposits t
   simp only at h3
@@ -71,6 +75,7 @@ theorem lhNewValidators_slotKeep (o : Oracle) (plan : LhDepositPlan) :
     SlotKeep (lhNewValidators o plan) := by
   intro t t' h
   unfold lhNewValidators at h
+  rw [lhApplyPendingDeposit_mainnet] at h
   obtain ⟨s3, h3, h⟩ := specM_bind_ok h
   obtain ⟨a1, a2⟩ := slotKeep_foldlM (fun t x => apply_pending_deposit Preset.mainnet o t x)
     (apply_slotKeep o) plan.new_validator_deposits t s3 h3
@@ -256,12 +261,10 @@ theorem lhFullTailWith_sameOk
   exact h _ _ _
 
 /-- The Gloas `process_epoch` on mainnet as Lighthouse runs it, in the Lighthouse order and with
-the Lighthouse resets. At the genesis epoch it is the spec, as `process_epoch_lh_full`. -/
-def process_epoch_lh_order (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
-  if s.slot / Preset.mainnet.SLOTS_PER_EPOCH = GENESIS_EPOCH then process_epoch Preset.mainnet o s
-  else do
-    let s1 ← lhJustificationAndFinalization Preset.mainnet s
-    lhFullTailWith (lhAfterPassOrder o) s1
+the Lighthouse resets. The genesis epoch takes the same path. -/
+def process_epoch_lh_order (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
+  let s1 ← lhJustificationAndFinalization Preset.mainnet s
+  lhFullTailWith (lhAfterPassOrder o) s1
 
 /-- At the last slot of an epoch, when the next slot fits in a `u64` and `historical_summaries`
 is below the Lighthouse limit, the Lighthouse order gives the same `ok` results as
@@ -269,8 +272,6 @@ is below the Lighthouse limit, the Lighthouse order gives the same `ok` results 
 theorem process_epoch_lh_order_sameOk (o : Oracle) (s : BeaconState) (hs : TailPre s) :
     SameOk (process_epoch_lh_order o s) (process_epoch_lh_full o s) := by
   unfold process_epoch_lh_order process_epoch_lh_full
-  split
-  · exact SameOk.refl _
   refine SameOk.bind (SameOk.refl _) fun s1 h1 => ?_
   obtain ⟨_, _, _, _, rfl⟩ := process_justification_and_finalization_shape _ _ _
     ((lhJustificationAndFinalization_sameOk _ _ s1).mp h1)

@@ -16,7 +16,7 @@ pub fn process_sync_committee_updates<E: EthSpec>(
     if next_epoch.safe_rem(spec.epochs_per_sync_committee_period)? == 0 {
         *state.current_sync_committee_mut()? = state.next_sync_committee()?.clone();
 
-        let next_sync_committee = if state.fork_name_unchecked().gloas_enabled() {
+        let next_sync_committee = if state.fork_name_unchecked().electra_enabled() {
             let indices = state.get_active_validator_indices(next_epoch, spec)?;
             let mix = *state.get_seed_mix(next_epoch, spec)?;
             let sync_committee_indices =

@@ -18,7 +18,7 @@
     "lib": "EpochProofs",
     "entrypoint": "state_processing::per_epoch_processing::builder_pending_payments",
     "generated": "EpochProofs/Generated.lean",
-    "charon_extra": "--start-from state_processing::per_epoch_processing::effective_balance --start-from state_processing::per_epoch_processing::inactivity_updates --start-from state_processing::per_epoch_processing::slashings_penalty --start-from state_processing::per_epoch_processing::rewards_penalties --start-from state_processing::per_epoch_processing::registry_update --start-from state_processing::per_epoch_processing::pending_deposits --start-from state_processing::per_epoch_processing::pending_consolidations --start-from state_processing::per_epoch_processing::single_pass_step --start-from state_processing::per_epoch_processing::justification --start-from state_processing::per_epoch_processing::epoch_committees --start-from state_processing::per_epoch_processing::tail_updates --include safe_arith --include types::state::balance_weighted_selection --include swap_or_not_shuffle::shuffle_hash --include swap_or_not_shuffle::compute_shuffled_index_with --include types::builder --include alloy_primitives::bits --include types::core::consts -- --lib",
+    "charon_extra": "--start-from state_processing::per_epoch_processing::effective_balance --start-from state_processing::per_epoch_processing::inactivity_updates --start-from state_processing::per_epoch_processing::slashings_penalty --start-from state_processing::per_epoch_processing::rewards_penalties --start-from state_processing::per_epoch_processing::registry_update --start-from state_processing::per_epoch_processing::pending_deposits --start-from state_processing::per_epoch_processing::pending_consolidations --start-from state_processing::per_epoch_processing::single_pass_step --start-from state_processing::per_epoch_processing::justification --start-from state_processing::per_epoch_processing::epoch_committees --start-from state_processing::per_epoch_processing::tail_updates --include safe_arith --include types::validator::deposit_balance --include types::state::balance_weighted_selection --include swap_or_not_shuffle::shuffle_hash --include swap_or_not_shuffle::compute_shuffled_index_with --include types::builder --include alloy_primitives::bits --include types::core::consts -- --lib",
     "sources": [
       "consensus/state_processing/src/per_epoch_processing/builder_pending_payments.rs",
       "consensus/state_processing/src/per_epoch_processing/effective_balance.rs",
@@ -34,8 +34,10 @@
       "consensus/state_processing/src/per_epoch_processing/tail_updates.rs",
       "consensus/types/src/state/balance_weighted_selection.rs",
       "consensus/swap_or_not_shuffle/src/compute_shuffled_index_with.rs",
-      "consensus/swap_or_not_shuffle/src/shuffle_hash.rs"
+      "consensus/swap_or_not_shuffle/src/shuffle_hash.rs",
+      "consensus/types/src/validator/deposit_balance.rs",
+      "consensus/types/proofs/**"
     ],
-    "setup": "etheorem/setup.sh"
+    "setup": "setup.sh"
   }
 ]

@@ -124,3 +124,25 @@ pub fn process_pending_deposits(
         postponed,
     })
 }
+
+/// The effective balance of the validator that a new deposit creates, as
+/// `Validator::from_deposit` computes it after Electra. Aeneas starts from this function to
+/// translate the two `types` functions that `Validator::from_deposit` calls.
+pub fn new_validator_effective_balance(
+    amount: u64,
+    is_compounding: bool,
+    effective_balance_increment: u64,
+    max_effective_balance_electra: u64,
+    min_activation_balance: u64,
+) -> u64 {
+    let max_effective_balance = types::validator::deposit_balance::max_effective_balance_electra(
+        is_compounding,
+        max_effective_balance_electra,
+        min_activation_balance,
+    );
+    types::validator::deposit_balance::deposit_effective_balance(
+        amount,
+        effective_balance_increment,
+        max_effective_balance,
+    )
+}

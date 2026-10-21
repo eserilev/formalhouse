@@ -1295,6 +1295,38 @@ def types.state.balance_weighted_selection.compute_ptc
     balances committee_indices seed ptc_size false shuffle_round_count
     max_effective_balance
 
+/-- [types::validator::deposit_balance::max_effective_balance_electra]:
+    Source: 'consensus/types/src/validator/deposit_balance.rs', lines 9:0-13:8
+    Name pattern: [types::validator::deposit_balance::max_effective_balance_electra]
+    Visibility: public -/
+@[rust_fun "types::validator::deposit_balance::max_effective_balance_electra"]
+def types.validator.deposit_balance.max_effective_balance_electra
+  (is_compounding : Bool) (max_effective_balance_electra : Std.U64)
+  (min_activation_balance : Std.U64) :
+  Result Std.U64
+  := do
+  if is_compounding
+  then ok max_effective_balance_electra
+  else ok min_activation_balance
+
+/-- [types::validator::deposit_balance::deposit_effective_balance]:
+    Source: 'consensus/types/src/validator/deposit_balance.rs', lines 23:0-23:96
+    Name pattern: [types::validator::deposit_balance::deposit_effective_balance]
+    Visibility: public -/
+@[rust_fun "types::validator::deposit_balance::deposit_effective_balance"]
+def types.validator.deposit_balance.deposit_effective_balance
+  (amount : Std.U64) (increment : Std.U64) (max_effective_balance : Std.U64) :
+  Result Std.U64
+  := do
+  let r ← U64.Insts.Safe_arithSafeArithU64.safe_rem amount increment
+  let rounded ←
+    match r with
+    | core.result.Result.Ok rem => ok (core.num.U64.saturating_sub amount rem)
+    | core.result.Result.Err _ => ok amount
+  if rounded < max_effective_balance
+  then ok rounded
+  else ok max_effective_balance
+
 /-- [state_processing::per_epoch_processing::builder_pending_payments::get_builder_payment_quorum_threshold]:
     Source: 'consensus/state_processing/src/per_epoch_processing/builder_pending_payments.rs', lines 9:0-18:1
     Visibility: public -/
@@ -2674,6 +2706,22 @@ def per_epoch_processing.pending_deposits.process_pending_deposits
     core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
       per_epoch_processing.pending_deposits.DepositsOutcome
       (core.convert.FromSame safe_arith.ArithError) residual
+
+/-- [state_processing::per_epoch_processing::pending_deposits::new_validator_effective_balance]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_deposits.rs', lines 131:0-148:1
+    Visibility: public -/
+def per_epoch_processing.pending_deposits.new_validator_effective_balance
+  (amount : Std.U64) (is_compounding : Bool)
+  (effective_balance_increment : Std.U64)
+  (max_effective_balance_electra : Std.U64) (min_activation_balance : Std.U64)
+  :
+  Result Std.U64
+  := do
+  let max_effective_balance ←
+    types.validator.deposit_balance.max_effective_balance_electra
+      is_compounding max_effective_balance_electra min_activation_balance
+  types.validator.deposit_balance.deposit_effective_balance amount
+    effective_balance_increment max_effective_balance
 
 /-- [state_processing::per_epoch_processing::registry_update::RegistryFields]
     Source: 'consensus/state_processing/src/per_epoch_processing/registry_update.rs', lines 9:0-16:1

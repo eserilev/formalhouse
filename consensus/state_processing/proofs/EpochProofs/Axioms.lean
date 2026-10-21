@@ -69,6 +69,22 @@ import EpochProofs.Sanity.Invariants.LighthouseResets
 import EpochProofs.Sanity.Invariants.LighthouseOrder
 import EpochProofs.Etheorem.LighthouseOrder
 import EpochProofs.Etheorem.Final
+import EpochProofs.Sanity.Invariants.Totality
+import EpochProofs.Sanity.Invariants.TotalityCommittees
+import EpochProofs.Sanity.Invariants.TotalityRows
+import EpochProofs.Etheorem.Total
+import EpochProofs.Equiv.DepositBalance
+import EpochProofs.Equiv.SelectionEmpty
+import EpochProofs.CacheBridge.Capstone
+import EpochProofs.CacheBridge.CapstoneCommittees
+import EpochProofs.CachePubkey
+import EpochProofs.Equiv.Fulu
+import EpochProofs.Equiv.FuluRegistry
+import EpochProofs.Sanity.FuluSinglePass
+import EpochProofs.Sanity.FuluEpoch
+import EpochProofs.Sanity.Invariants.FuluOrder
+import EpochProofs.Etheorem.Fulu.Epoch
+import EpochProofs.Formalhouse
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -249,7 +265,6 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Etheorem.queuesPresetAgrees_mainnet
 #print axioms EpochProofs.Etheorem.queuesPresetAgrees_minimal
 #print axioms EpochProofs.Etheorem.apply_pending_deposit_etheorem
-#print axioms EpochProofs.Etheorem.ppdStep_bridge_stop
 #print axioms EpochProofs.Etheorem.process_pending_deposits_etheorem
 #print axioms EpochProofs.Etheorem.process_pending_consolidations_etheorem
 #print axioms EpochProofs.Etheorem.epochPresetAgrees_mainnet
@@ -304,3 +319,140 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.lighthouse_order_epoch_state_transition_sameOk
 #print axioms EpochProofs.Etheorem.lighthouse_order_epoch_etheorem
 #print axioms EpochProofs.Etheorem.lighthouse_order_epoch_etheorem_reachable
+#print axioms EpochProofs.Spec.process_justification_and_finalization_total
+#print axioms EpochProofs.Spec.process_pending_consolidations_total
+#print axioms EpochProofs.Spec.process_effective_balance_updates_total
+#print axioms EpochProofs.Spec.process_builder_pending_payments_total
+#print axioms EpochProofs.Spec.apply_pending_deposit_total
+#print axioms EpochProofs.Spec.process_epoch_total
+#print axioms EpochProofs.Etheorem.lighthouse_epoch_total_etheorem
+#print axioms EpochProofs.Spec.compute_balance_weighted_selection_total
+#print axioms EpochProofs.Spec.ptcIndices_total
+#print axioms EpochProofs.Spec.get_next_sync_committee_total
+#print axioms EpochProofs.Spec.get_beacon_proposer_indices_total
+#print axioms EpochProofs.Spec.process_sync_committee_updates_total
+#print axioms EpochProofs.Spec.process_proposer_lookahead_total
+#print axioms EpochProofs.Spec.process_ptc_window_total
+#print axioms EpochProofs.Spec.committee_steps_total
+#print axioms EpochProofs.Spec.committeesOk_of
+#print axioms EpochProofs.Spec.process_ptc_window_few_active_error
+#print axioms EpochProofs.Spec.rewardsRowStep_total
+#print axioms EpochProofs.Spec.registryRowStep_total
+#print axioms EpochProofs.Spec.slashingsRowStep_total
+#print axioms EpochProofs.Spec.midOk_of_rowBounds
+#print axioms EpochProofs.Spec.depOk_of_rowBounds
+#print axioms EpochProofs.Spec.process_epoch_total_rows
+#print axioms EpochProofs.max_effective_balance_electra_equiv
+#print axioms EpochProofs.deposit_effective_balance_equiv
+#print axioms EpochProofs.new_validator_effective_balance_equiv
+#print axioms EpochProofs.Spec.get_validator_from_deposit_lh
+#print axioms EpochProofs.Spec.lhApplyPendingDeposit_mainnet
+#print axioms EpochProofs.compute_balance_weighted_selection_empty
+#print axioms EpochProofs.spec_compute_balance_weighted_selection_empty
+#print axioms EpochProofs.CacheBridge.has_flag_bridge
+#print axioms EpochProofs.CacheBridge.get_active_validator_indices_bridge
+#print axioms EpochProofs.CacheBridge.participating_total_bridge
+#print axioms EpochProofs.CacheBridge.previous_epoch_bridge
+#print axioms EpochProofs.CacheBridge.lh_previous_flag_balance_eq
+#print axioms EpochProofs.CacheBridge.lh_current_flag_balance_eq
+#print axioms EpochProofs.CacheBridge.integer_squareroot_eq_sqrt
+#print axioms EpochProofs.CacheBridge.activeSum_eq
+#print axioms EpochProofs.CacheBridge.get_total_active_balance_closed
+#print axioms EpochProofs.CacheBridge.lh_total_active_balance_eq
+#print axioms EpochProofs.CacheBridge.rewardsBaseReward_of_altair
+#print axioms EpochProofs.CacheBridge.lh_base_reward_eq
+#print axioms EpochProofs.CacheBridge.lh_cache_reads_mainnet
+#print axioms EpochProofs.CacheBridge.lighthouse_order_epoch_etheorem_reachable_cached
+#print axioms EpochProofs.CacheBridge.csiFold_eq
+#print axioms EpochProofs.CacheBridge.epoch_shuffled_at
+#print axioms EpochProofs.CacheBridge.epoch_compute_committee_slice
+#print axioms EpochProofs.CacheBridge.epoch_cps_eq
+#print axioms EpochProofs.CacheBridge.epoch_get_beacon_committee_slice
+#print axioms EpochProofs.CacheBridge.lh_committee_eq
+#print axioms EpochProofs.CacheBridge.ptcIndices_of_cache
+#print axioms EpochProofs.CacheBridge.committeeCacheBuilt_of_rust
+#print axioms EpochProofs.CacheBridge.hcomm_of_cache
+#print axioms EpochProofs.CacheBridge.lh_ptc_window_from_cache
+#print axioms EpochProofs.CacheBridge.lighthouse_order_epoch_etheorem_reachable_cached_ptc
+#print axioms EpochProofs.Spec.idxOf_pubkey_eq
+#print axioms EpochProofs.Spec.pubkey_cache_deposit_lookup
+#print axioms EpochProofs.Spec.process_rewards_and_penalties_genesis
+#print axioms EpochProofs.Spec.lhRowStep_genesis
+#print axioms EpochProofs.Spec.genesis_passes_eq_single_pass
+#print axioms EpochProofs.Spec.lighthouse_single_pass_eq_spec_genesis
+#print axioms EpochProofs.Spec.rewardsContextOf_genesis
+#print axioms EpochProofs.Spec.process_epoch_lh_full_genesis
+#print axioms EpochProofs.Spec.get_activation_churn_limit_fuluView
+#print axioms EpochProofs.Spec.process_pending_deposits_fulu_eq
+#print axioms EpochProofs.Spec.electraPass_ok
+#print axioms EpochProofs.Spec.selectionPass_ok
+#print axioms EpochProofs.Spec.next_sync_committee_indices_loop_iff
+#print axioms EpochProofs.Spec.get_next_sync_committee_indices_fulu_iff
+#print axioms EpochProofs.Spec.compute_proposer_index_loop_selection
+#print axioms EpochProofs.Spec.selection_compute_proposer_index_loop
+#print axioms EpochProofs.Spec.compute_proposer_index_selection
+#print axioms EpochProofs.Spec.selection_compute_proposer_index
+#print axioms EpochProofs.Spec.compute_proposer_indices_fulu_ok
+#print axioms EpochProofs.Spec.compute_proposer_indices_ok_fulu
+#print axioms EpochProofs.exit_churn_limit_capped
+#print axioms EpochProofs.exit_churn_limit_fulu
+#print axioms EpochProofs.activation_churn_limit_gloas
+#print axioms EpochProofs.next_sync_committee_indices_spec_fulu
+#print axioms EpochProofs.next_proposer_lookahead_spec_fulu
+#print axioms EpochProofs.compute_exit_epoch_and_update_churn_equiv_churn
+#print axioms EpochProofs.ejection_step_equiv_churn
+#print axioms EpochProofs.registry_update_equiv_churn
+#print axioms EpochProofs.registry_step_equiv_churn
+#print axioms EpochProofs.lhRowStepFull_eq_tab
+#print axioms EpochProofs.single_pass_step_equiv_churn
+#print axioms EpochProofs.fulu_churnSpec
+#print axioms EpochProofs.registry_update_equiv_fulu
+#print axioms EpochProofs.registry_update_eq_spec_fulu
+#print axioms EpochProofs.single_pass_step_equiv_fulu
+#print axioms EpochProofs.Spec.fuluCompat_mainnet
+#print axioms EpochProofs.Spec.fuluCompat_minimal
+#print axioms EpochProofs.Spec.fulu_churn_value
+#print axioms EpochProofs.Spec.fulu_exit_churn_eq
+#print axioms EpochProofs.Spec.fulu_activation_churn_eq
+#print axioms EpochProofs.Spec.compute_exit_epoch_and_update_churn_fulu_eq
+#print axioms EpochProofs.Spec.initiate_validator_exit_fulu_eq
+#print axioms EpochProofs.Spec.process_registry_updates_fulu_eq
+#print axioms EpochProofs.Spec.process_pending_deposits_fulu_tab_eq
+#print axioms EpochProofs.Spec.spec_passes_eq_rows_tab
+#print axioms EpochProofs.Spec.separate_passes_eq_single_pass_tab
+#print axioms EpochProofs.Spec.lighthouse_single_pass_eq_spec_fulu
+#print axioms EpochProofs.Spec.get_next_sync_committee_fulu_sameOk
+#print axioms EpochProofs.Spec.process_sync_committee_updates_fulu_sameOk
+#print axioms EpochProofs.Spec.process_epoch_fulu_eq_tab
+#print axioms EpochProofs.Spec.process_proposer_lookahead_fulu_eq
+#print axioms EpochProofs.Spec.plFuluNew_congr
+#print axioms EpochProofs.Spec.specOrderFulu_lhOrderFulu
+#print axioms EpochProofs.Etheorem.Fulu.get_activation_exit_churn_limit_ok
+#print axioms EpochProofs.Etheorem.Fulu.get_exit_churn_limit_ok
+#print axioms EpochProofs.Etheorem.Fulu.get_activation_churn_limit_ok
+#print axioms EpochProofs.Etheorem.Fulu.compute_exit_epoch_and_update_churn_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.initiate_validator_exit_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.presetAgrees_mainnet
+#print axioms EpochProofs.Etheorem.Fulu.presetAgrees_minimal
+#print axioms EpochProofs.Etheorem.Fulu.fuluChurnAgrees_mainnet
+#print axioms EpochProofs.Etheorem.Fulu.fuluChurnAgrees_minimal
+#print axioms EpochProofs.Etheorem.Fulu.justification_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.inactivity_updates_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.rewards_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.slashings_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.process_registry_updates_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.process_pending_deposits_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.process_pending_consolidations_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.eth1_data_reset_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.effective_balance_updates_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.slashings_reset_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.randao_mixes_reset_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.historical_summaries_update_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.participation_flag_updates_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.get_beacon_proposer_indices_ok
+#print axioms EpochProofs.Etheorem.Fulu.process_proposer_lookahead_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.process_sync_committee_updates_fulu_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.epochPresetAgrees_mainnet
+#print axioms EpochProofs.Etheorem.Fulu.epochPresetAgrees_minimal
+#print axioms EpochProofs.Etheorem.Fulu.process_epoch_fulu_etheorem
+#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch
