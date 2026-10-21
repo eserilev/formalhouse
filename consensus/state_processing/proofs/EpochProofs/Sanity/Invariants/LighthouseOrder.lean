@@ -51,8 +51,8 @@ theorem lhAfterPass_eq (o : Oracle) (s : BeaconState) (total_active_balance : Gw
     lhAfterPass o s total_active_balance plan x =
       (process_eth1_data_reset Preset.mainnet (s.withRowsChurn x.1 x.2) >>= fun s1 =>
         lhMid o s total_active_balance plan s1 >>= epochRest2 o) := by
-  simp only [lhAfterPass, lhMid, lhNewValidators, lhQueueWrite, bind_assoc,
-    lhApplyPendingDeposit_mainnet]
+  simp only [lhAfterPass, lhAfterPassG, gloasFin, lhMid, lhNewValidators, lhQueueWrite,
+    bind_assoc, lhApplyPendingDeposit_mainnet]
 
 theorem lhNewValidators_votesBlind (o : Oracle) (plan : LhDepositPlan) :
     VotesBlind (lhNewValidators o plan) := by
@@ -240,7 +240,7 @@ def lhFullTailWith
 
 theorem lhFullTail_eq_with (o : Oracle) (s : BeaconState) :
     lhFullTail o s = lhFullTailWith (lhAfterPass o) s := by
-  unfold lhFullTail lhFullTailWith lhAfterPass
+  unfold lhFullTail lhFullTailG lhFullTailWith lhAfterPass lhAfterPassG gloasFin
   rfl
 
 theorem lhFullTailWith_sameOk

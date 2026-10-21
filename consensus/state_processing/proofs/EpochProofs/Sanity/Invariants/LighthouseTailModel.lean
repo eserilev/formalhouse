@@ -90,16 +90,19 @@ def epochRest2 (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
   let state ← process_proposer_lookahead Preset.mainnet o state
   process_ptc_window Preset.mainnet o state
 
-/-- The Lighthouse steps after justification and finalization. -/
-def lhFullTail (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
+/-- The Lighthouse steps after justification and finalization, for a fork. `rt` gives the total
+that the registry churn and the deposit churn read, from the total active balance. `fin` runs
+after the effective balance updates of the validators that consolidations name. -/
+def lhFullTailG (o : Oracle) (rt : Gwei → Gwei) (fin : Gwei → BeaconState → SpecM BeaconState)
+    (s : BeaconState) : SpecM BeaconState := do
   let current_epoch ← get_current_epoch Preset.mainnet s
   let total_active_balance ← get_total_active_balance Preset.mainnet s
   let rctx ← rewardsContextOf Preset.mainnet total_active_balance s
   let (_, per) ← slashingsPreamble Preset.mainnet total_active_balance s.slashings
-  let plan ← lhDepositPlan s total_active_balance current_epoch
+  let plan ← lhDepositPlan s (rt total_active_balance) current_epoch
   let (downward, upward) ← hysteresisThresholds Preset.mainnet
   let named := consolidationIndices s
-  let ctx := lhContextOf s total_active_balance current_epoch rctx per
+  let ctx := lhContextOf s (rt total_active_balance) current_epoch rctx per
   let (churn, rows) ← passM (fun churn r => lhRowStepFull Preset.mainnet ctx downward upward
       ⟨lhBaseReward total_active_balance r, plan.topups.getD r.index 0, decide (r.index ∈ named)⟩
       churn r)
@@ -113,8 +116,16 @@ def lhFullTail (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
     ebUpdateAt s3
   let s5 ← process_pending_consolidations Preset.mainnet s4
   let s6 ← named.foldlM ebUpdateAt s5
-  let s7 ← process_builder_pending_payments Preset.mainnet total_active_balance s6
-  epochRest2 o s7
+  fin total_active_balance s6
+
+/-- The Gloas end of the tail: the builder payments, then the steps after them. -/
+def gloasFin (o : Oracle) (total_active_balance : Gwei) (t : BeaconState) :
+    SpecM BeaconState :=
+  process_builder_pending_payments Preset.mainnet total_active_balance t >>= epochRest2 o
+
+/-- The Lighthouse steps after justification and finalization. -/
+def lhFullTail (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
+  lhFullTailG o id (gloasFin o) s
 
 /-- The Gloas `process_epoch` on mainnet as Lighthouse runs it, with the pending deposits and the
 effective balance updates in the single pass. At the genesis epoch the single pass skips the

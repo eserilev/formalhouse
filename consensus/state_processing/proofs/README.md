@@ -33,6 +33,7 @@ EpochProofs/Spec/*.lean  <-- written by hand from the consensus specs
 | Fulu: exit and activation churn, proposer lookahead, sync committee selection | Done | Done (shared with Gloas) | Done, with glue conditions |
 | Fulu: registry update and single pass | Done (shared with Gloas) | Done (shared with Gloas) | Done |
 | Fulu: whole epoch against Etheorem's Fulu `processEpoch` | Done | - | Done, with conditions |
+| Fulu: whole Lighthouse epoch (`formalhouse_fulu_epoch`) | Done | Done (shared with Gloas) | Done, with conditions; not total |
 
 ## The final result
 
@@ -78,10 +79,13 @@ satisfies `CommitteeCacheBuilt`, and the pubkey cache is `Coherent` with the val
 | Step order | not Rust | `process_epoch_lh_order` follows `altair.rs` and `single_pass.rs`; `LighthouseOrder*.lean` proves it safe | none | none |
 | Genesis epoch | `single_pass_step.rs` with `after_genesis` false | as the other epochs | as the other epochs | none |
 
-Fulu: `process_epoch_fulu_etheorem` proves the Fulu spec epoch equal to Etheorem's Fulu
-`processEpoch`, and the Fulu Lighthouse steps are proved per step (see "Fulu"). A whole-epoch
-Fulu Lighthouse model, and so a `formalhouse_fulu_epoch`, does not exist yet: the tail model
-(`LighthouseTail*.lean`) uses one total for rewards and churn and includes the Gloas-only steps.
+Fulu: `formalhouse_fulu_epoch` (`EpochProofs/FormalhouseFulu.lean`) states that if Lighthouse's
+Fulu epoch (`process_epoch_lh_order_fulu`) returns `s'`, Etheorem's Fulu `processEpoch` returns
+a state that maps to `s'`, and that the Fulu spec epoch and Lighthouse's Fulu epoch return the
+same `ok` results. It does not state that the Fulu epoch returns `ok`: the totality proofs cover
+Gloas only. Its state facts are the invariants that reachable Gloas states keep
+(`EpochInputOk''`). The Lean spec has no Fulu block processing, so for Fulu they are
+assumptions.
 
 ## Each epoch step and what checks it
 
@@ -236,11 +240,14 @@ functions that differ from Gloas. `Sanity/Fulu.lean` reduces them to the Gloas f
   its registry update and pending deposits as the Gloas functions at `fuluTab`, and
   `process_sync_committee_updates_fulu_sameOk` relates its sync committee update to the Gloas one.
 
-Not yet done for Fulu: the whole-epoch model `process_epoch_lh_order` and its capstones for Fulu,
-and Fulu totality. The Etheorem bridge for Fulu is done (see Etheorem below). The tail proofs (`LighthouseTail*.lean`) take one
-total for the rewards, the slashings, the registry churn and the deposit churn, and they include
-the builder payments and the PTC window. Fulu needs the churn total `fuluTab` apart from the
-rewards total, and no builder payments or PTC window.
+- Whole epoch: the tail proofs are general over the churn total and the steps at the end
+  (`lhFullTailG`, `tailNFG`, `specTailG`, `specRest_nf`). `EBBlind` states what the step between
+  the consolidations and the effective balance updates needs: the builder payments in Gloas, no
+  step in Fulu. `LighthouseFulu.lean` proves `process_epoch_lh_full_fulu_sameOk'`, and
+  `LighthouseFuluOrder.lean` proves `lighthouse_fulu_epoch_sameOk` for Lighthouse's Fulu order.
+
+Not yet done for Fulu: totality, and the Fulu invariants from genesis (the Lean spec has no Fulu
+block processing).
 
 ## Separate passes and the single pass
 
