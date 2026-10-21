@@ -33,7 +33,7 @@ EpochProofs/Spec/*.lean  <-- written by hand from the consensus specs
 | Fulu: exit and activation churn, proposer lookahead, sync committee selection | Done | Done (shared with Gloas) | Done, with glue conditions |
 | Fulu: registry update and single pass | Done (shared with Gloas) | Done (shared with Gloas) | Done |
 | Fulu: whole epoch against Etheorem's Fulu `processEpoch` | Done | - | Done, with conditions |
-| Fulu: whole Lighthouse epoch (`formalhouse_fulu_epoch`) | Done | Done (shared with Gloas) | Done, with conditions; not total |
+| Fulu: whole Lighthouse epoch (`formalhouse_fulu_epoch`, `formalhouse_fulu_epoch_total`) | Done | Done (shared with Gloas) | Done, with conditions; total |
 
 ## The final result
 
@@ -82,9 +82,13 @@ satisfies `CommitteeCacheBuilt`, and the pubkey cache is `Coherent` with the val
 Fulu: `formalhouse_fulu_epoch` (`EpochProofs/FormalhouseFulu.lean`) states that if Lighthouse's
 Fulu epoch (`process_epoch_lh_order_fulu`) returns `s'`, Etheorem's Fulu `processEpoch` returns
 a state that maps to `s'`, and that the Fulu spec epoch and Lighthouse's Fulu epoch return the
-same `ok` results. It does not state that the Fulu epoch returns `ok`: the totality proofs cover
-Gloas only. Its state facts are the invariants that reachable Gloas states keep
-(`EpochInputOk''`). The Lean spec has no Fulu block processing, so for Fulu they are
+same `ok` results. `formalhouse_fulu_epoch_total` adds that Lighthouse's Fulu epoch returns `ok`
+(`process_epoch_fulu_total`, `Sanity/Invariants/TotalityFulu.lean`), under `RowBounds` and the
+Fulu pyspec preconditions (`FuluCommPreconds`): an active validator at the next epoch and at
+`current + 2`, and selections that end within `2^64` passes. Fulu has no PTC, so the Gloas F12
+halt (fewer than 32 active validators) does not apply, and a slashed active validator counts as
+a proposer candidate (no F4). Its state facts are the invariants that reachable Gloas states
+keep (`EpochInputOk''`). The Lean spec has no Fulu block processing, so for Fulu they are
 assumptions.
 
 ## Each epoch step and what checks it
