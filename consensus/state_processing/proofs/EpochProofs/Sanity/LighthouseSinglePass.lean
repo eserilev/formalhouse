@@ -66,7 +66,8 @@ def lhContextOf (state : BeaconState) (total_active_balance : Gwei)
     active_increments := rctx.active_increments
     total_active_balance
     slashings_target := current_epoch + Preset.mainnet.EPOCHS_PER_SLASHINGS_VECTOR / 2
-    penalty_per_increment := per }
+    penalty_per_increment := per
+    after_genesis := current_epoch != GENESIS_EPOCH }
 
 /-- On mainnet, one pass of `lhRowStep` gives the same `ok` results as the spec's inactivity,
 rewards, registry and slashings passes.
@@ -130,7 +131,8 @@ theorem lighthouse_single_pass_eq_spec (total_active_balance : Gwei) (state : Be
     have hrow := rowsOf_getElem state i hi
     rw [hri] at hrow
     subst hrow
-    exact lhRowStep_eq_singlePassStep_of_bounds _ rctx _ churn (base_reward _) activation_epoch
+    exact lhRowStep_eq_singlePassStep_of_bounds _ (by simpa [lhContextOf] using hgenesis) rctx _
+      churn (base_reward _) activation_epoch
       rfl rfl rfl rfl rfl rfl
       (by rw [htab]; exact hbase _ hr) (by rw [htab]; exact htotal) hincrements
       (hentry.effective_balance i hiv) (hentry.supply i hiv) hfinalized hcurrent64 hactivation

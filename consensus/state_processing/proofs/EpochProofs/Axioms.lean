@@ -304,3 +304,9 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.lighthouse_order_epoch_state_transition_sameOk
 #print axioms EpochProofs.Etheorem.lighthouse_order_epoch_etheorem
 #print axioms EpochProofs.Etheorem.lighthouse_order_epoch_etheorem_reachable
+#print axioms EpochProofs.Spec.process_rewards_and_penalties_genesis
+#print axioms EpochProofs.Spec.lhRowStep_genesis
+#print axioms EpochProofs.Spec.genesis_passes_eq_single_pass
+#print axioms EpochProofs.Spec.lighthouse_single_pass_eq_spec_genesis
+#print axioms EpochProofs.Spec.rewardsContextOf_genesis
+#print axioms EpochProofs.Spec.process_epoch_lh_full_genesis

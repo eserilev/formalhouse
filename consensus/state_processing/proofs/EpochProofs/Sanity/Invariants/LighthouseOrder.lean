@@ -256,12 +256,10 @@ theorem lhFullTailWith_sameOk
   exact h _ _ _
 
 /-- The Gloas `process_epoch` on mainnet as Lighthouse runs it, in the Lighthouse order and with
-the Lighthouse resets. At the genesis epoch it is the spec, as `process_epoch_lh_full`. -/
-def process_epoch_lh_order (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
-  if s.slot / Preset.mainnet.SLOTS_PER_EPOCH = GENESIS_EPOCH then process_epoch Preset.mainnet o s
-  else do
-    let s1 ← lhJustificationAndFinalization Preset.mainnet s
-    lhFullTailWith (lhAfterPassOrder o) s1
+the Lighthouse resets. The genesis epoch takes the same path. -/
+def process_epoch_lh_order (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
+  let s1 ← lhJustificationAndFinalization Preset.mainnet s
+  lhFullTailWith (lhAfterPassOrder o) s1
 
 /-- At the last slot of an epoch, when the next slot fits in a `u64` and `historical_summaries`
 is below the Lighthouse limit, the Lighthouse order gives the same `ok` results as
@@ -269,8 +267,6 @@ is below the Lighthouse limit, the Lighthouse order gives the same `ok` results 
 theorem process_epoch_lh_order_sameOk (o : Oracle) (s : BeaconState) (hs : TailPre s) :
     SameOk (process_epoch_lh_order o s) (process_epoch_lh_full o s) := by
   unfold process_epoch_lh_order process_epoch_lh_full
-  split
-  · exact SameOk.refl _
   refine SameOk.bind (SameOk.refl _) fun s1 h1 => ?_
   obtain ⟨_, _, _, _, rfl⟩ := process_justification_and_finalization_shape _ _ _
     ((lhJustificationAndFinalization_sameOk _ _ s1).mp h1)
