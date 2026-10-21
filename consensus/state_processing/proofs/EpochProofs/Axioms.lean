@@ -70,6 +70,10 @@ import EpochProofs.Sanity.Invariants.LighthouseOrder
 import EpochProofs.Etheorem.LighthouseOrder
 import EpochProofs.Etheorem.Final
 import EpochProofs.Equiv.Fulu
+import EpochProofs.Equiv.FuluRegistry
+import EpochProofs.Sanity.FuluSinglePass
+import EpochProofs.Sanity.FuluEpoch
+import EpochProofs.Sanity.Invariants.FuluOrder
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -328,3 +332,31 @@ open EpochProofs.Spec
 #print axioms EpochProofs.activation_churn_limit_gloas
 #print axioms EpochProofs.next_sync_committee_indices_spec_fulu
 #print axioms EpochProofs.next_proposer_lookahead_spec_fulu
+#print axioms EpochProofs.compute_exit_epoch_and_update_churn_equiv_churn
+#print axioms EpochProofs.ejection_step_equiv_churn
+#print axioms EpochProofs.registry_update_equiv_churn
+#print axioms EpochProofs.registry_step_equiv_churn
+#print axioms EpochProofs.lhRowStepFull_eq_tab
+#print axioms EpochProofs.single_pass_step_equiv_churn
+#print axioms EpochProofs.fulu_churnSpec
+#print axioms EpochProofs.registry_update_equiv_fulu
+#print axioms EpochProofs.registry_update_eq_spec_fulu
+#print axioms EpochProofs.single_pass_step_equiv_fulu
+#print axioms EpochProofs.Spec.fuluCompat_mainnet
+#print axioms EpochProofs.Spec.fuluCompat_minimal
+#print axioms EpochProofs.Spec.fulu_churn_value
+#print axioms EpochProofs.Spec.fulu_exit_churn_eq
+#print axioms EpochProofs.Spec.fulu_activation_churn_eq
+#print axioms EpochProofs.Spec.compute_exit_epoch_and_update_churn_fulu_eq
+#print axioms EpochProofs.Spec.initiate_validator_exit_fulu_eq
+#print axioms EpochProofs.Spec.process_registry_updates_fulu_eq
+#print axioms EpochProofs.Spec.process_pending_deposits_fulu_tab_eq
+#print axioms EpochProofs.Spec.spec_passes_eq_rows_tab
+#print axioms EpochProofs.Spec.separate_passes_eq_single_pass_tab
+#print axioms EpochProofs.Spec.lighthouse_single_pass_eq_spec_fulu
+#print axioms EpochProofs.Spec.get_next_sync_committee_fulu_sameOk
+#print axioms EpochProofs.Spec.process_sync_committee_updates_fulu_sameOk
+#print axioms EpochProofs.Spec.process_epoch_fulu_eq_tab
+#print axioms EpochProofs.Spec.process_proposer_lookahead_fulu_eq
+#print axioms EpochProofs.Spec.plFuluNew_congr
+#print axioms EpochProofs.Spec.specOrderFulu_lhOrderFulu

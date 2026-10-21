@@ -31,6 +31,7 @@ EpochProofs/Spec/*.lean  <-- written by hand from the consensus specs
 | `process_proposer_lookahead`, `process_ptc_window`, sync committee selection (Gloas) | Done | Done | Done, with glue conditions |
 | eth1, slashings and randao resets, historical summaries (checks) | Done | Done | Done |
 | Fulu: exit and activation churn, proposer lookahead, sync committee selection | Done | Done (shared with Gloas) | Done, with glue conditions |
+| Fulu: registry update and single pass | Done (shared with Gloas) | Done (shared with Gloas) | Done |
 
 ## Each epoch step and what checks it
 
@@ -166,8 +167,30 @@ functions that differ from Gloas. `Sanity/Fulu.lean` reduces them to the Gloas f
   lookahead through `epoch_committees::next_proposer_lookahead` on all the active validators
   (`next_proposer_lookahead_spec_fulu`).
 
-Not yet done for Fulu: the registry update, the single pass and the whole-epoch model with the
-Fulu constants, and the Etheorem bridge for Fulu.
+- Registry update and single pass: on mainnet and minimal the Fulu quotient is twice the Gloas
+  quotient and the Fulu cap is the Gloas activation cap (`FuluCompat`). So the Fulu churn of a
+  total is the Gloas churn of `fuluTab` of it (`fulu_exit_churn_eq`, `fulu_activation_churn_eq`),
+  and Fulu `process_registry_updates` and `process_pending_deposits` are the Gloas functions at
+  `fuluTab`, with the same preset (`process_registry_updates_fulu_eq`,
+  `process_pending_deposits_fulu_tab_eq`). The registry theorems of `Equiv/RegistryUpdates.lean`
+  and `single_pass_step_equiv` now take any constants whose exit churn is the Gloas churn of
+  `T total` (`ChurnSpec`). With the Fulu constants `T = fuluTab`
+  (`single_pass_step_equiv_fulu`). `lighthouse_single_pass_eq_spec_fulu`: one pass of `lhRowStep`
+  with the registry total `fuluTab` equals the Fulu inactivity, rewards, registry and slashings
+  passes. Only the registry pass reads `fuluTab`; `separate_passes_eq_single_pass_tab` takes the
+  registry total apart from the total of the other passes.
+- Order: Lighthouse runs the Fulu proposer lookahead inside the single pass, before the resets,
+  the historical summaries update, the participation rotation and the sync committee update.
+  `specOrderFulu_lhOrderFulu` shows that the two orders give the same `ok` results.
+- `Spec/FuluEpoch.lean` transcribes the Fulu `process_epoch`. `process_epoch_fulu_eq_tab` writes
+  its registry update and pending deposits as the Gloas functions at `fuluTab`, and
+  `process_sync_committee_updates_fulu_sameOk` relates its sync committee update to the Gloas one.
+
+Not yet done for Fulu: the whole-epoch model `process_epoch_lh_order` and its capstones for Fulu,
+the Etheorem bridge for Fulu, and Fulu totality. The tail proofs (`LighthouseTail*.lean`) take one
+total for the rewards, the slashings, the registry churn and the deposit churn, and they include
+the builder payments and the PTC window. Fulu needs the churn total `fuluTab` apart from the
+rewards total, and no builder payments or PTC window.
 
 ## Separate passes and the single pass
 
