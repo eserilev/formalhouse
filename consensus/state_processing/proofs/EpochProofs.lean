@@ -128,3 +128,5 @@ import EpochProofs.Caches
 import EpochProofs.CacheBridge.ProgressiveBalances
 import EpochProofs.CacheBridge.EpochCache
 import EpochProofs.CacheBridge.Capstone
+import EpochProofs.CacheBridge.Committees
+import EpochProofs.CacheBridge.CapstoneCommittees

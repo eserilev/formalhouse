@@ -402,11 +402,21 @@ each cache model and proves the cache reads equal to the epoch spec values:
 | Epoch cache: base reward | `lh_base_reward_eq` (equals `rewardsBaseReward`, which `lhBaseReward` uses) | the same total, and the table built from it |
 | Exit cache | none | not read after Electra: `initiate_validator_exit` uses `compute_exit_epoch_and_update_churn`. `build_exit_cache` still runs, and it can fail only on a `u64` overflow |
 | Activation queue | none | not read after Electra (`single_pass.rs` builds it only before Electra) |
-| Committee cache (PTC committees) | none yet | the two projects model the shuffle with different hash types: `Oracle.hash` on bytes in the epoch spec, `sha256` on `Nat` lists in the cache spec. A bridge needs a hash link and a `csiFold` equality between the two closed forms |
+| Committee cache (PTC committees) | `hcomm_of_cache`, `lh_ptc_window_from_cache` (`CacheBridge/Committees.lean`) | `CommitteeCacheBuilt`: the shuffling is the spec shuffling of the active indices with the spec seed, and the count is the spec count. `committeeCacheBuilt_of_rust` gives it from the outputs of the Aeneas-checked `shuffling` (#66) and `committee_count_per_slot` (#65). Also `CommitteesFromCache`: entry `k` joins the cache committees of slot `start + k` (the loop in `process_ptc_window`, glue) |
 | Pubkey cache | none | no cache proof |
 
 `lighthouse_order_epoch_etheorem_reachable_cached` states the main result together with the
 cache reads (`lh_cache_reads_mainnet`) at the epoch start state.
+`lighthouse_order_epoch_etheorem_reachable_cached_ptc` adds the committee cache read of the PTC
+window step, for any state at which Lighthouse builds the cache.
+
+The hash link: `natHash o` is `o.hash` on byte values, the hash form of the cache spec.
+`csiFold_eq` proves the two closed forms of the shuffle equal for it, with no condition. The
+two `Generated.lean` files each translate the `ShuffleHash` trait, so the cache side takes its
+own `HashLink` to `natHash o`. Both instances are the same Rust `Sha256Hash`.
+
+The index lists of the proposer lookahead and the sync committee, the seed mix and the effective
+balances do not come from a cache. Lighthouse reads them from the validator list.
 
 Both `Generated.lean` files translate `safe_arith::ArithError`. The Aeneas `discriminant`
 attribute names its instance after the short type name, so the two files clash.
