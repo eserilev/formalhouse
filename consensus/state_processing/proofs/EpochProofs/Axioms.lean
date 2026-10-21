@@ -56,6 +56,9 @@ import EpochProofs.Etheorem.Justification
 import EpochProofs.Etheorem.Inactivity
 import EpochProofs.Etheorem.Rewards
 import EpochProofs.Etheorem.Slashings
+import EpochProofs.Etheorem.Registry
+import EpochProofs.Etheorem.Deposits
+import EpochProofs.Etheorem.Consolidations
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -232,3 +235,10 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Etheorem.inact_deltas_etheorem
 #print axioms EpochProofs.Etheorem.applyDeltas_run
 #print axioms EpochProofs.Etheorem.rewards_etheorem
+#print axioms EpochProofs.Etheorem.process_registry_updates_etheorem
+#print axioms EpochProofs.Etheorem.queuesPresetAgrees_mainnet
+#print axioms EpochProofs.Etheorem.queuesPresetAgrees_minimal
+#print axioms EpochProofs.Etheorem.apply_pending_deposit_etheorem
+#print axioms EpochProofs.Etheorem.ppdStep_bridge_stop
+#print axioms EpochProofs.Etheorem.process_pending_deposits_etheorem
+#print axioms EpochProofs.Etheorem.process_pending_consolidations_etheorem

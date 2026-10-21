@@ -106,4 +106,7 @@ import EpochProofs.Etheorem.Justification
 import EpochProofs.Etheorem.Inactivity
 import EpochProofs.Etheorem.Rewards
 import EpochProofs.Etheorem.Slashings
+import EpochProofs.Etheorem.Registry
+import EpochProofs.Etheorem.Deposits
+import EpochProofs.Etheorem.Consolidations
 import EpochProofs.Axioms
