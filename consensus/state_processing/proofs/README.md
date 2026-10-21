@@ -264,12 +264,21 @@ Lighthouse returns `Ok`, Etheorem's run succeeds, and the results agree on the b
 fields. The conditions:
 
 - `SLOTS_PER_EPOCH ≥ 6` (both presets), so the quorum does not overflow.
-- The new withdrawals fit under the list limit. Etheorem's `SSZList.push` drops an item past
-  the limit, and the spec raises an error.
+- The new withdrawals fit under the alpha.11 list limit, 2^20. Etheorem's `SSZList.push` drops
+  an item past the limit. In beta.2 the list has no limit.
 - Lighthouse's total active balance equals Etheorem's `get_total_active_balance`.
 
 Etheorem pins spec v1.7.0-alpha.11. Every Gloas epoch function in alpha.11 has the same meaning
-as in beta.2. Only type casts and syntax differ.
+as in beta.2. Only type casts and syntax differ. The `BeaconState` lists have limits in
+alpha.11 and none in beta.2.
+
+`etheorem/PLAN.md` is the plan for the whole epoch, with the findings so far. The shared parts
+are done:
+
+- `Etheorem/State.lean`: `absEState` maps every field of an Etheorem state to the reference.
+- `Etheorem/Helpers.lean`: `PresetAgrees` (proved for both presets) and the helpers that many
+  steps call, from epoch helpers to `initiate_validator_exit`.
+- `Etheorem/Oracle.lean`: `OracleAgrees`, the Oracle fields that equal Etheorem functions.
 
 Etheorem pins Lean v4.29.1. `etheorem/setup.sh` applies `etheorem/lean-v4.31.0.patch`: four
 proof fixes for v4.31.0, no `-march=native`, and a KZG lakefile fix that finds the BLS library

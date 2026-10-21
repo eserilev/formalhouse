@@ -45,6 +45,8 @@ import EpochProofs.Sanity.Invariants.LighthouseTailViews
 import EpochProofs.Sanity.Invariants.PubkeysUnique
 import EpochProofs.Sanity.Invariants.WithdrawableEpochs
 import EpochProofs.Etheorem.BuilderPendingPayments
+import EpochProofs.Etheorem.Helpers
+import EpochProofs.Etheorem.Oracle
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -59,6 +61,23 @@ open EpochProofs.Spec
 #print axioms EpochProofs.builder_pending_payments_equiv
 #print axioms EpochProofs.Etheorem.builder_pending_payments_etheorem
 #print axioms EpochProofs.Etheorem.lighthouse_builder_pending_payments_etheorem
+#print axioms EpochProofs.Etheorem.isqrt_eq_integer_squareroot
+#print axioms EpochProofs.Etheorem.indicesWhere_toList
+#print axioms EpochProofs.Etheorem.get_current_epoch_eq
+#print axioms EpochProofs.Etheorem.get_previous_epoch_eq
+#print axioms EpochProofs.Etheorem.get_active_validator_indices_eq
+#print axioms EpochProofs.Etheorem.get_total_balance_ok
+#print axioms EpochProofs.Etheorem.get_total_active_balance_ok
+#print axioms EpochProofs.Etheorem.get_base_reward_per_increment_ok
+#print axioms EpochProofs.Etheorem.get_exit_churn_limit_ok
+#print axioms EpochProofs.Etheorem.get_activation_churn_limit_ok
+#print axioms EpochProofs.Etheorem.increase_balance_etheorem
+#print axioms EpochProofs.Etheorem.decrease_balance_etheorem
+#print axioms EpochProofs.Etheorem.compute_exit_epoch_and_update_churn_etheorem
+#print axioms EpochProofs.Etheorem.initiate_validator_exit_etheorem
+#print axioms EpochProofs.Etheorem.presetAgrees_mainnet
+#print axioms EpochProofs.Etheorem.presetAgrees_minimal
+#print axioms EpochProofs.Etheorem.etheoremOracle_agrees
 #print axioms EpochProofs.Spec.process_effective_balance_updates_eq
 #print axioms EpochProofs.Spec.hysteresisThresholds_mainnet
 #print axioms EpochProofs.Spec.newEffectiveBalance_le_max

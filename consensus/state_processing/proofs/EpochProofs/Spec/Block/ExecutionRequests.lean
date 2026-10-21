@@ -19,14 +19,10 @@ namespace EpochProofs.Spec
 def GENESIS_SLOT : Slot := 0
 def MIN_DEPOSIT_AMOUNT : Gwei := 1000000000
 def FULL_EXIT_REQUEST_AMOUNT : Gwei := 0
-def PENDING_PARTIAL_WITHDRAWALS_LIMIT : Uint64 := 134217728
-def PENDING_CONSOLIDATIONS_LIMIT : Uint64 := 262144
 def MAX_WITHDRAWAL_REQUESTS_PER_PAYLOAD : Uint64 := 16
 def MAX_CONSOLIDATION_REQUESTS_PER_PAYLOAD : Uint64 := 2
 def MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD : Uint64 := 64
 def MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD : Uint64 := 16
-def CONSOLIDATION_CHURN_LIMIT_QUOTIENT : Uint64 := 65536
-def MIN_BUILDER_WITHDRAWABILITY_DELAY : Epoch := 64
 def BUILDER_INDEX_SELF_BUILD : BuilderIndex := UINT64_MAX
 def BUILDER_WITHDRAWAL_PREFIX : UInt8 := 0xB0
 def PAYLOAD_BUILDER_VERSION : UInt8 := 0
@@ -80,7 +76,7 @@ def get_consolidation_churn_limit(state: BeaconState) -> Gwei:
     return churn - churn % EFFECTIVE_BALANCE_INCREMENT
 ``` -/
 def get_consolidation_churn_limit (p : Preset) (total_active_balance : Gwei) : SpecM Gwei := do
-  let churn ← uint64Div total_active_balance CONSOLIDATION_CHURN_LIMIT_QUOTIENT
+  let churn ← uint64Div total_active_balance p.CONSOLIDATION_CHURN_LIMIT_QUOTIENT
   uint64Sub churn (← uint64Mod churn p.EFFECTIVE_BALANCE_INCREMENT)
 
 /-- ```python
@@ -289,7 +285,7 @@ def process_withdrawal_request (p : Preset) (state : BeaconState)
   let amount := withdrawal_request.amount
   let is_full_exit_request := amount == FULL_EXIT_REQUEST_AMOUNT
 
-  if state.pending_partial_withdrawals.length == PENDING_PARTIAL_WITHDRAWALS_LIMIT
+  if state.pending_partial_withdrawals.length == p.PENDING_PARTIAL_WITHDRAWALS_LIMIT
       && !is_full_exit_request then
     return state
 
@@ -493,7 +489,7 @@ def process_consolidation_request (p : Preset) (state : BeaconState)
 
   if consolidation_request.source_pubkey == consolidation_request.target_pubkey then
     pure state else
-  if state.pending_consolidations.length == PENDING_CONSOLIDATIONS_LIMIT then
+  if state.pending_consolidations.length == p.PENDING_CONSOLIDATIONS_LIMIT then
     pure state else
   if (← get_consolidation_churn_limit p (← get_total_active_balance p state))
       ≤ p.MIN_ACTIVATION_BALANCE then
@@ -596,7 +592,7 @@ def initiate_builder_exit (p : Preset) (state : BeaconState) (builder_index : Bu
   let builder ← listGet state.builders builder_index
   let builder := { builder with
     withdrawable_epoch :=
-      ← uint64Add (← get_current_epoch p state) MIN_BUILDER_WITHDRAWABILITY_DELAY }
+      ← uint64Add (← get_current_epoch p state) p.MIN_BUILDER_WITHDRAWABILITY_DELAY }
   pure { state with builders := ← listSet state.builders builder_index builder }
 
 /-- ```python
@@ -717,7 +713,7 @@ def process_builder_deposit_request (p : Preset) (o : Oracle) (state : BeaconSta
     if builder.withdrawable_epoch != FAR_FUTURE_EPOCH && builder.balance == 0 then
       let epoch ← get_current_epoch p state
       builder := { builder with
-        withdrawable_epoch := ← uint64Add epoch MIN_BUILDER_WITHDRAWABILITY_DELAY }
+        withdrawable_epoch := ← uint64Add epoch p.MIN_BUILDER_WITHDRAWABILITY_DELAY }
 
     builder := { builder with balance := ← uint64Add builder.balance request.amount }
     pure { state with builders := ← listSet state.builders builder_index builder }
