@@ -224,8 +224,8 @@ theorem process_pending_consolidations_etheorem (e : EState) {s' : Spec.BeaconSt
     (hlen : e.balances.val.size = e.validators.val.size)
     (h : Spec.process_pending_consolidations p (absEState e) = .ok s') :
     ∃ e' : EState,
-      runPure (EthCLSpecs.Gloas.processPendingConsolidations (StateTransition := GloasRun)) e =
-        .ok ((), e') ∧ s' = absEState e' := by
+      (EthCLSpecs.Gloas.processPendingConsolidations (StateTransition := GloasRun)).run
+          (pureState e) = .ok ((), pureState e') ∧ s' = absEState e' := by
   rw [Spec.process_pending_consolidations_eq p _ (by simpa using hlen)] at h
   rw [get_current_epoch_eq hp] at h
   simp only [bind, Except.bind] at h
@@ -253,7 +253,6 @@ theorem process_pending_consolidations_etheorem (e : EState) {s' : Spec.BeaconSt
     pendingConsolidations := sszDrop e.pendingConsolidations r.1.2 }, ?_, ?_⟩
   · have hrun_get : ∀ s, (get : GloasRun EthCLSpecs.Gloas.State).run s = .ok (s, s) := fun _ => rfl
     unfold EthCLSpecs.Gloas.processPendingConsolidations
-    rw [runPure_eq]
     simp only [run_bind, hrun_get, except_bind_ok, view_uncachedBox]
     rw [pcLoop_eq, hrun, except_bind_ok]
     rfl

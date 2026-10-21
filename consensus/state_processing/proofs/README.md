@@ -252,14 +252,19 @@ signature values. `process_slots` takes `process_epoch` as the parameter `proces
 ## Etheorem
 
 [Etheorem](https://github.com/etheorem/etheorem) is a Lean spec of the consensus specs that
-passes the EF vectors. `EpochProofs/Etheorem/` proves our reference equal to it. The reference
-is then no longer trusted for that step.
+passes the EF vectors. `EpochProofs/Etheorem/` proves our reference equal to it for the whole
+Gloas epoch. The reference is then no longer trusted for the epoch.
 
-| Function | Theorem |
+| Theorem | Statement |
 |---|---|
-| `process_builder_pending_payments` | `builder_pending_payments_etheorem` |
+| `process_epoch_etheorem` | If `Spec.process_epoch` returns `s'`, Etheorem's `processEpoch` succeeds and `absEState` of its result is `s'`. |
+| `lighthouse_epoch_etheorem` | The same for `process_epoch_lh_full`, the Lighthouse epoch model, on mainnet. |
 
-`lighthouse_builder_pending_payments_etheorem` joins it to `builder_pending_payments_equiv`:
+The 17 step theorems are in `Etheorem/<Step>.lean`. `etheorem/PLAN.md` lists the conditions of
+`process_epoch_etheorem` and the findings.
+
+`lighthouse_builder_pending_payments_etheorem` joins `builder_pending_payments_etheorem` to
+`builder_pending_payments_equiv`:
 Lighthouse returns `Ok`, Etheorem's run succeeds, and the results agree on the builder payment
 fields. The conditions:
 
@@ -272,8 +277,7 @@ Etheorem pins spec v1.7.0-alpha.11. Every Gloas epoch function in alpha.11 has t
 as in beta.2. Only type casts and syntax differ. The `BeaconState` lists have limits in
 alpha.11 and none in beta.2.
 
-`etheorem/PLAN.md` is the plan for the whole epoch, with the findings so far. The shared parts
-are done:
+The shared parts:
 
 - `Etheorem/State.lean`: `absEState` maps every field of an Etheorem state to the reference.
 - `Etheorem/Helpers.lean`: `PresetAgrees` (proved for both presets) and the helpers that many

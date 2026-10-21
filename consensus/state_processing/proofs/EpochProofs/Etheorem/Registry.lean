@@ -333,8 +333,8 @@ theorem process_registry_updates_etheorem (e : EState) {tab : Nat} {s' : Spec.Be
     (hfin : (absEState e).finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH)
     (h : Spec.process_registry_updates p tab (absEState e) = .ok s') :
     ∃ e' : EState,
-      runPure (EthCLSpecs.Gloas.processRegistryUpdates (StateTransition := GloasRun)) e =
-        .ok ((), e') ∧ s' = absEState e' := by
+      (EthCLSpecs.Gloas.processRegistryUpdates (StateTransition := GloasRun)).run (pureState e) =
+        .ok ((), pureState e') ∧ s' = absEState e' := by
   have hcur := get_current_epoch_eq hp e
   generalize hC : EthCLSpecs.Gloas.currentEpochOf (pureState e) = C at hcur
   have hact0 := h
@@ -376,7 +376,7 @@ theorem process_registry_updates_etheorem (e : EState) {tab : Nat} {s' : Spec.Be
   obtain ⟨e', hrun, hs', -⟩ :=
     forIn_list_etheorem Inv _ _ hstep (List.range e.validators.val.size) e ⟨rfl, rfl, rfl⟩ h
   refine ⟨e', ?_, hs'⟩
-  rw [runPure_eq, processRegistryUpdates_run, hC, hrun]
+  rw [processRegistryUpdates_run, hC, hrun]
   rfl
 
 end RegistryStep

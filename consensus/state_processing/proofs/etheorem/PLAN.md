@@ -1,7 +1,8 @@
-# Plan: the whole Gloas epoch equals Etheorem
+# The whole Gloas epoch equals Etheorem
 
-Goal: prove `Spec.process_epoch` equal to Etheorem's `EthCLSpecs.Gloas.processEpoch`. With the
-existing proofs, Lighthouse's epoch then equals Etheorem.
+Status: done. `process_epoch_etheorem` proves `Spec.process_epoch` equal to Etheorem's
+`EthCLSpecs.Gloas.processEpoch`. `lighthouse_epoch_etheorem` joins it to the Lighthouse epoch
+model of `process_epoch_lh_full_sameOk'`, so Lighthouse's epoch equals Etheorem on mainnet.
 
 ## The foundation (done)
 
@@ -42,20 +43,43 @@ Both `process_epoch` functions run the same 17 steps in the same order.
 | 16 | `process_proposer_lookahead` | hard | As 15, and F4. |
 | 17 | `process_ptc_window` | hard | As 15. Uses the beacon committees. |
 
-## Work units
+## Work units (done)
 
-Each unit adds only its own files under `EpochProofs/Etheorem/`. The lead owns `State.lean`,
-`Helpers.lean`, `Oracle.lean`, `EpochProofs.lean`, `Axioms.lean`, the README and this file. A
-unit that needs a new shared lemma puts it in its own file first. The lead moves it later.
-
-1. Tail: steps 6, 10, 11, 12, 13, 14. Files `Resets.lean`, `EffectiveBalance.lean`,
+1. Tail (#47): steps 6, 10, 11, 12, 13, 14. `Resets.lean`, `EffectiveBalance.lean`,
    `HistoricalSummaries.lean`.
-2. Passes: steps 1, 2, 3, 5. Files `Participation.lean` (participating and eligible indices),
-   `Justification.lean`, `Inactivity.lean`, `Rewards.lean`, `Slashings.lean`.
-3. Queues: steps 4, 7, 8. Files `Registry.lean`, `Deposits.lean`, `Consolidations.lean`.
-4. Committees: steps 15, 16, 17. Files `Shuffle.lean` (shuffle, seed, balance weighted
-   selection), `Committees.lean`.
-5. Lead: `Epoch.lean` joins the 17 steps. Then Lighthouse equals Etheorem for the whole epoch.
+2. Committees (#48): steps 15, 16, 17. `Shuffle.lean`, `Committees.lean`. The 90-round shuffle
+   is proved with SHA-256 as a function, not by evaluation.
+3. Passes (#49): steps 1, 2, 3, 5. `Participation.lean`, `Justification.lean`,
+   `Inactivity.lean`, `Rewards.lean`, `Slashings.lean`.
+4. Queues (#50): steps 4, 7, 8. `Registry.lean`, `Deposits.lean`, `Consolidations.lean`.
+5. Whole epoch: `Epoch.lean`.
+
+## The whole epoch
+
+Each step theorem states Etheorem's run on the uncached box:
+`step.run (pureState e) = .ok ((), pureState e')`. `runPure` reads only the view of the
+result box, so it does not compose. `StepsOk` chains the runs, and `processEpoch_eq` shows
+that `processEpoch` is the 17 steps in sequence.
+
+`process_epoch_etheorem` takes:
+
+- `EpochPresetAgrees p`: the preset facts of all steps. Proved for mainnet and minimal.
+- `OracleAgrees o`, and `sha` returns 32 bytes (`sha_size_pure` proves it for the pure
+  SHA-256).
+- `EtheoremEpochConds e`. Each field reads the Etheorem state right before its step.
+  - State facts: the finalized epoch is below `FAR_FUTURE_EPOCH` (registry), the registry lists
+    have equal length, there is room for the pending deposits, and the F2 condition holds
+    (deposits), one balance for each validator (consolidations), the builder withdrawals fit
+    (F6), the historical summaries fit (F6).
+  - Facts about Etheorem's own output (F3): its sync committee, proposer and PTC selections
+    return `size` items.
+
+`lighthouse_epoch_etheorem` adds `EpochInputOk'' EpochSupply`, the condition that
+`reachable_state_transition_sameOk'''` proves at each epoch boundary of a reachable state.
+
+Not done: the conditions of `EtheoremEpochConds` are not yet proved from the reachable-state
+invariants. Each one reads a state in the middle of the epoch, so each needs a frame lemma for
+the steps before it.
 
 ## Findings
 
@@ -77,10 +101,13 @@ unit that needs a new shared lemma puts it in its own file first. The lead moves
   passes. Etheorem fills the rest with validator 0.
 - F4 (b and c). Etheorem has no `assert total > 0`. With no candidates it returns validator 0.
   In pyspec the assert raises. Gloas (EIP-8045) drops slashed validators from the proposer
-  candidates. A slashed validator stays active until its exit epoch. So if every validator
-  active at epoch `N + 2` is slashed, `process_proposer_lookahead` raises and no state passes
-  the epoch boundary. Example: a small devnet where every validator gets slashed.
-  Before Gloas the candidates include slashed validators, so the assert does not fire.
+  candidates (gloas:1302). A slashed validator stays active until its exit epoch, `N + 5` or
+  later. So if every validator active at epoch `N + 2` is slashed, `process_proposer_lookahead`
+  raises (gloas:1213) and no state passes the epoch boundary. A block can do it: an unslashed
+  proposer includes one attester slashing that covers every unslashed validator, itself too.
+  The header check `assert not proposer.slashed` (phase0:2308) runs before the operations. The
+  chain is already dead then, because every proposer is slashed. Fulu also halts when the
+  slashed validators exit (electra:606). Gloas only halts a few epochs earlier.
 - F5 (c). `get_inactivity_penalty_deltas` multiplies `effective_balance * inactivity_score`.
   pyspec raises when the product reaches 2^64. That needs a score of 2^23 at 2048 ETH, about
   2.1M epochs of leak. Etheorem computes in `Nat` and does not raise.
@@ -92,12 +119,21 @@ unit that needs a new shared lemma puts it in its own file first. The lead moves
   and `MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD` (256 to 64).
 - F7 (b, unreachable). Etheorem's `get_next_sync_committee` does not check `KeyValidate` on
   the keys. pyspec's `eth_aggregate_pubkeys` asserts it. A deposit adds a validator only after
-  its signature verifies with the key, so every key in the registry passes. Step 15 needs this
-  as a hypothesis on `o.bls_KeyValidate`.
+  its signature verifies with the key, so every key in the registry passes. The reference
+  checks `KeyValidate`, and step 15 assumes that the reference succeeds, so it needs no extra
+  hypothesis.
 - F8 (b, unreachable). Etheorem wraps where pyspec raises: the total balance sum, the
   slashings sum, `epoch + k` compares, `balance + downward`, `score + bias` and
   `get_finality_delay` when the finalized epoch is above the previous epoch. The lemmas assume
   the reference succeeds, so the reachable-state invariants cover these.
+- F9 (b, unreachable). Etheorem runs the three registry checks as independent `if`s. pyspec
+  uses `if`/`elif`. They differ only when the finalized epoch is `FAR_FUTURE_EPOCH`. Lighthouse
+  has the same shape (`registry_update_equiv`).
+- F10 (b, unreachable). Etheorem drops a new validator when the registry is at
+  `VALIDATOR_REGISTRY_LIMIT`. pyspec raises. The deposits theorem assumes room.
+- F11 (b, unreachable). Etheorem reads participation, inactivity scores, deltas and balances
+  with `[i]!`, which gives 0 past the end of the list. pyspec raises. They differ only when a
+  per-validator list is shorter than `validators`.
 
 ## The Oracle
 
@@ -107,6 +143,6 @@ unit that needs a new shared lemma puts it in its own file first. The lead moves
 | `hash_tree_root_BlockRoots`, `_StateRoots` | `htr` on the vector | Clean |
 | `hash_tree_root_ForkData`, `_SigningData`, `_DepositMessage` | `htr` | Clean |
 | `bls_Verify`, `bls_AggregatePKs` | `[CryptoBackend]` | Parameter, as in our spec |
-| `bls_KeyValidate` | none | Needs a hypothesis (F7) |
+| `bls_KeyValidate` | none | Not needed: the reference checks it (F7) |
 
 `etheoremOracle_agrees` proves `OracleAgrees` for `etheoremOracle`, so the hypothesis holds.

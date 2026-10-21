@@ -67,14 +67,15 @@ theorem foldl_pureState {α : Type} (F : EthCLSpecs.Gloas.State → α → EthCL
   | cons a l ih => intro s; simp only [List.foldl_cons, hFG, ih]
 
 theorem processEffectiveBalanceUpdates_run (e : EState) :
-    runPure (EthCLSpecs.Gloas.processEffectiveBalanceUpdates (StateTransition := GloasRun)) e =
-      .ok ((), (List.range' 0 e.validators.val.size).foldl ebStepView e) := by
+    (EthCLSpecs.Gloas.processEffectiveBalanceUpdates (StateTransition := GloasRun)).run
+        (pureState e) =
+      .ok ((), pureState ((List.range' 0 e.validators.val.size).foldl ebStepView e)) := by
   unfold EthCLSpecs.Gloas.processEffectiveBalanceUpdates
   simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range', pure_bind, bind_pure, ite_pure_yield,
     List.forIn_pure_yield_eq_foldl, Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel,
     Nat.div_one]
-  simp only [runPure, EthCLSpecs.Gloas.modifyState, modifyThe, MonadStateOf.modifyGet,
-    StateT.modifyGet, StateT.run, view_uncachedBox, pure, Except.map, Except.pure]
+  simp only [EthCLSpecs.Gloas.modifyState, modifyThe, MonadStateOf.modifyGet,
+    StateT.modifyGet, StateT.run, pure, Except.pure]
   rw [foldl_pureState _ ebStepView]
   · rfl
   · intro s a
@@ -373,8 +374,8 @@ theorem mapM_effectiveBalanceStep_ok (e : EState) :
 /-- `process_effective_balance_updates` equals Etheorem's. -/
 theorem effective_balance_updates_etheorem (e : EState) {s' : Spec.BeaconState}
     (h : Spec.process_effective_balance_updates p (absEState e) = .ok s') :
-    ∃ e', runPure (EthCLSpecs.Gloas.processEffectiveBalanceUpdates (StateTransition := GloasRun))
-        e = .ok ((), e') ∧ absEState e' = s' := by
+    ∃ e', (EthCLSpecs.Gloas.processEffectiveBalanceUpdates (StateTransition := GloasRun)).run
+        (pureState e) = .ok ((), pureState e') ∧ absEState e' = s' := by
   have hn : e.validators.val.size < 2 ^ 64 :=
     Nat.lt_of_le_of_lt e.validators.property hp.validatorRegistryLimit
   obtain ⟨V, hV, hVl⟩ := ebFold e hn _ (Nat.le_refl _)

@@ -600,8 +600,8 @@ theorem process_pending_deposits_etheorem (o : Spec.Oracle) (ho : OracleAgrees o
     (h : Spec.process_pending_deposits p tab (Spec.apply_pending_deposit p o) (absEState e) =
       .ok s') :
     ∃ e' : EState,
-      runPure (EthCLSpecs.Gloas.processPendingDeposits (StateTransition := GloasRun)) e =
-        .ok ((), e') ∧ s' = absEState e' := by
+      (EthCLSpecs.Gloas.processPendingDeposits (StateTransition := GloasRun)).run (pureState e) =
+        .ok ((), pureState e') ∧ s' = absEState e' := by
   have htab' := get_total_active_balance_ok hp e htab
   rw [process_pending_deposits_eqP] at h
   rw [get_current_epoch_eq hp] at h
@@ -644,7 +644,7 @@ theorem process_pending_deposits_etheorem (o : Spec.Oracle) (ho : OracleAgrees o
     have := e.pendingDeposits.property
     simp only [Array.size_append, Array.size_extract, SSZList.toArray]
     omega
-  refine ⟨_, by rw [runPure_eq, hrun']; rfl, ?_⟩
+  refine ⟨_, hrun', ?_⟩
   unfold Spec.depFinish at h
   rw [hstate] at h
   have hpend : (absEState e1).pending_deposits.drop racc.2.2.1 ++ racc.1 = ((sszOfArray (e.pendingDeposits.toArray.extract sc.ndi

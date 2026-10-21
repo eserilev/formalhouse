@@ -71,55 +71,56 @@ theorem currentEpochOf_pureState (e : EState) :
 
 omit [EthCLSpecs.Gloas.Config] in
 theorem processEth1DataReset_run (e : EState) :
-    runPure (EthCLSpecs.Gloas.processEth1DataReset (StateTransition := GloasRun)) e =
-      .ok ((), if (EthCLSpecs.Gloas.computeEpochAtSlot e.slot + 1) %
+    (EthCLSpecs.Gloas.processEth1DataReset (StateTransition := GloasRun)).run (pureState e) =
+      .ok ((), pureState (if (EthCLSpecs.Gloas.computeEpochAtSlot e.slot + 1) %
           UInt64.ofNat EthCLSpecs.Gloas.Const.epochsPerEth1VotingPeriod = 0
-        then { e with eth1DataVotes := sszOfArray #[] } else e) := by
+        then { e with eth1DataVotes := sszOfArray #[] } else e)) := by
   unfold EthCLSpecs.Gloas.processEth1DataReset EthCLSpecs.Gloas.getCurrentEpoch
   by_cases h : (EthCLSpecs.Gloas.computeEpochAtSlot e.slot + 1) %
       UInt64.ofNat EthCLSpecs.Gloas.Const.epochsPerEth1VotingPeriod = 0
   · rw [if_pos h]
-    simp [runPure, StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure,
+    simp [StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure,
       StateT.pure, Except.pure, Except.bind, view_uncachedBox, h]
     rfl
   · rw [if_neg h]
-    simp [runPure, StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure,
+    simp [StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure,
       StateT.pure, Except.pure, Except.bind, view_uncachedBox, h]
-    rfl
 
 omit [EthCLSpecs.Gloas.Config] in
 theorem processSlashingsReset_run (e : EState) :
-    runPure (EthCLSpecs.Gloas.processSlashingsReset (StateTransition := GloasRun)) e =
-      .ok ((), { e with slashings := (e.slashings.set!
+    (EthCLSpecs.Gloas.processSlashingsReset (StateTransition := GloasRun)).run (pureState e) =
+      .ok ((), pureState ({ e with slashings := (e.slashings.set!
         (umodIdx (EthCLSpecs.Gloas.computeEpochAtSlot e.slot + 1)
-          EthCLSpecs.Gloas.Const.epochsPerSlashingsVector) 0) }) := by
+          EthCLSpecs.Gloas.Const.epochsPerSlashingsVector) 0) })) := by
   unfold EthCLSpecs.Gloas.processSlashingsReset EthCLSpecs.Gloas.getCurrentEpoch
-  simp [runPure, StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure,
+  simp [StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure,
     StateT.pure, Except.pure, Except.bind, view_uncachedBox]
   rfl
 
 omit [EthCLSpecs.Gloas.Config] in
 theorem processRandaoMixesReset_run (e : EState) :
-    runPure (EthCLSpecs.Gloas.processRandaoMixesReset (StateTransition := GloasRun)) e =
-      .ok ((), { e with randaoMixes := (e.randaoMixes.set!
+    (EthCLSpecs.Gloas.processRandaoMixesReset (StateTransition := GloasRun)).run (pureState e) =
+      .ok ((), pureState ({ e with randaoMixes := (e.randaoMixes.set!
         (umodIdx (EthCLSpecs.Gloas.computeEpochAtSlot e.slot + 1)
           EthCLSpecs.Gloas.Const.epochsPerHistoricalVector)
         (vget e.randaoMixes (EthCLSpecs.Gloas.computeEpochAtSlot e.slot %
-          UInt64.ofNat EthCLSpecs.Gloas.Const.epochsPerHistoricalVector).toNat)) }) := by
+          UInt64.ofNat EthCLSpecs.Gloas.Const.epochsPerHistoricalVector).toNat)) })) := by
   unfold EthCLSpecs.Gloas.processRandaoMixesReset EthCLSpecs.Gloas.getCurrentEpoch
     EthCLSpecs.Gloas.getRandaoMix
-  simp [runPure, StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure,
+  simp [StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure,
     StateT.pure, Except.pure, Except.bind, view_uncachedBox]
   rfl
 
 omit [EthCLSpecs.Gloas.Config] in
 theorem processParticipationFlagUpdates_run (e : EState) :
-    runPure (EthCLSpecs.Gloas.processParticipationFlagUpdates (StateTransition := GloasRun)) e =
-      .ok ((), { e with previousEpochParticipation := e.currentEpochParticipation,
-                        currentEpochParticipation :=
-                          sszOfArray (Array.replicate e.validators.val.size 0) }) := by
+    (EthCLSpecs.Gloas.processParticipationFlagUpdates (StateTransition := GloasRun)).run
+        (pureState e) =
+      .ok ((), pureState
+        { e with previousEpochParticipation := e.currentEpochParticipation,
+                 currentEpochParticipation :=
+                   sszOfArray (Array.replicate e.validators.val.size 0) }) := by
   unfold EthCLSpecs.Gloas.processParticipationFlagUpdates
-  simp [runPure, StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure,
+  simp [StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure,
     Except.pure, Except.bind, view_uncachedBox]
   rfl
 
@@ -133,8 +134,8 @@ include hp ht in
 /-- `process_eth1_data_reset` equals Etheorem's. -/
 theorem eth1_data_reset_etheorem (e : EState) {s' : Spec.BeaconState}
     (h : Spec.process_eth1_data_reset p (absEState e) = .ok s') :
-    ∃ e', runPure (EthCLSpecs.Gloas.processEth1DataReset (StateTransition := GloasRun)) e =
-        .ok ((), e') ∧ absEState e' = s' := by
+    ∃ e', (EthCLSpecs.Gloas.processEth1DataReset (StateTransition := GloasRun)).run (pureState e) =
+        .ok ((), pureState e') ∧ absEState e' = s' := by
   refine ⟨_, processEth1DataReset_run e, ?_⟩
   unfold Spec.process_eth1_data_reset at h
   rw [get_current_epoch_eq hp, currentEpochOf_pureState] at h
@@ -164,8 +165,8 @@ include hp ht in
 /-- `process_slashings_reset` equals Etheorem's. -/
 theorem slashings_reset_etheorem (e : EState) {s' : Spec.BeaconState}
     (h : Spec.process_slashings_reset p (absEState e) = .ok s') :
-    ∃ e', runPure (EthCLSpecs.Gloas.processSlashingsReset (StateTransition := GloasRun)) e =
-        .ok ((), e') ∧ absEState e' = s' := by
+    ∃ e', (EthCLSpecs.Gloas.processSlashingsReset (StateTransition := GloasRun)).run (pureState e) =
+        .ok ((), pureState e') ∧ absEState e' = s' := by
   refine ⟨_, processSlashingsReset_run e, ?_⟩
   unfold Spec.process_slashings_reset at h
   rw [get_current_epoch_eq hp, currentEpochOf_pureState] at h
@@ -198,8 +199,8 @@ include hp in
 /-- `process_randao_mixes_reset` equals Etheorem's. -/
 theorem randao_mixes_reset_etheorem (e : EState) {s' : Spec.BeaconState}
     (h : Spec.process_randao_mixes_reset p (absEState e) = .ok s') :
-    ∃ e', runPure (EthCLSpecs.Gloas.processRandaoMixesReset (StateTransition := GloasRun)) e =
-        .ok ((), e') ∧ absEState e' = s' := by
+    ∃ e', (EthCLSpecs.Gloas.processRandaoMixesReset (StateTransition := GloasRun)).run (pureState e) =
+        .ok ((), pureState e') ∧ absEState e' = s' := by
   refine ⟨_, processRandaoMixesReset_run e, ?_⟩
   have hk := hp.epochsPerHistoricalVector
   have hlt := EthCLSpecs.Gloas.Const.epochsPerHistoricalVectorLt
@@ -262,8 +263,8 @@ theorem randao_mixes_reset_etheorem (e : EState) {s' : Spec.BeaconState}
 omit [EthCLSpecs.Gloas.Config] in
 /-- `process_participation_flag_updates` equals Etheorem's. -/
 theorem participation_flag_updates_etheorem (e : EState) :
-    ∃ e', runPure (EthCLSpecs.Gloas.processParticipationFlagUpdates (StateTransition := GloasRun))
-        e = .ok ((), e') ∧ absEState e' = Spec.process_participation_flag_updates (absEState e) := by
+    ∃ e', (EthCLSpecs.Gloas.processParticipationFlagUpdates (StateTransition := GloasRun)).run
+        (pureState e) = .ok ((), pureState e') ∧ absEState e' = Spec.process_participation_flag_updates (absEState e) := by
   refine ⟨_, processParticipationFlagUpdates_run e, ?_⟩
   have hcap := e.validators.property
   rw [absEState_set_participation]
