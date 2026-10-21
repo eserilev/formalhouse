@@ -122,4 +122,5 @@ import EpochProofs.Sanity.Invariants.LighthouseOrderTail
 import EpochProofs.Sanity.Invariants.LighthouseOrderEth1
 import EpochProofs.Sanity.Invariants.LighthouseOrder
 import EpochProofs.Etheorem.LighthouseOrder
+import EpochProofs.Etheorem.Final
 import EpochProofs.Axioms
