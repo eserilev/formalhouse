@@ -96,4 +96,7 @@ import EpochProofs.Equiv.SinglePassStep
 import EpochProofs.Etheorem.BuilderPendingPayments
 import EpochProofs.Etheorem.Helpers
 import EpochProofs.Etheorem.Oracle
+import EpochProofs.Etheorem.Resets
+import EpochProofs.Etheorem.EffectiveBalance
+import EpochProofs.Etheorem.HistoricalSummaries
 import EpochProofs.Axioms

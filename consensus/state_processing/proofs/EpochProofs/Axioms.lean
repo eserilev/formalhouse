@@ -47,6 +47,9 @@ import EpochProofs.Sanity.Invariants.WithdrawableEpochs
 import EpochProofs.Etheorem.BuilderPendingPayments
 import EpochProofs.Etheorem.Helpers
 import EpochProofs.Etheorem.Oracle
+import EpochProofs.Etheorem.Resets
+import EpochProofs.Etheorem.EffectiveBalance
+import EpochProofs.Etheorem.HistoricalSummaries
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -180,3 +183,11 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.reachable_state_transition_sameOk'''
 #print axioms EpochProofs.Spec.process_epoch_lh_full_sameOk'
 #print axioms EpochProofs.Spec.lighthouse_full_epoch_state_transition_sameOk
+#print axioms EpochProofs.Etheorem.eth1_data_reset_etheorem
+#print axioms EpochProofs.Etheorem.slashings_reset_etheorem
+#print axioms EpochProofs.Etheorem.randao_mixes_reset_etheorem
+#print axioms EpochProofs.Etheorem.participation_flag_updates_etheorem
+#print axioms EpochProofs.Etheorem.tailPresetAgrees_mainnet
+#print axioms EpochProofs.Etheorem.tailPresetAgrees_minimal
+#print axioms EpochProofs.Etheorem.effective_balance_updates_etheorem
+#print axioms EpochProofs.Etheorem.historical_summaries_update_etheorem
