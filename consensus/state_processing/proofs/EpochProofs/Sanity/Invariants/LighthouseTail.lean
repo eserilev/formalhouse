@@ -18,7 +18,7 @@ namespace EpochProofs.Spec
 /-! ## Balances after the single pass -/
 
 /-- `rewardsCombined` returns a `u64` value. -/
-private theorem rewardsCombined_lt (b : Gwei) (ds : List (Gwei × Gwei)) (x : Gwei)
+theorem rewardsCombined_lt (b : Gwei) (ds : List (Gwei × Gwei)) (x : Gwei)
     (h : rewardsCombined b ds = .ok x) : x < 2 ^ 64 := by
   unfold rewardsCombined at h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
@@ -37,7 +37,7 @@ private theorem rewardsCombined_lt (b : Gwei) (ds : List (Gwei × Gwei)) (x : Gw
   · cases hy
 
 /-- The slashing penalty does not raise the balance. -/
-private theorem lhSlashingBalanceStep_le (target per : Uint64) (v : Validator) (b x : Gwei)
+theorem lhSlashingBalanceStep_le (target per : Uint64) (v : Validator) (b x : Gwei)
     (h : slashingBalanceStep Preset.mainnet target per v b = .ok x) : x ≤ b := by
   unfold slashingBalanceStep at h
   split at h
@@ -51,7 +51,7 @@ private theorem lhSlashingBalanceStep_le (target per : Uint64) (v : Validator) (
     exact Nat.le_refl _
 
 /-- One Lighthouse row step keeps the balance below `2^64`. -/
-private theorem lhRowStep_balance_lt (ctx : LhStepContext) (base : Gwei) (churn : Epoch × Gwei)
+theorem lhRowStep_balance_lt (ctx : LhStepContext) (base : Gwei) (churn : Epoch × Gwei)
     (r : Row) (x : (Epoch × Gwei) × Row) (hb : r.balance < 2 ^ 64)
     (h : lhRowStep Preset.mainnet ctx base churn r = .ok x) : x.2.balance < 2 ^ 64 := by
   unfold lhRowStep at h
@@ -67,7 +67,7 @@ private theorem lhRowStep_balance_lt (ctx : LhStepContext) (base : Gwei) (churn 
            | exact hb))
 
 /-- After the single pass every balance is below `2^64`, if every balance was. -/
-private theorem pass_balances_lt (ctx : LhStepContext) (bf : Row → Gwei) (s : BeaconState)
+theorem pass_balances_lt (ctx : LhStepContext) (bf : Row → Gwei) (s : BeaconState)
     (churn0 : Epoch × Gwei) (y : (Epoch × Gwei) × List Row)
     (hb : ∀ i, i < s.validators.length → s.balances.getD i 0 < 2 ^ 64)
     (h : passM (fun c r => lhRowStep Preset.mainnet ctx (bf r) c r) churn0 (rowsOf s) = .ok y) :
@@ -86,17 +86,17 @@ private theorem pass_balances_lt (ctx : LhStepContext) (bf : Row → Gwei) (s : 
 /-! ## The total active balance after the four steps -/
 
 /-- An `ok` value followed by more code. -/
-private theorem ok_bind'' {α β : Type} (a : α) (f : α → SpecM β) :
+theorem ok_bind'' {α β : Type} (a : α) (f : α → SpecM β) :
     (Except.ok a >>= f) = f a := rfl
 
 /-- The current epoch reads only the slot. -/
-private theorem current_epoch_of_slot' {s s' : BeaconState} {e : Epoch}
+theorem current_epoch_of_slot' {s s' : BeaconState} {e : Epoch}
     (h : get_current_epoch Preset.mainnet s = .ok e) (hslot : s'.slot = s.slot) :
     get_current_epoch Preset.mainnet s' = .ok e := by
   rw [← h]; simp only [get_current_epoch, hslot]
 
 /-- The four spec steps with one total keep the total active balance. -/
-private theorem fourSteps_total (s1 : BeaconState) (total_active_balance : Gwei)
+theorem fourSteps_total (s1 : BeaconState) (total_active_balance : Gwei)
     (htab : get_total_active_balance Preset.mainnet s1 = .ok total_active_balance)
     (hrows : RowsOk s1) (current_epoch activation_epoch : Epoch)
     (hcurrent : get_current_epoch Preset.mainnet s1 = .ok current_epoch)
@@ -136,17 +136,17 @@ private theorem fourSteps_total (s1 : BeaconState) (total_active_balance : Gwei)
 /-! ## The whole epoch -/
 
 /-- `saturating_sub e 1` is `e - 1`. -/
-private theorem saturating_sub_one' (e : Nat) : saturating_sub e 1 = e - 1 := by
+theorem saturating_sub_one' (e : Nat) : saturating_sub e 1 = e - 1 := by
   show (if e > 1 then e - 1 else e - e) = e - 1
   split <;> omega
 
 /-- A `map` followed by a `bind` is one `bind`. -/
-private theorem map_bind' {α β γ : Type} (x : SpecM α) (f : α → β) (g : β → SpecM γ) :
+theorem map_bind' {α β γ : Type} (x : SpecM α) (f : α → β) (g : β → SpecM γ) :
     ((f <$> x) >>= g) = (x >>= fun a => g (f a)) := by
   cases x <;> rfl
 
 /-- The consolidation indices of a state are validator indices. -/
-private theorem consolidationIndices_lt (s : BeaconState) (hcons : ConsolidationsInRange s) :
+theorem consolidationIndices_lt (s : BeaconState) (hcons : ConsolidationsInRange s) :
     ∀ i ∈ consolidationIndices s, i < s.validators.length := by
   intro i hi
   have hi' : i ∈ (s.pending_consolidations.flatMap fun c =>

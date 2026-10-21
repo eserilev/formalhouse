@@ -85,6 +85,7 @@ import EpochProofs.Sanity.FuluEpoch
 import EpochProofs.Sanity.Invariants.FuluOrder
 import EpochProofs.Etheorem.Fulu.Epoch
 import EpochProofs.Formalhouse
+import EpochProofs.FormalhouseFulu
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -456,3 +457,16 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Etheorem.Fulu.epochPresetAgrees_minimal
 #print axioms EpochProofs.Etheorem.Fulu.process_epoch_fulu_etheorem
 #print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch
+#print axioms EpochProofs.Spec.lhFullTailG_nf
+#print axioms EpochProofs.Spec.specRest_nf
+#print axioms EpochProofs.Spec.specFourStepsFulu_sameOk
+#print axioms EpochProofs.Spec.epochRestFulu_specTail
+#print axioms EpochProofs.Spec.lighthouse_single_pass_eq_spec_supply_fulu
+#print axioms EpochProofs.Spec.lighthouse_single_pass_eq_spec_genesis_fulu
+#print axioms EpochProofs.Spec.epochRestFulu_nf
+#print axioms EpochProofs.Spec.process_epoch_lh_full_fulu_genesis
+#print axioms EpochProofs.Spec.process_epoch_lh_full_fulu_sameOk'
+#print axioms EpochProofs.Spec.lhRestOrderFulu_sameOk
+#print axioms EpochProofs.Spec.process_epoch_lh_order_fulu_sameOk
+#print axioms EpochProofs.Spec.lighthouse_fulu_epoch_sameOk
+#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch

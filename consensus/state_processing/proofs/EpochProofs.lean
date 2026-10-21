@@ -166,3 +166,6 @@ import EpochProofs.Etheorem.Fulu.Consolidations
 import EpochProofs.Etheorem.Fulu.Deposits
 import EpochProofs.Etheorem.Fulu.Epoch
 import EpochProofs.Formalhouse
+import EpochProofs.Sanity.Invariants.LighthouseFulu
+import EpochProofs.Sanity.Invariants.LighthouseFuluOrder
+import EpochProofs.FormalhouseFulu
