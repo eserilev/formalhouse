@@ -12,9 +12,10 @@ steps. The deposit decisions read `s1`; the other steps act on `S4`.
 namespace EpochProofs.Spec
 
 /-- The epoch tail after the four steps, in the Lighthouse order with every deposit and
-effective balance step written out. -/
-def tailNF (o : Oracle) (s1 S4 : BeaconState) (total_active_balance : Gwei)
-    (current_epoch : Epoch) : SpecM BeaconState := do
+effective balance step written out. `total_active_balance` is the total of the deposit churn, and
+`K` runs after the effective balance updates of the validators that consolidations name. -/
+def tailNFG (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 S4 : BeaconState)
+    (total_active_balance : Gwei) (current_epoch : Epoch) : SpecM BeaconState := do
   let finalized_slot ←
     compute_start_slot_at_epoch Preset.mainnet s1.finalized_checkpoint.epoch
   let (next, dbtc, postponed) ← depositDecisions Preset.mainnet finalized_slot
@@ -36,7 +37,11 @@ def tailNF (o : Oracle) (s1 S4 : BeaconState) (total_active_balance : Gwei)
   let t6 ← (List.range' n (t5.validators.length - n)).foldlM ebUpdateAt t5
   let t7 ← process_pending_consolidations Preset.mainnet t6
   let t8 ← named.foldlM ebUpdateAt t7
-  let t9 ← process_builder_pending_payments Preset.mainnet total_active_balance t8
-  epochRest2 o t9
+  K t8
+
+/-- `tailNFG` for Gloas: the builder payments, then the steps after them. -/
+def tailNF (o : Oracle) (s1 S4 : BeaconState) (total_active_balance : Gwei)
+    (current_epoch : Epoch) : SpecM BeaconState :=
+  tailNFG o (gloasFin o total_active_balance) s1 S4 total_active_balance current_epoch
 
 end EpochProofs.Spec
