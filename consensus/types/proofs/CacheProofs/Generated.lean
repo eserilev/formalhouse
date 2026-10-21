@@ -2008,6 +2008,31 @@ def state.participation_totals.on_effective_balance_change
       let totals1 := to_slice_mut_back s1
       ok (r1, totals1)
 
+/-- Trait declaration: [types::state::pubkey_index::IndexMap]
+    Source: 'consensus/types/src/state/pubkey_index.rs', lines 7:0-10:1
+    Visibility: public -/
+structure state.pubkey_index.IndexMap (Self : Type) (K : Type) where
+  get_index : Self → K → Result (Option Std.Usize)
+  insert_index : Self → K → Std.Usize → Result Self
+
+/-- [types::state::pubkey_index::insert]:
+    Source: 'consensus/types/src/state/pubkey_index.rs', lines 14:0-25:1
+    Visibility: public -/
+def state.pubkey_index.insert
+  {K : Type} {M : Type} (IndexMapInst : state.pubkey_index.IndexMap M K)
+  (map : M) (len : Std.Usize) (key : K) (index : Std.Usize) :
+  Result ((Option Std.Usize) × M)
+  := do
+  if index != len
+  then ok (none, map)
+  else
+    let o ← lift (Usize.checked_add len 1#usize)
+    match o with
+    | none => ok (none, map)
+    | some _ =>
+      let map1 ← IndexMapInst.insert_index map key index
+      ok (o, map1)
+
 /-- [types::state::total_active_balance::update_effective_balance]:
     Source: 'consensus/types/src/state/total_active_balance.rs', lines 21:0-44:1
     Visibility: public -/

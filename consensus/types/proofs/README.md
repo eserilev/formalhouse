@@ -621,6 +621,42 @@ The CommitteeCache pure functions need `--include swap_or_not_shuffle`. Without 
 translate the body of `shuffle_list_with`. `regenerate.sh` passes the flag, and the workflow
 also runs when `consensus/swap_or_not_shuffle/src/shuffle_list.rs` changes.
 
+## PubkeyCache
+
+Rust: `../src/state/pubkey_index.rs`. `PubkeyCache::insert` calls `pubkey_index::insert`.
+Proofs: `Spec/PubkeyCache.lean`, `Equiv/PubkeyCache.lean`. The epoch bridge is
+`consensus/state_processing/proofs/EpochProofs/CachePubkey.lean`.
+
+### Theorems
+
+- `insert_spec`: the insert never fails. It adds the key at the next index, or returns `None`
+  and leaves the map unchanged.
+- `insert_coherent`, `insertAll_coherent`, `update_coherent`: inserting keys in index order
+  keeps the cache equal to `indexView`, the last index of each key.
+- `insertAll_ok`: the loop of `update_pubkey_cache` finishes when the length fits in `usize`.
+- `get_coherent_of_nodup`: with unique keys, a get returns the spec's
+  `validator_pubkeys.index(pubkey)`, or `None` for a key that is not a validator.
+- Epoch bridge `pubkey_cache_deposit_lookup`: the cache lookup in the pending deposits step
+  equals the spec lookup that the epoch model uses.
+
+### Trusted base
+
+- `rpds::HashTrieMap` obeys `IndexMapLaws`: a get reads the view, and an insert changes the
+  view at one key.
+- The loop in `BeaconState::update_pubkey_cache` calls `insert` at the current length for each
+  validator after the cached ones. `insertAll` models it.
+- At the start of the epoch the cache holds the first `len` validator pubkeys. This holds
+  where Lighthouse builds the cache and in `rebase_caches_on`, which copies the cache of a
+  state with the same first validators. The proofs do not cover these call sites.
+
+### Coherence notes
+
+- An insert of a key that is already present overwrites its index, so the cache returns the
+  last index. The spec returns the first. They agree because no two validators share a pubkey
+  (`PubkeysUnique`, a reachable-state invariant in the epoch proofs).
+- Before this change, an overflow of the length panicked. Now `insert` returns `false` and the
+  caller returns `PubkeyCacheInconsistent`. The length cannot reach `usize::MAX`.
+
 ## Trusted base for all caches
 
 - Charon and Aeneas.
