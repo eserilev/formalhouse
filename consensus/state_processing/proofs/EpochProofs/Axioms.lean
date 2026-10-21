@@ -69,6 +69,8 @@ import EpochProofs.Sanity.Invariants.LighthouseResets
 import EpochProofs.Sanity.Invariants.LighthouseOrder
 import EpochProofs.Etheorem.LighthouseOrder
 import EpochProofs.Etheorem.Final
+import EpochProofs.Equiv.DepositBalance
+import EpochProofs.Equiv.SelectionEmpty
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -304,3 +306,10 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.lighthouse_order_epoch_state_transition_sameOk
 #print axioms EpochProofs.Etheorem.lighthouse_order_epoch_etheorem
 #print axioms EpochProofs.Etheorem.lighthouse_order_epoch_etheorem_reachable
+#print axioms EpochProofs.max_effective_balance_electra_equiv
+#print axioms EpochProofs.deposit_effective_balance_equiv
+#print axioms EpochProofs.new_validator_effective_balance_equiv
+#print axioms EpochProofs.Spec.get_validator_from_deposit_lh
+#print axioms EpochProofs.Spec.lhApplyPendingDeposit_mainnet
+#print axioms EpochProofs.compute_balance_weighted_selection_empty
+#print axioms EpochProofs.spec_compute_balance_weighted_selection_empty

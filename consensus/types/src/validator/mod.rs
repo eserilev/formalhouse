@@ -1,3 +1,4 @@
+pub mod deposit_balance;
 mod proposer_preparation_data;
 mod validator;
 mod validator_registration_data;

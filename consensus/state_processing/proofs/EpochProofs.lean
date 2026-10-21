@@ -123,4 +123,7 @@ import EpochProofs.Sanity.Invariants.LighthouseOrderEth1
 import EpochProofs.Sanity.Invariants.LighthouseOrder
 import EpochProofs.Etheorem.LighthouseOrder
 import EpochProofs.Etheorem.Final
+import EpochProofs.Sanity.LighthouseNewValidator
+import EpochProofs.Equiv.DepositBalance
+import EpochProofs.Equiv.SelectionEmpty
 import EpochProofs.Axioms
