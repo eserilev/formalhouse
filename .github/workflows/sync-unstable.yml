@@ -1,0 +1,139 @@
+name: sync-unstable
+
+# Keeps `unstable` equal to sigp/lighthouse `unstable`, then merges it into `formalhouse` through a
+# pull request, so the proof workflows check every sync. See FORMALHOUSE.md.
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Do the merge locally, but push nothing and open nothing'
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - '.github/workflows/sync-unstable.yml'
+
+concurrency:
+  group: sync-unstable
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  UPSTREAM: https://github.com/sigp/lighthouse.git
+  # Workflows that may run in this repo. A sync push registers the Lighthouse workflows again,
+  # so the job disables every other one.
+  ALLOWED_WORKFLOWS: >-
+    .github/workflows/sync-unstable.yml
+    .github/workflows/proofs.yml
+    .github/workflows/lean-proofs.yml
+    .github/workflows/beacon-state-cache-proofs.yml
+    .github/workflows/lean-types-proofs.yml
+
+jobs:
+  sync:
+    name: sync unstable
+    runs-on: ubuntu-latest
+    env:
+      DRY_RUN: ${{ github.event_name == 'pull_request' || inputs.dry_run == true }}
+      # A push with the default token cannot change workflow files, and its pull requests start
+      # no workflows. The sync needs a fine-grained token: see FORMALHOUSE.md.
+      GH_TOKEN: ${{ secrets.SYNC_TOKEN }}
+    steps:
+      - name: Require the sync token
+        if: env.DRY_RUN != 'true'
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::The SYNC_TOKEN secret is not set. See FORMALHOUSE.md."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
+
+      - name: Fetch both unstable branches
+        run: |
+          git fetch --quiet "$UPSTREAM" +unstable:refs/remotes/upstream/unstable
+          git fetch --quiet origin unstable formalhouse
+          git config user.name formalhouse-sync
+          git config user.email formalhouse-sync@users.noreply.github.com
+
+      - name: Fast-forward unstable
+        run: |
+          if ! git merge-base --is-ancestor origin/unstable upstream/unstable; then
+            echo "::error::origin/unstable has commits that sigp/lighthouse unstable does not have."
+            exit 1
+          fi
+          echo "unstable: $(git rev-parse --short origin/unstable) -> $(git rev-parse --short upstream/unstable)"
+          if [ "$DRY_RUN" != "true" ]; then
+            git push origin upstream/unstable:refs/heads/unstable
+          fi
+
+      - name: Disable the Lighthouse workflows
+        if: env.DRY_RUN != 'true'
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows" --paginate \
+            --jq '.workflows[] | select(.state == "active") | "\(.id) \(.path)"' |
+          while read -r id path; do
+            case " $ALLOWED_WORKFLOWS " in
+              *" $path "*) ;;
+              *)
+                echo "disable $path"
+                gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$id/disable"
+                gh run list --workflow "$id" --branch unstable --json databaseId,status \
+                  --jq '.[] | select(.status != "completed") | .databaseId' |
+                  xargs -r -n1 gh run cancel
+                ;;
+            esac
+          done
+
+      - name: Merge unstable into formalhouse
+        run: |
+          branch=$(gh pr list --base formalhouse --state open --json headRefName \
+            --jq 'map(select(.headRefName | startswith("sync/"))) | .[0].headRefName // empty' \
+            2>/dev/null || true)
+          if [ -n "$branch" ]; then
+            git checkout --quiet -B "$branch" "origin/$branch" 2>/dev/null \
+              || { git fetch --quiet origin "$branch" && git checkout --quiet -B "$branch" FETCH_HEAD; }
+          else
+            branch="sync/$(date -u +%Y-%m-%d)"
+            git checkout --quiet -B "$branch" origin/formalhouse
+          fi
+          upstream=$(git rev-parse --short upstream/unstable)
+
+          if ! git merge --no-ff --no-edit -m "Merge sigp/lighthouse unstable $upstream" upstream/unstable; then
+            files=$(git diff --name-only --diff-filter=U)
+            git merge --abort
+            echo "Merge conflict in:"; echo "$files"
+            if [ "$DRY_RUN" = "true" ]; then exit 0; fi
+            gh label create sync-conflict --color B60205 --force \
+              --description "The daily sync of sigp/lighthouse unstable has a merge conflict"
+            body=$(printf 'Merging sigp/lighthouse unstable `%s` into `formalhouse` conflicts in:\n\n%s\n' \
+              "$upstream" "$(sed 's/^/- `/; s/$/`/' <<<"$files")")
+            issue=$(gh issue list --label sync-conflict --state open --json number --jq '.[0].number // empty')
+            if [ -n "$issue" ]; then
+              gh issue comment "$issue" --body "$body"
+            else
+              gh issue create --label sync-conflict --title "Sync conflict with sigp/lighthouse unstable" --body "$body"
+            fi
+            exit 1
+          fi
+
+          if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/formalhouse)" ]; then
+            echo "formalhouse already contains sigp/lighthouse unstable $upstream."
+            exit 0
+          fi
+          git log --oneline -1
+          if [ "$DRY_RUN" = "true" ]; then exit 0; fi
+
+          git push origin "HEAD:refs/heads/$branch"
+          if [ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')" ]; then
+            gh pr create --base formalhouse --head "$branch" \
+              --title "Sync sigp/lighthouse unstable" \
+              --body "Merges sigp/lighthouse unstable into formalhouse. The proof workflows check the merge."
+          fi
