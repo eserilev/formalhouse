@@ -34,6 +34,55 @@ EpochProofs/Spec/*.lean  <-- written by hand from the consensus specs
 | Fulu: registry update and single pass | Done (shared with Gloas) | Done (shared with Gloas) | Done |
 | Fulu: whole epoch against Etheorem's Fulu `processEpoch` | Done | - | Done, with conditions |
 
+## The final result
+
+`formalhouse_gloas_epoch` (`EpochProofs/Formalhouse.lean`) joins the epoch results. On mainnet,
+at the last slot of an epoch of a reachable run:
+
+1. Lighthouse's epoch model `process_epoch_lh_order` returns `ok`.
+2. The result equals Etheorem's Gloas `processEpoch`.
+3. The progressive balances, epoch cache and PTC committee reads equal the spec values, given
+   the build fact of each cache.
+4. The pubkey cache lookup of the pending deposits equals the spec lookup.
+
+`GloasEpochConds` holds the conditions on the epoch start state, by kind:
+
+| Kind | Fields | Where they come from |
+|---|---|---|
+| Reachable-state invariants | `reachable`, `pubkeys`, `vectors` | `Sanity/Invariants/*` prove them for every state that spec state transitions reach |
+| Epoch boundary and time bounds | `boundary` (last slot, next slot in `u64`, fewer than `2^24` historical summaries), `slot` (`slot + 8192 < 2^64`) | time: unreachable for about 1.6M years |
+| Supply and time bounds | `rows` (`RowBounds`: inactivity scores (F5), supply, balance sum, exit queue, registry size, participation) | the pyspec also raises without them |
+| Etheorem list limits | `etheoremRoom` (deposit room, builder withdrawals room) | Etheorem keeps the alpha.11 limits (F6, F10); beta.2 has none |
+| Committee steps | `committees`: `CommConds` (state facts) and `CommPreconds` (a sync candidate, a proposer candidate (F4), at least 32 active validators (F12), selections end within `2^64` passes) | `CommPreconds` are true pyspec preconditions; the pass bound is a fact about the hash values |
+| Etheorem output | `selections` (F3: Etheorem stops a selection after `10^7` passes) | a fact about the hash values |
+| Oracle | `oracle` (SHA-256, the roots, BLS checks agree with Etheorem), `sha` (32 bytes) | `etheoremOracle_agrees` shows such an Oracle exists |
+
+The caches are arguments with their build facts: the progressive balances cache is `Coherent`
+with the state, the epoch cache total is the active effective balance sum, the committee cache
+satisfies `CommitteeCacheBuilt`, and the pubkey cache is `Coherent` with the validator pubkeys.
+
+### Every epoch step
+
+| Step | Aeneas-checked Rust | Glue modeled by hand | Cache build fact | Spec precondition |
+|---|---|---|---|---|
+| Justification and finalization | `justification.rs` | read the bits and roots, write the checkpoints | progressive balances `Coherent` | none |
+| Inactivity, rewards, registry, slashings, deposit top-up, effective balance (Gloas and Fulu) | `single_pass_step.rs` and the step modules; Fulu at `fuluTab` | the milhouse loop and the writes after it | epoch cache total and base reward; progressive balances | `RowBounds` |
+| Pending deposits | `pending_deposits.rs`, `deposit_balance.rs` | the `Validator` struct build and the five list pushes | pubkey cache `Coherent` | none |
+| Pending consolidations | `pending_consolidations.rs` | the index table and the balance write back | none | none |
+| Builder pending payments (Gloas) | `builder_pending_payments.rs` | the list writes | epoch cache total | none |
+| Proposer lookahead | `epoch_committees.rs`, `balance_weighted_selection.rs`, `compute_shuffled_index_with.rs`; Fulu: the Electra loop | `SeedMixLink`, `EBLink`, the index lists | none (read from the registry) | F4; Fulu: `ProposerFin` |
+| PTC window (Gloas) | as the lookahead | the PTC joining loop (`CommitteesFromCache`), the milhouse shift | `CommitteeCacheBuilt` | F12 |
+| Next sync committee | as the lookahead; Fulu: the Electra loop | the pubkeys and the aggregate key | none | a sync candidate |
+| Eth1, slashings and randao resets, historical summaries | `tail_updates.rs` | the vector writes; the summary root is `hash_tree_root` in the Oracle | none | none |
+| Participation flag rotation | none | the whole step | none | none |
+| Step order | not Rust | `process_epoch_lh_order` follows `altair.rs` and `single_pass.rs`; `LighthouseOrder*.lean` proves it safe | none | none |
+| Genesis epoch | `single_pass_step.rs` with `after_genesis` false | as the other epochs | as the other epochs | none |
+
+Fulu: `process_epoch_fulu_etheorem` proves the Fulu spec epoch equal to Etheorem's Fulu
+`processEpoch`, and the Fulu Lighthouse steps are proved per step (see "Fulu"). A whole-epoch
+Fulu Lighthouse model, and so a `formalhouse_fulu_epoch`, does not exist yet: the tail model
+(`LighthouseTail*.lean`) uses one total for rewards and churn and includes the Gloas-only steps.
+
 ## Each epoch step and what checks it
 
 The main result is `lighthouse_order_epoch_etheorem_reachable`. It is a theorem about the model
@@ -702,4 +751,8 @@ copies the rest of the body into each branch, and the generated code grows expon
   - `HashLink`: `Sha256Hash` computes SHA-256.
   - The shuffle takes at most `2^24` indices, and `usize` has 64 bits.
   - The sync committee pubkeys, the aggregate key and the milhouse PTC window shift stay glue.
+- The cache build facts of `formalhouse_gloas_epoch`: the cache proofs (`consensus/types/proofs`)
+  prove them for the build and update code, not on the epoch path of `per_epoch_processing`.
+- `aeneas/discriminant-instance-name.patch` renames one generated instance so that the two
+  `Generated.lean` files load together. It changes no definition.
 - The reference matches pyspec.

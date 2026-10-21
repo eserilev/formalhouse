@@ -96,7 +96,11 @@ the steps before it.
   applies it. Etheorem stops the scan and keeps the deposit pending. Lighthouse and our spec
   follow pyspec. Fixed on the fork: `eserilev/etheorem` branch `formalhouse-pin` removes the
   check, the start index setter and in-block deposits, as consensus-specs v1.7.0-alpha.9 did.
-  The step proof has no bridge condition.
+  The Gloas and Fulu step proofs have no bridge condition. On a pyspec state where the start
+  index stays `UNSET` (no deposit request before Fulu), upstream Etheorem's epoch never applies
+  a deposit request. A whole upstream Etheorem chain also sets the index at the first request,
+  so it differs from pyspec only when `eth1_deposit_index` is below that index. That case is not
+  shown reachable.
 - F3 (b). Etheorem's `compute_balance_weighted_selection` stops after 10^7 passes. pyspec loops
   until it has `size` items. Example: every candidate has effective balance 0. A pass selects
   only when `random_value = 0`, one time in 65536. A sync committee then needs about 33.5M
@@ -141,6 +145,11 @@ the steps before it.
 - F11 (b, unreachable). Etheorem reads participation, inactivity scores, deltas and balances
   with `[i]!`, which gives 0 past the end of the list. pyspec raises. They differ only when a
   per-validator list is shorter than `validators`.
+- F12 (c, proved: `process_ptc_window_few_active_error`). With fewer than `SLOTS_PER_EPOCH`
+  validators active at `current + 2`, some slot of that epoch has an empty beacon committee.
+  `compute_ptc` then fails `assert total > 0` (gloas:1213, unchanged in beta.4), and
+  `process_epoch` raises. A Gloas chain with fewer than 32 active validators (8 on minimal)
+  halts. Lighthouse halts the same way. `CommPreconds` takes at least 32 active validators.
 
 ## The Oracle
 
