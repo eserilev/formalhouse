@@ -24,6 +24,7 @@ trap 'rm -rf "$out"' EXIT
   --start-from types::state::balance \
   --start-from types::state::participation_totals \
   --start-from types::state::committee_assignment \
+  --start-from types::state::pubkey_index \
   --include safe_arith \
   --include swap_or_not_shuffle \
   --dest-file "$out/pure.llbc" -- --lib)

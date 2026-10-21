@@ -77,6 +77,7 @@ import EpochProofs.Equiv.DepositBalance
 import EpochProofs.Equiv.SelectionEmpty
 import EpochProofs.CacheBridge.Capstone
 import EpochProofs.CacheBridge.CapstoneCommittees
+import EpochProofs.CachePubkey
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -366,3 +367,5 @@ open EpochProofs.Spec
 #print axioms EpochProofs.CacheBridge.hcomm_of_cache
 #print axioms EpochProofs.CacheBridge.lh_ptc_window_from_cache
 #print axioms EpochProofs.CacheBridge.lighthouse_order_epoch_etheorem_reachable_cached_ptc
+#print axioms EpochProofs.Spec.idxOf_pubkey_eq
+#print axioms EpochProofs.Spec.pubkey_cache_deposit_lookup

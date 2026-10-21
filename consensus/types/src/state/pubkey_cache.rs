@@ -1,3 +1,4 @@
+use super::pubkey_index::{self, IndexMap};
 use bls::PublicKeyBytes;
 use rpds::HashTrieMapSync as HashTrieMap;
 
@@ -25,21 +26,28 @@ impl PubkeyCache {
     /// The added index must equal the number of validators already added to the map. This ensures
     /// that an index is never skipped.
     pub fn insert(&mut self, pubkey: PublicKeyBytes, index: ValidatorIndex) -> bool {
-        if index == self.len {
-            self.map.insert_mut(pubkey, index);
-            self.len = self
-                .len
-                .checked_add(1)
-                .expect("map length cannot exceed usize");
-            true
-        } else {
-            false
+        match pubkey_index::insert(&mut self.map, self.len, pubkey, index) {
+            Some(len) => {
+                self.len = len;
+                true
+            }
+            None => false,
         }
     }
 
     /// Looks up a validator index's by their public key.
     pub fn get(&self, pubkey: &PublicKeyBytes) -> Option<ValidatorIndex> {
-        self.map.get(pubkey).copied()
+        self.map.get_index(pubkey)
+    }
+}
+
+impl IndexMap<PublicKeyBytes> for HashTrieMap<PublicKeyBytes, ValidatorIndex> {
+    fn get_index(&self, key: &PublicKeyBytes) -> Option<ValidatorIndex> {
+        self.get(key).copied()
+    }
+
+    fn insert_index(&mut self, key: PublicKeyBytes, index: ValidatorIndex) {
+        self.insert_mut(key, index);
     }
 }
 

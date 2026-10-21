@@ -4,6 +4,7 @@ import CacheProofs.Equiv.EpochCache
 import CacheProofs.Equiv.ProgressiveBalances
 import CacheProofs.Equiv.CommitteeCache
 import CacheProofs.Equiv.Shuffle
+import CacheProofs.Equiv.PubkeyCache
 import Lean.Util.CollectAxioms
 
 /-!
