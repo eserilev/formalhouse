@@ -161,8 +161,8 @@ def newLookahead (e : EState) : Vector UInt64 (2 * EthCLSpecs.Gloas.Const.slotsP
 
 omit [EthCLSpecs.Gloas.Config] hp hc in
 theorem processProposerLookahead_run (e : EState) :
-    runPure (EthCLSpecs.Gloas.processProposerLookahead (StateTransition := GloasRun)) e =
-      .ok ((), { e with proposerLookahead := newLookahead e }) := rfl
+    (EthCLSpecs.Gloas.processProposerLookahead (StateTransition := GloasRun)).run (pureState e) =
+      .ok ((), pureState { e with proposerLookahead := newLookahead e }) := rfl
 
 /-- `process_proposer_lookahead` equals Etheorem's when Etheorem's proposer selections are
 full. -/
@@ -172,8 +172,8 @@ theorem process_proposer_lookahead_etheorem (o : Spec.Oracle)
     (hfull : ProposerSelectionsFull e (EthCLSpecs.Gloas.currentEpochOf (pureState e) +
       EthCLSpecs.Gloas.Const.minSeedLookahead + 1))
     {s' : Spec.BeaconState} (h : Spec.process_proposer_lookahead p o (absEState e) = .ok s') :
-    ∃ e', runPure (EthCLSpecs.Gloas.processProposerLookahead (StateTransition := GloasRun)) e =
-      .ok ((), e') ∧ absEState e' = s' := by
+    ∃ e', (EthCLSpecs.Gloas.processProposerLookahead (StateTransition := GloasRun)).run (pureState e) =
+      .ok ((), pureState e') ∧ absEState e' = s' := by
   refine ⟨_, processProposerLookahead_run e, ?_⟩
   unfold Spec.process_proposer_lookahead at h
   have hge : ∀ l, Spec.get_current_epoch p { absEState e with proposer_lookahead := l } =
@@ -348,16 +348,17 @@ theorem get_next_sync_committee_ok (o : Spec.Oracle) (hoa : OracleAgrees o) (e :
 
 omit [EthCLSpecs.Gloas.Config] hp hc in
 theorem processSyncCommitteeUpdates_run (e : EState) :
-    runPure (EthCLSpecs.Gloas.processSyncCommitteeUpdates (StateTransition := GloasRun)) e =
-      .ok ((), if (EthCLSpecs.Gloas.currentEpochOf (pureState e) + 1) %
+    (EthCLSpecs.Gloas.processSyncCommitteeUpdates (StateTransition := GloasRun)).run
+        (pureState e) =
+      .ok ((), pureState (if (EthCLSpecs.Gloas.currentEpochOf (pureState e) + 1) %
           UInt64.ofNat EthCLSpecs.Gloas.Const.epochsPerSyncCommitteePeriod == 0 then
         { e with currentSyncCommittee := e.nextSyncCommittee,
                  nextSyncCommittee := EthCLSpecs.Gloas.getNextSyncCommittee (pureState e) }
-        else e) := by
+        else e)) := by
   unfold EthCLSpecs.Gloas.processSyncCommitteeUpdates
   have hget : ∀ s : EthCLSpecs.Gloas.State,
       (get : GloasRun EthCLSpecs.Gloas.State).run s = .ok (s, s) := fun _ => rfl
-  rw [runPure_eq, run_bind, hget, except_bind_ok]
+  rw [run_bind, hget, except_bind_ok]
   cases hz : ((EthCLSpecs.Gloas.currentEpochOf (pureState e) + 1) %
       UInt64.ofNat EthCLSpecs.Gloas.Const.epochsPerSyncCommitteePeriod == 0)
   · simp only [Bool.false_eq_true, if_false]
@@ -371,8 +372,8 @@ theorem process_sync_committee_updates_etheorem (o : Spec.Oracle) (hoa : OracleA
     (hperiod : p.EPOCHS_PER_SYNC_COMMITTEE_PERIOD < 2 ^ 64) (e : EState)
     (hfull : SyncSelectionFull e) {s' : Spec.BeaconState}
     (h : Spec.process_sync_committee_updates p o (absEState e) = .ok s') :
-    ∃ e', runPure (EthCLSpecs.Gloas.processSyncCommitteeUpdates (StateTransition := GloasRun)) e =
-      .ok ((), e') ∧ absEState e' = s' := by
+    ∃ e', (EthCLSpecs.Gloas.processSyncCommitteeUpdates (StateTransition := GloasRun)).run (pureState e) =
+      .ok ((), pureState e') ∧ absEState e' = s' := by
   refine ⟨_, processSyncCommitteeUpdates_run e, ?_⟩
   unfold Spec.process_sync_committee_updates at h
   simp only [except_bind_eq_ok, get_current_epoch_eq hp] at h
@@ -508,15 +509,15 @@ def newPtcWindow (e : EState) :
 
 omit [EthCLSpecs.Gloas.Config] hp hc in
 theorem processPtcWindow_run (e : EState) :
-    runPure (EthCLSpecs.Gloas.processPtcWindow (StateTransition := GloasRun)) e =
-      .ok ((), { e with ptcWindow := newPtcWindow e }) := rfl
+    (EthCLSpecs.Gloas.processPtcWindow (StateTransition := GloasRun)).run (pureState e) =
+      .ok ((), pureState { e with ptcWindow := newPtcWindow e }) := rfl
 
 /-- `process_ptc_window` equals Etheorem's when Etheorem's PTC selections are full. -/
 theorem process_ptc_window_etheorem (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d)
     (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState) (hfull : PtcSelectionsFull e)
     {s' : Spec.BeaconState} (h : Spec.process_ptc_window p o (absEState e) = .ok s') :
-    ∃ e', runPure (EthCLSpecs.Gloas.processPtcWindow (StateTransition := GloasRun)) e =
-      .ok ((), e') ∧ absEState e' = s' := by
+    ∃ e', (EthCLSpecs.Gloas.processPtcWindow (StateTransition := GloasRun)).run (pureState e) =
+      .ok ((), pureState e') ∧ absEState e' = s' := by
   refine ⟨_, processPtcWindow_run e, ?_⟩
   unfold Spec.process_ptc_window at h
   have hge : ∀ l, Spec.get_current_epoch p { absEState e with ptc_window := l } =

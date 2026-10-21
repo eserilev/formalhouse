@@ -24,24 +24,24 @@ def etheoremSummary (e : EState) : EthCLSpecs.Gloas.HistoricalSummary :=
   { blockSummaryRoot := htr e.blockRoots, stateSummaryRoot := htr e.stateRoots }
 
 theorem processHistoricalSummariesUpdate_run (e : EState) :
-    runPure (EthCLSpecs.Gloas.processHistoricalSummariesUpdate (StateTransition := GloasRun)) e =
-      .ok ((), if (EthCLSpecs.Gloas.computeEpochAtSlot e.slot + 1) %
+    (EthCLSpecs.Gloas.processHistoricalSummariesUpdate (StateTransition := GloasRun)).run
+        (pureState e) =
+      .ok ((), pureState (if (EthCLSpecs.Gloas.computeEpochAtSlot e.slot + 1) %
           UInt64.ofNat (EthCLSpecs.Gloas.Const.slotsPerHistoricalRoot /
             EthCLSpecs.Gloas.Const.slotsPerEpoch) = 0
         then { e with historicalSummaries := e.historicalSummaries.push (etheoremSummary e) }
-        else e) := by
+        else e)) := by
   unfold EthCLSpecs.Gloas.processHistoricalSummariesUpdate EthCLSpecs.Gloas.getCurrentEpoch
   by_cases h : (EthCLSpecs.Gloas.computeEpochAtSlot e.slot + 1) %
       UInt64.ofNat (EthCLSpecs.Gloas.Const.slotsPerHistoricalRoot /
         EthCLSpecs.Gloas.Const.slotsPerEpoch) = 0
   · rw [if_pos h]
-    simp [runPure, StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure,
+    simp [StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure,
       StateT.pure, Except.pure, Except.bind, view_uncachedBox, h]
     rfl
   · rw [if_neg h]
-    simp [runPure, StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure,
+    simp [StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure,
       StateT.pure, Except.pure, Except.bind, view_uncachedBox, h]
-    rfl
 
 omit [EthCLSpecs.Gloas.Preset] [HasherTag] in
 /-- `SSZList.push` below the limit appends. -/
@@ -59,8 +59,8 @@ theorem historical_summaries_update_etheorem {p : Spec.Preset} (hp : PresetAgree
     (hcap : e.historicalSummaries.val.size < EthCLSpecs.Gloas.Const.historicalRootsLimit)
     {s' : Spec.BeaconState}
     (h : Spec.process_historical_summaries_update p o (absEState e) = .ok s') :
-    ∃ e', runPure (EthCLSpecs.Gloas.processHistoricalSummariesUpdate (StateTransition := GloasRun))
-        e = .ok ((), e') ∧ absEState e' = s' := by
+    ∃ e', (EthCLSpecs.Gloas.processHistoricalSummariesUpdate (StateTransition := GloasRun)).run
+        (pureState e) = .ok ((), pureState e') ∧ absEState e' = s' := by
   refine ⟨_, processHistoricalSummariesUpdate_run e, ?_⟩
   have hlt := EthCLSpecs.Gloas.Const.slotsPerHistoricalRootLt
   have hper : (UInt64.ofNat (EthCLSpecs.Gloas.Const.slotsPerHistoricalRoot /
