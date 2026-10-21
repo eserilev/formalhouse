@@ -69,6 +69,7 @@ import EpochProofs.Sanity.Invariants.LighthouseResets
 import EpochProofs.Sanity.Invariants.LighthouseOrder
 import EpochProofs.Etheorem.LighthouseOrder
 import EpochProofs.Etheorem.Final
+import EpochProofs.Equiv.Fulu
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -310,3 +311,20 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.lighthouse_single_pass_eq_spec_genesis
 #print axioms EpochProofs.Spec.rewardsContextOf_genesis
 #print axioms EpochProofs.Spec.process_epoch_lh_full_genesis
+#print axioms EpochProofs.Spec.get_activation_churn_limit_fuluView
+#print axioms EpochProofs.Spec.process_pending_deposits_fulu_eq
+#print axioms EpochProofs.Spec.electraPass_ok
+#print axioms EpochProofs.Spec.selectionPass_ok
+#print axioms EpochProofs.Spec.next_sync_committee_indices_loop_iff
+#print axioms EpochProofs.Spec.get_next_sync_committee_indices_fulu_iff
+#print axioms EpochProofs.Spec.compute_proposer_index_loop_selection
+#print axioms EpochProofs.Spec.selection_compute_proposer_index_loop
+#print axioms EpochProofs.Spec.compute_proposer_index_selection
+#print axioms EpochProofs.Spec.selection_compute_proposer_index
+#print axioms EpochProofs.Spec.compute_proposer_indices_fulu_ok
+#print axioms EpochProofs.Spec.compute_proposer_indices_ok_fulu
+#print axioms EpochProofs.exit_churn_limit_capped
+#print axioms EpochProofs.exit_churn_limit_fulu
+#print axioms EpochProofs.activation_churn_limit_gloas
+#print axioms EpochProofs.next_sync_committee_indices_spec_fulu
+#print axioms EpochProofs.next_proposer_lookahead_spec_fulu

@@ -125,3 +125,6 @@ import EpochProofs.Sanity.Invariants.LighthouseOrder
 import EpochProofs.Etheorem.LighthouseOrder
 import EpochProofs.Etheorem.Final
 import EpochProofs.Axioms
+import EpochProofs.Spec.Fulu
+import EpochProofs.Sanity.Fulu
+import EpochProofs.Equiv.Fulu

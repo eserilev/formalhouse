@@ -30,6 +30,7 @@ EpochProofs/Spec/*.lean  <-- written by hand from the consensus specs
 | `process_justification_and_finalization` | Done | Done | Done |
 | `process_proposer_lookahead`, `process_ptc_window`, sync committee selection (Gloas) | Done | Done | Done, with glue conditions |
 | eth1, slashings and randao resets, historical summaries (checks) | Done | Done | Done |
+| Fulu: exit and activation churn, proposer lookahead, sync committee selection | Done | Done (shared with Gloas) | Done, with glue conditions |
 
 ## Each epoch step and what checks it
 
@@ -140,6 +141,33 @@ lookahead, PTC window and sync committee steps call equal to the reference:
 They rest on `compute_balance_weighted_selection_spec` (`Equiv/BalanceWeightedSelection.lean`)
 and `compute_shuffled_index_with_eq` (`Equiv/ShuffledIndex.lean`). The closed form of the spec
 shuffle (`Sanity/ShuffleClosedForm.lean`) is ported from the committee shuffle proof (#29).
+
+## Fulu
+
+Fulu is live on mainnet. Lighthouse runs the Fulu epoch through the same translated functions as
+Gloas, with the Fulu constants and the Fulu candidates. `Spec/Fulu.lean` transcribes the Fulu
+functions that differ from Gloas. `Sanity/Fulu.lean` reduces them to the Gloas functions, and
+`Equiv/Fulu.lean` proves the Lighthouse functions equal to them:
+
+- Churn: the Fulu churn is the Gloas activation churn with `CHURN_LIMIT_QUOTIENT` and
+  `MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT` (`get_activation_churn_limit_fuluView`). So Fulu
+  `process_pending_deposits` is Gloas `process_pending_deposits` on `p.fuluView f`
+  (`process_pending_deposits_fulu_eq`). `exit_churn_limit_fulu`: `registry_update::exit_churn_limit`
+  with the Fulu constants returns `get_activation_exit_churn_limit`. The pending deposits glue
+  now computes its churn with the same function (`activation_churn_constants` in
+  `single_pass.rs`); `activation_churn_limit_gloas` covers the Gloas constants.
+- Sync committee: the Electra `get_next_sync_committee_indices` loop returns what
+  `compute_balance_weighted_selection` returns (`get_next_sync_committee_indices_fulu_iff`).
+  Lighthouse now uses `epoch_committees::next_sync_committee_indices` from Electra on
+  (`next_sync_committee_indices_spec_fulu`).
+- Proposer lookahead: an Electra `compute_proposer_index` is the first item of a selection of size
+  1 (`compute_proposer_index_selection`), if its loop ends before the last pass (`ProposerFin`, a
+  fact about the hash values, like the Gloas selection end facts). Lighthouse now runs the Fulu
+  lookahead through `epoch_committees::next_proposer_lookahead` on all the active validators
+  (`next_proposer_lookahead_spec_fulu`).
+
+Not yet done for Fulu: the registry update, the single pass and the whole-epoch model with the
+Fulu constants, and the Etheorem bridge for Fulu.
 
 ## Separate passes and the single pass
 
