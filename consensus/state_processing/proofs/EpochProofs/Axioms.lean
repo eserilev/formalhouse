@@ -69,6 +69,7 @@ import EpochProofs.Sanity.Invariants.LighthouseResets
 import EpochProofs.Sanity.Invariants.LighthouseOrder
 import EpochProofs.Etheorem.LighthouseOrder
 import EpochProofs.Etheorem.Final
+import EpochProofs.CacheBridge.Capstone
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -304,3 +305,17 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.lighthouse_order_epoch_state_transition_sameOk
 #print axioms EpochProofs.Etheorem.lighthouse_order_epoch_etheorem
 #print axioms EpochProofs.Etheorem.lighthouse_order_epoch_etheorem_reachable
+#print axioms EpochProofs.CacheBridge.has_flag_bridge
+#print axioms EpochProofs.CacheBridge.get_active_validator_indices_bridge
+#print axioms EpochProofs.CacheBridge.participating_total_bridge
+#print axioms EpochProofs.CacheBridge.previous_epoch_bridge
+#print axioms EpochProofs.CacheBridge.lh_previous_flag_balance_eq
+#print axioms EpochProofs.CacheBridge.lh_current_flag_balance_eq
+#print axioms EpochProofs.CacheBridge.integer_squareroot_eq_sqrt
+#print axioms EpochProofs.CacheBridge.activeSum_eq
+#print axioms EpochProofs.CacheBridge.get_total_active_balance_closed
+#print axioms EpochProofs.CacheBridge.lh_total_active_balance_eq
+#print axioms EpochProofs.CacheBridge.rewardsBaseReward_of_altair
+#print axioms EpochProofs.CacheBridge.lh_base_reward_eq
+#print axioms EpochProofs.CacheBridge.lh_cache_reads_mainnet
+#print axioms EpochProofs.CacheBridge.lighthouse_order_epoch_etheorem_reachable_cached
