@@ -47,9 +47,10 @@ Hypotheses:
 - `hcombined`: for the row after the inactivity step and the deltas that the spec computes,
   `rewardsCombined` equals `rewardsSequential`.
 - `hbalances`, `hfinalized`, `hcurrent`, `hactivation`, `hexit`: the conditions of
-  `registryStepIndependent_eq_exclusive`. `hexit` is on the validator of this row. -/
+  `registryStepIndependent_eq_exclusive`. `hexit` is on the validator of this row.
+- `hgen`: the epoch is not the genesis epoch. -/
 theorem lhRowStep_eq_singlePassStep_of_combined (p : Preset) (ctx : LhStepContext)
-    (rctx : RewardsContext) (r : Row) (churn : Epoch × Gwei) (base_reward : Gwei)
+    (hgen : ctx.after_genesis = true) (rctx : RewardsContext) (r : Row) (churn : Epoch × Gwei) (base_reward : Gwei)
     (activation_epoch : Epoch)
     (hprev : rctx.previous_epoch = ctx.previous_epoch)
     (hleak : rctx.in_leak = ctx.in_leak)
@@ -85,7 +86,7 @@ theorem lhRowStep_eq_singlePassStep_of_combined (p : Preset) (ctx : LhStepContex
     registryStepIndependent_eq_exclusive p _ _ _ _ _ _ hbalances hfinalized hv hcurrent
       hactivation
   unfold lhRowStep singlePassStep
-  simp only [bothSteps, inactivityRowStep, rewardsRowStep, registryRowStep, slashingsRowStep,
+  simp only [hgen, Bool.true_and, bothSteps, inactivityRowStep, rewardsRowStep, registryRowStep, slashingsRowStep,
     rewardsRowDeltas, ← validatorEligible_eq_rewardsEligible]
   cases helig : validatorEligible ctx.previous_epoch r.validator with
   | error e => rfl
@@ -147,7 +148,8 @@ Hypotheses:
   `u64`.
 - `hbalances`, `hfinalized`, `hcurrent`, `hactivation`, `hexit`: the conditions of
   `registryStepIndependent_eq_exclusive`. `hexit` is on the validator of this row. -/
-theorem lhRowStep_eq_singlePassStep (p : Preset) (ctx : LhStepContext) (rctx : RewardsContext)
+theorem lhRowStep_eq_singlePassStep (p : Preset) (ctx : LhStepContext)
+    (hgen : ctx.after_genesis = true) (rctx : RewardsContext)
     (r : Row) (churn : Epoch × Gwei) (base_reward : Gwei) (activation_epoch : Epoch)
     (hprev : rctx.previous_epoch = ctx.previous_epoch)
     (hleak : rctx.in_leak = ctx.in_leak)
@@ -170,7 +172,7 @@ theorem lhRowStep_eq_singlePassStep (p : Preset) (ctx : LhStepContext) (rctx : R
       (fun x => (x.1.1.2, x.2)) <$> singlePassStep p ctx.total_active_balance ctx.previous_epoch
         ctx.in_leak rctx ctx.current_epoch ctx.finalized_epoch activation_epoch
         ctx.slashings_target ctx.penalty_per_increment ((((), ()), churn), ()) r := by
-  refine lhRowStep_eq_singlePassStep_of_combined p ctx rctx r churn base_reward activation_epoch
+  refine lhRowStep_eq_singlePassStep_of_combined p ctx hgen rctx r churn base_reward activation_epoch
     hprev hleak hsource htarget hhead hactive hbase ?_ ?_ hbalances hfinalized hcurrent
     hactivation hexit
   · intro helig

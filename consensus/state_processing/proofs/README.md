@@ -30,6 +30,9 @@ EpochProofs/Spec/*.lean  <-- written by hand from the consensus specs
 | `process_justification_and_finalization` | Done | Done | Done |
 | `process_proposer_lookahead`, `process_ptc_window`, sync committee selection (Gloas) | Done | Done | Done, with glue conditions |
 | eth1, slashings and randao resets, historical summaries (checks) | Done | Done | Done |
+| Fulu: exit and activation churn, proposer lookahead, sync committee selection | Done | Done (shared with Gloas) | Done, with glue conditions |
+| Fulu: registry update and single pass | Done (shared with Gloas) | Done (shared with Gloas) | Done |
+| Fulu: whole epoch against Etheorem's Fulu `processEpoch` | Done | - | Done, with conditions |
 
 ## Each epoch step and what checks it
 
@@ -51,7 +54,7 @@ value the model takes from the spec. The cache stack (#24 to #29) proves the cac
 | Eth1, slashings and randao resets, historical summaries | `tail_updates.rs` (#56) | the vector writes (`LighthouseResets.lean`); the summary root is `hash_tree_root` in the Oracle | none |
 | Participation flag rotation | none | the whole step | none |
 | Step order | not Rust | `process_epoch_lh_order` follows `altair.rs` and `single_pass.rs`; `LighthouseOrder*.lean` proves the order safe | none |
-| Genesis epoch | none | the model uses the spec `process_epoch` | none |
+| Genesis epoch | `single_pass_step.rs` with `after_genesis` false (`SinglePassStep.lean`) | same as the other epochs; `LighthouseGenesis.lean` proves the genesis single pass | same as the other epochs |
 
 For the committee steps, the theorems of #54 show that the Rust returns the spec result under the
 glue conditions. The model calls the spec function at that step. The glue conditions are not
@@ -140,6 +143,55 @@ lookahead, PTC window and sync committee steps call equal to the reference:
 They rest on `compute_balance_weighted_selection_spec` (`Equiv/BalanceWeightedSelection.lean`)
 and `compute_shuffled_index_with_eq` (`Equiv/ShuffledIndex.lean`). The closed form of the spec
 shuffle (`Sanity/ShuffleClosedForm.lean`) is ported from the committee shuffle proof (#29).
+
+## Fulu
+
+Fulu is live on mainnet. Lighthouse runs the Fulu epoch through the same translated functions as
+Gloas, with the Fulu constants and the Fulu candidates. `Spec/Fulu.lean` transcribes the Fulu
+functions that differ from Gloas. `Sanity/Fulu.lean` reduces them to the Gloas functions, and
+`Equiv/Fulu.lean` proves the Lighthouse functions equal to them:
+
+- Churn: the Fulu churn is the Gloas activation churn with `CHURN_LIMIT_QUOTIENT` and
+  `MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT` (`get_activation_churn_limit_fuluView`). So Fulu
+  `process_pending_deposits` is Gloas `process_pending_deposits` on `p.fuluView f`
+  (`process_pending_deposits_fulu_eq`). `exit_churn_limit_fulu`: `registry_update::exit_churn_limit`
+  with the Fulu constants returns `get_activation_exit_churn_limit`. The pending deposits glue
+  now computes its churn with the same function (`activation_churn_constants` in
+  `single_pass.rs`); `activation_churn_limit_gloas` covers the Gloas constants.
+- Sync committee: the Electra `get_next_sync_committee_indices` loop returns what
+  `compute_balance_weighted_selection` returns (`get_next_sync_committee_indices_fulu_iff`).
+  Lighthouse now uses `epoch_committees::next_sync_committee_indices` from Electra on
+  (`next_sync_committee_indices_spec_fulu`).
+- Proposer lookahead: an Electra `compute_proposer_index` is the first item of a selection of size
+  1 (`compute_proposer_index_selection`), if its loop ends before the last pass (`ProposerFin`, a
+  fact about the hash values, like the Gloas selection end facts). Lighthouse now runs the Fulu
+  lookahead through `epoch_committees::next_proposer_lookahead` on all the active validators
+  (`next_proposer_lookahead_spec_fulu`).
+
+- Registry update and single pass: on mainnet and minimal the Fulu quotient is twice the Gloas
+  quotient and the Fulu cap is the Gloas activation cap (`FuluCompat`). So the Fulu churn of a
+  total is the Gloas churn of `fuluTab` of it (`fulu_exit_churn_eq`, `fulu_activation_churn_eq`),
+  and Fulu `process_registry_updates` and `process_pending_deposits` are the Gloas functions at
+  `fuluTab`, with the same preset (`process_registry_updates_fulu_eq`,
+  `process_pending_deposits_fulu_tab_eq`). The registry theorems of `Equiv/RegistryUpdates.lean`
+  and `single_pass_step_equiv` now take any constants whose exit churn is the Gloas churn of
+  `T total` (`ChurnSpec`). With the Fulu constants `T = fuluTab`
+  (`single_pass_step_equiv_fulu`). `lighthouse_single_pass_eq_spec_fulu`: one pass of `lhRowStep`
+  with the registry total `fuluTab` equals the Fulu inactivity, rewards, registry and slashings
+  passes. Only the registry pass reads `fuluTab`; `separate_passes_eq_single_pass_tab` takes the
+  registry total apart from the total of the other passes.
+- Order: Lighthouse runs the Fulu proposer lookahead inside the single pass, before the resets,
+  the historical summaries update, the participation rotation and the sync committee update.
+  `specOrderFulu_lhOrderFulu` shows that the two orders give the same `ok` results.
+- `Spec/FuluEpoch.lean` transcribes the Fulu `process_epoch`. `process_epoch_fulu_eq_tab` writes
+  its registry update and pending deposits as the Gloas functions at `fuluTab`, and
+  `process_sync_committee_updates_fulu_sameOk` relates its sync committee update to the Gloas one.
+
+Not yet done for Fulu: the whole-epoch model `process_epoch_lh_order` and its capstones for Fulu,
+and Fulu totality. The Etheorem bridge for Fulu is done (see Etheorem below). The tail proofs (`LighthouseTail*.lean`) take one
+total for the rewards, the slashings, the registry churn and the deposit churn, and they include
+the builder payments and the PTC window. Fulu needs the churn total `fuluTab` apart from the
+rewards total, and no builder payments or PTC window.
 
 ## Separate passes and the single pass
 
@@ -433,6 +485,29 @@ Etheorem pins spec v1.7.0-alpha.11. Every Gloas epoch function in alpha.11 has t
 as in beta.2. Only type casts and syntax differ. The `BeaconState` lists have limits in
 alpha.11 and none in beta.2.
 
+### Fulu
+
+`Etheorem/Fulu/` proves the reference Fulu `process_epoch` equal to Etheorem's Fulu
+`processEpoch`: `process_epoch_fulu_etheorem`. Etheorem's Gloas steps replay the Fulu bodies, so
+the Fulu files are copies of the Gloas ones over the Fulu state. The differences:
+
+- `Fulu/State.lean`: the Gloas-only reference fields read as empty, and `latest_block_hash` reads
+  the block hash of the latest execution payload header. No Fulu epoch step reads them.
+- Churn: `FuluChurnAgrees` holds the Fulu config values and `FuluCompat`. Etheorem's Fulu
+  `get_activation_exit_churn_limit` then equals the Gloas exit and activation churn at
+  `fuluTab`, so the registry and deposits theorems run at `fuluTab`, as
+  `process_epoch_fulu_eq_tab` writes them.
+- Proposer lookahead: every active validator is a candidate. The reference uses the Electra loop
+  and Etheorem the balance weighted selection. They agree when the loop ends before its last
+  pass (`Spec.ProposerFin`, a condition in `FuluEpochConds`).
+- Sync committee: the Electra loop gives the same `ok` results as the selection
+  (`process_sync_committee_updates_fulu_sameOk`).
+- No builder payments and no PTC window: 15 steps.
+
+`FuluEpochConds` holds the step conditions: the Gloas ones without the builder withdrawals and
+PTC conditions, plus `proposerFin`. The F2 condition stays, because this Etheorem pin keeps the
+eth1 bridge check in its Fulu `process_pending_deposits` too.
+
 The shared parts:
 
 - `Etheorem/State.lean`: `absEState` maps every field of an Etheorem state to the reference.
@@ -608,9 +683,6 @@ copies the rest of the body into each branch, and the generated code grows expon
   `BeaconState::add_validator_to_registry` pushes one entry onto each of the five lists.
   `lhApplyPendingDeposit` models both, and `lhApplyPendingDeposit_eq` shows that it equals
   `apply_pending_deposit` when the increment is not 0.
-- At the genesis epoch, `process_epoch_lh_full` and `process_epoch_lh_order` are the spec
-  `process_epoch`. Lighthouse runs the single pass with `after_genesis` false there. This path
-  runs once per chain, at the end of epoch 0, and a chain that forks into Gloas never takes it.
 - `apply_pending_deposit` is a parameter of the reference. It verifies a BLS signature.
 - The registry proof covers Electra and later. The pre-Electra path is unchanged and not proved.
 - Lighthouse computes the slashings target epoch once per epoch. The spec computes it once per

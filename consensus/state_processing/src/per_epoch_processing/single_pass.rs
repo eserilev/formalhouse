@@ -272,7 +272,7 @@ pub fn process_epoch_single_pass<E: EthSpec>(
             pending_deposits: pending_deposits_ctxt.is_some(),
             effective_balance_updates: conf.effective_balance_updates,
         };
-        Some((step_ctxt, registry_constants(state_ctxt, spec)))
+        Some((step_ctxt, registry_constants(fork_name, spec)))
     } else {
         None
     };
@@ -627,39 +627,32 @@ pub fn process_proposer_lookahead<E: EthSpec>(
         .safe_add(spec.min_seed_lookahead.as_u64())?
         .safe_add(1)?;
 
-    // Shift out proposers in the first epoch and fill in the last epoch.
-    let lookahead = if state.fork_name_unchecked().gloas_enabled() {
-        // Post-Gloas, slashed validators are excluded from proposer selection.
-        let indices: Vec<usize> = state
-            .validators()
-            .iter()
-            .enumerate()
-            .filter(|(_, validator)| validator.is_active_at(next_epoch) && !validator.slashed)
-            .map(|(index, _)| index)
-            .collect();
-        let mix = *state.get_seed_mix(next_epoch, spec)?;
-        epoch_committees::next_proposer_lookahead::<Sha256Hash, _>(
-            &*state,
-            &lookahead,
-            &indices,
-            &spec
-                .get_domain_constant(Domain::BeaconProposer)
-                .to_le_bytes(),
-            next_epoch.as_u64(),
-            &mix.0,
-            next_epoch.start_slot(E::slots_per_epoch()).as_u64(),
-            &selection_constants(state, spec),
-        )
-        .map_err(BeaconStateError::from)?
-    } else {
-        let last_epoch_proposers = state.get_beacon_proposer_indices(next_epoch, spec)?;
-        epoch_committees::shift_lookahead(
-            &lookahead,
-            E::slots_per_epoch() as usize,
-            &last_epoch_proposers,
-        )
-        .ok_or(Error::ProposerLookaheadOutOfBounds(lookahead.len()))?
-    };
+    // Shift out proposers in the first epoch and fill in the last epoch. Post-Gloas, slashed
+    // validators are excluded from proposer selection.
+    let exclude_slashed = state.fork_name_unchecked().gloas_enabled();
+    let indices: Vec<usize> = state
+        .validators()
+        .iter()
+        .enumerate()
+        .filter(|(_, validator)| {
+            validator.is_active_at(next_epoch) && !(exclude_slashed && validator.slashed)
+        })
+        .map(|(index, _)| index)
+        .collect();
+    let mix = *state.get_seed_mix(next_epoch, spec)?;
+    let lookahead = epoch_committees::next_proposer_lookahead::<Sha256Hash, _>(
+        &*state,
+        &lookahead,
+        &indices,
+        &spec
+            .get_domain_constant(Domain::BeaconProposer)
+            .to_le_bytes(),
+        next_epoch.as_u64(),
+        &mix.0,
+        next_epoch.start_slot(E::slots_per_epoch()).as_u64(),
+        &selection_constants(state, spec),
+    )
+    .map_err(BeaconStateError::from)?;
 
     *state.proposer_lookahead_mut()? = Vector::new(lookahead)?;
 
@@ -907,11 +900,8 @@ fn process_single_registry_update_pre_electra(
     Ok(())
 }
 
-fn registry_constants(
-    state_ctxt: &StateContext,
-    spec: &ChainSpec,
-) -> registry_update::RegistryConstants {
-    let gloas = state_ctxt.fork_name.gloas_enabled();
+fn registry_constants(fork_name: ForkName, spec: &ChainSpec) -> registry_update::RegistryConstants {
+    let gloas = fork_name.gloas_enabled();
     registry_update::RegistryConstants {
         far_future_epoch: spec.far_future_epoch.as_u64(),
         min_activation_balance: spec.min_activation_balance,
@@ -930,6 +920,22 @@ fn registry_constants(
         } else {
             spec.max_per_epoch_activation_exit_churn_limit
         },
+    }
+}
+
+/// The constants of the activation churn: `get_activation_churn_limit` after Gloas and
+/// `get_activation_exit_churn_limit` before.
+fn activation_churn_constants(
+    fork_name: ForkName,
+    spec: &ChainSpec,
+) -> registry_update::RegistryConstants {
+    registry_update::RegistryConstants {
+        exit_churn_cap: if fork_name.gloas_enabled() {
+            spec.max_per_epoch_activation_churn_limit_gloas
+        } else {
+            spec.max_per_epoch_activation_exit_churn_limit
+        },
+        ..registry_constants(fork_name, spec)
     }
 }
 
@@ -1233,7 +1239,10 @@ impl PendingDepositsContext {
             current_epoch.as_u64(),
             next_epoch.as_u64(),
             state.deposit_balance_to_consume()?,
-            state.get_activation_exit_churn_limit(spec)?,
+            registry_update::exit_churn_limit(
+                state.get_total_active_balance()?,
+                &activation_churn_constants(state.fork_name_unchecked(), spec),
+            )?,
             &constants,
         )?;
 
