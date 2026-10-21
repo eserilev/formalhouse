@@ -38,13 +38,13 @@ The main result is `lighthouse_order_epoch_etheorem_reachable`. It is a theorem 
 Aeneas translates, and what the model takes on trust. "Glue" is Rust that reads or writes the
 state around a translated function, modeled by hand in Lean. "Cache" is a Lighthouse cache whose
 value the model takes from the spec. The cache stack (#24 to #29) proves the caches separately.
-It is not joined to the main result.
+`EpochProofs/CacheBridge/` joins part of it to the main result: see "The cache proofs" below.
 
 | Step (Lighthouse order) | Aeneas-checked Rust | Glue (by hand) | Cache (trusted here) |
 |---|---|---|---|
-| Justification and finalization | `justification.rs` (#53) | read the bits and roots, write the checkpoints | progressive balances totals (#27) |
-| Inactivity, rewards, registry, slashings, deposit top-up, effective balance | `single_pass_step.rs` and the step modules (#5 to #12, #22) | the milhouse loop in `single_pass.rs` calls the step once per validator, in order | base reward and total active balance (#26, #27), exit cache (#24), activation queue (#25) |
-| Pending deposits | `pending_deposits.rs` (#10); the effective balance of a new validator, `deposit_balance.rs` | the pubkey map; the `Validator` struct build and the list pushes of `add_validator_to_registry` | pubkey cache |
+| Justification and finalization | `justification.rs` (#53) | read the bits and roots, write the checkpoints | progressive balances totals: proved equal to the spec when the cache is `Coherent` (`lh_cache_reads_mainnet`) |
+| Inactivity, rewards, registry, slashings, deposit top-up, effective balance | `single_pass_step.rs` and the step modules (#5 to #12, #22) | the milhouse loop in `single_pass.rs` calls the step once per validator, in order | base reward and total active balance: proved equal to the spec when the epoch cache is built from the state (`lh_base_reward_eq`, `lh_cache_reads_mainnet`); the exit cache and the activation queue are not read after Electra |
+| Pending deposits | `pending_deposits.rs` (#10); the effective balance of a new validator, `deposit_balance.rs` (#60) | the pubkey map; the `Validator` struct build and the list pushes of `add_validator_to_registry` | pubkey cache (#70) |
 | Pending consolidations | `pending_consolidations.rs` (#11) | the index table and the balance write back | none |
 | Builder pending payments | `builder_pending_payments.rs` (#4) | the list writes | total active balance |
 | Proposer lookahead, PTC window, next sync committee | `epoch_committees.rs`, `balance_weighted_selection.rs`, `compute_shuffled_index_with.rs` (#54) | `SeedMixLink`, `EBLink`, the index lists, the milhouse PTC shift, the sync committee keys and aggregate key | committee cache (#28), shuffle (#29) |
@@ -451,12 +451,49 @@ The dependency is the fork `eserilev/etheorem`, branch `formalhouse-pin`, at the
 
 `etheorem/setup.sh` fetches blst, c-kzg-4844 and ISA-L at Etheorem's pins. ISA-L needs `nasm`.
 
+## The cache proofs
+
+`lakefile.toml` requires `cache_proofs` (`consensus/types/proofs`) by path.
+`EpochProofs/Caches.lean` imports `CacheProofs` with the epoch proofs, so the build checks that
+the two libraries load together. `EpochProofs/CacheBridge/` maps the epoch state to the state of
+each cache model and proves the cache reads equal to the epoch spec values:
+
+| Cache read in Lighthouse | Bridge theorem | Fact left about the cache |
+|---|---|---|
+| Progressive balances: current and previous epoch flag totals | `lh_current_flag_balance_eq`, `lh_previous_flag_balance_eq` | the cache is `Coherent` with the state (`build_coherent` and the update theorems of #27) |
+| Epoch cache: floored total active balance | `lh_total_active_balance_eq` | the cache total is the active sum of the effective balances (`single_pass_total_active_balance`, #26) |
+| Epoch cache: base reward | `lh_base_reward_eq` (equals `rewardsBaseReward`, which `lhBaseReward` uses) | the same total, and the table built from it |
+| Exit cache | none | not read after Electra: `initiate_validator_exit` uses `compute_exit_epoch_and_update_churn`. `build_exit_cache` still runs, and it can fail only on a `u64` overflow |
+| Activation queue | none | not read after Electra (`single_pass.rs` builds it only before Electra) |
+| Committee cache (PTC committees) | `hcomm_of_cache`, `lh_ptc_window_from_cache` (`CacheBridge/Committees.lean`) | `CommitteeCacheBuilt`: the shuffling is the spec shuffling of the active indices with the spec seed, and the count is the spec count. `committeeCacheBuilt_of_rust` gives it from the outputs of the Aeneas-checked `shuffling` (#66) and `committee_count_per_slot` (#65). Also `CommitteesFromCache`: entry `k` joins the cache committees of slot `start + k` (the loop in `process_ptc_window`, glue) |
+| Pubkey cache | none | no cache proof |
+
+`lighthouse_order_epoch_etheorem_reachable_cached` states the main result together with the
+cache reads (`lh_cache_reads_mainnet`) at the epoch start state.
+`lighthouse_order_epoch_etheorem_reachable_cached_ptc` adds the committee cache read of the PTC
+window step, for any state at which Lighthouse builds the cache.
+
+The hash link: `natHash o` is `o.hash` on byte values, the hash form of the cache spec.
+`csiFold_eq` proves the two closed forms of the shuffle equal for it, with no condition. The
+two `Generated.lean` files each translate the `ShuffleHash` trait, so the cache side takes its
+own `HashLink` to `natHash o`. Both instances are the same Rust `Sha256Hash`.
+
+The index lists of the proposer lookahead and the sync committee, the seed mix and the effective
+balances do not come from a cache. Lighthouse reads them from the validator list.
+
+Both `Generated.lean` files translate `safe_arith::ArithError`. The Aeneas `discriminant`
+attribute names its instance after the short type name, so the two files clash.
+`aeneas/setup.sh` applies `aeneas/discriminant-instance-name.patch`, which names the instance
+after the full type name. It changes no definition and no proof.
+
 ## Building
+
+`setup.sh` runs `etheorem/setup.sh` and `aeneas/setup.sh`.
 
 ```sh
 cd consensus/state_processing/proofs
 lake exe cache get
-./etheorem/setup.sh
+./setup.sh
 lake build
 lake lean EpochProofs/Axioms.lean
 ```
@@ -557,7 +594,8 @@ copies the rest of the body into each branch, and the generated code grows expon
   models it by hand.
 - The progressive balances cache gives the previous and current target balances, and the total
   active balance cache gives the total. `lhJustificationAndFinalization` takes the spec values.
-  The cache stack (#27) proves that the progressive balances cache holds them.
+  `lh_cache_reads_mainnet` proves the cache reads equal to them when the caches are built from
+  the state.
 - `resets.rs` and `historical_summaries_update.rs` write the vector entry or push the summary
   that the checks of `tail_updates.rs` select. `LighthouseResets.lean` models these writes.
   `HistoricalSummary::new` hashes the block and state roots, as `hash_tree_root` in the Oracle.

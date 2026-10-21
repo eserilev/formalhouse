@@ -1,17 +1,22 @@
 mod activation_queue;
 mod balance;
 pub mod balance_weighted_selection;
+pub mod base_rewards;
 mod beacon_state;
+pub mod committee_assignment;
 #[macro_use]
 mod committee_cache;
 mod epoch_cache;
 mod exit_cache;
+mod exit_queue;
 mod historical_batch;
 mod historical_summary;
 mod iter;
+pub mod participation_totals;
 mod progressive_balances_cache;
 mod pubkey_cache;
 mod slashings_cache;
+pub mod total_active_balance;
 
 pub use activation_queue::ActivationQueue;
 pub use balance::Balance;

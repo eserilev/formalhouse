@@ -20,6 +20,12 @@ git = "https://github.com/eserilev/etheorem"
 rev = "4e065a433822fe78cab1d1bbf45cff54d97d2ece"
 subDir = "packages/EthCLSpecs"
 
+# The BeaconState cache proofs in `consensus/types/proofs`. The epoch proofs import them to
+# replace the cache facts that the epoch theorems take as hypotheses.
+[[require]]
+name = "cache_proofs"
+path = "../../types/proofs"
+
 # The loop proofs need more than the default budget.
 [leanOptions]
 maxHeartbeats = 1000000

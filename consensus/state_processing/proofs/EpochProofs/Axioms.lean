@@ -75,6 +75,8 @@ import EpochProofs.Sanity.Invariants.TotalityRows
 import EpochProofs.Etheorem.Total
 import EpochProofs.Equiv.DepositBalance
 import EpochProofs.Equiv.SelectionEmpty
+import EpochProofs.CacheBridge.Capstone
+import EpochProofs.CacheBridge.CapstoneCommittees
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -339,3 +341,28 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.lhApplyPendingDeposit_mainnet
 #print axioms EpochProofs.compute_balance_weighted_selection_empty
 #print axioms EpochProofs.spec_compute_balance_weighted_selection_empty
+#print axioms EpochProofs.CacheBridge.has_flag_bridge
+#print axioms EpochProofs.CacheBridge.get_active_validator_indices_bridge
+#print axioms EpochProofs.CacheBridge.participating_total_bridge
+#print axioms EpochProofs.CacheBridge.previous_epoch_bridge
+#print axioms EpochProofs.CacheBridge.lh_previous_flag_balance_eq
+#print axioms EpochProofs.CacheBridge.lh_current_flag_balance_eq
+#print axioms EpochProofs.CacheBridge.integer_squareroot_eq_sqrt
+#print axioms EpochProofs.CacheBridge.activeSum_eq
+#print axioms EpochProofs.CacheBridge.get_total_active_balance_closed
+#print axioms EpochProofs.CacheBridge.lh_total_active_balance_eq
+#print axioms EpochProofs.CacheBridge.rewardsBaseReward_of_altair
+#print axioms EpochProofs.CacheBridge.lh_base_reward_eq
+#print axioms EpochProofs.CacheBridge.lh_cache_reads_mainnet
+#print axioms EpochProofs.CacheBridge.lighthouse_order_epoch_etheorem_reachable_cached
+#print axioms EpochProofs.CacheBridge.csiFold_eq
+#print axioms EpochProofs.CacheBridge.epoch_shuffled_at
+#print axioms EpochProofs.CacheBridge.epoch_compute_committee_slice
+#print axioms EpochProofs.CacheBridge.epoch_cps_eq
+#print axioms EpochProofs.CacheBridge.epoch_get_beacon_committee_slice
+#print axioms EpochProofs.CacheBridge.lh_committee_eq
+#print axioms EpochProofs.CacheBridge.ptcIndices_of_cache
+#print axioms EpochProofs.CacheBridge.committeeCacheBuilt_of_rust
+#print axioms EpochProofs.CacheBridge.hcomm_of_cache
+#print axioms EpochProofs.CacheBridge.lh_ptc_window_from_cache
+#print axioms EpochProofs.CacheBridge.lighthouse_order_epoch_etheorem_reachable_cached_ptc
