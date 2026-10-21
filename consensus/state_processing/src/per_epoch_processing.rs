@@ -35,6 +35,7 @@ pub mod single_pass;
 pub mod single_pass_step;
 pub mod slashings;
 pub mod slashings_penalty;
+pub mod tail_updates;
 pub mod tests;
 pub mod weigh_justification_and_finalization;
 

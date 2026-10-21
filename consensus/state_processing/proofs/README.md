@@ -225,6 +225,39 @@ Hypotheses that remain:
 - BLS, `hash_tree_root` and the execution engine are parameters (`Spec/Oracle.lean`).
 - The base reward that Lighthouse reads from the epoch cache equals `get_base_reward`.
 
+## The Lighthouse order of the epoch tail
+
+`process_epoch_lh_full` calls the spec functions for the resets and runs the steps after the
+builder payments in the spec order. Lighthouse runs them in another order:
+`process_epoch_single_pass` ends with the proposer lookahead and the PTC window, and then
+`altair.rs` runs the eth1, slashings and randao resets, the historical summaries update, the
+participation rotation and the sync committee update.
+
+`process_epoch_lh_order` (in `Sanity/Invariants/LighthouseOrder.lean`) follows this order. The
+checks of the resets and of the historical summaries update come from `tail_updates.rs`, which
+Aeneas translates. `Equiv/TailUpdates.lean` relates each Rust function to a model, and
+`LighthouseResets.lean` relates each Lighthouse reset to the spec reset.
+
+| Theorem | Statement |
+|---|---|
+| `specOrder_lhOrder` | The spec order and the Lighthouse order of the eight tail steps give the same `ok` results. |
+| `process_epoch_lh_order_sameOk` | `process_epoch_lh_order` and `process_epoch_lh_full` give the same `ok` results. |
+| `lighthouse_order_epoch_state_transition_sameOk` | The whole state transition with `process_epoch_lh_order` equals the spec on every reachable state. |
+
+The steps commute for these reasons:
+- The committee steps read `slot`, `validators`, `randao_mixes` and their own field. The other
+  steps do not write these fields, except the randao reset. The randao reset writes the mix of
+  the next epoch. The committee steps read the mix of the current epoch (`rrNew_seed`).
+- The eth1 reset reads only the slot. The deposits, consolidations, payments and committee
+  steps keep the slot and do not read `eth1_data_votes`.
+
+Conditions beyond `lighthouse_full_epoch_state_transition_sameOk`:
+- `historical_summaries` holds fewer than 2^24 items at each epoch boundary (`HistRoom`).
+  Lighthouse pushes to a list with that limit. The beta.2 list has no limit.
+- The eth1 reset of Lighthouse tests `(slot + 1) % 2048 == 0`. The spec tests
+  `next_epoch % 64 == 0`. They agree at the last slot of an epoch when `slot + 1` fits in a
+  `u64`. `reachable_state_transition_sameOk_last` gives both facts.
+
 ## The reference
 
 `EpochProofs/Spec/` transcribes the consensus specs (v1.7.0-beta.2) line by line. Each
@@ -293,6 +326,7 @@ finalized epoch is below `FAR_FUTURE_EPOCH`, and the registry lists have equal l
 the deposits and the consolidations. Frame lemmas move four conditions to the epoch start:
 room for the pending deposits, the eth1 bridge (F2), and room in the builder withdrawals and
 the historical summaries (F6). The F3 conditions are facts about Etheorem's own output and stay.
+| `lighthouse_order_epoch_etheorem` | The same for `process_epoch_lh_order`, the Lighthouse epoch in the Lighthouse order. |
 
 The 17 step theorems are in `Etheorem/<Step>.lean`. `etheorem/PLAN.md` lists the conditions of
 `process_epoch_etheorem` and the findings.
@@ -355,7 +389,11 @@ charon cargo --preset=aeneas \
   --start-from 'state_processing::per_epoch_processing::pending_consolidations' \
   --start-from 'state_processing::per_epoch_processing::single_pass_step' \
   --start-from 'state_processing::per_epoch_processing::justification' \
-  --include safe_arith --include types::builder --include alloy_primitives::bits \
+  --start-from 'state_processing::per_epoch_processing::epoch_committees' \
+  --start-from 'state_processing::per_epoch_processing::tail_updates' \
+  --include safe_arith --include types::state::balance_weighted_selection \
+  --include swap_or_not_shuffle::shuffle_hash --include swap_or_not_shuffle::compute_shuffled_index_with \
+  --include types::builder --include alloy_primitives::bits \
   --include types::core::consts \
   --dest-file "$out/pure.llbc" -- --lib
 aeneas -backend lean "$out/pure.llbc" -dest "$out"
@@ -421,6 +459,16 @@ copies the rest of the body into each branch, and the generated code grows expon
 - The progressive balances cache gives the previous and current target balances, and the total
   active balance cache gives the total. `lhJustificationAndFinalization` takes the spec values.
   The cache stack (#27) proves that the progressive balances cache holds them.
+- `resets.rs` and `historical_summaries_update.rs` write the vector entry or push the summary
+  that the checks of `tail_updates.rs` select. `LighthouseResets.lean` models these writes.
+  `HistoricalSummary::new` hashes the block and state roots, as `hash_tree_root` in the Oracle.
+- `rotate_participation_flags` moves the current participation to the previous one and writes
+  one zero flag for each validator, as the spec does. It has no translated module.
+- `Validator::from_deposit` and `BeaconState::add_validator_to_registry` (in the `types` crate)
+  are not translated. The Charon run is on `state_processing` and reaches only its own modules.
+- At the genesis epoch, `process_epoch_lh_full` and `process_epoch_lh_order` are the spec
+  `process_epoch`. Lighthouse runs the single pass with `after_genesis` false there. This path
+  runs once per chain, at the end of epoch 0, and a chain that forks into Gloas never takes it.
 - `apply_pending_deposit` is a parameter of the reference. It verifies a BLS signature.
 - The registry proof covers Electra and later. The pre-Electra path is unchanged and not proved.
 - Lighthouse computes the slashings target epoch once per epoch. The spec computes it once per

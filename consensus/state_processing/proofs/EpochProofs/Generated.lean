@@ -3910,4 +3910,170 @@ def per_epoch_processing.slashings_penalty.slashings_context
       (Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
       safe_arith.ArithError) residual
 
+/-- [state_processing::per_epoch_processing::tail_updates::eth1_data_votes_reset_due]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/tail_updates.rs', lines 8:0-13:1
+    Visibility: public -/
+def per_epoch_processing.tail_updates.eth1_data_votes_reset_due
+  (slot : Std.U64) (slots_per_eth1_voting_period : Std.U64) :
+  Result (core.result.Result Bool safe_arith.ArithError)
+  := do
+  let r ← U64.Insts.Safe_arithSafeArithU64.safe_add slot 1#u64
+  let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
+    let r1 ←
+      U64.Insts.Safe_arithSafeArithU64.safe_rem val
+        slots_per_eth1_voting_period
+    let cf1 ← core.result.Result.Insts.CoreOpsTry.branch r1
+    match cf1 with
+    | core.ops.control_flow.ControlFlow.Continue val1 =>
+      ok (core.result.Result.Ok (val1 = 0#u64))
+    | core.ops.control_flow.ControlFlow.Break residual =>
+      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+        Bool (core.convert.FromSame safe_arith.ArithError) residual
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+      Bool (core.convert.FromSame safe_arith.ArithError) residual
+
+/-- [state_processing::per_epoch_processing::tail_updates::epoch_vector_index]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/tail_updates.rs', lines 19:0-38:1
+    Visibility: public -/
+def per_epoch_processing.tail_updates.epoch_vector_index
+  (current_epoch : Std.U64) (epoch : Std.U64) (length : Std.U64)
+  (allow_next_epoch : Bool) :
+  Result (core.result.Result (Option Std.U64) safe_arith.ArithError)
+  := do
+  let r ← U64.Insts.Safe_arithSafeArithU64.safe_add epoch length
+  let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
+    if current_epoch >= val
+    then ok (core.result.Result.Ok none)
+    else
+      if allow_next_epoch
+      then
+        let r1 ←
+          U64.Insts.Safe_arithSafeArithU64.safe_add current_epoch 1#u64
+        let cf1 ← core.result.Result.Insts.CoreOpsTry.branch r1
+        match cf1 with
+        | core.ops.control_flow.ControlFlow.Continue val1 =>
+          if epoch > val1
+          then ok (core.result.Result.Ok none)
+          else
+            let r2 ← U64.Insts.Safe_arithSafeArithU64.safe_rem epoch length
+            let cf2 ← core.result.Result.Insts.CoreOpsTry.branch r2
+            match cf2 with
+            | core.ops.control_flow.ControlFlow.Continue val2 =>
+              ok (core.result.Result.Ok (some val2))
+            | core.ops.control_flow.ControlFlow.Break residual =>
+              core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+                (Option Std.U64) (core.convert.FromSame safe_arith.ArithError)
+                residual
+        | core.ops.control_flow.ControlFlow.Break residual =>
+          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+            (Option Std.U64) (core.convert.FromSame safe_arith.ArithError)
+            residual
+      else
+        if epoch > current_epoch
+        then ok (core.result.Result.Ok none)
+        else
+          let r1 ← U64.Insts.Safe_arithSafeArithU64.safe_rem epoch length
+          let cf1 ← core.result.Result.Insts.CoreOpsTry.branch r1
+          match cf1 with
+          | core.ops.control_flow.ControlFlow.Continue val1 =>
+            ok (core.result.Result.Ok (some val1))
+          | core.ops.control_flow.ControlFlow.Break residual =>
+            core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+              (Option Std.U64) (core.convert.FromSame safe_arith.ArithError)
+              residual
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+      (Option Std.U64) (core.convert.FromSame safe_arith.ArithError) residual
+
+/-- [state_processing::per_epoch_processing::tail_updates::slashings_reset_index]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/tail_updates.rs', lines 41:0-47:1
+    Visibility: public -/
+def per_epoch_processing.tail_updates.slashings_reset_index
+  (current_epoch : Std.U64) (epochs_per_slashings_vector : Std.U64) :
+  Result (core.result.Result (Option Std.U64) safe_arith.ArithError)
+  := do
+  let r ← U64.Insts.Safe_arithSafeArithU64.safe_add current_epoch 1#u64
+  let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
+    per_epoch_processing.tail_updates.epoch_vector_index current_epoch val
+      epochs_per_slashings_vector true
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+      (Option Std.U64) (core.convert.FromSame safe_arith.ArithError) residual
+
+/-- [state_processing::per_epoch_processing::tail_updates::randao_mixes_reset_indices]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/tail_updates.rs', lines 51:0-72:1
+    Visibility: public -/
+def per_epoch_processing.tail_updates.randao_mixes_reset_indices
+  (current_epoch : Std.U64) (epochs_per_historical_vector : Std.U64) :
+  Result (core.result.Result (Option (Std.U64 × Std.U64))
+    safe_arith.ArithError)
+  := do
+  let r ← U64.Insts.Safe_arithSafeArithU64.safe_add current_epoch 1#u64
+  let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
+    let r1 ←
+      per_epoch_processing.tail_updates.epoch_vector_index current_epoch
+        current_epoch epochs_per_historical_vector false
+    let cf1 ← core.result.Result.Insts.CoreOpsTry.branch r1
+    match cf1 with
+    | core.ops.control_flow.ControlFlow.Continue val1 =>
+      let r2 ←
+        per_epoch_processing.tail_updates.epoch_vector_index current_epoch val
+          epochs_per_historical_vector true
+      let cf2 ← core.result.Result.Insts.CoreOpsTry.branch r2
+      match cf2 with
+      | core.ops.control_flow.ControlFlow.Continue val2 =>
+        match val1 with
+        | none => ok (core.result.Result.Ok none)
+        | some source =>
+          match val2 with
+          | none => ok (core.result.Result.Ok none)
+          | some target => ok (core.result.Result.Ok (some (source, target)))
+      | core.ops.control_flow.ControlFlow.Break residual =>
+        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+          (Option (Std.U64 × Std.U64)) (core.convert.FromSame
+          safe_arith.ArithError) residual
+    | core.ops.control_flow.ControlFlow.Break residual =>
+      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+        (Option (Std.U64 × Std.U64)) (core.convert.FromSame
+        safe_arith.ArithError) residual
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+      (Option (Std.U64 × Std.U64)) (core.convert.FromSame
+      safe_arith.ArithError) residual
+
+/-- [state_processing::per_epoch_processing::tail_updates::historical_summary_due]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/tail_updates.rs', lines 75:0-81:1
+    Visibility: public -/
+def per_epoch_processing.tail_updates.historical_summary_due
+  (next_epoch : Std.U64) (slots_per_historical_root : Std.U64)
+  (slots_per_epoch : Std.U64) :
+  Result (core.result.Result Bool safe_arith.ArithError)
+  := do
+  let r ←
+    U64.Insts.Safe_arithSafeArithU64.safe_div slots_per_historical_root
+      slots_per_epoch
+  let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
+    let r1 ← U64.Insts.Safe_arithSafeArithU64.safe_rem next_epoch val
+    let cf1 ← core.result.Result.Insts.CoreOpsTry.branch r1
+    match cf1 with
+    | core.ops.control_flow.ControlFlow.Continue val1 =>
+      ok (core.result.Result.Ok (val1 = 0#u64))
+    | core.ops.control_flow.ControlFlow.Break residual =>
+      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+        Bool (core.convert.FromSame safe_arith.ArithError) residual
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+      Bool (core.convert.FromSame safe_arith.ArithError) residual
+
 end state_processing
