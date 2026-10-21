@@ -128,3 +128,9 @@ import EpochProofs.Axioms
 import EpochProofs.Spec.Fulu
 import EpochProofs.Sanity.Fulu
 import EpochProofs.Equiv.Fulu
+import EpochProofs.Sanity.FuluRegistry
+import EpochProofs.Equiv.FuluRegistry
+import EpochProofs.Sanity.FuluSinglePass
+import EpochProofs.Spec.FuluEpoch
+import EpochProofs.Sanity.FuluEpoch
+import EpochProofs.Sanity.Invariants.FuluOrder

@@ -374,4 +374,109 @@ def get_next_sync_committee_indices_fulu (p : Preset) (o : Oracle) (state : Beac
   next_sync_committee_indices_loop p o state.validators active_validator_indices seed
     active_validator_count UINT64_SIZE [] 0
 
+/-- ```python
+def initiate_validator_exit(state: BeaconState, index: ValidatorIndex) -> None:
+    # Return if validator already initiated exit
+    validator = state.validators[index]
+    if validator.exit_epoch != FAR_FUTURE_EPOCH:
+        return
+
+    # Compute exit queue epoch [Modified in Electra:EIP7251]
+    exit_queue_epoch = compute_exit_epoch_and_update_churn(state, validator.effective_balance)
+
+    # Set validator exit epoch and withdrawable epoch
+    validator.exit_epoch = exit_queue_epoch
+    validator.withdrawable_epoch = validator.exit_epoch + MIN_VALIDATOR_WITHDRAWABILITY_DELAY
+``` -/
+def initiate_validator_exit_fulu (p : Preset) (f : FuluConfig) (total_active_balance : Gwei)
+    (state : BeaconState) (index : ValidatorIndex) : SpecM BeaconState := do
+  let validator ← listGet state.validators index
+  if validator.exit_epoch != FAR_FUTURE_EPOCH then
+    return state
+
+  let (exit_queue_epoch, state) ← compute_exit_epoch_and_update_churn_fulu p f total_active_balance
+    state validator.effective_balance
+
+  let validator := { validator with exit_epoch := exit_queue_epoch }
+  let validator := { validator with
+    withdrawable_epoch := ← uint64Add validator.exit_epoch p.MIN_VALIDATOR_WITHDRAWABILITY_DELAY }
+  pure { state with validators := ← listSet state.validators index validator }
+
+/-- ```python
+def process_registry_updates(state: BeaconState) -> None:
+    current_epoch = get_current_epoch(state)
+    activation_epoch = compute_activation_exit_epoch(current_epoch)
+
+    # Process activation eligibility, ejections, and activations
+    for index, validator in enumerate(state.validators):
+        # [Modified in Electra:EIP7251]
+        if is_eligible_for_activation_queue(validator):
+            validator.activation_eligibility_epoch = current_epoch + 1
+        elif (
+            is_active_validator(validator, current_epoch)
+            and validator.effective_balance <= EJECTION_BALANCE
+        ):
+            # [Modified in Electra:EIP7251]
+            initiate_validator_exit(state, ValidatorIndex(index))
+        elif is_eligible_for_activation(state, validator):
+            validator.activation_epoch = activation_epoch
+```
+
+This is the Electra text, which Fulu keeps. It differs from Gloas only in the churn that
+`initiate_validator_exit` reads. -/
+def process_registry_updates_fulu (p : Preset) (f : FuluConfig) (total_active_balance : Gwei)
+    (state : BeaconState) : SpecM BeaconState := do
+  let current_epoch ← get_current_epoch p state
+  let activation_epoch ← compute_activation_exit_epoch p current_epoch
+
+  let mut state := state
+  for index in List.range state.validators.length do
+    let validator ← listGet state.validators index
+    if is_eligible_for_activation_queue p validator then
+      let validator := { validator with
+        activation_eligibility_epoch := ← uint64Add current_epoch 1 }
+      state := { state with validators := ← listSet state.validators index validator }
+    else if is_active_validator validator current_epoch
+        && validator.effective_balance ≤ p.EJECTION_BALANCE then
+      state ← initiate_validator_exit_fulu p f total_active_balance state index
+    else if is_eligible_for_activation state validator then
+      let validator := { validator with activation_epoch }
+      state := { state with validators := ← listSet state.validators index validator }
+  pure state
+
+/-- ```python
+def get_next_sync_committee(state: BeaconState) -> SyncCommittee:
+    """
+    Return the next sync committee, with possible pubkey duplicates.
+    """
+    indices = get_next_sync_committee_indices(state)
+    pubkeys = SyncCommitteePubkeys(data=[state.validators[index].pubkey for index in indices])
+    aggregate_pubkey = eth_aggregate_pubkeys(pubkeys)
+    return SyncCommittee(pubkeys=pubkeys, aggregate_pubkey=aggregate_pubkey)
+```
+
+The Altair text, with the Electra `get_next_sync_committee_indices`. -/
+def get_next_sync_committee_fulu (p : Preset) (o : Oracle) (state : BeaconState) :
+    SpecM SyncCommittee := do
+  let indices ← get_next_sync_committee_indices_fulu p o state
+  let pubkeys ← indices.mapM fun index => do pure (← listGet state.validators index).pubkey
+  let aggregate_pubkey ← eth_aggregate_pubkeys o pubkeys
+  pure { pubkeys, aggregate_pubkey }
+
+/-- ```python
+def process_sync_committee_updates(state: BeaconState) -> None:
+    next_epoch = get_current_epoch(state) + 1
+    if next_epoch % EPOCHS_PER_SYNC_COMMITTEE_PERIOD == 0:
+        state.current_sync_committee = state.next_sync_committee
+        state.next_sync_committee = get_next_sync_committee(state)
+``` -/
+def process_sync_committee_updates_fulu (p : Preset) (o : Oracle) (state : BeaconState) :
+    SpecM BeaconState := do
+  let next_epoch ← uint64Add (← get_current_epoch p state) 1
+  if (← uint64Mod next_epoch p.EPOCHS_PER_SYNC_COMMITTEE_PERIOD) == 0 then
+    let state := { state with current_sync_committee := state.next_sync_committee }
+    pure { state with next_sync_committee := ← get_next_sync_committee_fulu p o state }
+  else
+    pure state
+
 end EpochProofs.Spec
