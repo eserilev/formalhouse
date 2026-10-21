@@ -114,4 +114,5 @@ import EpochProofs.Etheorem.Conditions
 import EpochProofs.Spec.JustificationLighthouse
 import EpochProofs.Sanity.LighthouseJustification
 import EpochProofs.Equiv.Justification
+import EpochProofs.Equiv.EpochCommittees
 import EpochProofs.Axioms

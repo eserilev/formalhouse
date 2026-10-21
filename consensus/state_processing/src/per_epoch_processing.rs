@@ -18,6 +18,7 @@ pub mod builder_pending_payments;
 pub mod capella;
 pub mod effective_balance;
 pub mod effective_balance_updates;
+pub mod epoch_committees;
 pub mod epoch_processing_summary;
 pub mod errors;
 pub mod historical_roots_update;

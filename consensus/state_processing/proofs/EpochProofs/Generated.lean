@@ -147,6 +147,290 @@ def U64.Insts.Safe_arithSafeArithU64.safe_rem
   let o ← lift (U64.checked_rem self other)
   core.option.Option.ok_or o safe_arith.ArithError.DivisionByZero
 
+/-- [safe_arith::{impl safe_arith::SafeArith<usize> for usize}::safe_rem]:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/safe_arith-0.1.0/src/lib.rs', lines 160:12-160:59
+    Name pattern: [safe_arith::{safe_arith::SafeArith<usize, usize>}::safe_rem]
+    Visibility: public -/
+@[rust_fun "safe_arith::{safe_arith::SafeArith<usize, usize>}::safe_rem"]
+def Usize.Insts.Safe_arithSafeArithUsize.safe_rem
+  (self : Std.Usize) (other : Std.Usize) :
+  Result (core.result.Result Std.Usize safe_arith.ArithError)
+  := do
+  let o ← lift (Usize.checked_rem self other)
+  core.option.Option.ok_or o safe_arith.ArithError.DivisionByZero
+
+/-- [swap_or_not_shuffle::compute_shuffled_index_with::first_u64]:
+    Source: 'consensus/swap_or_not_shuffle/src/compute_shuffled_index_with.rs', lines 9:0-9:38
+    Name pattern: [swap_or_not_shuffle::compute_shuffled_index_with::first_u64] -/
+@[rust_fun "swap_or_not_shuffle::compute_shuffled_index_with::first_u64"]
+def swap_or_not_shuffle.compute_shuffled_index_with.first_u64
+  (digest : Array Std.U8 32#usize) : Result Std.U64 := do
+  let i ← Array.index_usize digest 0#usize
+  let i1 ← lift (UScalar.cast .U64 i)
+  let i2 ← Array.index_usize digest 1#usize
+  let i3 ← lift (UScalar.cast .U64 i2)
+  let i4 ← i3 <<< 8#i32
+  let i5 ← lift (i1 ||| i4)
+  let i6 ← Array.index_usize digest 2#usize
+  let i7 ← lift (UScalar.cast .U64 i6)
+  let i8 ← i7 <<< 16#i32
+  let i9 ← lift (i5 ||| i8)
+  let i10 ← Array.index_usize digest 3#usize
+  let i11 ← lift (UScalar.cast .U64 i10)
+  let i12 ← i11 <<< 24#i32
+  let i13 ← lift (i9 ||| i12)
+  let i14 ← Array.index_usize digest 4#usize
+  let i15 ← lift (UScalar.cast .U64 i14)
+  let i16 ← i15 <<< 32#i32
+  let i17 ← lift (i13 ||| i16)
+  let i18 ← Array.index_usize digest 5#usize
+  let i19 ← lift (UScalar.cast .U64 i18)
+  let i20 ← i19 <<< 40#i32
+  let i21 ← lift (i17 ||| i20)
+  let i22 ← Array.index_usize digest 6#usize
+  let i23 ← lift (UScalar.cast .U64 i22)
+  let i24 ← i23 <<< 48#i32
+  let i25 ← lift (i21 ||| i24)
+  let i26 ← Array.index_usize digest 7#usize
+  let i27 ← lift (UScalar.cast .U64 i26)
+  let i28 ← i27 <<< 56#i32
+  ok (i25 ||| i28)
+
+/-- [swap_or_not_shuffle::compute_shuffled_index_with::pivot_preimage]: loop body 0:
+    Source: 'consensus/swap_or_not_shuffle/src/compute_shuffled_index_with.rs', lines 24:4-27:5
+    Name pattern: [swap_or_not_shuffle::compute_shuffled_index_with::pivot_preimage] -/
+@[rust_loop_body, rust_fun
+  "swap_or_not_shuffle::compute_shuffled_index_with::pivot_preimage"]
+def swap_or_not_shuffle.compute_shuffled_index_with.pivot_preimage_loop.body
+  (seed : Array Std.U8 32#usize) (buf : Array Std.U8 33#usize) (k : Std.Usize)
+  :
+  Result (ControlFlow ((Array Std.U8 33#usize) × Std.Usize) (Array Std.U8
+    33#usize))
+  := do
+  if k < 32#usize
+  then
+    let i ← Array.index_usize seed k
+    let a ← Array.update buf k i
+    let k1 ← k + 1#usize
+    ok (cont (a, k1))
+  else ok (done buf)
+
+/-- [swap_or_not_shuffle::compute_shuffled_index_with::pivot_preimage]: loop 0:
+    Source: 'consensus/swap_or_not_shuffle/src/compute_shuffled_index_with.rs', lines 24:4-27:5
+    Name pattern: [swap_or_not_shuffle::compute_shuffled_index_with::pivot_preimage] -/
+@[rust_loop, rust_fun
+  "swap_or_not_shuffle::compute_shuffled_index_with::pivot_preimage"]
+def swap_or_not_shuffle.compute_shuffled_index_with.pivot_preimage_loop
+  (seed : Array Std.U8 32#usize) (buf : Array Std.U8 33#usize) (k : Std.Usize)
+  :
+  Result (Array Std.U8 33#usize)
+  := do
+  loop
+    (fun (buf1, k1) =>
+      swap_or_not_shuffle.compute_shuffled_index_with.pivot_preimage_loop.body
+      seed buf1 k1)
+    (buf, k)
+
+/-- [swap_or_not_shuffle::compute_shuffled_index_with::pivot_preimage]:
+    Source: 'consensus/swap_or_not_shuffle/src/compute_shuffled_index_with.rs', lines 21:0-21:57
+    Name pattern: [swap_or_not_shuffle::compute_shuffled_index_with::pivot_preimage] -/
+@[rust_fun "swap_or_not_shuffle::compute_shuffled_index_with::pivot_preimage"]
+def swap_or_not_shuffle.compute_shuffled_index_with.pivot_preimage
+  (seed : Array Std.U8 32#usize) (round : Std.U8) :
+  Result (Array Std.U8 33#usize)
+  := do
+  let buf := Array.repeat 33#usize 0#u8
+  let buf1 ←
+    swap_or_not_shuffle.compute_shuffled_index_with.pivot_preimage_loop seed
+      buf 0#usize
+  Array.update buf1 32#usize round
+
+/-- [swap_or_not_shuffle::compute_shuffled_index_with::source_preimage]: loop body 0:
+    Source: 'consensus/swap_or_not_shuffle/src/compute_shuffled_index_with.rs', lines 36:4-39:5
+    Name pattern: [swap_or_not_shuffle::compute_shuffled_index_with::source_preimage] -/
+@[rust_loop_body, rust_fun
+  "swap_or_not_shuffle::compute_shuffled_index_with::source_preimage"]
+def swap_or_not_shuffle.compute_shuffled_index_with.source_preimage_loop.body
+  (seed : Array Std.U8 32#usize) (buf : Array Std.U8 37#usize) (k : Std.Usize)
+  :
+  Result (ControlFlow ((Array Std.U8 37#usize) × Std.Usize) (Array Std.U8
+    37#usize))
+  := do
+  if k < 32#usize
+  then
+    let i ← Array.index_usize seed k
+    let a ← Array.update buf k i
+    let k1 ← k + 1#usize
+    ok (cont (a, k1))
+  else ok (done buf)
+
+/-- [swap_or_not_shuffle::compute_shuffled_index_with::source_preimage]: loop 0:
+    Source: 'consensus/swap_or_not_shuffle/src/compute_shuffled_index_with.rs', lines 36:4-39:5
+    Name pattern: [swap_or_not_shuffle::compute_shuffled_index_with::source_preimage] -/
+@[rust_loop, rust_fun
+  "swap_or_not_shuffle::compute_shuffled_index_with::source_preimage"]
+def swap_or_not_shuffle.compute_shuffled_index_with.source_preimage_loop
+  (seed : Array Std.U8 32#usize) (buf : Array Std.U8 37#usize) (k : Std.Usize)
+  :
+  Result (Array Std.U8 37#usize)
+  := do
+  loop
+    (fun (buf1, k1) =>
+      swap_or_not_shuffle.compute_shuffled_index_with.source_preimage_loop.body
+      seed buf1 k1)
+    (buf, k)
+
+/-- [swap_or_not_shuffle::compute_shuffled_index_with::source_preimage]:
+    Source: 'consensus/swap_or_not_shuffle/src/compute_shuffled_index_with.rs', lines 33:0-33:73
+    Name pattern: [swap_or_not_shuffle::compute_shuffled_index_with::source_preimage] -/
+@[rust_fun "swap_or_not_shuffle::compute_shuffled_index_with::source_preimage"]
+def swap_or_not_shuffle.compute_shuffled_index_with.source_preimage
+  (seed : Array Std.U8 32#usize) (round : Std.U8) (bucket : Std.Usize) :
+  Result (Array Std.U8 37#usize)
+  := do
+  let buf := Array.repeat 37#usize 0#u8
+  let buf1 ←
+    swap_or_not_shuffle.compute_shuffled_index_with.source_preimage_loop seed
+      buf 0#usize
+  let buf2 ← Array.update buf1 32#usize round
+  let i ← lift (UScalar.cast .U8 bucket)
+  let buf3 ← Array.update buf2 33#usize i
+  let i1 ← bucket >>> 8#i32
+  let i2 ← lift (UScalar.cast .U8 i1)
+  let buf4 ← Array.update buf3 34#usize i2
+  let i3 ← bucket >>> 16#i32
+  let i4 ← lift (UScalar.cast .U8 i3)
+  let buf5 ← Array.update buf4 35#usize i4
+  let i5 ← bucket >>> 24#i32
+  let i6 ← lift (UScalar.cast .U8 i5)
+  Array.update buf5 36#usize i6
+
+/-- Trait declaration: [swap_or_not_shuffle::shuffle_hash::ShuffleHash]
+    Source: 'consensus/swap_or_not_shuffle/src/shuffle_hash.rs', lines 4:0-4:21
+    Name pattern: [swap_or_not_shuffle::shuffle_hash::ShuffleHash]
+    Visibility: public -/
+@[rust_trait "swap_or_not_shuffle::shuffle_hash::ShuffleHash"]
+structure swap_or_not_shuffle.shuffle_hash.ShuffleHash (Self : Type) where
+  hash : Slice Std.U8 → Result (Array Std.U8 32#usize)
+
+/-- [swap_or_not_shuffle::compute_shuffled_index_with::shuffle_round]:
+    Source: 'consensus/swap_or_not_shuffle/src/compute_shuffled_index_with.rs', lines 49:0-54:10
+    Name pattern: [swap_or_not_shuffle::compute_shuffled_index_with::shuffle_round] -/
+@[rust_fun "swap_or_not_shuffle::compute_shuffled_index_with::shuffle_round"]
+def swap_or_not_shuffle.compute_shuffled_index_with.shuffle_round
+  {H : Type} (shuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H)
+  (seed : Array Std.U8 32#usize) (index : Std.Usize) (round : Std.U8)
+  (list_size : Std.Usize) :
+  Result Std.Usize
+  := do
+  let a ←
+    swap_or_not_shuffle.compute_shuffled_index_with.pivot_preimage seed round
+  let s ← lift (Array.to_slice a)
+  let a1 ← shuffle_hashShuffleHashInst.hash s
+  let i ← swap_or_not_shuffle.compute_shuffled_index_with.first_u64 a1
+  let i1 ← lift (UScalar.cast .U64 list_size)
+  let i2 ← i % i1
+  let pivot ← lift (UScalar.cast .Usize i2)
+  let i3 ← list_size - index
+  let i4 ← pivot + i3
+  let flip ← i4 % list_size
+  let position ← if index < flip
+                   then ok flip
+                   else ok index
+  let i5 ← position >>> 8#i32
+  let a2 ←
+    swap_or_not_shuffle.compute_shuffled_index_with.source_preimage seed round
+      i5
+  let s1 ← lift (Array.to_slice a2)
+  let source ← shuffle_hashShuffleHashInst.hash s1
+  let i6 ← position % 256#usize
+  let i7 ← i6 / 8#usize
+  let byte ← Array.index_usize source i7
+  let i8 ← position % 8#usize
+  let i9 ← byte >>> i8
+  let i10 ← i9 % 2#u8
+  if i10 = 1#u8
+  then ok flip
+  else ok index
+
+/-- [swap_or_not_shuffle::compute_shuffled_index_with::compute_shuffled_index_with]: loop body 0:
+    Source: 'consensus/swap_or_not_shuffle/src/compute_shuffled_index_with.rs', lines 82:4-85:5
+    Name pattern: [swap_or_not_shuffle::compute_shuffled_index_with::compute_shuffled_index_with]
+    Visibility: public -/
+@[rust_loop_body, rust_fun
+  "swap_or_not_shuffle::compute_shuffled_index_with::compute_shuffled_index_with"]
+def
+  swap_or_not_shuffle.compute_shuffled_index_with.compute_shuffled_index_with_loop.body
+  {H : Type} (shuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H) (list_size : Std.Usize)
+  (seed : Array Std.U8 32#usize) (shuffle_round_count : Std.U8)
+  (index : Std.Usize) (round : Std.U8) :
+  Result (ControlFlow (Std.Usize × Std.U8) Std.Usize)
+  := do
+  if round < shuffle_round_count
+  then
+    let index1 ←
+      swap_or_not_shuffle.compute_shuffled_index_with.shuffle_round
+        shuffle_hashShuffleHashInst seed index round list_size
+    let round1 ← round + 1#u8
+    ok (cont (index1, round1))
+  else ok (done index)
+
+/-- [swap_or_not_shuffle::compute_shuffled_index_with::compute_shuffled_index_with]: loop 0:
+    Source: 'consensus/swap_or_not_shuffle/src/compute_shuffled_index_with.rs', lines 82:4-85:5
+    Name pattern: [swap_or_not_shuffle::compute_shuffled_index_with::compute_shuffled_index_with]
+    Visibility: public -/
+@[rust_loop, rust_fun
+  "swap_or_not_shuffle::compute_shuffled_index_with::compute_shuffled_index_with"]
+def
+  swap_or_not_shuffle.compute_shuffled_index_with.compute_shuffled_index_with_loop
+  {H : Type} (shuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H) (list_size : Std.Usize)
+  (seed : Array Std.U8 32#usize) (shuffle_round_count : Std.U8)
+  (index : Std.Usize) (round : Std.U8) :
+  Result Std.Usize
+  := do
+  loop
+    (fun (index1, round1) =>
+      swap_or_not_shuffle.compute_shuffled_index_with.compute_shuffled_index_with_loop.body
+      shuffle_hashShuffleHashInst list_size seed shuffle_round_count index1
+      round1)
+    (index, round)
+
+/-- [swap_or_not_shuffle::compute_shuffled_index_with::compute_shuffled_index_with]:
+    Source: 'consensus/swap_or_not_shuffle/src/compute_shuffled_index_with.rs', lines 70:0-75:18
+    Name pattern: [swap_or_not_shuffle::compute_shuffled_index_with::compute_shuffled_index_with]
+    Visibility: public -/
+@[rust_fun
+  "swap_or_not_shuffle::compute_shuffled_index_with::compute_shuffled_index_with"]
+def swap_or_not_shuffle.compute_shuffled_index_with.compute_shuffled_index_with
+  {H : Type} (shuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H) (index : Std.Usize)
+  (list_size : Std.Usize) (seed : Array Std.U8 32#usize)
+  (shuffle_round_count : Std.U8) :
+  Result (Option Std.Usize)
+  := do
+  if list_size = 0#usize
+  then ok none
+  else
+    if index >= list_size
+    then ok none
+    else
+      let i ← core.num.Usize.MAX / 2#usize
+      if list_size > i
+      then ok none
+      else
+        let i1 ← 1#usize <<< 24#i32
+        if list_size > i1
+        then ok none
+        else
+          let index1 ←
+            swap_or_not_shuffle.compute_shuffled_index_with.compute_shuffled_index_with_loop
+              shuffle_hashShuffleHashInst list_size seed shuffle_round_count
+              index 0#u8
+          ok (some index1)
+
 /-- [types::builder::builder_pending_withdrawal::BuilderPendingWithdrawal]
     Source: 'consensus/types/src/builder/builder_pending_withdrawal.rs', lines 12:0-12:35
     Name pattern: [types::builder::builder_pending_withdrawal::BuilderPendingWithdrawal]
@@ -275,6 +559,741 @@ def types.core.consts.altair.TIMELY_HEAD_WEIGHT : Std.U64 := 14#u64
 @[global_simps, irreducible, rust_const
   "types::core::consts::altair::WEIGHT_DENOMINATOR"]
 def types.core.consts.altair.WEIGHT_DENOMINATOR : Std.U64 := 64#u64
+
+/-- [types::state::balance_weighted_selection::MAX_RANDOM_VALUE]
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 12:0-12:31
+    Name pattern: [types::state::balance_weighted_selection::MAX_RANDOM_VALUE]
+    Visibility: public -/
+@[global_simps, irreducible, rust_const
+  "types::state::balance_weighted_selection::MAX_RANDOM_VALUE"]
+def types.state.balance_weighted_selection.MAX_RANDOM_VALUE : Std.U64 :=
+  65535#u64
+
+/-- Trait declaration: [types::state::balance_weighted_selection::EffectiveBalances]
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 15:0-15:27
+    Name pattern: [types::state::balance_weighted_selection::EffectiveBalances]
+    Visibility: public -/
+@[rust_trait "types::state::balance_weighted_selection::EffectiveBalances"]
+structure types.state.balance_weighted_selection.EffectiveBalances (Self :
+  Type) where
+  effective_balance : Self → Std.Usize → Result (Option Std.U64)
+
+/-- [types::state::balance_weighted_selection::SelectionError]
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 22:0-22:23
+    Name pattern: [types::state::balance_weighted_selection::SelectionError]
+    Visibility: public -/
+@[discriminant isize, rust_type
+  "types::state::balance_weighted_selection::SelectionError"]
+inductive types.state.balance_weighted_selection.SelectionError where
+| EmptyIndices : types.state.balance_weighted_selection.SelectionError
+| UnableToShuffle : types.state.balance_weighted_selection.SelectionError
+| IndexOutOfBounds :
+  Std.Usize →
+  types.state.balance_weighted_selection.SelectionError
+| UnknownValidator :
+  Std.Usize →
+  types.state.balance_weighted_selection.SelectionError
+| Arith :
+  safe_arith.ArithError →
+  types.state.balance_weighted_selection.SelectionError
+
+/-- [types::state::balance_weighted_selection::{impl core::convert::From<safe_arith::ArithError> for types::state::balance_weighted_selection::SelectionError}::from]:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 31:4-31:34
+    Name pattern: [types::state::balance_weighted_selection::{core::convert::From<types::state::balance_weighted_selection::SelectionError, safe_arith::ArithError>}::from]
+    Visibility: public -/
+@[rust_fun
+  "types::state::balance_weighted_selection::{core::convert::From<types::state::balance_weighted_selection::SelectionError, safe_arith::ArithError>}::from"]
+def
+  types.state.balance_weighted_selection.SelectionError.Insts.CoreConvertFromArithError.from
+  (e : safe_arith.ArithError) :
+  Result types.state.balance_weighted_selection.SelectionError
+  := do
+  ok (types.state.balance_weighted_selection.SelectionError.Arith e)
+
+/-- Trait implementation: [types::state::balance_weighted_selection::{impl core::convert::From<safe_arith::ArithError> for types::state::balance_weighted_selection::SelectionError}]
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 30:0-30:40
+    Name pattern: [core::convert::From<types::state::balance_weighted_selection::SelectionError, safe_arith::ArithError>] -/
+@[reducible, rust_trait_impl
+  "core::convert::From<types::state::balance_weighted_selection::SelectionError, safe_arith::ArithError>"]
+def
+  types.state.balance_weighted_selection.SelectionError.Insts.CoreConvertFromArithError
+  : core.convert.From types.state.balance_weighted_selection.SelectionError
+  safe_arith.ArithError := {
+  «from» :=
+    types.state.balance_weighted_selection.SelectionError.Insts.CoreConvertFromArithError.from
+}
+
+/-- [types::state::balance_weighted_selection::le_bytes8]:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 38:0-38:31
+    Name pattern: [types::state::balance_weighted_selection::le_bytes8] -/
+@[rust_fun "types::state::balance_weighted_selection::le_bytes8"]
+def types.state.balance_weighted_selection.le_bytes8
+  (x : Std.U64) : Result (Array Std.U8 8#usize) := do
+  let i ← lift (UScalar.cast .U8 x)
+  let i1 ← x >>> 8#i32
+  let i2 ← lift (UScalar.cast .U8 i1)
+  let i3 ← x >>> 16#i32
+  let i4 ← lift (UScalar.cast .U8 i3)
+  let i5 ← x >>> 24#i32
+  let i6 ← lift (UScalar.cast .U8 i5)
+  let i7 ← x >>> 32#i32
+  let i8 ← lift (UScalar.cast .U8 i7)
+  let i9 ← x >>> 40#i32
+  let i10 ← lift (UScalar.cast .U8 i9)
+  let i11 ← x >>> 48#i32
+  let i12 ← lift (UScalar.cast .U8 i11)
+  let i13 ← x >>> 56#i32
+  let i14 ← lift (UScalar.cast .U8 i13)
+  ok (Array.make 8#usize [ i, i2, i4, i6, i8, i10, i12, i14 ])
+
+/-- [types::state::balance_weighted_selection::hash_with_u64]: loop body 0:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 57:4-60:5
+    Name pattern: [types::state::balance_weighted_selection::hash_with_u64]
+    Visibility: public -/
+@[rust_loop_body, rust_fun
+  "types::state::balance_weighted_selection::hash_with_u64"]
+def types.state.balance_weighted_selection.hash_with_u64_loop0.body
+  (seed : Array Std.U8 32#usize) (buf : Array Std.U8 40#usize) (k : Std.Usize)
+  :
+  Result (ControlFlow ((Array Std.U8 40#usize) × Std.Usize) ((Array Std.U8
+    40#usize) × Std.Usize))
+  := do
+  if k < 32#usize
+  then
+    let i ← Array.index_usize seed k
+    let a ← Array.update buf k i
+    let k1 ← k + 1#usize
+    ok (cont (a, k1))
+  else ok (done (buf, k))
+
+/-- [types::state::balance_weighted_selection::hash_with_u64]: loop 0:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 57:4-60:5
+    Name pattern: [types::state::balance_weighted_selection::hash_with_u64]
+    Visibility: public -/
+@[rust_loop, rust_fun
+  "types::state::balance_weighted_selection::hash_with_u64"]
+def types.state.balance_weighted_selection.hash_with_u64_loop0
+  (seed : Array Std.U8 32#usize) (buf : Array Std.U8 40#usize) (k : Std.Usize)
+  :
+  Result ((Array Std.U8 40#usize) × Std.Usize)
+  := do
+  loop
+    (fun (buf1, k1) =>
+      types.state.balance_weighted_selection.hash_with_u64_loop0.body seed buf1
+      k1)
+    (buf, k)
+
+/-- [types::state::balance_weighted_selection::hash_with_u64]: loop body 1:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 61:4-64:5
+    Name pattern: [types::state::balance_weighted_selection::hash_with_u64]
+    Visibility: public -/
+@[rust_loop_body, rust_fun
+  "types::state::balance_weighted_selection::hash_with_u64"]
+def types.state.balance_weighted_selection.hash_with_u64_loop1.body
+  (bytes : Array Std.U8 8#usize) (buf : Array Std.U8 40#usize) (k : Std.Usize)
+  :
+  Result (ControlFlow ((Array Std.U8 40#usize) × Std.Usize) (Array Std.U8
+    40#usize))
+  := do
+  if k < 40#usize
+  then
+    let i ← k - 32#usize
+    let i1 ← Array.index_usize bytes i
+    let a ← Array.update buf k i1
+    let k1 ← k + 1#usize
+    ok (cont (a, k1))
+  else ok (done buf)
+
+/-- [types::state::balance_weighted_selection::hash_with_u64]: loop 1:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 61:4-64:5
+    Name pattern: [types::state::balance_weighted_selection::hash_with_u64]
+    Visibility: public -/
+@[rust_loop, rust_fun
+  "types::state::balance_weighted_selection::hash_with_u64"]
+def types.state.balance_weighted_selection.hash_with_u64_loop1
+  (bytes : Array Std.U8 8#usize) (buf : Array Std.U8 40#usize) (k : Std.Usize)
+  :
+  Result (Array Std.U8 40#usize)
+  := do
+  loop
+    (fun (buf1, k1) =>
+      types.state.balance_weighted_selection.hash_with_u64_loop1.body bytes
+      buf1 k1)
+    (buf, k)
+
+/-- [types::state::balance_weighted_selection::hash_with_u64]:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 53:0-53:73
+    Name pattern: [types::state::balance_weighted_selection::hash_with_u64]
+    Visibility: public -/
+@[rust_fun "types::state::balance_weighted_selection::hash_with_u64"]
+def types.state.balance_weighted_selection.hash_with_u64
+  {H : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H)
+  (seed : Array Std.U8 32#usize) (x : Std.U64) :
+  Result (Array Std.U8 32#usize)
+  := do
+  let bytes ← types.state.balance_weighted_selection.le_bytes8 x
+  let buf := Array.repeat 40#usize 0#u8
+  let (buf1, k) ←
+    types.state.balance_weighted_selection.hash_with_u64_loop0 seed buf 0#usize
+  let buf2 ←
+    types.state.balance_weighted_selection.hash_with_u64_loop1 bytes buf1 k
+  let s ← lift (Array.to_slice buf2)
+  swap_or_not_shuffleshuffle_hashShuffleHashInst.hash s
+
+/-- [types::state::balance_weighted_selection::compute_seed]: loop body 0:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 74:4-77:5
+    Name pattern: [types::state::balance_weighted_selection::compute_seed]
+    Visibility: public -/
+@[rust_loop_body, rust_fun
+  "types::state::balance_weighted_selection::compute_seed"]
+def types.state.balance_weighted_selection.compute_seed_loop0.body
+  (domain_type : Array Std.U8 4#usize) (buf : Array Std.U8 44#usize)
+  (k : Std.Usize) :
+  Result (ControlFlow ((Array Std.U8 44#usize) × Std.Usize) ((Array Std.U8
+    44#usize) × Std.Usize))
+  := do
+  if k < 4#usize
+  then
+    let i ← Array.index_usize domain_type k
+    let a ← Array.update buf k i
+    let k1 ← k + 1#usize
+    ok (cont (a, k1))
+  else ok (done (buf, k))
+
+/-- [types::state::balance_weighted_selection::compute_seed]: loop 0:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 74:4-77:5
+    Name pattern: [types::state::balance_weighted_selection::compute_seed]
+    Visibility: public -/
+@[rust_loop, rust_fun "types::state::balance_weighted_selection::compute_seed"]
+def types.state.balance_weighted_selection.compute_seed_loop0
+  (domain_type : Array Std.U8 4#usize) (buf : Array Std.U8 44#usize)
+  (k : Std.Usize) :
+  Result ((Array Std.U8 44#usize) × Std.Usize)
+  := do
+  loop
+    (fun (buf1, k1) =>
+      types.state.balance_weighted_selection.compute_seed_loop0.body
+      domain_type buf1 k1)
+    (buf, k)
+
+/-- [types::state::balance_weighted_selection::compute_seed]: loop body 1:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 78:4-81:5
+    Name pattern: [types::state::balance_weighted_selection::compute_seed]
+    Visibility: public -/
+@[rust_loop_body, rust_fun
+  "types::state::balance_weighted_selection::compute_seed"]
+def types.state.balance_weighted_selection.compute_seed_loop1.body
+  (bytes : Array Std.U8 8#usize) (buf : Array Std.U8 44#usize) (k : Std.Usize)
+  :
+  Result (ControlFlow ((Array Std.U8 44#usize) × Std.Usize) ((Array Std.U8
+    44#usize) × Std.Usize))
+  := do
+  if k < 12#usize
+  then
+    let i ← k - 4#usize
+    let i1 ← Array.index_usize bytes i
+    let a ← Array.update buf k i1
+    let k1 ← k + 1#usize
+    ok (cont (a, k1))
+  else ok (done (buf, k))
+
+/-- [types::state::balance_weighted_selection::compute_seed]: loop 1:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 78:4-81:5
+    Name pattern: [types::state::balance_weighted_selection::compute_seed]
+    Visibility: public -/
+@[rust_loop, rust_fun "types::state::balance_weighted_selection::compute_seed"]
+def types.state.balance_weighted_selection.compute_seed_loop1
+  (bytes : Array Std.U8 8#usize) (buf : Array Std.U8 44#usize) (k : Std.Usize)
+  :
+  Result ((Array Std.U8 44#usize) × Std.Usize)
+  := do
+  loop
+    (fun (buf1, k1) =>
+      types.state.balance_weighted_selection.compute_seed_loop1.body bytes buf1
+      k1)
+    (buf, k)
+
+/-- [types::state::balance_weighted_selection::compute_seed]: loop body 2:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 82:4-85:5
+    Name pattern: [types::state::balance_weighted_selection::compute_seed]
+    Visibility: public -/
+@[rust_loop_body, rust_fun
+  "types::state::balance_weighted_selection::compute_seed"]
+def types.state.balance_weighted_selection.compute_seed_loop2.body
+  (mix : Array Std.U8 32#usize) (buf : Array Std.U8 44#usize) (k : Std.Usize) :
+  Result (ControlFlow ((Array Std.U8 44#usize) × Std.Usize) (Array Std.U8
+    44#usize))
+  := do
+  if k < 44#usize
+  then
+    let i ← k - 12#usize
+    let i1 ← Array.index_usize mix i
+    let a ← Array.update buf k i1
+    let k1 ← k + 1#usize
+    ok (cont (a, k1))
+  else ok (done buf)
+
+/-- [types::state::balance_weighted_selection::compute_seed]: loop 2:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 82:4-85:5
+    Name pattern: [types::state::balance_weighted_selection::compute_seed]
+    Visibility: public -/
+@[rust_loop, rust_fun "types::state::balance_weighted_selection::compute_seed"]
+def types.state.balance_weighted_selection.compute_seed_loop2
+  (mix : Array Std.U8 32#usize) (buf : Array Std.U8 44#usize) (k : Std.Usize) :
+  Result (Array Std.U8 44#usize)
+  := do
+  loop
+    (fun (buf1, k1) =>
+      types.state.balance_weighted_selection.compute_seed_loop2.body mix buf1
+      k1)
+    (buf, k)
+
+/-- [types::state::balance_weighted_selection::compute_seed]:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 70:0-70:98
+    Name pattern: [types::state::balance_weighted_selection::compute_seed]
+    Visibility: public -/
+@[rust_fun "types::state::balance_weighted_selection::compute_seed"]
+def types.state.balance_weighted_selection.compute_seed
+  {H : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H)
+  (domain_type : Array Std.U8 4#usize) (epoch : Std.U64)
+  (mix : Array Std.U8 32#usize) :
+  Result (Array Std.U8 32#usize)
+  := do
+  let bytes ← types.state.balance_weighted_selection.le_bytes8 epoch
+  let buf := Array.repeat 44#usize 0#u8
+  let (buf1, k) ←
+    types.state.balance_weighted_selection.compute_seed_loop0 domain_type buf
+      0#usize
+  let (buf2, k1) ←
+    types.state.balance_weighted_selection.compute_seed_loop1 bytes buf1 k
+  let buf3 ←
+    types.state.balance_weighted_selection.compute_seed_loop2 mix buf2 k1
+  let s ← lift (Array.to_slice buf3)
+  swap_or_not_shuffleshuffle_hashShuffleHashInst.hash s
+
+/-- [types::state::balance_weighted_selection::random_value]:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 92:0-92:69
+    Name pattern: [types::state::balance_weighted_selection::random_value]
+    Visibility: public -/
+@[rust_fun "types::state::balance_weighted_selection::random_value"]
+def types.state.balance_weighted_selection.random_value
+  {H : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H)
+  (seed : Array Std.U8 32#usize) (i : Std.Usize) :
+  Result Std.U64
+  := do
+  let i1 ← i / 16#usize
+  let i2 ← lift (UScalar.cast .U64 i1)
+  let random_bytes ←
+    types.state.balance_weighted_selection.hash_with_u64
+      swap_or_not_shuffleshuffle_hashShuffleHashInst seed i2
+  let i3 ← i % 16#usize
+  let offset ← i3 * 2#usize
+  let i4 ← Array.index_usize random_bytes offset
+  let i5 ← lift (UScalar.cast .U64 i4)
+  let i6 ← offset + 1#usize
+  let i7 ← Array.index_usize random_bytes i6
+  let i8 ← lift (UScalar.cast .U64 i7)
+  let i9 ← i8 <<< 8#i32
+  ok (i5 ||| i9)
+
+/-- [types::state::balance_weighted_selection::selection_pass]:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 100:0-108:42
+    Name pattern: [types::state::balance_weighted_selection::selection_pass] -/
+@[rust_fun "types::state::balance_weighted_selection::selection_pass"]
+def types.state.balance_weighted_selection.selection_pass
+  {H : Type} {B : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H) (EffectiveBalancesInst :
+  types.state.balance_weighted_selection.EffectiveBalances B) (balances : B)
+  (indices : Slice Std.Usize) (seed : Array Std.U8 32#usize)
+  (shuffle_indices : Bool) (shuffle_round_count : Std.U8)
+  (max_effective_balance : Std.U64) (i : Std.Usize) :
+  Result (core.result.Result (Option Std.Usize)
+    types.state.balance_weighted_selection.SelectionError)
+  := do
+  let total := Slice.len indices
+  let r ← Usize.Insts.Safe_arithSafeArithUsize.safe_rem i total
+  let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
+    if shuffle_indices
+    then
+      let o ←
+        swap_or_not_shuffle.compute_shuffled_index_with.compute_shuffled_index_with
+          swap_or_not_shuffleshuffle_hashShuffleHashInst val total seed
+          shuffle_round_count
+      let r1 ←
+        core.option.Option.ok_or o
+          types.state.balance_weighted_selection.SelectionError.UnableToShuffle
+      let cf1 ← core.result.Result.Insts.CoreOpsTry.branch r1
+      match cf1 with
+      | core.ops.control_flow.ControlFlow.Continue val1 =>
+        let o1 ←
+          core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice
+            Std.Usize) indices val1
+        let r2 ←
+          core.option.Option.ok_or o1
+            (types.state.balance_weighted_selection.SelectionError.IndexOutOfBounds
+            val1)
+        let cf2 ← core.result.Result.Insts.CoreOpsTry.branch r2
+        match cf2 with
+        | core.ops.control_flow.ControlFlow.Continue val2 =>
+          let o2 ← EffectiveBalancesInst.effective_balance balances val2
+          let r3 ←
+            core.option.Option.ok_or o2
+              (types.state.balance_weighted_selection.SelectionError.UnknownValidator
+              val2)
+          let cf3 ← core.result.Result.Insts.CoreOpsTry.branch r3
+          match cf3 with
+          | core.ops.control_flow.ControlFlow.Continue val3 =>
+            let r4 ←
+              U64.Insts.Safe_arithSafeArithU64.safe_mul val3
+                types.state.balance_weighted_selection.MAX_RANDOM_VALUE
+            let cf4 ← core.result.Result.Insts.CoreOpsTry.branch r4
+            match cf4 with
+            | core.ops.control_flow.ControlFlow.Continue val4 =>
+              let i1 ←
+                types.state.balance_weighted_selection.random_value
+                  swap_or_not_shuffleshuffle_hashShuffleHashInst seed i
+              let r5 ←
+                U64.Insts.Safe_arithSafeArithU64.safe_mul max_effective_balance
+                  i1
+              let cf5 ← core.result.Result.Insts.CoreOpsTry.branch r5
+              match cf5 with
+              | core.ops.control_flow.ControlFlow.Continue val5 =>
+                if val4 >= val5
+                then ok (core.result.Result.Ok (some val2))
+                else ok (core.result.Result.Ok none)
+              | core.ops.control_flow.ControlFlow.Break residual =>
+                core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+                  (Option Std.Usize)
+                  types.state.balance_weighted_selection.SelectionError.Insts.CoreConvertFromArithError
+                  residual
+            | core.ops.control_flow.ControlFlow.Break residual =>
+              core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+                (Option Std.Usize)
+                types.state.balance_weighted_selection.SelectionError.Insts.CoreConvertFromArithError
+                residual
+          | core.ops.control_flow.ControlFlow.Break residual =>
+            core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+              (Option Std.Usize) (core.convert.FromSame
+              types.state.balance_weighted_selection.SelectionError) residual
+        | core.ops.control_flow.ControlFlow.Break residual =>
+          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+            (Option Std.Usize) (core.convert.FromSame
+            types.state.balance_weighted_selection.SelectionError) residual
+      | core.ops.control_flow.ControlFlow.Break residual =>
+        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+          (Option Std.Usize) (core.convert.FromSame
+          types.state.balance_weighted_selection.SelectionError) residual
+    else
+      let o ←
+        core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice Std.Usize)
+          indices val
+      let r1 ←
+        core.option.Option.ok_or o
+          (types.state.balance_weighted_selection.SelectionError.IndexOutOfBounds
+          val)
+      let cf1 ← core.result.Result.Insts.CoreOpsTry.branch r1
+      match cf1 with
+      | core.ops.control_flow.ControlFlow.Continue val1 =>
+        let o1 ← EffectiveBalancesInst.effective_balance balances val1
+        let r2 ←
+          core.option.Option.ok_or o1
+            (types.state.balance_weighted_selection.SelectionError.UnknownValidator
+            val1)
+        let cf2 ← core.result.Result.Insts.CoreOpsTry.branch r2
+        match cf2 with
+        | core.ops.control_flow.ControlFlow.Continue val2 =>
+          let r3 ←
+            U64.Insts.Safe_arithSafeArithU64.safe_mul val2
+              types.state.balance_weighted_selection.MAX_RANDOM_VALUE
+          let cf3 ← core.result.Result.Insts.CoreOpsTry.branch r3
+          match cf3 with
+          | core.ops.control_flow.ControlFlow.Continue val3 =>
+            let i1 ←
+              types.state.balance_weighted_selection.random_value
+                swap_or_not_shuffleshuffle_hashShuffleHashInst seed i
+            let r4 ←
+              U64.Insts.Safe_arithSafeArithU64.safe_mul max_effective_balance
+                i1
+            let cf4 ← core.result.Result.Insts.CoreOpsTry.branch r4
+            match cf4 with
+            | core.ops.control_flow.ControlFlow.Continue val4 =>
+              if val3 >= val4
+              then ok (core.result.Result.Ok (some val1))
+              else ok (core.result.Result.Ok none)
+            | core.ops.control_flow.ControlFlow.Break residual =>
+              core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+                (Option Std.Usize)
+                types.state.balance_weighted_selection.SelectionError.Insts.CoreConvertFromArithError
+                residual
+          | core.ops.control_flow.ControlFlow.Break residual =>
+            core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+              (Option Std.Usize)
+              types.state.balance_weighted_selection.SelectionError.Insts.CoreConvertFromArithError
+              residual
+        | core.ops.control_flow.ControlFlow.Break residual =>
+          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+            (Option Std.Usize) (core.convert.FromSame
+            types.state.balance_weighted_selection.SelectionError) residual
+      | core.ops.control_flow.ControlFlow.Break residual =>
+        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+          (Option Std.Usize) (core.convert.FromSame
+          types.state.balance_weighted_selection.SelectionError) residual
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+      (Option Std.Usize)
+      types.state.balance_weighted_selection.SelectionError.Insts.CoreConvertFromArithError
+      residual
+
+/-- [types::state::balance_weighted_selection::compute_balance_weighted_selection]: loop body 0:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 149:4-178:1
+    Name pattern: [types::state::balance_weighted_selection::compute_balance_weighted_selection]
+    Visibility: public -/
+@[rust_loop_body, rust_fun
+  "types::state::balance_weighted_selection::compute_balance_weighted_selection"]
+def
+  types.state.balance_weighted_selection.compute_balance_weighted_selection_loop.body
+  {H : Type} {B : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H) (EffectiveBalancesInst :
+  types.state.balance_weighted_selection.EffectiveBalances B) (balances : B)
+  (indices : Slice Std.Usize) (seed : Array Std.U8 32#usize) (size : Std.Usize)
+  (shuffle_indices : Bool) (shuffle_round_count : Std.U8)
+  (max_effective_balance : Std.U64) (selected : alloc.vec.Vec Std.Usize)
+  (i : Std.Usize) :
+  Result (ControlFlow ((alloc.vec.Vec Std.Usize) × Std.Usize)
+    (core.result.Result (alloc.vec.Vec Std.Usize)
+    types.state.balance_weighted_selection.SelectionError))
+  := do
+  let i1 := alloc.vec.Vec.len selected
+  if i1 < size
+  then
+    let r ←
+      types.state.balance_weighted_selection.selection_pass
+        swap_or_not_shuffleshuffle_hashShuffleHashInst EffectiveBalancesInst
+        balances indices seed shuffle_indices shuffle_round_count
+        max_effective_balance i
+    match r with
+    | core.result.Result.Ok o =>
+      let selected1 ←
+        match o with
+        | none => ok selected
+        | some candidate => alloc.vec.Vec.push selected candidate
+      let o1 ← lift (Usize.checked_add i 1#usize)
+      match o1 with
+      | none =>
+        ok (done (core.result.Result.Err
+          (types.state.balance_weighted_selection.SelectionError.Arith
+          safe_arith.ArithError.Overflow)))
+      | some next => ok (cont (selected1, next))
+    | core.result.Result.Err e => ok (done (core.result.Result.Err e))
+  else ok (done (core.result.Result.Ok selected))
+
+/-- [types::state::balance_weighted_selection::compute_balance_weighted_selection]: loop 0:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 149:4-178:1
+    Name pattern: [types::state::balance_weighted_selection::compute_balance_weighted_selection]
+    Visibility: public -/
+@[rust_loop, rust_fun
+  "types::state::balance_weighted_selection::compute_balance_weighted_selection"]
+def
+  types.state.balance_weighted_selection.compute_balance_weighted_selection_loop
+  {H : Type} {B : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H) (EffectiveBalancesInst :
+  types.state.balance_weighted_selection.EffectiveBalances B) (balances : B)
+  (indices : Slice Std.Usize) (seed : Array Std.U8 32#usize) (size : Std.Usize)
+  (shuffle_indices : Bool) (shuffle_round_count : Std.U8)
+  (max_effective_balance : Std.U64) (selected : alloc.vec.Vec Std.Usize)
+  (i : Std.Usize) :
+  Result (core.result.Result (alloc.vec.Vec Std.Usize)
+    types.state.balance_weighted_selection.SelectionError)
+  := do
+  loop
+    (fun (selected1, i1) =>
+      types.state.balance_weighted_selection.compute_balance_weighted_selection_loop.body
+      swap_or_not_shuffleshuffle_hashShuffleHashInst EffectiveBalancesInst
+      balances indices seed size shuffle_indices shuffle_round_count
+      max_effective_balance selected1 i1)
+    (selected, i)
+
+/-- [types::state::balance_weighted_selection::compute_balance_weighted_selection]:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 134:0-142:39
+    Name pattern: [types::state::balance_weighted_selection::compute_balance_weighted_selection]
+    Visibility: public -/
+@[rust_fun
+  "types::state::balance_weighted_selection::compute_balance_weighted_selection"]
+def types.state.balance_weighted_selection.compute_balance_weighted_selection
+  {H : Type} {B : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H) (EffectiveBalancesInst :
+  types.state.balance_weighted_selection.EffectiveBalances B) (balances : B)
+  (indices : Slice Std.Usize) (seed : Array Std.U8 32#usize) (size : Std.Usize)
+  (shuffle_indices : Bool) (shuffle_round_count : Std.U8)
+  (max_effective_balance : Std.U64) :
+  Result (core.result.Result (alloc.vec.Vec Std.Usize)
+    types.state.balance_weighted_selection.SelectionError)
+  := do
+  let b ← core.slice.Slice.is_empty indices
+  if b
+  then
+    ok (core.result.Result.Err
+      types.state.balance_weighted_selection.SelectionError.EmptyIndices)
+  else
+    types.state.balance_weighted_selection.compute_balance_weighted_selection_loop
+      swap_or_not_shuffleshuffle_hashShuffleHashInst EffectiveBalancesInst
+      balances indices seed size shuffle_indices shuffle_round_count
+      max_effective_balance (alloc.vec.Vec.new Std.Usize) 0#usize
+
+/-- [types::state::balance_weighted_selection::proposer_at]:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 182:0-190:34
+    Name pattern: [types::state::balance_weighted_selection::proposer_at] -/
+@[rust_fun "types::state::balance_weighted_selection::proposer_at"]
+def types.state.balance_weighted_selection.proposer_at
+  {H : Type} {B : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H) (EffectiveBalancesInst :
+  types.state.balance_weighted_selection.EffectiveBalances B) (balances : B)
+  (indices : Slice Std.Usize) (seed : Array Std.U8 32#usize)
+  (start_slot : Std.U64) (i : Std.U64) (shuffle_round_count : Std.U8)
+  (max_effective_balance : Std.U64) :
+  Result (core.result.Result Std.Usize
+    types.state.balance_weighted_selection.SelectionError)
+  := do
+  let r ← U64.Insts.Safe_arithSafeArithU64.safe_add start_slot i
+  let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
+    let slot_seed ←
+      types.state.balance_weighted_selection.hash_with_u64
+        swap_or_not_shuffleshuffle_hashShuffleHashInst seed val
+    let r1 ←
+      types.state.balance_weighted_selection.compute_balance_weighted_selection
+        swap_or_not_shuffleshuffle_hashShuffleHashInst EffectiveBalancesInst
+        balances indices slot_seed 1#usize true shuffle_round_count
+        max_effective_balance
+    let cf1 ← core.result.Result.Insts.CoreOpsTry.branch r1
+    match cf1 with
+    | core.ops.control_flow.ControlFlow.Continue val1 =>
+      let s := alloc.vec.Vec.deref val1
+      let o ←
+        core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice Std.Usize)
+          s 0#usize
+      match o with
+      | none =>
+        ok (core.result.Result.Err
+          types.state.balance_weighted_selection.SelectionError.EmptyIndices)
+      | some proposer => ok (core.result.Result.Ok proposer)
+    | core.ops.control_flow.ControlFlow.Break residual =>
+      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+        Std.Usize (core.convert.FromSame
+        types.state.balance_weighted_selection.SelectionError) residual
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+      Std.Usize
+      types.state.balance_weighted_selection.SelectionError.Insts.CoreConvertFromArithError
+      residual
+
+/-- [types::state::balance_weighted_selection::compute_proposer_indices]: loop body 0:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 223:4-245:1
+    Name pattern: [types::state::balance_weighted_selection::compute_proposer_indices]
+    Visibility: public -/
+@[rust_loop_body, rust_fun
+  "types::state::balance_weighted_selection::compute_proposer_indices"]
+def types.state.balance_weighted_selection.compute_proposer_indices_loop.body
+  {H : Type} {B : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H) (EffectiveBalancesInst :
+  types.state.balance_weighted_selection.EffectiveBalances B) (balances : B)
+  (indices : Slice Std.Usize) (seed : Array Std.U8 32#usize)
+  (start_slot : Std.U64) (slots_per_epoch : Std.U64)
+  (shuffle_round_count : Std.U8) (max_effective_balance : Std.U64)
+  (proposers : alloc.vec.Vec Std.Usize) (i : Std.U64) :
+  Result (ControlFlow ((alloc.vec.Vec Std.Usize) × Std.U64)
+    (core.result.Result (alloc.vec.Vec Std.Usize)
+    types.state.balance_weighted_selection.SelectionError))
+  := do
+  if i < slots_per_epoch
+  then
+    let r ←
+      types.state.balance_weighted_selection.proposer_at
+        swap_or_not_shuffleshuffle_hashShuffleHashInst EffectiveBalancesInst
+        balances indices seed start_slot i shuffle_round_count
+        max_effective_balance
+    match r with
+    | core.result.Result.Ok proposer =>
+      let proposers1 ← alloc.vec.Vec.push proposers proposer
+      let i1 ← lift (core.num.U64.saturating_add i 1#u64)
+      ok (cont (proposers1, i1))
+    | core.result.Result.Err e => ok (done (core.result.Result.Err e))
+  else ok (done (core.result.Result.Ok proposers))
+
+/-- [types::state::balance_weighted_selection::compute_proposer_indices]: loop 0:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 223:4-245:1
+    Name pattern: [types::state::balance_weighted_selection::compute_proposer_indices]
+    Visibility: public -/
+@[rust_loop, rust_fun
+  "types::state::balance_weighted_selection::compute_proposer_indices"]
+def types.state.balance_weighted_selection.compute_proposer_indices_loop
+  {H : Type} {B : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H) (EffectiveBalancesInst :
+  types.state.balance_weighted_selection.EffectiveBalances B) (balances : B)
+  (indices : Slice Std.Usize) (seed : Array Std.U8 32#usize)
+  (start_slot : Std.U64) (slots_per_epoch : Std.U64)
+  (shuffle_round_count : Std.U8) (max_effective_balance : Std.U64)
+  (proposers : alloc.vec.Vec Std.Usize) (i : Std.U64) :
+  Result (core.result.Result (alloc.vec.Vec Std.Usize)
+    types.state.balance_weighted_selection.SelectionError)
+  := do
+  loop
+    (fun (proposers1, i1) =>
+      types.state.balance_weighted_selection.compute_proposer_indices_loop.body
+      swap_or_not_shuffleshuffle_hashShuffleHashInst EffectiveBalancesInst
+      balances indices seed start_slot slots_per_epoch shuffle_round_count
+      max_effective_balance proposers1 i1)
+    (proposers, i)
+
+/-- [types::state::balance_weighted_selection::compute_proposer_indices]:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 211:0-219:39
+    Name pattern: [types::state::balance_weighted_selection::compute_proposer_indices]
+    Visibility: public -/
+@[reducible, rust_fun
+  "types::state::balance_weighted_selection::compute_proposer_indices"]
+def types.state.balance_weighted_selection.compute_proposer_indices
+  {H : Type} {B : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H) (EffectiveBalancesInst :
+  types.state.balance_weighted_selection.EffectiveBalances B) (balances : B)
+  (indices : Slice Std.Usize) (seed : Array Std.U8 32#usize)
+  (start_slot : Std.U64) (slots_per_epoch : Std.U64)
+  (shuffle_round_count : Std.U8) (max_effective_balance : Std.U64) :
+  Result (core.result.Result (alloc.vec.Vec Std.Usize)
+    types.state.balance_weighted_selection.SelectionError)
+  := do
+  types.state.balance_weighted_selection.compute_proposer_indices_loop
+    swap_or_not_shuffleshuffle_hashShuffleHashInst EffectiveBalancesInst
+    balances indices seed start_slot slots_per_epoch shuffle_round_count
+    max_effective_balance (alloc.vec.Vec.new Std.Usize) 0#u64
+
+/-- [types::state::balance_weighted_selection::compute_ptc]:
+    Source: 'consensus/types/src/state/balance_weighted_selection.rs', lines 251:0-259:39
+    Name pattern: [types::state::balance_weighted_selection::compute_ptc]
+    Visibility: public -/
+@[rust_fun "types::state::balance_weighted_selection::compute_ptc"]
+def types.state.balance_weighted_selection.compute_ptc
+  {H : Type} {B : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H) (EffectiveBalancesInst :
+  types.state.balance_weighted_selection.EffectiveBalances B) (balances : B)
+  (committee_indices : Slice Std.Usize) (attester_seed : Array Std.U8 32#usize)
+  (slot : Std.U64) (ptc_size : Std.Usize) (shuffle_round_count : Std.U8)
+  (max_effective_balance : Std.U64) :
+  Result (core.result.Result (alloc.vec.Vec Std.Usize)
+    types.state.balance_weighted_selection.SelectionError)
+  := do
+  let seed ←
+    types.state.balance_weighted_selection.hash_with_u64
+      swap_or_not_shuffleshuffle_hashShuffleHashInst attester_seed slot
+  types.state.balance_weighted_selection.compute_balance_weighted_selection
+    swap_or_not_shuffleshuffle_hashShuffleHashInst EffectiveBalancesInst
+    balances committee_indices seed ptc_size false shuffle_round_count
+    max_effective_balance
 
 /-- [state_processing::per_epoch_processing::builder_pending_payments::get_builder_payment_quorum_threshold]:
     Source: 'consensus/state_processing/src/per_epoch_processing/builder_pending_payments.rs', lines 9:0-18:1
@@ -598,6 +1617,322 @@ def per_epoch_processing.effective_balance.new_effective_balance
   | core.ops.control_flow.ControlFlow.Break residual =>
     core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
       Std.U64 (core.convert.FromSame safe_arith.ArithError) residual
+
+/-- [state_processing::per_epoch_processing::epoch_committees::SelectionConstants]
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 15:0-20:1
+    Visibility: public -/
+structure per_epoch_processing.epoch_committees.SelectionConstants where
+  shuffle_round_count : Std.U8
+  max_effective_balance : Std.U64
+  slots_per_epoch : Std.U64
+
+/-- [state_processing::per_epoch_processing::epoch_committees::{impl core::clone::Clone for state_processing::per_epoch_processing::epoch_committees::SelectionConstants}::clone]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 14:9-14:14
+    Visibility: public -/
+def
+  per_epoch_processing.epoch_committees.SelectionConstants.Insts.CoreCloneClone.clone
+  (self : per_epoch_processing.epoch_committees.SelectionConstants) :
+  Result per_epoch_processing.epoch_committees.SelectionConstants
+  := do
+  ok self
+
+/-- Trait implementation: [state_processing::per_epoch_processing::epoch_committees::{impl core::clone::Clone for state_processing::per_epoch_processing::epoch_committees::SelectionConstants}]
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 14:9-14:14 -/
+@[reducible]
+def
+  per_epoch_processing.epoch_committees.SelectionConstants.Insts.CoreCloneClone
+  : core.clone.Clone per_epoch_processing.epoch_committees.SelectionConstants
+  := {
+  clone :=
+    per_epoch_processing.epoch_committees.SelectionConstants.Insts.CoreCloneClone.clone
+}
+
+/-- Trait implementation: [state_processing::per_epoch_processing::epoch_committees::{impl core::marker::Copy for state_processing::per_epoch_processing::epoch_committees::SelectionConstants}]
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 14:16-14:20 -/
+@[reducible]
+def
+  per_epoch_processing.epoch_committees.SelectionConstants.Insts.CoreMarkerCopy
+  : core.marker.Copy per_epoch_processing.epoch_committees.SelectionConstants
+  := {
+  cloneInst :=
+    per_epoch_processing.epoch_committees.SelectionConstants.Insts.CoreCloneClone
+}
+
+/-- [state_processing::per_epoch_processing::epoch_committees::shift_lookahead]: loop body 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 31:4-36:5
+    Visibility: public -/
+@[rust_loop_body]
+def per_epoch_processing.epoch_committees.shift_lookahead_loop0.body
+  (lookahead : Slice Std.U64) (shifted : alloc.vec.Vec Std.U64) (k : Std.Usize)
+  :
+  Result (ControlFlow ((alloc.vec.Vec Std.U64) × Std.Usize) (alloc.vec.Vec
+    Std.U64))
+  := do
+  let i := Slice.len lookahead
+  if k < i
+  then
+    let o ←
+      core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice Std.U64)
+        lookahead k
+    let shifted1 ←
+      match o with
+      | none => ok shifted
+      | some proposer => alloc.vec.Vec.push shifted proposer
+    let k1 ← lift (core.num.Usize.saturating_add k 1#usize)
+    ok (cont (shifted1, k1))
+  else ok (done shifted)
+
+/-- [state_processing::per_epoch_processing::epoch_committees::shift_lookahead]: loop 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 31:4-36:5
+    Visibility: public -/
+@[rust_loop]
+def per_epoch_processing.epoch_committees.shift_lookahead_loop0
+  (lookahead : Slice Std.U64) (shifted : alloc.vec.Vec Std.U64) (k : Std.Usize)
+  :
+  Result (alloc.vec.Vec Std.U64)
+  := do
+  loop
+    (fun (shifted1, k1) =>
+      per_epoch_processing.epoch_committees.shift_lookahead_loop0.body
+      lookahead shifted1 k1)
+    (shifted, k)
+
+/-- [state_processing::per_epoch_processing::epoch_committees::shift_lookahead]: loop body 1:
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 38:4-43:5
+    Visibility: public -/
+@[rust_loop_body]
+def per_epoch_processing.epoch_committees.shift_lookahead_loop1.body
+  (proposers : Slice Std.Usize) (shifted : alloc.vec.Vec Std.U64)
+  (j : Std.Usize) :
+  Result (ControlFlow ((alloc.vec.Vec Std.U64) × Std.Usize) (alloc.vec.Vec
+    Std.U64))
+  := do
+  let i := Slice.len proposers
+  if j < i
+  then
+    let o ←
+      core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice Std.Usize)
+        proposers j
+    let shifted1 ←
+      match o with
+      | none => ok shifted
+      | some proposer =>
+        do
+        let i1 ← lift (UScalar.cast .U64 proposer)
+        alloc.vec.Vec.push shifted i1
+    let j1 ← lift (core.num.Usize.saturating_add j 1#usize)
+    ok (cont (shifted1, j1))
+  else ok (done shifted)
+
+/-- [state_processing::per_epoch_processing::epoch_committees::shift_lookahead]: loop 1:
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 38:4-43:5
+    Visibility: public -/
+@[rust_loop]
+def per_epoch_processing.epoch_committees.shift_lookahead_loop1
+  (proposers : Slice Std.Usize) (shifted : alloc.vec.Vec Std.U64)
+  (j : Std.Usize) :
+  Result (alloc.vec.Vec Std.U64)
+  := do
+  loop
+    (fun (shifted1, j1) =>
+      per_epoch_processing.epoch_committees.shift_lookahead_loop1.body
+      proposers shifted1 j1)
+    (shifted, j)
+
+/-- [state_processing::per_epoch_processing::epoch_committees::shift_lookahead]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 24:0-49:1
+    Visibility: public -/
+def per_epoch_processing.epoch_committees.shift_lookahead
+  (lookahead : Slice Std.U64) (slots_per_epoch : Std.Usize)
+  (proposers : Slice Std.Usize) :
+  Result (Option (alloc.vec.Vec Std.U64))
+  := do
+  let shifted ←
+    per_epoch_processing.epoch_committees.shift_lookahead_loop0 lookahead
+      (alloc.vec.Vec.new Std.U64) slots_per_epoch
+  let shifted1 ←
+    per_epoch_processing.epoch_committees.shift_lookahead_loop1 proposers
+      shifted 0#usize
+  let i := alloc.vec.Vec.len shifted1
+  let i1 := Slice.len lookahead
+  if i = i1
+  then ok (some shifted1)
+  else ok none
+
+/-- [state_processing::per_epoch_processing::epoch_committees::next_proposer_lookahead]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 56:0-78:1
+    Visibility: public -/
+def per_epoch_processing.epoch_committees.next_proposer_lookahead
+  {H : Type} {B : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H)
+  (typesstatebalance_weighted_selectionEffectiveBalancesInst :
+  types.state.balance_weighted_selection.EffectiveBalances B) (balances : B)
+  (lookahead : Slice Std.U64) (indices : Slice Std.Usize)
+  (domain_beacon_proposer : Array Std.U8 4#usize) (epoch : Std.U64)
+  (mix : Array Std.U8 32#usize) (start_slot : Std.U64)
+  (constants : per_epoch_processing.epoch_committees.SelectionConstants) :
+  Result (core.result.Result (alloc.vec.Vec Std.U64)
+    types.state.balance_weighted_selection.SelectionError)
+  := do
+  let seed ←
+    types.state.balance_weighted_selection.compute_seed
+      swap_or_not_shuffleshuffle_hashShuffleHashInst domain_beacon_proposer
+      epoch mix
+  let r ←
+    types.state.balance_weighted_selection.compute_proposer_indices
+      swap_or_not_shuffleshuffle_hashShuffleHashInst
+      typesstatebalance_weighted_selectionEffectiveBalancesInst balances
+      indices seed start_slot constants.slots_per_epoch
+      constants.shuffle_round_count constants.max_effective_balance
+  let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
+    let i ← lift (UScalar.cast .Usize constants.slots_per_epoch)
+    let s := alloc.vec.Vec.deref val
+    let o ←
+      per_epoch_processing.epoch_committees.shift_lookahead lookahead i s
+    let i1 := Slice.len lookahead
+    core.option.Option.ok_or o
+      (types.state.balance_weighted_selection.SelectionError.IndexOutOfBounds
+      i1)
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+      (alloc.vec.Vec Std.U64) (core.convert.FromSame
+      types.state.balance_weighted_selection.SelectionError) residual
+
+/-- [state_processing::per_epoch_processing::epoch_committees::ptc_for_epoch]: loop body 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 99:4-122:5
+    Visibility: public -/
+@[rust_loop_body]
+def per_epoch_processing.epoch_committees.ptc_for_epoch_loop.body
+  {H : Type} {B : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H)
+  (typesstatebalance_weighted_selectionEffectiveBalancesInst :
+  types.state.balance_weighted_selection.EffectiveBalances B) (balances : B)
+  (committees : Slice (alloc.vec.Vec Std.Usize)) (start_slot : Std.U64)
+  (ptc_size : Std.Usize) (attester_seed : Array Std.U8 32#usize)
+  (constants : per_epoch_processing.epoch_committees.SelectionConstants)
+  (ptcs : alloc.vec.Vec (alloc.vec.Vec Std.Usize)) (i : Std.Usize) :
+  Result (ControlFlow (per_epoch_processing.epoch_committees.SelectionConstants
+    × (alloc.vec.Vec (alloc.vec.Vec Std.Usize)) × Std.Usize) ((alloc.vec.Vec
+    (alloc.vec.Vec Std.Usize)) × (Option
+    types.state.balance_weighted_selection.SelectionError)))
+  := do
+  let i1 := Slice.len committees
+  if i < i1
+  then
+    let o ←
+      core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice
+        (alloc.vec.Vec Std.Usize)) committees i
+    match o with
+    | none =>
+      let i2 ← lift (core.num.Usize.saturating_add i 1#usize)
+      ok (cont (constants, ptcs, i2))
+    | some committee =>
+      let i2 ← lift (UScalar.cast .U64 i)
+      let o1 ← lift (U64.checked_add start_slot i2)
+      let (constants1, ptc) ←
+        match o1 with
+        | none =>
+          ok (constants, core.result.Result.Err
+            (types.state.balance_weighted_selection.SelectionError.Arith
+            safe_arith.ArithError.Overflow))
+        | some slot =>
+          do
+          let s := alloc.vec.Vec.deref committee
+          let ptc1 ←
+            types.state.balance_weighted_selection.compute_ptc
+              swap_or_not_shuffleshuffle_hashShuffleHashInst
+              typesstatebalance_weighted_selectionEffectiveBalancesInst
+              balances s attester_seed slot ptc_size
+              constants.shuffle_round_count constants.max_effective_balance
+          ok (constants, ptc1)
+      match ptc with
+      | core.result.Result.Ok ptc1 =>
+        let ptcs1 ← alloc.vec.Vec.push ptcs ptc1
+        let i3 ← lift (core.num.Usize.saturating_add i 1#usize)
+        ok (cont (constants1, ptcs1, i3))
+      | core.result.Result.Err e => ok (done (ptcs, some e))
+  else ok (done (ptcs, none))
+
+/-- [state_processing::per_epoch_processing::epoch_committees::ptc_for_epoch]: loop 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 99:4-122:5
+    Visibility: public -/
+@[rust_loop]
+def per_epoch_processing.epoch_committees.ptc_for_epoch_loop
+  {H : Type} {B : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H)
+  (typesstatebalance_weighted_selectionEffectiveBalancesInst :
+  types.state.balance_weighted_selection.EffectiveBalances B) (balances : B)
+  (committees : Slice (alloc.vec.Vec Std.Usize)) (start_slot : Std.U64)
+  (ptc_size : Std.Usize)
+  (constants : per_epoch_processing.epoch_committees.SelectionConstants)
+  (attester_seed : Array Std.U8 32#usize)
+  (ptcs : alloc.vec.Vec (alloc.vec.Vec Std.Usize)) (i : Std.Usize) :
+  Result ((alloc.vec.Vec (alloc.vec.Vec Std.Usize)) × (Option
+    types.state.balance_weighted_selection.SelectionError))
+  := do
+  loop
+    (fun (constants1, ptcs1, i1) =>
+      per_epoch_processing.epoch_committees.ptc_for_epoch_loop.body
+      swap_or_not_shuffleshuffle_hashShuffleHashInst
+      typesstatebalance_weighted_selectionEffectiveBalancesInst balances
+      committees start_slot ptc_size attester_seed constants1 ptcs1 i1)
+    (constants, ptcs, i)
+
+/-- [state_processing::per_epoch_processing::epoch_committees::ptc_for_epoch]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 85:0-127:1
+    Visibility: public -/
+def per_epoch_processing.epoch_committees.ptc_for_epoch
+  {H : Type} {B : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H)
+  (typesstatebalance_weighted_selectionEffectiveBalancesInst :
+  types.state.balance_weighted_selection.EffectiveBalances B) (balances : B)
+  (committees : Slice (alloc.vec.Vec Std.Usize))
+  (domain_ptc_attester : Array Std.U8 4#usize) (epoch : Std.U64)
+  (mix : Array Std.U8 32#usize) (start_slot : Std.U64) (ptc_size : Std.Usize)
+  (constants : per_epoch_processing.epoch_committees.SelectionConstants) :
+  Result (core.result.Result (alloc.vec.Vec (alloc.vec.Vec Std.Usize))
+    types.state.balance_weighted_selection.SelectionError)
+  := do
+  let attester_seed ←
+    types.state.balance_weighted_selection.compute_seed
+      swap_or_not_shuffleshuffle_hashShuffleHashInst domain_ptc_attester epoch
+      mix
+  let (ptcs, error) ←
+    per_epoch_processing.epoch_committees.ptc_for_epoch_loop
+      swap_or_not_shuffleshuffle_hashShuffleHashInst
+      typesstatebalance_weighted_selectionEffectiveBalancesInst balances
+      committees start_slot ptc_size constants attester_seed (alloc.vec.Vec.new
+      (alloc.vec.Vec Std.Usize)) 0#usize
+  match error with
+  | none => ok (core.result.Result.Ok ptcs)
+  | some e => ok (core.result.Result.Err e)
+
+/-- [state_processing::per_epoch_processing::epoch_committees::next_sync_committee_indices]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 134:0-153:1
+    Visibility: public -/
+def per_epoch_processing.epoch_committees.next_sync_committee_indices
+  {H : Type} {B : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H)
+  (typesstatebalance_weighted_selectionEffectiveBalancesInst :
+  types.state.balance_weighted_selection.EffectiveBalances B) (balances : B)
+  (indices : Slice Std.Usize) (domain_sync_committee : Array Std.U8 4#usize)
+  (epoch : Std.U64) (mix : Array Std.U8 32#usize)
+  (sync_committee_size : Std.Usize)
+  (constants : per_epoch_processing.epoch_committees.SelectionConstants) :
+  Result (core.result.Result (alloc.vec.Vec Std.Usize)
+    types.state.balance_weighted_selection.SelectionError)
+  := do
+  let seed ←
+    types.state.balance_weighted_selection.compute_seed
+      swap_or_not_shuffleshuffle_hashShuffleHashInst domain_sync_committee
+      epoch mix
+  types.state.balance_weighted_selection.compute_balance_weighted_selection
+    swap_or_not_shuffleshuffle_hashShuffleHashInst
+    typesstatebalance_weighted_selectionEffectiveBalancesInst balances indices
+    seed sync_committee_size true constants.shuffle_round_count
+    constants.max_effective_balance
 
 /-- [state_processing::per_epoch_processing::inactivity_updates::new_inactivity_score]:
     Source: 'consensus/state_processing/src/per_epoch_processing/inactivity_updates.rs', lines 9:0-37:1

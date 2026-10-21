@@ -15,9 +15,13 @@
 //! larger list (~250x larger is a good guide, but solid figures yet to be calculated).
 
 mod compute_shuffled_index;
+mod compute_shuffled_index_with;
+mod shuffle_hash;
 mod shuffle_list;
 
 pub use compute_shuffled_index::compute_shuffled_index;
+pub use compute_shuffled_index_with::compute_shuffled_index_with;
+pub use shuffle_hash::{Sha256Hash, ShuffleHash};
 pub use shuffle_list::shuffle_list;
 
 type Hash256 = fixed_bytes::Hash256;

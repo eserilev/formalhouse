@@ -6,7 +6,7 @@ use context_deserialize::ContextDeserialize;
 use educe::Educe;
 use ethereum_hashing::hash;
 use fixed_bytes::FixedBytesExtended;
-use int_to_bytes::{int_to_bytes4, int_to_bytes8};
+use int_to_bytes::int_to_bytes8;
 use metastruct::{NumFields, metastruct};
 use milhouse::{AnyList, AnyListMut, AnyListRef, List, ProgressiveList, Vector};
 use safe_arith::{ArithError, SafeArith, SafeArithIter};
@@ -16,7 +16,7 @@ use ssz_derive::{Decode, Encode};
 use ssz_types::{BitVector, FixedVector};
 use std::collections::BTreeMap;
 use superstruct::superstruct;
-use swap_or_not_shuffle::compute_shuffled_index;
+use swap_or_not_shuffle::{Sha256Hash, compute_shuffled_index};
 use tracing::instrument;
 use tree_hash::TreeHash;
 use tree_hash_derive::TreeHash;
@@ -46,6 +46,7 @@ use crate::{
     state::{
         BlockRootsIter, CommitteeCache, EpochCache, EpochCacheError, ExitCache, HistoricalBatch,
         HistoricalSummary, ProgressiveBalancesCache, PubkeyCache, SlashingsCache,
+        balance_weighted_selection::{self, EffectiveBalances, SelectionError},
         get_active_validator_indices,
     },
     sync_committee::{SyncCommittee, SyncDuty},
@@ -1381,7 +1382,7 @@ impl<E: EthSpec> BeaconState<E> {
     fn compute_proposer_indices(
         &self,
         epoch: Epoch,
-        seed: &[u8],
+        seed: &Hash256,
         indices: &[usize],
         spec: &ChainSpec,
     ) -> Result<Vec<usize>, BeaconStateError> {
@@ -1438,22 +1439,27 @@ impl<E: EthSpec> BeaconState<E> {
             }
         }
 
-        let gloas_enabled = self.fork_name_unchecked().gloas_enabled();
+        if self.fork_name_unchecked().gloas_enabled() {
+            return Ok(balance_weighted_selection::compute_proposer_indices::<
+                Sha256Hash,
+                _,
+            >(
+                self,
+                indices,
+                &seed.0,
+                epoch.start_slot(E::slots_per_epoch()).as_u64(),
+                E::slots_per_epoch(),
+                spec.shuffle_round_count,
+                spec.max_effective_balance_for_fork(self.fork_name_unchecked()),
+            )?);
+        }
         epoch
             .slot_iter(E::slots_per_epoch())
             .map(|slot| {
                 let mut preimage = seed.to_vec();
                 preimage.append(&mut int_to_bytes8(slot.as_u64()));
                 let seed = hash(&preimage);
-
-                if gloas_enabled {
-                    self.compute_balance_weighted_selection(indices, &seed, 1, true, spec)?
-                        .first()
-                        .copied()
-                        .ok_or(BeaconStateError::InsufficientValidators)
-                } else {
-                    self.compute_proposer_index(indices, &seed, spec)
-                }
+                self.compute_proposer_index(indices, &seed, spec)
             })
             .collect()
     }
@@ -1653,7 +1659,7 @@ impl<E: EthSpec> BeaconState<E> {
         }
 
         let preimage = self.get_seed(epoch, Domain::BeaconProposer, spec)?;
-        self.compute_proposer_indices(epoch, preimage.as_slice(), &indices, spec)
+        self.compute_proposer_indices(epoch, &preimage, &indices, spec)
     }
 
     /// Compute the seed to use for the beacon proposer selection at the given `slot`.
@@ -1725,7 +1731,7 @@ impl<E: EthSpec> BeaconState<E> {
         if self.fork_name_unchecked().gloas_enabled() {
             self.compute_balance_weighted_selection(
                 &active_validator_indices,
-                seed.as_slice(),
+                &seed.0,
                 E::SyncCommitteeSize::to_usize(),
                 true,
                 spec,
@@ -1772,7 +1778,14 @@ impl<E: EthSpec> BeaconState<E> {
         spec: &ChainSpec,
     ) -> Result<SyncCommittee<E>, BeaconStateError> {
         let sync_committee_indices = self.get_next_sync_committee_indices(spec)?;
+        self.sync_committee_from_indices(&sync_committee_indices)
+    }
 
+    /// Returns the sync committee with the validators `sync_committee_indices`.
+    pub fn sync_committee_from_indices(
+        &self,
+        sync_committee_indices: &[usize],
+    ) -> Result<SyncCommittee<E>, BeaconStateError> {
         let pubkeys = sync_committee_indices
             .iter()
             .map(|&index| {
@@ -2315,6 +2328,24 @@ impl<E: EthSpec> BeaconState<E> {
             .ok_or(BeaconStateError::BalancesOutOfBounds(validator_index))
     }
 
+    /// Returns the RANDAO mix that `get_seed` reads for the given `epoch`.
+    pub fn get_seed_mix(
+        &self,
+        epoch: Epoch,
+        spec: &ChainSpec,
+    ) -> Result<&Hash256, BeaconStateError> {
+        // Bypass the safe getter for RANDAO so we can gracefully handle the scenario where `epoch
+        // == 0`.
+        let i = epoch
+            .safe_add(E::EpochsPerHistoricalVector::to_u64())?
+            .safe_sub(spec.min_seed_lookahead)?
+            .safe_sub(1)?;
+        let i_mod = i.as_usize().safe_rem(self.randao_mixes().len())?;
+        self.randao_mixes()
+            .get(i_mod)
+            .ok_or(BeaconStateError::RandaoMixesOutOfBounds(i_mod))
+    }
+
     /// Generate a seed for the given `epoch`.
     pub fn get_seed(
         &self,
@@ -2322,32 +2353,14 @@ impl<E: EthSpec> BeaconState<E> {
         domain_type: Domain,
         spec: &ChainSpec,
     ) -> Result<Hash256, BeaconStateError> {
-        // Bypass the safe getter for RANDAO so we can gracefully handle the scenario where `epoch
-        // == 0`.
-        let mix = {
-            let i = epoch
-                .safe_add(E::EpochsPerHistoricalVector::to_u64())?
-                .safe_sub(spec.min_seed_lookahead)?
-                .safe_sub(1)?;
-            let i_mod = i.as_usize().safe_rem(self.randao_mixes().len())?;
-            self.randao_mixes()
-                .get(i_mod)
-                .ok_or(BeaconStateError::RandaoMixesOutOfBounds(i_mod))?
-        };
-        let domain_bytes = int_to_bytes4(spec.get_domain_constant(domain_type));
-        let epoch_bytes = int_to_bytes8(epoch.as_u64());
-
-        const NUM_DOMAIN_BYTES: usize = 4;
-        const NUM_EPOCH_BYTES: usize = 8;
-        const MIX_OFFSET: usize = NUM_DOMAIN_BYTES + NUM_EPOCH_BYTES;
-        const NUM_MIX_BYTES: usize = 32;
-
-        let mut preimage = [0; NUM_DOMAIN_BYTES + NUM_EPOCH_BYTES + NUM_MIX_BYTES];
-        preimage[0..NUM_DOMAIN_BYTES].copy_from_slice(&domain_bytes);
-        preimage[NUM_DOMAIN_BYTES..MIX_OFFSET].copy_from_slice(&epoch_bytes);
-        preimage[MIX_OFFSET..].copy_from_slice(mix.as_slice());
-
-        Ok(Hash256::from_slice(&hash(&preimage)))
+        let mix = self.get_seed_mix(epoch, spec)?;
+        Ok(Hash256::from(balance_weighted_selection::compute_seed::<
+            Sha256Hash,
+        >(
+            &spec.get_domain_constant(domain_type).to_le_bytes(),
+            epoch.as_u64(),
+            &mix.0,
+        )))
     }
 
     /// Safe indexer for the `validators` list.
@@ -3590,18 +3603,21 @@ impl<E: EthSpec> BeaconState<E> {
     ) -> Result<PTC<E>, BeaconStateError> {
         let committees = committee_cache.get_beacon_committees_at_slot(slot)?;
 
-        let seed = self.get_ptc_attester_seed(slot, spec)?;
+        let epoch = slot.epoch(E::slots_per_epoch());
+        let attester_seed = self.get_seed(epoch, Domain::PTCAttester, spec)?;
 
         let committee_indices: Vec<usize> = committees
             .iter()
             .flat_map(|committee| committee.committee.iter().copied())
             .collect();
-        let selected_indices = self.compute_balance_weighted_selection(
+        let selected_indices = balance_weighted_selection::compute_ptc::<Sha256Hash, _>(
+            self,
             &committee_indices,
-            &seed,
+            &attester_seed.0,
+            slot.as_u64(),
             E::ptc_size(),
-            false,
-            spec,
+            spec.shuffle_round_count,
+            spec.max_effective_balance_for_fork(self.fork_name_unchecked()),
         )?;
 
         Ok(PTC(FixedVector::new(selected_indices)?))
@@ -3614,12 +3630,11 @@ impl<E: EthSpec> BeaconState<E> {
         spec: &ChainSpec,
     ) -> Result<Vec<u8>, BeaconStateError> {
         let epoch = slot.epoch(E::slots_per_epoch());
-        let mut preimage = self
-            .get_seed(epoch, Domain::PTCAttester, spec)?
-            .as_slice()
-            .to_vec();
-        preimage.append(&mut int_to_bytes8(slot.as_u64()));
-        Ok(hash(&preimage))
+        let seed = self.get_seed(epoch, Domain::PTCAttester, spec)?;
+        Ok(
+            balance_weighted_selection::hash_with_u64::<Sha256Hash>(&seed.0, slot.as_u64())
+                .to_vec(),
+        )
     }
 
     /// Find the first slot in the given epoch where the validator is assigned to the PTC.
@@ -3650,62 +3665,22 @@ impl<E: EthSpec> BeaconState<E> {
     fn compute_balance_weighted_selection(
         &self,
         indices: &[usize],
-        seed: &[u8],
+        seed: &[u8; 32],
         size: usize,
         shuffle_indices: bool,
         spec: &ChainSpec,
     ) -> Result<Vec<usize>, BeaconStateError> {
-        let total = indices.len();
-        if total == 0 {
-            return Err(BeaconStateError::InvalidIndicesCount);
-        }
-
-        let mut selected = Vec::with_capacity(size);
-        let mut i = 0usize;
-
-        while selected.len() < size {
-            let mut next_index = i.safe_rem(total)?;
-
-            if shuffle_indices {
-                next_index =
-                    compute_shuffled_index(next_index, total, seed, spec.shuffle_round_count)
-                        .ok_or(BeaconStateError::UnableToShuffle)?;
-            }
-
-            let candidate_index = indices
-                .get(next_index)
-                .ok_or(BeaconStateError::InvalidIndicesCount)?;
-
-            if self.compute_balance_weighted_acceptance(*candidate_index, seed, i, spec)? {
-                selected.push(*candidate_index);
-            }
-
-            i.safe_add_assign(1)?;
-        }
-
-        Ok(selected)
-    }
-
-    /// Return whether to accept the selection of the validator `index`, with probability
-    /// proportional to its `effective_balance`, and randomness given by `seed` and `iteration`.
-    fn compute_balance_weighted_acceptance(
-        &self,
-        index: usize,
-        seed: &[u8],
-        iteration: usize,
-        spec: &ChainSpec,
-    ) -> Result<bool, BeaconStateError> {
-        // TODO(EIP-7732): Consider grabbing effective balances from the epoch cache here.
-        // Note that this function will be used in a loop, so using cached values could be nice for performance.
-        // However, post-gloas, this function will be used in `compute_proposer_indices`, `get_next_sync_committee_indices`, and `get_ptc`, which has ~15 call sites in total
-        // so we will need to check each one to ensure epoch cache is initialized first, if we deem a good idea.
-        // Currently, we can't test if making the change would work since the test suite is not ready for gloas.
-        let effective_balance = self.get_effective_balance(index)?;
-        let max_effective_balance = spec.max_effective_balance_for_fork(self.fork_name_unchecked());
-        let random_value = self.shuffling_random_value(iteration, seed)?;
-
-        Ok(effective_balance.safe_mul(MAX_RANDOM_VALUE)?
-            >= max_effective_balance.safe_mul(random_value)?)
+        Ok(
+            balance_weighted_selection::compute_balance_weighted_selection::<Sha256Hash, _>(
+                self,
+                indices,
+                seed,
+                size,
+                shuffle_indices,
+                spec.shuffle_round_count,
+                spec.max_effective_balance_for_fork(self.fork_name_unchecked()),
+            )?,
+        )
     }
 
     pub fn can_builder_cover_bid(
@@ -3992,6 +3967,25 @@ impl From<tree_hash::Error> for BeaconStateError {
 impl From<merkle_proof::MerkleTreeError> for BeaconStateError {
     fn from(e: merkle_proof::MerkleTreeError) -> BeaconStateError {
         BeaconStateError::MerkleTreeError(e)
+    }
+}
+
+impl From<SelectionError> for BeaconStateError {
+    fn from(e: SelectionError) -> BeaconStateError {
+        match e {
+            SelectionError::EmptyIndices | SelectionError::IndexOutOfBounds(_) => {
+                BeaconStateError::InvalidIndicesCount
+            }
+            SelectionError::UnableToShuffle => BeaconStateError::UnableToShuffle,
+            SelectionError::UnknownValidator(index) => BeaconStateError::UnknownValidator(index),
+            SelectionError::Arith(e) => BeaconStateError::ArithError(e),
+        }
+    }
+}
+
+impl<E: EthSpec> EffectiveBalances for BeaconState<E> {
+    fn effective_balance(&self, index: usize) -> Option<u64> {
+        self.get_effective_balance(index).ok()
     }
 }
 

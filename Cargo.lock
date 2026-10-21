@@ -8770,6 +8770,7 @@ dependencies = [
  "smallvec",
  "ssz_types",
  "state_processing",
+ "swap_or_not_shuffle",
  "tokio",
  "tracing",
  "tree_hash",

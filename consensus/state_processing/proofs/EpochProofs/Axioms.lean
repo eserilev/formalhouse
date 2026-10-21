@@ -63,6 +63,7 @@ import EpochProofs.Etheorem.Epoch
 import EpochProofs.Etheorem.Conditions
 import EpochProofs.Equiv.Justification
 import EpochProofs.Sanity.LighthouseJustification
+import EpochProofs.Equiv.EpochCommittees
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -266,3 +267,19 @@ open EpochProofs.Spec
 #print axioms EpochProofs.weigh_justification_equiv
 #print axioms EpochProofs.Spec.lhWeigh_sameOk
 #print axioms EpochProofs.Spec.lhJustificationAndFinalization_sameOk
+#print axioms EpochProofs.Spec.compute_shuffled_permutation_eq
+#print axioms EpochProofs.Spec.compute_shuffled_index_eq
+#print axioms EpochProofs.compute_shuffled_index_with_eq
+#print axioms EpochProofs.hash_with_u64_spec
+#print axioms EpochProofs.compute_seed_spec
+#print axioms EpochProofs.random_value_spec
+#print axioms EpochProofs.Spec.selection_loop_succ
+#print axioms EpochProofs.selection_pass_spec
+#print axioms EpochProofs.selection_loop_spec
+#print axioms EpochProofs.compute_balance_weighted_selection_spec
+#print axioms EpochProofs.next_sync_committee_indices_spec
+#print axioms EpochProofs.compute_proposer_indices_spec
+#print axioms EpochProofs.shift_lookahead_spec
+#print axioms EpochProofs.next_proposer_lookahead_spec
+#print axioms EpochProofs.compute_ptc_spec
+#print axioms EpochProofs.ptc_for_epoch_spec
