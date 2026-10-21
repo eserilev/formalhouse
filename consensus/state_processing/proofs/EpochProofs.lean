@@ -109,4 +109,5 @@ import EpochProofs.Etheorem.Slashings
 import EpochProofs.Etheorem.Registry
 import EpochProofs.Etheorem.Deposits
 import EpochProofs.Etheorem.Consolidations
+import EpochProofs.Etheorem.Epoch
 import EpochProofs.Axioms

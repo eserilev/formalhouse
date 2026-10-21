@@ -59,6 +59,7 @@ import EpochProofs.Etheorem.Slashings
 import EpochProofs.Etheorem.Registry
 import EpochProofs.Etheorem.Deposits
 import EpochProofs.Etheorem.Consolidations
+import EpochProofs.Etheorem.Epoch
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -242,3 +243,10 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Etheorem.ppdStep_bridge_stop
 #print axioms EpochProofs.Etheorem.process_pending_deposits_etheorem
 #print axioms EpochProofs.Etheorem.process_pending_consolidations_etheorem
+#print axioms EpochProofs.Etheorem.epochPresetAgrees_mainnet
+#print axioms EpochProofs.Etheorem.epochPresetAgrees_minimal
+#print axioms EpochProofs.Etheorem.StepsOk.run_seq
+#print axioms EpochProofs.Etheorem.processEpoch_eq
+#print axioms EpochProofs.Etheorem.builder_pending_payments_etheorem'
+#print axioms EpochProofs.Etheorem.process_epoch_etheorem
+#print axioms EpochProofs.Etheorem.lighthouse_epoch_etheorem
