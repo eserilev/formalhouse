@@ -38,12 +38,12 @@ def epochRest2Fulu [PresetCfg] (o : Oracle) (state : BeaconState) : SpecM Beacon
   process_proposer_lookahead_fulu P o state
 
 /-- The Lighthouse Fulu steps after justification and finalization. -/
-def lhFullTailFulu (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
+def lhFullTailFulu [PresetCfg] [FuluCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
   lhFullTailG o fuluTabM (fun _ => epochRest2Fulu o) s
 
 /-- The Fulu `process_epoch` on mainnet as Lighthouse runs it, with the pending deposits and the
 effective balance updates in the single pass. -/
-def process_epoch_lh_full_fulu [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
+def process_epoch_lh_full_fulu [PresetCfg] [FuluCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
   let s1 ← lhJustificationAndFinalization P s
   lhFullTailFulu o s1
 
@@ -51,7 +51,7 @@ def process_epoch_lh_full_fulu [PresetCfg] (o : Oracle) (s : BeaconState) : Spec
 
 /-- The Fulu inactivity, rewards, registry and slashings steps, with the registry update written
 as the Gloas function at `fuluTab`. -/
-def specFourStepsFulu [PresetCfg] (s : BeaconState) : SpecM BeaconState := do
+def specFourStepsFulu [PresetCfg] [FuluCfg] (s : BeaconState) : SpecM BeaconState := do
   let s ← process_inactivity_updates P s
   let s ← process_rewards_and_penalties P
     (← get_total_active_balance P s) s
@@ -60,7 +60,7 @@ def specFourStepsFulu [PresetCfg] (s : BeaconState) : SpecM BeaconState := do
   process_slashings P (← get_total_active_balance P s) s
 
 /-- The Fulu steps after `process_slashings`. -/
-def epochRestFulu [PresetCfg] (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
+def epochRestFulu [PresetCfg] [FuluCfg] (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
   let state ← process_eth1_data_reset P state
   let state ← process_pending_deposits P
     (fuluTabM (← get_total_active_balance P state))
@@ -84,7 +84,7 @@ theorem process_epoch_fulu_parts [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle)
   simp only [specFourStepsFulu, epochRestFulu, fuluTabM, bind_assoc]
 
 /-- `specFourStepsFulu` with one total active balance. -/
-theorem specFourStepsFulu_sameOk [PresetCfg] (s1 : BeaconState) (total_active_balance : Gwei)
+theorem specFourStepsFulu_sameOk [PresetCfg] [FuluCfg] (s1 : BeaconState) (total_active_balance : Gwei)
     (htab : get_total_active_balance P s1 = .ok total_active_balance)
     (hrows : RowsOk s1) (current_epoch activation_epoch : Epoch)
     (hcurrent : get_current_epoch P s1 = .ok current_epoch)
@@ -129,7 +129,7 @@ theorem specFourStepsFulu_sameOk [PresetCfg] (s1 : BeaconState) (total_active_ba
   exact SameOk.refl _
 
 /-- The four Fulu steps with one total keep the total active balance. -/
-theorem fourStepsFulu_total [PresetCfg] (s1 : BeaconState) (total_active_balance : Gwei)
+theorem fourStepsFulu_total [PresetCfg] [FuluCfg] (s1 : BeaconState) (total_active_balance : Gwei)
     (htab : get_total_active_balance P s1 = .ok total_active_balance)
     (hrows : RowsOk s1) (current_epoch activation_epoch : Epoch)
     (hcurrent : get_current_epoch P s1 = .ok current_epoch)
@@ -168,7 +168,7 @@ theorem fourStepsFulu_total [PresetCfg] (s1 : BeaconState) (total_active_balance
 
 /-- `epochRest2Fulu` with the Fulu sync committee update gives the same `ok` results as with the
 Gloas one. -/
-theorem epochRest2Fulu_sameOk [PresetCfg] (o : Oracle) (S : BeaconState) :
+theorem epochRest2Fulu_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (S : BeaconState) :
     SameOk (do
         let state ← process_slashings_reset P S
         let state ← process_randao_mixes_reset P state
@@ -181,12 +181,12 @@ theorem epochRest2Fulu_sameOk [PresetCfg] (o : Oracle) (S : BeaconState) :
   refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
   refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
   refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
-  exact SameOk.bind (process_sync_committee_updates_fulu_sameOk P o _ (by decide))
+  exact SameOk.bind (process_sync_committee_updates_fulu_sameOk P o _ P_sync_size_pos)
     (fun _ _ => SameOk.refl _)
 
 /-- In `epochRestFulu`, the deposit churn total is `fuluTab` of the total of the state before
 it, and the rest is `specTailG` with no step in place of the builder payments. -/
-theorem epochRestFulu_specTail [PresetCfg] (o : Oracle) (S4 : BeaconState) (tab : Gwei) (cur : Epoch)
+theorem epochRestFulu_specTail [PresetCfg] [PresetCfg.Ok] [FuluCfg] (o : Oracle) (S4 : BeaconState) (tab : Gwei) (cur : Epoch)
     (hcur : get_current_epoch P S4 = .ok cur) (hfar : cur < FAR_FUTURE_EPOCH)
     (htab : get_total_active_balance P S4 = .ok tab) :
     SameOk (epochRestFulu o S4)
@@ -213,7 +213,7 @@ theorem epochRestFulu_specTail [PresetCfg] (o : Oracle) (S4 : BeaconState) (tab 
 
 /-- `lighthouse_single_pass_eq_spec_supply` for Fulu: the registry pass reads `fuluTab`, and
 Lighthouse's context holds `fuluTab` as its churn total. -/
-theorem lighthouse_single_pass_eq_spec_supply_fulu [PresetCfg] (total_active_balance : Gwei)
+theorem lighthouse_single_pass_eq_spec_supply_fulu [PresetCfg] [FuluCfg] (total_active_balance : Gwei)
     (state : BeaconState) (hrows : RowsOk state) (current_epoch : Epoch)
     (hcurrent : get_current_epoch P state = .ok current_epoch)
     (hgenesis : current_epoch ≠ GENESIS_EPOCH)
@@ -329,7 +329,7 @@ theorem genesis_passes_eq_single_pass_tab (p : Preset) (total_active_balance reg
     y3.2 <;> rfl
 
 /-- `lighthouse_single_pass_eq_spec_genesis` for Fulu. -/
-theorem lighthouse_single_pass_eq_spec_genesis_fulu [PresetCfg] (total_active_balance : Gwei)
+theorem lighthouse_single_pass_eq_spec_genesis_fulu [PresetCfg] [PresetCfg.Ok] [FuluCfg] (total_active_balance : Gwei)
     (state : BeaconState) (hrows : RowsOk state)
     (hcurrent : get_current_epoch P state = .ok GENESIS_EPOCH)
     (rctx : RewardsContext) (hprev : rctx.previous_epoch = GENESIS_EPOCH)
@@ -354,7 +354,8 @@ theorem lighthouse_single_pass_eq_spec_genesis_fulu [PresetCfg] (total_active_ba
           (base_reward r) churn r)
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
   refine SameOk.trans (genesis_passes_eq_single_pass_tab P total_active_balance
-    (fuluTabM total_active_balance) state hrows hcurrent activation_epoch hactivation (by decide)
+    (fuluTabM total_active_balance) state hrows hcurrent activation_epoch hactivation
+    (P_slashings_target_lt (by decide))
     adjusted per hpre) (SameOk.of_eq ?_)
   have hstep : ∀ churn r, r ∈ rowsOf state →
       lhRowStep P (lhContextOf state (fuluTabM total_active_balance) GENESIS_EPOCH
@@ -371,7 +372,7 @@ theorem lighthouse_single_pass_eq_spec_genesis_fulu [PresetCfg] (total_active_ba
     rw [hri] at hrow
     subst hrow
     exact lhRowStep_genesis P _ rfl _ churn _ activation_epoch
-      (by simp only [lhContextOf, hprev, GENESIS_EPOCH, UINT64_SIZE]; decide) (by decide)
+      (by simp only [lhContextOf, hprev, GENESIS_EPOCH, UINT64_SIZE]; decide) (by pdecide)
       (by simpa only [lhContextOf] using hfinalized)
       (by simp only [lhContextOf, GENESIS_EPOCH, UINT64_SIZE]; decide) hactivation (hexit i hiv)
   rw [passM_congr _ _ (rowsOf state) (fun churn r hr => hstep churn r hr)]
@@ -384,7 +385,7 @@ theorem lighthouse_single_pass_eq_spec_genesis_fulu [PresetCfg] (total_active_ba
 
 /-- The Fulu spec steps after the four passes give the same `ok` results as `tailNFG` at the
 Fulu churn total, with `epochRest2Fulu` after the consolidations. -/
-theorem epochRestFulu_nf [PresetCfg] (o : Oracle) (s1 : BeaconState) (current_epoch : Epoch)
+theorem epochRestFulu_nf [PresetCfg] [PresetCfg.Ok] [FuluCfg] (o : Oracle) (s1 : BeaconState) (current_epoch : Epoch)
     (total_active_balance : Gwei) (ctx : LhStepContext) (bf : Row → Gwei)
     (churn : Epoch × Gwei) (rows : List Row) (activation_epoch : Epoch)
     (hpass : passM (fun c r => lhRowStep P ctx (bf r) c r)
@@ -421,7 +422,7 @@ theorem epochRestFulu_nf [PresetCfg] (o : Oracle) (s1 : BeaconState) (current_ep
 /-- `process_epoch_lh_full_fulu_sameOk'` at the genesis epoch. Justification and finalization return
 the state, the spec skips the inactivity and rewards steps, and the single pass skips them
 through `after_genesis`. -/
-theorem process_epoch_lh_full_fulu_genesis [PresetCfg] [FuluCfg] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
+theorem process_epoch_lh_full_fulu_genesis [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
     (hexitb : ExitBounds t) (hsupply_t : EpochSupply t) (hvalid : WithdrawableValid t)
     (hcons : ConsolidationsInRange t)
     (hgen : t.slot / P.SLOTS_PER_EPOCH = GENESIS_EPOCH) :
@@ -451,9 +452,9 @@ theorem process_epoch_lh_full_fulu_genesis [PresetCfg] [FuluCfg] (o : Oracle) (t
   obtain ⟨tab, htab, htab_lo, -⟩ :=
     get_total_active_balance_bounds P s1 GENESIS_EPOCH hcurrent hS64
   obtain ⟨rctx, hctx, hprevr⟩ :=
-    rewardsContextOf_genesis P tab s1 hrows hcurrent (by decide) hS64 hfin0
+    rewardsContextOf_genesis P tab s1 hrows hcurrent (by pdecide) hS64 hfin0
   have hactivation := compute_activation_exit_epoch_of_lt P GENESIS_EPOCH
-    (by decide)
+    (by pdecide)
   obtain ⟨adj, per, hpre⟩ := slashingsPreamble_ok tab s1.slashings hslashings htab_lo
   have hexit1 : ∀ i (h : i < s1.validators.length),
       s1.validators[i].exit_epoch ≤ FAR_FUTURE_EPOCH :=
@@ -487,7 +488,7 @@ with the deposits and effective balance updates in the single pass gives the sam
 as the Fulu spec epoch. Beyond the hypotheses of `process_epoch_lh_sameOk'` it needs `WithdrawableValid`,
 for the deposit statuses that Lighthouse predicts, and `ConsolidationsInRange`, so that the
 validators that consolidations name are existing validators. -/
-theorem process_epoch_lh_full_fulu_sameOk' [PresetCfg] [FuluCfg] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
+theorem process_epoch_lh_full_fulu_sameOk' [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
     (hslot : t.slot < 2 ^ 64) (heb : EBOk P t) (hexitb : ExitBounds t)
     (hsupply_t : EpochSupply t) (hvalid : WithdrawableValid t)
     (hcons : ConsolidationsInRange t) :
@@ -561,7 +562,7 @@ theorem process_epoch_lh_full_fulu_sameOk' [PresetCfg] [FuluCfg] (o : Oracle) (t
     simp only [get_previous_epoch, hcur1, ok_bind'', hsat]
     rfl
   obtain ⟨rctx, hctx, hsrc, htgt, hhd⟩ := rewardsContextOf_bounds P tab s1 hrows1
-    current_epoch (current_epoch - 1) hcur1 hprev (by epoch_omega) (by decide) hS64
+    current_epoch (current_epoch - 1) hcur1 hprev (by epoch_omega) (by pdecide) hS64
     (by epoch_omega)
   obtain ⟨hprev', -, -, -, hactive, -, -⟩ := rewardsContextOf_ok _ _ _ rctx hctx
   rw [hprev] at hprev'
@@ -577,7 +578,7 @@ theorem process_epoch_lh_full_fulu_sameOk' [PresetCfg] [FuluCfg] (o : Oracle) (t
   have hk : max P.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) /
       P.EFFECTIVE_BALANCE_INCREMENT ≤ 1152921504 := by
     have : max P.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) <
-        2 ^ 60 := Nat.max_lt.mpr ⟨by decide, hsupply⟩
+        2 ^ 60 := Nat.max_lt.mpr ⟨by pdecide, hsupply⟩
     have hINC : P.EFFECTIVE_BALANCE_INCREMENT = 1000000000 := rfl
     obtain ⟨(m : Nat), hm⟩ : ∃ m : Nat,
         max P.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) = m :=
@@ -589,7 +590,7 @@ theorem process_epoch_lh_full_fulu_sameOk' [PresetCfg] [FuluCfg] (o : Oracle) (t
     omega
   have hact1 : 1 ≤ rctx.active_increments := by
     rw [hact_eq]
-    exact (Nat.le_div_iff_mul_le (by decide)).mpr (by simpa using htab_lo)
+    exact (Nat.le_div_iff_mul_le (by pdecide)).mpr (by simpa using htab_lo)
   have hle : ∀ x, x ≤ max P.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) /
       P.EFFECTIVE_BALANCE_INCREMENT →
       x ≤ max P.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) /

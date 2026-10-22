@@ -327,7 +327,7 @@ theorem upgrade_to_gloas_vectorLengths (p : Preset) (o : Oracle) (c : UpgradeCon
 /-- The state at the Gloas fork has the start facts. In a reachable Fulu run, the slot loop
 reaches `t`, `process_slot_fulu` gives `t1` at the last slot of an epoch, and the Fulu
 `process_epoch` gives `s2`. The slot increment gives the input of `upgrade_to_gloas`. -/
-theorem fulu_fork_state_startOk [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
+theorem fulu_fork_state_startOk [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
     (init : FuluState) (hi : FuluStartOk init.state) (hsupply : SupplyBoundFulu o fo c init)
     (fs t t1 : FuluState) (s2 : BeaconState) (slot : Slot) (hr : ReachableFulu o fo c init fs)
     (hslot64 : slot < 2 ^ 64) (hreach : SlotReachFulu o fo fs slot t) (hlt : t.state.slot < slot)
@@ -358,7 +358,7 @@ theorem fulu_fork_state_startOk [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle) 
 
 /-- The Gloas state that `upgrade_to_gloas` makes at the fork of a reachable Fulu run has the
 start facts of the Gloas theorems. -/
-theorem fulu_gloas_fork_startOk [PresetCfg] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
+theorem fulu_gloas_fork_startOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
     (uc : UpgradeConfig) (init : FuluState) (hi : FuluStartOk init.state)
     (hsupply : SupplyBoundFulu o fo c init)
     (fs t t1 : FuluState) (s2 g : BeaconState) (slot : Slot) (hr : ReachableFulu o fo c init fs)
@@ -376,7 +376,7 @@ theorem fulu_gloas_fork_startOk [PresetCfg] (o : Oracle) (fo : FuluOracle) (c : 
 Gloas run reaches from the upgraded state `g` has the same `ok` results with any epoch function
 `f` that agrees with `process_epoch` on the inputs that `EpochInputOk''` describes. The Gloas
 supply and economic hypotheses are on the Gloas run, as in `reachable_state_transition_sameOk'''`. -/
-theorem fulu_then_gloas_sameOk [PresetCfg] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
+theorem fulu_then_gloas_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
     (uc : UpgradeConfig) (init : FuluState) (hi : FuluStartOk init.state)
     (hsupply : SupplyBoundFulu o fo c init)
     (fs t t1 : FuluState) (s2 g : BeaconState) (slot : Slot) (hr : ReachableFulu o fo c init fs)
@@ -450,7 +450,7 @@ theorem SlotReachG.slotReach {o : Oracle} {s t : BeaconState} {slot : Slot}
 /-- On mainnet, every input of the Gloas `process_epoch` in a reachable Gloas run has the
 facts of `EpochInputOk''`, if the start state has the eight start facts. The supply bound and
 `Econ` are hypotheses on the run. -/
-theorem gloas_reachable_invariants [PresetCfg] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem gloas_reachable_invariants [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState) (hi : FuluStartOk init)
     (hsupply : SupplyBound o max_blobs_per_block GLOAS_FORK_EPOCH init)
     (Econ : BeaconState → Prop) (hecon : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH init Econ)
@@ -482,7 +482,7 @@ theorem gloas_reachable_invariants [PresetCfg] (o : Oracle) (max_blobs_per_block
 
 /-- A Fulu run that crosses the Gloas fork: every input of the Gloas `process_epoch` after the
 fork has the facts of `EpochInputOk''`. -/
-theorem fulu_then_gloas_reachable_invariants [PresetCfg] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
+theorem fulu_then_gloas_reachable_invariants [PresetCfg] [PresetCfg.Ok] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
     (uc : UpgradeConfig) (init : FuluState) (hi : FuluStartOk init.state)
     (hsupply : SupplyBoundFulu o fo c init)
     (fs t t1 : FuluState) (s2 g : BeaconState) (slot : Slot) (hr : ReachableFulu o fo c init fs)

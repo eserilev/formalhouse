@@ -136,7 +136,7 @@ theorem bind_congr_of {α : Type} {x : SpecM α} {k1 k2 : α → SpecM BeaconSta
 def SameSH (T t : BeaconState) : Prop :=
   t.slot = T.slot ∧ t.historical_summaries = T.historical_summaries
 
-theorem runSteps_lhOrder_eq [PresetCfg] (o : Oracle) (T : BeaconState) (hT : TailPre T) :
+theorem runSteps_lhOrder_eq [PresetCfg] [PresetCfg.Ok] (o : Oracle) (T : BeaconState) (hT : TailPre T) :
     runSteps (lhOrder o) T = lhRestOrder o T := by
   obtain ⟨halign, hslot, hroom⟩ := hT
   have kpl : StepKeeps (SameSH T) (process_proposer_lookahead P o) :=
@@ -182,7 +182,7 @@ theorem runSteps_specOrder_eq [PresetCfg] (o : Oracle) (T : BeaconState) :
 
 /-- The steps after the builder payments: the Lighthouse order with the Lighthouse resets gives
 the same `ok` results as the eth1 reset followed by the spec order. -/
-theorem lhRestOrder_sameOk [PresetCfg] (o : Oracle) (T : BeaconState) (hT : TailPre T) :
+theorem lhRestOrder_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (T : BeaconState) (hT : TailPre T) :
     SameOk (lhRestOrder o T) (process_eth1_data_reset P T >>= epochRest2 o) := by
   have hroom : SlotRoom T := by
     show @LT.lt Nat _ (T.slot / 32 + 65538) (2 ^ 64)
@@ -196,7 +196,7 @@ def lhAfterPassOrder (o : Oracle) (s : BeaconState) (total_active_balance : Gwei
     (plan : LhDepositPlan) (x : (Epoch × Gwei) × List Row) : SpecM BeaconState :=
   lhMid o s total_active_balance plan (s.withRowsChurn x.1 x.2) >>= lhRestOrder o
 
-theorem lhAfterPassOrder_sameOk [PresetCfg] (o : Oracle) (s : BeaconState) (tab : Gwei)
+theorem lhAfterPassOrder_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (tab : Gwei)
     (plan : LhDepositPlan) (x : (Epoch × Gwei) × List Row) (hs : TailPre s) :
     SameOk (lhAfterPassOrder o s tab plan x) (lhAfterPass o s tab plan x) := by
   rw [lhAfterPass_eq]
@@ -285,7 +285,7 @@ theorem process_epoch_lh_order_sameOk (o : Oracle) (s : BeaconState) (hs : TailP
 /-- `reachable_state_transition_sameOk'` for an epoch function `f` that also needs the
 last-slot and next-slot facts. `process_slots` runs `process_epoch` only at the last slot of an
 epoch, before the slot of the block, so the next slot fits. -/
-theorem reachable_state_transition_sameOk_last [PresetCfg] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem reachable_state_transition_sameOk_last [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
     (hffg : FfgInvariant P init) (hrows : RowsOk init)
     (hd : ExitDelay P init) (hx : ExitEpochsU64 init)
@@ -353,7 +353,7 @@ def HistRoom (t : BeaconState) : Prop :=
 `state_transition`. Beyond the hypotheses of `lighthouse_full_epoch_state_transition_sameOk`,
 `historical_summaries` is below the Lighthouse limit at each epoch boundary (`HistRoom` in the
 economic facts). -/
-theorem lighthouse_order_epoch_state_transition_sameOk [PresetCfg] (o : Oracle)
+theorem lighthouse_order_epoch_state_transition_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle)
     (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
     (hffg : FfgInvariant P init) (hrows : RowsOk init)
     (hd : ExitDelay P init) (hx : ExitEpochsU64 init)

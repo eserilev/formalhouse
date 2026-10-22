@@ -23,7 +23,7 @@ The start state `init` has `FfgInvariant`, `RowsOk`, `ExitDelay`, `ExitEpochsU64
 million ETH. `EpochEcon … EpochSupply` says that each `process_epoch` input of the run has
 balances below `2^62`, effective balances that sum below `2^60`, and a slashed sum whose triple
 fits in a `u64`. Each block of the run has a `u64` slot and at most 512 sync bits. -/
-theorem lighthouse_state_transition_sameOk [PresetCfg] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem lighthouse_state_transition_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
     (hffg : FfgInvariant P init) (hrows : RowsOk init)
     (hd : ExitDelay P init) (hx : ExitEpochsU64 init)
@@ -47,7 +47,7 @@ theorem lighthouse_state_transition_sameOk [PresetCfg] (o : Oracle) (max_blobs_p
 update, then new deposits, consolidations, the effective balance redo and builder payments, as
 `single_pass.rs` does. The start state also has unique pubkeys, in-range consolidation indices
 and `u64` withdrawable epochs. Genesis does. -/
-theorem lighthouse_full_epoch_state_transition_sameOk [PresetCfg] (o : Oracle)
+theorem lighthouse_full_epoch_state_transition_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle)
     (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
     (hffg : FfgInvariant P init) (hrows : RowsOk init)
     (hd : ExitDelay P init) (hx : ExitEpochsU64 init)

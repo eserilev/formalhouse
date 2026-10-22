@@ -146,7 +146,7 @@ def plNew [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM (List ValidatorInde
       P.MIN_SEED_LOOKAHEAD) 1)
   pure (st.proposer_lookahead.take last_epoch_start ++ last_epoch_proposers)
 
-theorem process_proposer_lookahead_eq [PresetCfg] (o : Oracle) (s : BeaconState) :
+theorem process_proposer_lookahead_eq [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) :
     process_proposer_lookahead P o s = (fun l => setPL s l) <$> plNew o s := by
   unfold process_proposer_lookahead plNew setPL
   simp only [get_current_epoch_mainnet, ok_bind']
@@ -219,7 +219,7 @@ def ptcNew [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM (List (List Valida
   let fill_start ← uint64Sub st.ptc_window.length P.SLOTS_PER_EPOCH
   pure (st.ptc_window.take fill_start ++ ptcs)
 
-theorem process_ptc_window_eq [PresetCfg] (o : Oracle) (s : BeaconState) :
+theorem process_ptc_window_eq [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) :
     process_ptc_window P o s = (fun w => setPTC s w) <$> ptcNew o s := by
   unfold process_ptc_window ptcNew setPTC
   simp only [get_current_epoch_mainnet, ok_bind']
@@ -242,7 +242,7 @@ theorem uint64Mul_of_ge (a b : Nat) (h : ¬ a * b < 2 ^ 64) :
   rfl
 
 /-- `ptcNew` reads `ptc_window`, `slot`, `validators` and the seeds two epochs ahead. -/
-theorem ptcNew_congr [PresetCfg] (o : Oracle) (s1 s2 : BeaconState)
+theorem ptcNew_congr [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s1 s2 : BeaconState)
     (hptc : s1.ptc_window = s2.ptc_window) (hs : s1.slot = s2.slot)
     (hv : s1.validators = s2.validators)
     (hseed : ∀ d, get_seed P o s1 (s2.slot / P.SLOTS_PER_EPOCH + 1 + 1)
@@ -270,15 +270,14 @@ theorem ptcNew_congr [PresetCfg] (o : Oracle) (s1 s2 : BeaconState)
             · rfl
             intro slot hslot
             refine compute_ptc_congr hv (fun epoch he d => ?_)
-            have hspe : P.SLOTS_PER_EPOCH = 32 := rfl
             have he' : epoch = N := by
-              simp only [compute_epoch_at_slot, uint64Div, hspe,
-                show (32 : Nat) ≠ 0 by decide, if_false, pure, Except.pure] at he
+              simp only [compute_epoch_at_slot, uint64Div, Nat.ne_of_gt P_slots_pos, if_false,
+                pure, Except.pure] at he
               cases he
-              rw [List.mem_range'] at hslot
-              rw [hspe] at hslot
-              show @Eq Nat (slot / 32) N
-              omega
+              obtain ⟨i, hi, hs⟩ := List.mem_range'.mp hslot
+              rw [hs]
+              simp only [Slot, Epoch, Uint64] at *
+              exact Nat.div_eq_of_lt_le (by omega) (by rw [Nat.add_mul, Nat.one_mul]; omega)
             subst he'
             exact (congrFun (congrFun (get_seed_congr (s1 := setPTC s1 _) (s2 := s1) rfl) _) _).trans
               ((hseed d).trans

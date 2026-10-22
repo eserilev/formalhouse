@@ -733,7 +733,7 @@ theorem SlotReach.tail [PresetCfg] {o : Oracle} {s t : BeaconState} (hr : SlotRe
 
 /-- The facts at each `process_epoch` input, with unique pubkeys and in-range pending
 consolidations. -/
-def EpochInputOk' [PresetCfg] (Econ : BeaconState → Prop) (t : BeaconState) : Prop :=
+def EpochInputOk' [PresetCfg] [PresetCfg.Ok] (Econ : BeaconState → Prop) (t : BeaconState) : Prop :=
   EpochInputOk Econ t ∧ PubkeysUnique t ∧ ConsolidationsInRange t
 
 /-- `reachable_state_transition_sameOk'` for an epoch function `f` that needs, in addition,
@@ -797,7 +797,7 @@ theorem SlotReach.withdrawable [PresetCfg] {o : Oracle} {s t : BeaconState} (hr 
     exact ⟨h1, h2⟩
 
 /-- The facts at each `process_epoch` input, with `WithdrawableU64` and `WithdrawableValid`. -/
-def EpochInputOk'' [PresetCfg] (Econ : BeaconState → Prop) (t : BeaconState) : Prop :=
+def EpochInputOk'' [PresetCfg] [PresetCfg.Ok] (Econ : BeaconState → Prop) (t : BeaconState) : Prop :=
   EpochInputOk' Econ t ∧ WithdrawableU64 t ∧ WithdrawableValid t
 
 /-- `reachable_state_transition_sameOk''` for an epoch function `f` that needs, in addition,

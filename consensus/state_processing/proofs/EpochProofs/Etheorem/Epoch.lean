@@ -311,7 +311,7 @@ balances. If it returns `s'`, Etheorem's run succeeds and `absEState` of its res
 
 `hin` is the condition that `reachable_state_transition_sameOk'''` proves at each epoch
 boundary of a reachable state. `hc` holds the conditions of the Etheorem steps. -/
-theorem lighthouse_epoch_etheorem (o : Spec.Oracle) (ho : OracleAgrees o)
+theorem lighthouse_epoch_etheorem [EpochProofs.Spec.PresetCfg] [EpochProofs.Spec.PresetCfg.Ok] (o : Spec.Oracle) (ho : OracleAgrees o)
     (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState)
     (hin : Spec.EpochInputOk'' Spec.EpochSupply (absEState e)) (hc : EtheoremEpochConds e)
     {s' : Spec.BeaconState} (h : Spec.process_epoch_lh_full o (absEState e) = .ok s') :
