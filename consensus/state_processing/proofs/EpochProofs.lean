@@ -174,3 +174,7 @@ import EpochProofs.Formalhouse
 import EpochProofs.Sanity.Invariants.LighthouseFulu
 import EpochProofs.Sanity.Invariants.LighthouseFuluOrder
 import EpochProofs.FormalhouseFulu
+import EpochProofs.Sanity.Invariants.FuluSteps
+import EpochProofs.Sanity.Invariants.FuluLengths
+import EpochProofs.Sanity.Invariants.FuluPubkeys
+import EpochProofs.Sanity.Invariants.FuluConsolidations
