@@ -1,5 +1,12 @@
 # Epoch processing proofs
 
+## Final result
+
+- `formalhouse_gloas_epoch_final_mainnet` and `formalhouse_gloas_epoch_final_minimal`: on every Gloas epoch input of a run that starts in Fulu and crosses the Gloas fork, Lighthouse's epoch returns Ok and its state equals Etheorem's `processEpoch`.
+- `formalhouse_fulu_epoch_final_mainnet` and `formalhouse_fulu_epoch_final_minimal`: the same for every Fulu epoch input of a reachable Fulu run.
+- Both rest on the trusted base below: 9 Rust contracts, 26 glue facts, 4 cache build facts, 4 spec preconditions, 5 supply and time bounds, 3 probability facts, 2 Etheorem list limits, 3 Oracle items, 1 start state, and 6 tools and references.
+- Every `#print axioms` line in `EpochProofs/Axioms.lean` uses only `propext`, `Classical.choice` and `Quot.sound`.
+
 Goal: prove that Lighthouse's Gloas epoch processing equals the consensus spec for every state.
 
 ```

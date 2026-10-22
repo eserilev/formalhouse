@@ -12,13 +12,14 @@ namespace EpochProofs.Spec
 /-- Sites 170, 189 (`next_epoch`), 534, 535, 594, 595 and 1356: the current epoch plus 1 or 2
 fits in a `u64`. -/
 theorem glue_epoch_add_fits {slot : Nat} (h : slot + 8192 < 2 ^ 64) (k : Nat) (hk : k ≤ 2) :
-    slot / 32 + k < 2 ^ 64 :=
-  Nat.lt_of_le_of_lt (Nat.le_add_right _ _) (ep_bound h k (by omega))
+    slot / 32 + k < 2 ^ 64 := by
+  have : slot / 32 ≤ slot := Nat.div_le_self _ _
+  omega
 
 /-- Site 603: each slot of the lookahead epoch fits in a `u64`. -/
 theorem glue_lookahead_slot_fits {slot : Nat} (h : slot + 8192 < 2 ^ 64) (i : Nat) (hi : i < 32) :
     (slot / 32 + 2) * 32 + i < 2 ^ 64 := by
-  have := ep_start_bound h 2 (by decide)
+  have : slot / 32 * 32 ≤ slot := Nat.div_mul_le_self _ _
   omega
 
 /-- Sites 549 and 611: `BeaconState::get_seed_mix` at the lookahead epoch. The sum does not
@@ -27,7 +28,8 @@ theorem glue_seed_mix_index {slot : Nat} (h : slot + 8192 < 2 ^ 64) (len : Nat)
     (hlen : len = 65536) :
     slot / 32 + 2 + 65536 < 2 ^ 64 ∧ 1 + 1 ≤ slot / 32 + 2 + 65536 ∧
       (slot / 32 + 2 + 65536 - 1 - 1) % len < len := by
-  refine ⟨ep_bound h 2 (by decide), by omega, ?_⟩
+  have : slot / 32 ≤ slot := Nat.div_le_self _ _
+  refine ⟨by omega, by omega, ?_⟩
   subst hlen
   exact Nat.mod_lt _ (by decide)
 
@@ -110,14 +112,14 @@ theorem filter_sum_le (l : List Nat) (q : Nat → Bool) : (l.filter q).sum ≤ l
 
 /-- Site 1440: the deposits of one validator sum to less than `2^61`, so the per-validator sum
 does not overflow. -/
-theorem glue_validator_deposit_sum (t : BeaconState) (hb : RowBounds t) (q : Nat → Bool) :
+theorem glue_validator_deposit_sum [PresetCfg] (t : BeaconState) (hb : RowBounds t) (q : Nat → Bool) :
     ((t.pending_deposits.map (·.amount)).filter q).sum < 2 ^ 61 := by
   have key : ∀ a l c : Nat, a + l + c < 2 ^ 61 → l < 2 ^ 61 := by intros; omega
   exact Nat.lt_of_le_of_lt (filter_sum_le _ q) (key _ _ _ hb.funds)
 
 /-- Site 163: the exit cache counts exits per epoch. Each count is at most the number of
 validators, which is below `2^40`. -/
-theorem glue_exit_count (t : BeaconState) (hb : RowBounds t) (q : Validator → Bool) :
+theorem glue_exit_count [PresetCfg] (t : BeaconState) (hb : RowBounds t) (q : Validator → Bool) :
     (t.validators.filter q).length < 2 ^ 64 := by
   have h1 := List.length_filter_le q t.validators
   have h2 := hb.count
