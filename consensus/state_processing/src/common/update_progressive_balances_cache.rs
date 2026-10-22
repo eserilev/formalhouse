@@ -12,14 +12,16 @@ use types::{
     ParticipationFlags, ProgressiveBalancesCache, Validator, is_progressive_balances_enabled,
 };
 
-/// Initializes the `ProgressiveBalancesCache` if it is unbuilt.
+/// Initializes the `ProgressiveBalancesCache` if it is unbuilt or built for another epoch.
 #[instrument(skip_all, level = "debug")]
 pub fn initialize_progressive_balances_cache<E: EthSpec>(
     state: &mut BeaconState<E>,
     spec: &ChainSpec,
 ) -> Result<(), BeaconStateError> {
     if !is_progressive_balances_enabled(state)
-        || state.progressive_balances_cache().is_initialized()
+        || state
+            .progressive_balances_cache()
+            .is_initialized_at(state.current_epoch())
     {
         return Ok(());
     }

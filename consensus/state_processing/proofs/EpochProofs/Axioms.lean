@@ -107,6 +107,8 @@ import EpochProofs.FormalhouseFinal
 import EpochProofs.Equiv.EpochContexts
 import EpochProofs.Equiv.PendingDepositsLen
 import EpochProofs.CacheBridge.EpochCacheBuild
+import EpochProofs.CacheBridge.BuildPath
+import EpochProofs.FormalhouseCachePath
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -762,3 +764,16 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.depositDecisions_postponed_len
 #print axioms EpochProofs.process_pending_deposits_postponed_len
 #print axioms EpochProofs.CacheBridge.base_rewards_ok_mainnet
+#print axioms EpochProofs.Spec.ActiveAgree.symm
+#print axioms EpochProofs.Spec.apply_pending_deposit_pkPrefix
+#print axioms EpochProofs.Spec.process_pending_deposits_pkPrefix
+#print axioms EpochProofs.Spec.process_epoch_pkPrefix
+#print axioms EpochProofs.Spec.process_slots_pkPrefix
+#print axioms EpochProofs.Spec.state_transition_pkPrefix
+#print axioms EpochProofs.Spec.Reachable.pkPrefix
+#print axioms EpochProofs.Spec.SlotReachG.pkPrefix
+#print axioms EpochProofs.CacheBridge.activeSum_congr
+#print axioms EpochProofs.CacheBridge.epoch_cache_total_carry
+#print axioms EpochProofs.CacheBridge.activeAgree_of_epochInv
+#print axioms EpochProofs.CacheBridge.pubkey_cache_carry
+#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_cachepath
