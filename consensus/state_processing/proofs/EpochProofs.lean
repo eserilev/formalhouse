@@ -196,3 +196,6 @@ import EpochProofs.FormalhouseFinal
 import EpochProofs.Sanity.ConsolidationTable
 import EpochProofs.Trusted.Consolidations
 import EpochProofs.Equiv.ConsolidationTable
+import EpochProofs.Sanity.Onboarding
+import EpochProofs.Trusted.Onboarding
+import EpochProofs.Equiv.Onboarding
