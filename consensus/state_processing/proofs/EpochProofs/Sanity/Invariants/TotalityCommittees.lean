@@ -580,15 +580,21 @@ theorem ep_bound {x : Nat} (h : x + 8192 < 2 ^ 64) (k : Nat) (hk : k ≤ 3) :
   show x / 32 + k + 65536 < 18446744073709551616
   omega
 
-theorem get_next_sync_committee_total (o : Oracle) (s : BeaconState) (hf : CommFacts o s)
-    (hp : CommPreconds o s) :
+theorem get_next_sync_committee_total (o : Oracle) (s : BeaconState)
+    (hslot : s.slot + 8192 < 2 ^ 64) (hr : s.randao_mixes.length = 65536)
+    (hreg : s.validators.length ≤ 2 ^ 40)
+    (heb : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000)
+    (hkeys : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true)
+    (hsa : get_active_validator_indices s (s.slot / 32 + 1) ≠ [])
+    (hsel : ∀ seed, SelFin Preset.mainnet o s (get_active_validator_indices s (s.slot / 32 + 1))
+      seed 512 true) :
     ∃ c, get_next_sync_committee Preset.mainnet o s = .ok c := by
-  have he : s.slot / 32 + 1 + 65536 < 2 ^ 64 := ep_bound hf.slot 1 (by decide)
-  obtain ⟨seed, hseed⟩ := get_seed_total o s (s.slot / 32 + 1) DOMAIN_SYNC_COMMITTEE he hf.randao
-  have hn := (active_len_le s (s.slot / 32 + 1)).trans hf.regLen
+  have he : s.slot / 32 + 1 + 65536 < 2 ^ 64 := ep_bound hslot 1 (by decide)
+  obtain ⟨seed, hseed⟩ := get_seed_total o s (s.slot / 32 + 1) DOMAIN_SYNC_COMMITTEE he hr
+  have hn := (active_len_le s (s.slot / 32 + 1)).trans hreg
   obtain ⟨r, hr1, hr2, hr3⟩ := compute_balance_weighted_selection_total Preset.mainnet o s
-    (get_active_validator_indices s (s.slot / 32 + 1)) seed 512 true hp.syncActive
-    (fun j hj => active_lt s _ j hj) hf.ebMax hn (by decide) (by decide) (hp.selSync seed)
+    (get_active_validator_indices s (s.slot / 32 + 1)) seed 512 true hsa
+    (fun j hj => active_lt s _ j hj) heb hn (by decide) (by decide) (hsel seed)
   have hrl : ∀ j ∈ r, j < s.validators.length := fun j hj => active_lt s _ j (hr3 j hj)
   have hpk : r.mapM (fun index => do pure (← listGet s.validators index).pubkey :
       ValidatorIndex → SpecM BLSPubkey) =
@@ -611,7 +617,7 @@ theorem get_next_sync_committee_total (o : Oracle) (s : BeaconState) (hf : CommF
       subst hx
       have hjl := hrl j hj
       simp only [List.getElem?_eq_getElem hjl, Option.map_some, Option.getD_some]
-      rw [hf.keys _ (List.getElem_mem hjl)]
+      rw [hkeys _ (List.getElem_mem hjl)]
       simp)]
     rfl
   unfold get_next_sync_committee get_next_sync_committee_indices
@@ -798,16 +804,21 @@ theorem CommFacts.congr {o : Oracle} {s1 s2 : BeaconState} (hs : s1.slot = s2.sl
   obtain ⟨h1, h2, h3, h4, h5, h6, h7⟩ := h
   exact ⟨hs ▸ h1, hr ▸ h2, hv ▸ h3, hv ▸ h4, hl ▸ h5, hw ▸ h6, hv ▸ h7⟩
 
-theorem process_sync_committee_updates_total (o : Oracle) (s : BeaconState) (hf : CommFacts o s)
-    (hp : CommPreconds o s) :
+theorem process_sync_committee_updates_total (o : Oracle) (s : BeaconState)
+    (hslot : s.slot + 8192 < 2 ^ 64) (hr : s.randao_mixes.length = 65536)
+    (hreg : s.validators.length ≤ 2 ^ 40)
+    (heb : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000)
+    (hkeys : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true)
+    (hsa : get_active_validator_indices s (s.slot / 32 + 1) ≠ [])
+    (hsel : ∀ seed, SelFin Preset.mainnet o s (get_active_validator_indices s (s.slot / 32 + 1))
+      seed 512 true) :
     OkWith (process_sync_committee_updates Preset.mainnet o s) (fun s' =>
       s'.slot = s.slot ∧ s'.validators = s.validators ∧ s'.randao_mixes = s.randao_mixes ∧
         s'.proposer_lookahead = s.proposer_lookahead ∧ s'.ptc_window = s.ptc_window) := by
   have ha1 : s.slot / 32 + 1 < 2 ^ 64 :=
-    Nat.lt_of_le_of_lt (Nat.le_add_right _ _) (ep_bound hf.slot 1 (by decide))
+    Nat.lt_of_le_of_lt (Nat.le_add_right _ _) (ep_bound hslot 1 (by decide))
   obtain ⟨c, hc⟩ := get_next_sync_committee_total o
-    { s with current_sync_committee := s.next_sync_committee }
-    (CommFacts.congr (s2 := s) rfl rfl rfl rfl rfl hf) (CommPreconds.congr (s2 := s) rfl rfl rfl hp)
+    { s with current_sync_committee := s.next_sync_committee } hslot hr hreg heb hkeys hsa hsel
   unfold process_sync_committee_updates
   rw [tot_current_epoch, tot_bind_ok, tot_add ha1, tot_bind_ok,
     tot_mod (show (Preset.mainnet).EPOCHS_PER_SYNC_COMMITTEE_PERIOD ≠ 0 by decide), tot_bind_ok]
@@ -825,7 +836,8 @@ theorem committee_steps_total (o : Oracle) (s : BeaconState) (hf : CommFacts o s
       let s ← process_sync_committee_updates Preset.mainnet o s
       let s ← process_proposer_lookahead Preset.mainnet o s
       process_ptc_window Preset.mainnet o s) (fun _ => True) := by
-  obtain ⟨s1, h1, e1s, e1v, e1r, e1l, e1w⟩ := process_sync_committee_updates_total o s hf hp
+  obtain ⟨s1, h1, e1s, e1v, e1r, e1l, e1w⟩ := process_sync_committee_updates_total o s hf.slot
+    hf.randao hf.regLen hf.ebMax hf.keys hp.syncActive hp.selSync
   have hf1 := CommFacts.congr e1s e1v e1r e1l e1w hf
   have hp1 := CommPreconds.congr e1s e1v e1r hp
   rw [h1, tot_bind_ok]

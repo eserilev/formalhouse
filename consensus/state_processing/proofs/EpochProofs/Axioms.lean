@@ -72,6 +72,7 @@ import EpochProofs.Etheorem.Final
 import EpochProofs.Sanity.Invariants.Totality
 import EpochProofs.Sanity.Invariants.TotalityCommittees
 import EpochProofs.Sanity.Invariants.TotalityRows
+import EpochProofs.Sanity.Invariants.TotalityFulu
 import EpochProofs.Etheorem.Total
 import EpochProofs.Equiv.DepositBalance
 import EpochProofs.Equiv.SelectionEmpty
@@ -94,6 +95,9 @@ import EpochProofs.Sanity.Invariants.FuluLengths
 import EpochProofs.Sanity.Invariants.FuluPubkeys
 import EpochProofs.Sanity.Invariants.FuluConsolidations
 import EpochProofs.Sanity.Invariants.FuluExits
+import EpochProofs.Sanity.Invariants.FuluBalance
+import EpochProofs.Sanity.Invariants.FuluReachable
+import EpochProofs.FormalhouseFuluReachable
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -350,6 +354,9 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.slashingsRowStep_total
 #print axioms EpochProofs.Spec.midOk_of_rowBounds
 #print axioms EpochProofs.Spec.depOk_of_rowBounds
+#print axioms EpochProofs.Spec.regSlash_total_g
+#print axioms EpochProofs.Spec.midCore_of_rowBounds
+#print axioms EpochProofs.Spec.depCore_of_rowBounds
 #print axioms EpochProofs.Spec.process_epoch_total_rows
 #print axioms EpochProofs.max_effective_balance_electra_equiv
 #print axioms EpochProofs.deposit_effective_balance_equiv
@@ -638,3 +645,48 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.process_attester_slashing_fulu_exitDelay
 #print axioms EpochProofs.Spec.process_operations_fulu_exitDelay
 #print axioms EpochProofs.Spec.state_transition_fulu_exitDelay
+#print axioms EpochProofs.Spec.fuluTabM_lt
+#print axioms EpochProofs.Spec.midOkFulu_of_rowBounds
+#print axioms EpochProofs.Spec.compute_proposer_indices_total
+#print axioms EpochProofs.Spec.get_beacon_proposer_indices_fulu_total
+#print axioms EpochProofs.Spec.process_proposer_lookahead_fulu_total
+#print axioms EpochProofs.Spec.committeesOkFulu_of
+#print axioms EpochProofs.Spec.process_epoch_fulu_total
+#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_total
+#print axioms EpochProofs.Spec.FuluBalanceSanity.saturating_sub_eq
+#print axioms EpochProofs.Spec.FuluBalanceSanity.withdraw_fits
+#print axioms EpochProofs.Spec.FuluBalanceSanity.uint64Sub_ok'
+#print axioms EpochProofs.Spec.FuluBalanceSanity.pending_amount_fits
+#print axioms EpochProofs.Spec.FuluBalanceSanity.sweep_amount_fits
+#print axioms EpochProofs.Spec.WithdrawalsSafeAll.nil
+#print axioms EpochProofs.Spec.WithdrawalsSafeAll.append_validator
+#print axioms EpochProofs.Spec.get_pending_partial_withdrawals_loop_safeAll
+#print axioms EpochProofs.Spec.get_validators_sweep_withdrawals_loop_safeAll
+#print axioms EpochProofs.Spec.get_expected_withdrawals_fulu_safeAll
+#print axioms EpochProofs.Spec.apply_withdrawals_fulu_balances
+#print axioms EpochProofs.Spec.process_withdrawals_fulu_balances
+#print axioms EpochProofs.Spec.Budget.of_withdrawals_fulu
+#print axioms EpochProofs.Spec.Keeps.of_withdrawals_fulu
+#print axioms EpochProofs.Spec.lt_withdrawable_of_slashable'
+#print axioms EpochProofs.Spec.process_proposer_slashing_fulu_slashStep
+#print axioms EpochProofs.Spec.process_attester_slashing_fulu_slashable
+#print axioms EpochProofs.Spec.process_attester_slashing_fulu_slashStep
+#print axioms EpochProofs.Spec.process_block_header_fulu_opStep
+#print axioms EpochProofs.Spec.process_operations_fulu_keeps
+#print axioms EpochProofs.Spec.process_block_fulu_budget_mainnet
+#print axioms EpochProofs.Spec.process_epoch_fulu_effective_balances
+#print axioms EpochProofs.Spec.process_epoch_fulu_exitDelay
+#print axioms EpochProofs.Spec.process_epoch_fulu_exitEpochsU64
+#print axioms EpochProofs.Spec.process_epoch_fulu_withdrawableU64
+#print axioms EpochProofs.Spec.loopInv_steps_fulu
+#print axioms EpochProofs.Spec.process_slots_loop_fulu_reach
+#print axioms EpochProofs.Spec.process_slots_fulu_reach
+#print axioms EpochProofs.Spec.state_transition_fulu_reach
+#print axioms EpochProofs.Spec.reachable_fulu_inv
+#print axioms EpochProofs.Spec.reachable_fulu_tail
+#print axioms EpochProofs.Spec.SlotReachFulu.loopInv
+#print axioms EpochProofs.Spec.SlotReachFulu.tail
+#print axioms EpochProofs.Spec.fulu_reachable_invariants
+#print axioms EpochProofs.Formalhouse.fuluEpochInput_ok
+#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_reachable
+#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_total_reachable

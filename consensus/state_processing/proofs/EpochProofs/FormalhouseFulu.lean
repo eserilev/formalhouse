@@ -1,5 +1,6 @@
 import EpochProofs.Etheorem.Fulu.Epoch
 import EpochProofs.Sanity.Invariants.LighthouseFuluOrder
+import EpochProofs.Sanity.Invariants.TotalityFulu
 
 /-!
 # Formalhouse: the Fulu epoch of Lighthouse
@@ -11,8 +12,8 @@ import EpochProofs.Sanity.Invariants.LighthouseFuluOrder
    returns a state that maps to `s'`.
 2. If the Fulu spec `process_epoch` returns `s'`, Lighthouse's Fulu epoch returns `s'` too.
 
-It does not state that Lighthouse's Fulu epoch returns `ok`: the totality proofs
-(`Totality*.lean`) cover the Gloas epoch only.
+`formalhouse_fulu_epoch_total` adds that Lighthouse's Fulu epoch returns `ok`
+(`process_epoch_fulu_total`), under time and supply bounds and the Fulu pyspec preconditions.
 
 `FuluEpochCondsAll` lists the conditions on the epoch start state. The state facts are the
 invariants that reachable Gloas states keep (`EpochInputOk''`). The Lean spec has no Fulu block
@@ -57,6 +58,34 @@ theorem formalhouse_fulu_epoch (o : Spec.Oracle) (e : EState) (hc : FuluEpochCon
   refine ⟨fun s' hs' => ?_, fun s' hs' => (h s').mpr hs'⟩
   exact process_epoch_fulu_etheorem epochPresetAgrees_mainnet o hc.oracle hc.sha e hc.etheorem
     ((h s').mp hs')
+
+/-- The Fulu epoch of Lighthouse returns `ok`, and its state equals Etheorem's Fulu
+`processEpoch`.
+
+The conditions beyond `formalhouse_fulu_epoch`:
+- `hslot`: the slot is at least `8192` below `2^64` (the pyspec `get_block_root` raises near
+  `2^64`).
+- `hvec`: the Fulu vector fields have their SSZ lengths. The Lean state holds them as lists.
+- `hrb`: the time and supply bounds of `RowBounds`.
+- `hcomm`: at the committee steps, the state facts (`FuluCommConds`) and the Fulu pyspec
+  preconditions (`FuluCommPreconds`: an active validator at the next epoch and at `current + 2`,
+  and selections that end within `2^64` passes). -/
+theorem formalhouse_fulu_epoch_total (o : Spec.Oracle) (e : EState) (hc : FuluEpochCondsAll o e)
+    (hslot : (absEState e).slot + 8192 < 2 ^ 64)
+    (hvec : (absEState e).FuluVectorLengths Spec.Preset.mainnet)
+    (hrb : Spec.RowBounds (absEState e))
+    (hcomm : ∀ s, Spec.CommFrame (absEState e) s →
+      Spec.FuluCommConds o s ∧ Spec.FuluCommPreconds o s) :
+    ∃ s', Spec.process_epoch_lh_order_fulu o (absEState e) = .ok s' ∧
+      ∃ e', (EthCLSpecs.Fulu.processEpoch (StateTransition := FuluRun)).run (pureState e) =
+        .ok ((), pureState e') ∧ absEState e' = s' := by
+  have hin := hc.reachable
+  obtain ⟨⟨⟨hb, -, heb, -, hsup⟩, -, hcons⟩, -, -⟩ := hin
+  obtain ⟨s', hs'⟩ := Spec.process_epoch_fulu_total o (absEState e) hb.2.1 hslot hc.boundary.1
+    hvec hb.1 heb hcons hsup.2.2 hrb (Spec.committeesOkFulu_of o _ hslot hcomm)
+  have h := formalhouse_fulu_epoch o e hc
+  have hlh := h.2 s' hs'
+  exact ⟨s', hlh, h.1 s' hlh⟩
 
 end Mainnet
 

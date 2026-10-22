@@ -132,6 +132,7 @@ import EpochProofs.Etheorem.Final
 import EpochProofs.Sanity.Invariants.Totality
 import EpochProofs.Sanity.Invariants.TotalityCommittees
 import EpochProofs.Sanity.Invariants.TotalityRows
+import EpochProofs.Sanity.Invariants.TotalityFulu
 import EpochProofs.Etheorem.Total
 import EpochProofs.Sanity.LighthouseNewValidator
 import EpochProofs.Equiv.DepositBalance
@@ -179,3 +180,6 @@ import EpochProofs.Sanity.Invariants.FuluLengths
 import EpochProofs.Sanity.Invariants.FuluPubkeys
 import EpochProofs.Sanity.Invariants.FuluConsolidations
 import EpochProofs.Sanity.Invariants.FuluExits
+import EpochProofs.Sanity.Invariants.FuluBalance
+import EpochProofs.Sanity.Invariants.FuluReachable
+import EpochProofs.FormalhouseFuluReachable
