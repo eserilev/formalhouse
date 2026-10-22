@@ -110,7 +110,7 @@ theorem process_pending_deposits_pkPrefix (p : Preset) (o : Oracle)
            ‹apply_pending_deposit _ _ _ _ = _›))
 
 /-- `process_epoch` keeps a pubkey prefix. -/
-theorem process_epoch_pkPrefix (p : Preset) (o : Oracle) (s s' : BeaconState)
+theorem process_epoch_pkPrefix [PresetCfg] (p : Preset) (o : Oracle) (s s' : BeaconState)
     (h : process_epoch p o s = .ok s') : PkPrefix s s' := by
   unfold process_epoch at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
@@ -154,12 +154,12 @@ theorem process_epoch_pkPrefix (p : Preset) (o : Oracle) (s s' : BeaconState)
   exact d6.pkPrefix.trans (d7.trans d15.pkPrefix)
 
 /-- `process_slot` keeps the pubkeys. -/
-theorem process_slot_pkPrefix (p : Preset) (o : Oracle) (s s' : BeaconState)
+theorem process_slot_pkPrefix [PresetCfg] (p : Preset) (o : Oracle) (s s' : BeaconState)
     (h : process_slot p o s = .ok s') : PkPrefix s s' :=
   (PkSame.of_eq (process_slot_frame p o _ _ h).1.1).pkPrefix
 
 /-- `process_slots` with the real `process_epoch` keeps a pubkey prefix. -/
-theorem process_slots_pkPrefix (p : Preset) (o : Oracle) (s s' : BeaconState) (slot : Slot)
+theorem process_slots_pkPrefix [PresetCfg] (p : Preset) (o : Oracle) (s s' : BeaconState) (slot : Slot)
     (h : process_slots p o (process_epoch p o) s slot = .ok s') : PkPrefix s s' :=
   process_slots_invariant p o (process_epoch p o) (PkPrefix s)
     (fun _ _ ht hP => hP.trans (process_slot_pkPrefix p o _ _ ht))
@@ -167,7 +167,7 @@ theorem process_slots_pkPrefix (p : Preset) (o : Oracle) (s s' : BeaconState) (s
     (fun _ _ hP => hP) s s' slot (PkPrefix.refl s) h
 
 /-- `state_transition` keeps a pubkey prefix. -/
-theorem state_transition_pkPrefix (p : Preset) (o : Oracle)
+theorem state_transition_pkPrefix [PresetCfg] (p : Preset) (o : Oracle)
     (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch) (s s' : BeaconState)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (h : state_transition p o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
@@ -184,7 +184,7 @@ theorem state_transition_pkPrefix (p : Preset) (o : Oracle)
            ‹process_block _ _ _ _ _ _ = _›).pkPrefix)
 
 /-- Every state of a reachable Gloas run has the start pubkeys as a prefix. -/
-theorem Reachable.pkPrefix {o : Oracle} {max_blobs_per_block : Epoch → Uint64}
+theorem Reachable.pkPrefix [PresetCfg] {o : Oracle} {max_blobs_per_block : Epoch → Uint64}
     {GLOAS_FORK_EPOCH : Epoch} {init s : BeaconState}
     (hr : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s) : PkPrefix init s := by
   induction hr with
@@ -192,7 +192,7 @@ theorem Reachable.pkPrefix {o : Oracle} {max_blobs_per_block : Epoch → Uint64}
   | step _ _ _ _ _ ht ih => exact ih.trans (state_transition_pkPrefix _ o _ _ _ _ _ _ ht)
 
 /-- The Gloas slot loop keeps a pubkey prefix. -/
-theorem SlotReachG.pkPrefix {o : Oracle} {s t : BeaconState} {slot : Slot}
+theorem SlotReachG.pkPrefix [PresetCfg] {o : Oracle} {s t : BeaconState} {slot : Slot}
     (hr : SlotReachG o s slot t) : PkPrefix s t := by
   induction hr with
   | refl => exact PkPrefix.refl _
@@ -266,7 +266,7 @@ theorem epoch_cache_total_carry {E : Nat} {b t : BeaconState} (total : Nat)
 
 /-- Two states of the blocks of epoch `E` on mainnet agree on the effective balances and on the
 activity at `E`. `EpochInv` is what `state_transition_epochInv` keeps for each block. -/
-theorem activeAgree_of_epochInv {s0 r b t : BeaconState} {E nb nt : Nat}
+theorem activeAgree_of_epochInv [PresetCfg] {s0 r b t : BeaconState} {E nb nt : Nat}
     (hb : EpochInv s0 r E nb b) (ht : EpochInv s0 r E nt t) : ActiveAgree E b t :=
   hb.2.2.2.1.symm.trans ht.2.2.2.1
 

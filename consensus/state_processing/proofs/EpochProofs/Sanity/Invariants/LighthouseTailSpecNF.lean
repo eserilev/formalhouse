@@ -1,4 +1,5 @@
 import EpochProofs.Sanity.Invariants.LighthouseTailNF
+import EpochProofs.Spec.PresetCfg
 
 /-!
 # The spec epoch tail in the common form
@@ -34,16 +35,16 @@ theorem sameOk_cont {x y : SpecM BeaconState} (h : SameOk x y)
 /-! ## The eth1 reset -/
 
 /-- The test of `process_eth1_data_reset`: it reads only the slot. -/
-def eth1Cond (S : BeaconState) : SpecM Bool := do
-  let next_epoch ← uint64Add (← get_current_epoch Preset.mainnet S) 1
-  pure ((← uint64Mod next_epoch Preset.mainnet.EPOCHS_PER_ETH1_VOTING_PERIOD) == 0)
+def eth1Cond [PresetCfg] (S : BeaconState) : SpecM Bool := do
+  let next_epoch ← uint64Add (← get_current_epoch P S) 1
+  pure ((← uint64Mod next_epoch P.EPOCHS_PER_ETH1_VOTING_PERIOD) == 0)
 
 /-- `process_eth1_data_reset` clears the votes or keeps the state, by its test. -/
-theorem eth1_eq (S : BeaconState) :
-    process_eth1_data_reset Preset.mainnet S =
+theorem eth1_eq [PresetCfg] (S : BeaconState) :
+    process_eth1_data_reset P S =
       (fun b => if b then { S with eth1_data_votes := [] } else S) <$> eth1Cond S := by
   unfold process_eth1_data_reset eth1Cond
-  cases get_current_epoch Preset.mainnet S with
+  cases get_current_epoch P S with
   | error e => rfl
   | ok c =>
     simp only [bind, Except.bind]
@@ -51,18 +52,18 @@ theorem eth1_eq (S : BeaconState) :
     | error e => rfl
     | ok n =>
       simp only
-      cases uint64Mod n Preset.mainnet.EPOCHS_PER_ETH1_VOTING_PERIOD with
+      cases uint64Mod n P.EPOCHS_PER_ETH1_VOTING_PERIOD with
       | error e => rfl
       | ok m =>
         simp only [pure, Except.pure, Functor.map, Except.map]
         split <;> simp_all
 
 /-- The test reads only the slot. -/
-theorem eth1Cond_slot {S S' : BeaconState} (h : S'.slot = S.slot) : eth1Cond S' = eth1Cond S := by
+theorem eth1Cond_slot [PresetCfg] {S S' : BeaconState} (h : S'.slot = S.slot) : eth1Cond S' = eth1Cond S := by
   simp only [eth1Cond, get_current_epoch, h]
 
 /-- A successful eth1 reset changes only the votes. -/
-theorem eth1_shape {S S' : BeaconState} (h : process_eth1_data_reset Preset.mainnet S = .ok S') :
+theorem eth1_shape [PresetCfg] {S S' : BeaconState} (h : process_eth1_data_reset P S = .ok S') :
     ∃ v, S' = { S with eth1_data_votes := v } := by
   rw [eth1_eq] at h
   cases hc : eth1Cond S with
@@ -74,12 +75,12 @@ theorem eth1_shape {S S' : BeaconState} (h : process_eth1_data_reset Preset.main
     · cases h; exact ⟨[], rfl⟩
 
 /-- The eth1 reset commutes with a step that keeps the slot and passes the votes through. -/
-theorem eth1_comm (F : BeaconState → SpecM BeaconState) (S : BeaconState)
+theorem eth1_comm [PresetCfg] (F : BeaconState → SpecM BeaconState) (S : BeaconState)
     (hslot : ∀ T, F S = .ok T → T.slot = S.slot)
     (hB : F { S with eth1_data_votes := [] } =
       (fun t => { t with eth1_data_votes := [] }) <$> F S) :
-    SameOk (process_eth1_data_reset Preset.mainnet S >>= F)
-      (F S >>= process_eth1_data_reset Preset.mainnet) := by
+    SameOk (process_eth1_data_reset P S >>= F)
+      (F S >>= process_eth1_data_reset P) := by
   intro w
   rw [eth1_eq]
   cases hF : F S with
@@ -92,7 +93,7 @@ theorem eth1_comm (F : BeaconState → SpecM BeaconState) (S : BeaconState)
       · simp [bind, Except.bind, Functor.map, Except.map, hB, hF]
   | ok T =>
     have hT := hslot T hF
-    show _ ↔ process_eth1_data_reset Preset.mainnet T = .ok w
+    show _ ↔ process_eth1_data_reset P T = .ok w
     rw [eth1_eq, eth1Cond_slot hT]
     cases hc : eth1Cond S with
     | error e' => simp [bind, Except.bind, Functor.map, Except.map]
@@ -133,18 +134,18 @@ theorem active_index_lt (l : List Validator) (epoch : Epoch) (i : Nat)
   simpa using this
 
 /-- Inactive validators appended after the old ones keep `get_total_active_balance`. -/
-theorem get_total_active_balance_append (S T : BeaconState) (extra : List Validator)
-    (epoch : Epoch) (hcur : get_current_epoch Preset.mainnet S = .ok epoch)
+theorem get_total_active_balance_append [PresetCfg] (S T : BeaconState) (extra : List Validator)
+    (epoch : Epoch) (hcur : get_current_epoch P S = .ok epoch)
     (hslot : T.slot = S.slot) (hv : T.validators = S.validators ++ extra)
     (hext : ∀ v ∈ extra, v.activation_epoch = FAR_FUTURE_EPOCH)
     (hfar : epoch < FAR_FUTURE_EPOCH) :
-    get_total_active_balance Preset.mainnet T = get_total_active_balance Preset.mainnet S := by
-  have hcurT : get_current_epoch Preset.mainnet T = .ok epoch := by
+    get_total_active_balance P T = get_total_active_balance P S := by
+  have hcurT : get_current_epoch P T = .ok epoch := by
     rw [← hcur]; simp only [get_current_epoch, hslot]
   unfold get_total_active_balance
   rw [hcur, hcurT]
-  show get_total_balance Preset.mainnet T (get_active_validator_indices T epoch) =
-    get_total_balance Preset.mainnet S (get_active_validator_indices S epoch)
+  show get_total_balance P T (get_active_validator_indices T epoch) =
+    get_total_balance P S (get_active_validator_indices S epoch)
   have hidx : get_active_validator_indices T epoch = get_active_validator_indices S epoch := by
     unfold get_active_validator_indices
     rw [hv, active_indices_append]
@@ -160,9 +161,9 @@ theorem get_total_active_balance_append (S T : BeaconState) (extra : List Valida
 /-! ## New validators are not active -/
 
 /-- A new validator from a deposit has no activation epoch. -/
-theorem get_validator_from_deposit_act (pubkey : BLSPubkey) (withdrawal_credentials : Bytes32)
+theorem get_validator_from_deposit_act [PresetCfg] (pubkey : BLSPubkey) (withdrawal_credentials : Bytes32)
     (amount : Gwei) (v : Validator)
-    (h : get_validator_from_deposit Preset.mainnet pubkey withdrawal_credentials amount = .ok v) :
+    (h : get_validator_from_deposit P pubkey withdrawal_credentials amount = .ok v) :
     v.activation_epoch = FAR_FUTURE_EPOCH := by
   unfold get_validator_from_deposit at h
   simp only [bind, Except.bind, pure, Except.pure] at h
@@ -186,8 +187,8 @@ theorem ValAct.of_eq {S T T' : BeaconState} (h : ValAct S T) (hs : T'.slot = T.s
   exact ⟨hs.trans h1, extra, hv.trans h2, h3⟩
 
 /-- `apply_pending_deposit` keeps `ValAct`. -/
-theorem apply_valAct (o : Oracle) (S T T' : BeaconState) (d : PendingDeposit)
-    (hT : ValAct S T) (h : apply_pending_deposit Preset.mainnet o T d = .ok T') :
+theorem apply_valAct [PresetCfg] (o : Oracle) (S T T' : BeaconState) (d : PendingDeposit)
+    (hT : ValAct S T) (h : apply_pending_deposit P o T d = .ok T') :
     ValAct S T' := by
   obtain ⟨hs, extra, hv, hextra⟩ := hT
   unfold apply_pending_deposit at h
@@ -219,9 +220,9 @@ theorem apply_valAct (o : Oracle) (S T T' : BeaconState) (d : PendingDeposit)
       exact ⟨hs, extra, hv, hextra⟩
 
 /-- A fold of deposits keeps `ValAct`. -/
-theorem applyFold_valAct (o : Oracle) (S : BeaconState) :
+theorem applyFold_valAct [PresetCfg] (o : Oracle) (S : BeaconState) :
     ∀ (ds : List PendingDeposit) (T T' : BeaconState), ValAct S T →
-      ds.foldlM (apply_pending_deposit Preset.mainnet o) T = .ok T' → ValAct S T'
+      ds.foldlM (apply_pending_deposit P o) T = .ok T' → ValAct S T'
   | [], T, T', hT, h => by
     simp only [List.foldlM_nil, pure, Except.pure, Except.ok.injEq] at h
     subst h
@@ -282,13 +283,13 @@ theorem range_perm_split (n m : Nat) (named : List Nat) (hnd : named.Nodup)
 /-! ## Steps that pass other fields through -/
 
 /-- `add_validator_to_registry` passes the deposit queue fields through. -/
-theorem add_validator_wq (t : BeaconState) (q : List PendingDeposit) (d : Gwei)
+theorem add_validator_wq [PresetCfg] (t : BeaconState) (q : List PendingDeposit) (d : Gwei)
     (pubkey : BLSPubkey) (withdrawal_credentials : Bytes32) (amount : Gwei) :
-    add_validator_to_registry Preset.mainnet
+    add_validator_to_registry P
         { t with pending_deposits := q, deposit_balance_to_consume := d } pubkey
         withdrawal_credentials amount =
       (fun t' => { t' with pending_deposits := q, deposit_balance_to_consume := d }) <$>
-        add_validator_to_registry Preset.mainnet t pubkey withdrawal_credentials amount := by
+        add_validator_to_registry P t pubkey withdrawal_credentials amount := by
   unfold add_validator_to_registry get_index_for_new_validator
   simp only [bind, Except.bind, pure, Except.pure, Functor.map, Except.map]
   repeat' split
@@ -298,12 +299,12 @@ theorem add_validator_wq (t : BeaconState) (q : List PendingDeposit) (d : Gwei)
     | (rename_i h; cases h)
 
 /-- `apply_pending_deposit` passes the deposit queue fields through. -/
-theorem apply_wq (o : Oracle) (t : BeaconState) (q : List PendingDeposit) (d : Gwei)
+theorem apply_wq [PresetCfg] (o : Oracle) (t : BeaconState) (q : List PendingDeposit) (d : Gwei)
     (dp : PendingDeposit) :
-    apply_pending_deposit Preset.mainnet o
+    apply_pending_deposit P o
         { t with pending_deposits := q, deposit_balance_to_consume := d } dp =
       (fun t' => { t' with pending_deposits := q, deposit_balance_to_consume := d }) <$>
-        apply_pending_deposit Preset.mainnet o t dp := by
+        apply_pending_deposit P o t dp := by
   unfold apply_pending_deposit
   dsimp only
   split
@@ -316,30 +317,30 @@ theorem apply_wq (o : Oracle) (t : BeaconState) (q : List PendingDeposit) (d : G
     | ok bs => rfl
 
 /-- A fold of deposits passes the deposit queue fields through. -/
-theorem applyFold_wq (o : Oracle) (q : List PendingDeposit) (d : Gwei) :
+theorem applyFold_wq [PresetCfg] (o : Oracle) (q : List PendingDeposit) (d : Gwei) :
     ∀ (ds : List PendingDeposit) (t : BeaconState),
-      ds.foldlM (apply_pending_deposit Preset.mainnet o)
+      ds.foldlM (apply_pending_deposit P o)
           { t with pending_deposits := q, deposit_balance_to_consume := d } =
         (fun t' => { t' with pending_deposits := q, deposit_balance_to_consume := d }) <$>
-          ds.foldlM (apply_pending_deposit Preset.mainnet o) t
+          ds.foldlM (apply_pending_deposit P o) t
   | [], t => rfl
   | dp :: ds, t => by
     rw [List.foldlM_cons, List.foldlM_cons, apply_wq]
-    cases apply_pending_deposit Preset.mainnet o t dp with
+    cases apply_pending_deposit P o t dp with
     | error e => rfl
     | ok t1 => exact applyFold_wq o q d ds t1
 
 /-- The queue write commutes with a fold of deposits. -/
-theorem wq_news_comm (o : Oracle) (q : List PendingDeposit) (d : Gwei)
+theorem wq_news_comm [PresetCfg] (o : Oracle) (q : List PendingDeposit) (d : Gwei)
     (ds : List PendingDeposit) (t : BeaconState) (k : BeaconState → SpecM BeaconState) :
-    (ds.foldlM (apply_pending_deposit Preset.mainnet o) t >>= fun t' =>
+    (ds.foldlM (apply_pending_deposit P o) t >>= fun t' =>
         pure { t' with pending_deposits := q, deposit_balance_to_consume := d } >>= k) =
       (writeQueue q d t >>= fun t' =>
-        ds.foldlM (apply_pending_deposit Preset.mainnet o) t' >>= k) := by
-  show _ = ds.foldlM (apply_pending_deposit Preset.mainnet o)
+        ds.foldlM (apply_pending_deposit P o) t' >>= k) := by
+  show _ = ds.foldlM (apply_pending_deposit P o)
     { t with pending_deposits := q, deposit_balance_to_consume := d } >>= k
   conv => rhs; rw [applyFold_wq o q d ds t]
-  cases ds.foldlM (apply_pending_deposit Preset.mainnet o) t <;> rfl
+  cases ds.foldlM (apply_pending_deposit P o) t <;> rfl
 
 /-- `addSums` keeps the slot and passes the votes through. -/
 theorem addSums_eth1 (S : BeaconState) (sums : List Gwei) :
@@ -376,9 +377,9 @@ theorem NewsQ.setEB {Pk : List BLSPubkey} {i : Nat} {t : BeaconState} (j : Nat) 
     exact h.2 v hv
 
 /-- A deposit keeps `NewsQ`. -/
-theorem NewsQ.apply {Pk : List BLSPubkey} {i : Nat} {t t' : BeaconState} (o : Oracle)
+theorem NewsQ.apply [PresetCfg] {Pk : List BLSPubkey} {i : Nat} {t t' : BeaconState} (o : Oracle)
     (d : PendingDeposit) (h : NewsQ Pk i t)
-    (ha : apply_pending_deposit Preset.mainnet o t d = .ok t') : NewsQ Pk i t' := by
+    (ha : apply_pending_deposit P o t d = .ok t') : NewsQ Pk i t' := by
   obtain ⟨⟨ys, hys⟩, -⟩ := apply_frame o d t t' ha
   refine ⟨by rw [hys, List.length_append]; exact Nat.lt_of_lt_of_le h.1 (Nat.le_add_right _ _),
     fun v hv => h.2 v ?_⟩
@@ -387,16 +388,16 @@ theorem NewsQ.apply {Pk : List BLSPubkey} {i : Nat} {t t' : BeaconState} (o : Or
 
 /-- A fold of deposits for pubkeys outside `Pk` commutes with `setEB` at a validator with a
 pubkey in `Pk`. -/
-theorem newsFold_hF1 (o : Oracle) (Pk : List BLSPubkey) (i : Nat) (e : Gwei) :
+theorem newsFold_hF1 [PresetCfg] (o : Oracle) (Pk : List BLSPubkey) (i : Nat) (e : Gwei) :
     ∀ (ds : List PendingDeposit), (∀ d ∈ ds, d.pubkey ∉ Pk) → ∀ t, NewsQ Pk i t →
-      ds.foldlM (apply_pending_deposit Preset.mainnet o) (setEB t i e) =
-        (fun t' => setEB t' i e) <$> ds.foldlM (apply_pending_deposit Preset.mainnet o) t
+      ds.foldlM (apply_pending_deposit P o) (setEB t i e) =
+        (fun t' => setEB t' i e) <$> ds.foldlM (apply_pending_deposit P o) t
   | [], _, t, _ => rfl
   | d :: ds, hds, t, hq => by
     have hother : ApplyOther i d t :=
       ⟨hq.1, fun v hv heq => hds d (by simp) (heq ▸ hq.2 v hv)⟩
     rw [List.foldlM_cons, List.foldlM_cons, apply_hF1 o d i t e hother]
-    cases ha : apply_pending_deposit Preset.mainnet o t d with
+    cases ha : apply_pending_deposit P o t d with
     | error err => rfl
     | ok t1 =>
       exact newsFold_hF1 o Pk i e ds (fun d' hd' => hds d' (by simp [hd'])) t1
@@ -404,9 +405,9 @@ theorem newsFold_hF1 (o : Oracle) (Pk : List BLSPubkey) (i : Nat) (e : Gwei) :
 
 /-- A fold of deposits for pubkeys outside `Pk` keeps a validator with a pubkey in `Pk` and its
 balance. -/
-theorem newsFold_hF2 (o : Oracle) (Pk : List BLSPubkey) (i : Nat) :
+theorem newsFold_hF2 [PresetCfg] (o : Oracle) (Pk : List BLSPubkey) (i : Nat) :
     ∀ (ds : List PendingDeposit), (∀ d ∈ ds, d.pubkey ∉ Pk) → ∀ t t', NewsQ Pk i t →
-      ds.foldlM (apply_pending_deposit Preset.mainnet o) t = .ok t' →
+      ds.foldlM (apply_pending_deposit P o) t = .ok t' →
       t'.validators[i]? = t.validators[i]? ∧ t'.balances[i]? = t.balances[i]?
   | [], _, t, t', _, h => by cases h; exact ⟨rfl, rfl⟩
   | d :: ds, hds, t, t', hq, h => by
@@ -422,13 +423,13 @@ theorem newsFold_hF2 (o : Oracle) (Pk : List BLSPubkey) (i : Nat) :
 /-! ## The pieces of the common form -/
 
 /-- The deposit decisions on the views that Lighthouse predicts. -/
-def decOf (s1 : BeaconState) (total_active_balance : Gwei) (current_epoch : Epoch) :
+def decOf [PresetCfg] (s1 : BeaconState) (total_active_balance : Gwei) (current_epoch : Epoch) :
     SpecM (Nat × Gwei × List Bool) := do
   let finalized_slot ←
-    compute_start_slot_at_epoch Preset.mainnet s1.finalized_checkpoint.epoch
-  depositDecisions Preset.mainnet finalized_slot s1.deposit_balance_to_consume
-    (← get_activation_churn_limit Preset.mainnet total_active_balance)
-    ((s1.pending_deposits.take Preset.mainnet.MAX_PENDING_DEPOSITS_PER_EPOCH).map
+    compute_start_slot_at_epoch P s1.finalized_checkpoint.epoch
+  depositDecisions P finalized_slot s1.deposit_balance_to_consume
+    (← get_activation_churn_limit P total_active_balance)
+    ((s1.pending_deposits.take P.MAX_PENDING_DEPOSITS_PER_EPOCH).map
       (lhDepositView s1 current_epoch))
 
 /-- The handled deposits of a decision, with their postponed flags. -/
@@ -450,23 +451,23 @@ def newsOf (s1 : BeaconState) (x : Nat × Gwei × List Bool) : List PendingDepos
   newDeposits (s1.validators.map (·.pubkey)) (handledOf' s1 x)
 
 /-- The common form after the decisions and the sums. -/
-def specNfAfterG (o : Oracle) (B K : BeaconState → SpecM BeaconState) (s1 S4 : BeaconState)
+def specNfAfterG [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM BeaconState) (s1 S4 : BeaconState)
     (x : Nat × Gwei × List Bool) (sums : List Gwei) : SpecM BeaconState := do
   let n := s1.validators.length
   let named := consolidationIndices s1
   let t1 ← addSums S4 sums
   let t2 ← ((List.range n).filter (fun i => !decide (i ∈ named))).foldlM ebUpdateAt t1
-  let t3 ← process_eth1_data_reset Preset.mainnet t2
+  let t3 ← process_eth1_data_reset P t2
   let t4 ← writeQueue (queueOf s1 x) x.2.1 t3
-  let t5 ← (newsOf s1 x).foldlM (apply_pending_deposit Preset.mainnet o) t4
+  let t5 ← (newsOf s1 x).foldlM (apply_pending_deposit P o) t4
   let t6 ← (List.range' n (t5.validators.length - n)).foldlM ebUpdateAt t5
-  let t7 ← process_pending_consolidations Preset.mainnet t6
+  let t7 ← process_pending_consolidations P t6
   let t8 ← named.foldlM ebUpdateAt t7
   let t9 ← B t8
   K t9
 
 /-- `tailNFG` in pieces. -/
-theorem tailNF_eq_spec (o : Oracle) (B K : BeaconState → SpecM BeaconState) (s1 S4 : BeaconState)
+theorem tailNF_eq_spec [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM BeaconState) (s1 S4 : BeaconState)
     (total_active_balance : Gwei) (current_epoch : Epoch) :
     tailNFG o (fun t => B t >>= K) s1 S4 total_active_balance current_epoch =
       (decOf s1 total_active_balance current_epoch >>= fun x => sumsOf s1 x >>= fun sums =>
@@ -478,8 +479,8 @@ theorem tailNF_eq_spec (o : Oracle) (B K : BeaconState → SpecM BeaconState) (s
 /-! ## The total active balance stays the same -/
 
 /-- `process_pending_deposits` keeps `ValAct`. -/
-theorem process_pending_deposits_valAct (o : Oracle) (tab : Gwei) (S S6 : BeaconState)
-    (h : process_pending_deposits Preset.mainnet tab (apply_pending_deposit Preset.mainnet o) S =
+theorem process_pending_deposits_valAct [PresetCfg] (o : Oracle) (tab : Gwei) (S S6 : BeaconState)
+    (h : process_pending_deposits P tab (apply_pending_deposit P o) S =
       .ok S6) : ValAct S S6 := by
   unfold process_pending_deposits at h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
@@ -507,29 +508,29 @@ theorem process_pending_deposits_valAct (o : Oracle) (tab : Gwei) (S S6 : Beacon
 
 /-- The spec tail after the eth1 reset: the deposits with the churn total `tab`, the
 consolidations, `B`, the effective balance updates, then `K`. -/
-def specTailG (o : Oracle) (tab : Gwei) (B K : BeaconState → SpecM BeaconState)
+def specTailG [PresetCfg] (o : Oracle) (tab : Gwei) (B K : BeaconState → SpecM BeaconState)
     (S5 : BeaconState) : SpecM BeaconState := do
-  let S6 ← process_pending_deposits Preset.mainnet tab (apply_pending_deposit Preset.mainnet o) S5
-  let S7 ← process_pending_consolidations Preset.mainnet S6
+  let S6 ← process_pending_deposits P tab (apply_pending_deposit P o) S5
+  let S7 ← process_pending_consolidations P S6
   let S8 ← B S7
-  let S9 ← process_effective_balance_updates Preset.mainnet S8
+  let S9 ← process_effective_balance_updates P S8
   K S9
 
 /-- The Gloas spec tail after the eth1 reset, with one total active balance. -/
-def specTail (o : Oracle) (tab : Gwei) (S5 : BeaconState) : SpecM BeaconState :=
-  specTailG o tab (process_builder_pending_payments Preset.mainnet tab) (epochRest2 o) S5
+def specTail [PresetCfg] (o : Oracle) (tab : Gwei) (S5 : BeaconState) : SpecM BeaconState :=
+  specTailG o tab (process_builder_pending_payments P tab) (epochRest2 o) S5
 
 /-- In `epochRest`, both totals are the total of the state before it. -/
-theorem epochRest_specTail (o : Oracle) (S4 : BeaconState) (tab : Gwei) (cur : Epoch)
-    (hcur : get_current_epoch Preset.mainnet S4 = .ok cur) (hfar : cur < FAR_FUTURE_EPOCH)
-    (htab : get_total_active_balance Preset.mainnet S4 = .ok tab) :
-    SameOk (epochRest Preset.mainnet o S4)
-      (process_eth1_data_reset Preset.mainnet S4 >>= specTail o tab) := by
+theorem epochRest_specTail [PresetCfg] (o : Oracle) (S4 : BeaconState) (tab : Gwei) (cur : Epoch)
+    (hcur : get_current_epoch P S4 = .ok cur) (hfar : cur < FAR_FUTURE_EPOCH)
+    (htab : get_total_active_balance P S4 = .ok tab) :
+    SameOk (epochRest P o S4)
+      (process_eth1_data_reset P S4 >>= specTail o tab) := by
   unfold epochRest
   refine SameOk.bind (SameOk.refl _) (fun S5 h5 => ?_)
   obtain ⟨v, rfl⟩ := eth1_shape h5
-  have hcur5 : get_current_epoch Preset.mainnet { S4 with eth1_data_votes := v } = .ok cur := hcur
-  have htab5 : get_total_active_balance Preset.mainnet { S4 with eth1_data_votes := v } =
+  have hcur5 : get_current_epoch P { S4 with eth1_data_votes := v } = .ok cur := hcur
+  have htab5 : get_total_active_balance P { S4 with eth1_data_votes := v } =
       .ok tab := by
     rw [get_total_active_balance_append S4 { S4 with eth1_data_votes := v } [] cur hcur rfl
       (by simp) (by simp) hfar]
@@ -539,10 +540,10 @@ theorem epochRest_specTail (o : Oracle) (S4 : BeaconState) (tab : Gwei) (cur : E
   refine SameOk.bind (SameOk.refl _) (fun S6 h6 => ?_)
   refine SameOk.bind (SameOk.refl _) (fun S7 h7 => ?_)
   have hva := process_pending_deposits_valAct o tab _ S6 h6
-  have hc7 := process_pending_consolidations_checkpointsStable Preset.mainnet S6 S7 h7
+  have hc7 := process_pending_consolidations_checkpointsStable P S6 S7 h7
   have hv7 := (consolidations_frame S6 S7 h7).1
   obtain ⟨hs7, extra, hv7', hext⟩ := hva.of_eq hc7.1 hv7
-  have htab7 : get_total_active_balance Preset.mainnet S7 = .ok tab := by
+  have htab7 : get_total_active_balance P S7 = .ok tab := by
     rw [get_total_active_balance_append _ S7 extra cur hcur5 hs7 hv7' hext hfar]
     exact htab5
   rw [htab7, ok_bind']
@@ -551,22 +552,22 @@ theorem epochRest_specTail (o : Oracle) (S4 : BeaconState) (tab : Gwei) (cur : E
 /-! ## The deposits in pieces -/
 
 /-- The decide-then-apply form of the deposits, with projections in place of the match. -/
-theorem decide_form_eq (o : Oracle) (tab : Gwei) (s : BeaconState) (current_epoch : Epoch) :
+theorem decide_form_eq [PresetCfg] (o : Oracle) (tab : Gwei) (s : BeaconState) (current_epoch : Epoch) :
     (do
       let finalized_slot ←
-        compute_start_slot_at_epoch Preset.mainnet s.finalized_checkpoint.epoch
-      let (next, dbtc, postponed) ← depositDecisions Preset.mainnet finalized_slot
+        compute_start_slot_at_epoch P s.finalized_checkpoint.epoch
+      let (next, dbtc, postponed) ← depositDecisions P finalized_slot
         s.deposit_balance_to_consume
-        (← get_activation_churn_limit Preset.mainnet tab)
+        (← get_activation_churn_limit P tab)
         (s.pending_deposits.map (specDepositView s (current_epoch + 1)))
       let handled := (s.pending_deposits.take next).zip postponed
       let s' ← applyHandled o s handled
       pure { s' with
         pending_deposits := s.pending_deposits.drop next ++ (handled.filter (·.2)).map (·.1)
         deposit_balance_to_consume := dbtc } : SpecM BeaconState) =
-    (compute_start_slot_at_epoch Preset.mainnet s.finalized_checkpoint.epoch >>= fun fs =>
-      get_activation_churn_limit Preset.mainnet tab >>= fun c =>
-      depositDecisions Preset.mainnet fs s.deposit_balance_to_consume c
+    (compute_start_slot_at_epoch P s.finalized_checkpoint.epoch >>= fun fs =>
+      get_activation_churn_limit P tab >>= fun c =>
+      depositDecisions P fs s.deposit_balance_to_consume c
         (s.pending_deposits.map (specDepositView s (current_epoch + 1))) >>= fun x =>
       applyHandled o s ((s.pending_deposits.take x.1).zip x.2.2) >>= fun s' =>
       pure { s' with
@@ -576,28 +577,28 @@ theorem decide_form_eq (o : Oracle) (tab : Gwei) (s : BeaconState) (current_epoc
   rfl
 
 /-- The spec tail after the sums, before any reordering. -/
-def innerAfterG (o : Oracle) (B K : BeaconState → SpecM BeaconState) (s1 : BeaconState)
+def innerAfterG [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM BeaconState) (s1 : BeaconState)
     (S5 : BeaconState) (x : Nat × Gwei × List Bool) (sums : List Gwei) : SpecM BeaconState := do
   let t ← addSums S5 sums
-  let t' ← (newsOf s1 x).foldlM (apply_pending_deposit Preset.mainnet o) t
-  let S7 ← process_pending_consolidations Preset.mainnet
+  let t' ← (newsOf s1 x).foldlM (apply_pending_deposit P o) t
+  let S7 ← process_pending_consolidations P
     { t' with pending_deposits := queueOf s1 x, deposit_balance_to_consume := x.2.1 }
   let S8 ← B S7
-  let S9 ← process_effective_balance_updates Preset.mainnet S8
+  let S9 ← process_effective_balance_updates P S8
   K S9
 
 /-- The spec deposits, decided once on the predicted views and with summed top-ups. -/
-theorem specTail_inner (o : Oracle) (B K : BeaconState → SpecM BeaconState)
+theorem specTail_inner [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM BeaconState)
     (s1 S5 : BeaconState) (tab : Gwei) (cur : Epoch)
-    (hcur5 : get_current_epoch Preset.mainnet S5 = .ok cur)
+    (hcur5 : get_current_epoch P S5 = .ok cur)
     (hfar : cur + 1 ≤ FAR_FUTURE_EPOCH)
     (hpend : S5.pending_deposits = s1.pending_deposits)
     (hdbtc : S5.deposit_balance_to_consume = s1.deposit_balance_to_consume)
     (hfinal : S5.finalized_checkpoint = s1.finalized_checkpoint)
     (hpk : S5.validators.map (·.pubkey) = s1.validators.map (·.pubkey))
-    (hviews : (s1.pending_deposits.take Preset.mainnet.MAX_PENDING_DEPOSITS_PER_EPOCH).map
+    (hviews : (s1.pending_deposits.take P.MAX_PENDING_DEPOSITS_PER_EPOCH).map
         (specDepositView S5 (cur + 1)) =
-      (s1.pending_deposits.take Preset.mainnet.MAX_PENDING_DEPOSITS_PER_EPOCH).map
+      (s1.pending_deposits.take P.MAX_PENDING_DEPOSITS_PER_EPOCH).map
         (lhDepositView s1 cur))
     (hlen5 : S5.balances.length = S5.validators.length)
     (hbs5 : ∀ i (h : i < S5.balances.length), S5.balances[i] < UINT64_SIZE) :
@@ -641,7 +642,7 @@ theorem specTail_inner (o : Oracle) (B K : BeaconState → SpecM BeaconState)
 /-! ## Moving the effective balance updates -/
 
 /-- A fold of updates moves before a step that commutes with each update. -/
-theorem fold_past (F : BeaconState → SpecM BeaconState) (P : BeaconState → Prop)
+theorem fold_past [PresetCfg] (F : BeaconState → SpecM BeaconState) (P : BeaconState → Prop)
     (l : List Nat) (hP : ∀ i ∈ l, ∀ t e, P t → P (setEB t i e))
     (hF1 : ∀ i ∈ l, ∀ t e, P t → F (setEB t i e) = (fun t' => setEB t' i e) <$> F t)
     (hF2 : ∀ i ∈ l, ∀ t t', P t → F t = .ok t' →
@@ -653,7 +654,7 @@ theorem fold_past (F : BeaconState → SpecM BeaconState) (P : BeaconState → P
     (ebFold_commute F P l hP hF1 hF2 s hs) k).flip
 
 /-- A fold of updates keeps the number of validators. -/
-theorem ebFold_len : ∀ (l : List Nat) (t t' : BeaconState),
+theorem ebFold_len [PresetCfg] : ∀ (l : List Nat) (t t' : BeaconState),
     l.foldlM ebUpdateAt t = .ok t' → t'.validators.length = t.validators.length
   | [], t, t', h => by cases h; rfl
   | i :: l, t, t', h => by
@@ -663,7 +664,7 @@ theorem ebFold_len : ∀ (l : List Nat) (t t' : BeaconState),
     rw [ebFold_len l _ t' h, setEB_length]
 
 /-- A fold of updates keeps `consolidationIndices`. -/
-theorem ebFold_ci : ∀ (l : List Nat) (t t' : BeaconState),
+theorem ebFold_ci [PresetCfg] : ∀ (l : List Nat) (t t' : BeaconState),
     l.foldlM ebUpdateAt t = .ok t' → consolidationIndices t' = consolidationIndices t
   | [], t, t', h => by cases h; rfl
   | i :: l, t, t', h => by
@@ -673,9 +674,9 @@ theorem ebFold_ci : ∀ (l : List Nat) (t t' : BeaconState),
     rw [ebFold_ci l _ t' h, consolidationIndices_setEB]
 
 /-- `add_validator_to_registry` keeps the pending consolidations. -/
-theorem add_validator_pc (t t' : BeaconState) (pubkey : BLSPubkey)
+theorem add_validator_pc [PresetCfg] (t t' : BeaconState) (pubkey : BLSPubkey)
     (withdrawal_credentials : Bytes32) (amount : Gwei)
-    (h : add_validator_to_registry Preset.mainnet t pubkey withdrawal_credentials amount =
+    (h : add_validator_to_registry P t pubkey withdrawal_credentials amount =
       .ok t') : t'.pending_consolidations = t.pending_consolidations := by
   unfold add_validator_to_registry at h
   simp only [bind, Except.bind, pure, Except.pure] at h
@@ -685,8 +686,8 @@ theorem add_validator_pc (t t' : BeaconState) (pubkey : BLSPubkey)
     | (cases h; rfl)
 
 /-- `apply_pending_deposit` keeps the pending consolidations. -/
-theorem apply_pc (o : Oracle) (d : PendingDeposit) (t t' : BeaconState)
-    (h : apply_pending_deposit Preset.mainnet o t d = .ok t') :
+theorem apply_pc [PresetCfg] (o : Oracle) (d : PendingDeposit) (t t' : BeaconState)
+    (h : apply_pending_deposit P o t d = .ok t') :
     t'.pending_consolidations = t.pending_consolidations := by
   unfold apply_pending_deposit at h
   simp only [bind, Except.bind, pure, Except.pure] at h
@@ -699,8 +700,8 @@ theorem apply_pc (o : Oracle) (d : PendingDeposit) (t t' : BeaconState)
     · cases h; rfl
 
 /-- A fold of deposits keeps the pending consolidations, and does not shrink the validators. -/
-theorem applyFold_pc (o : Oracle) : ∀ (ds : List PendingDeposit) (t t' : BeaconState),
-    ds.foldlM (apply_pending_deposit Preset.mainnet o) t = .ok t' →
+theorem applyFold_pc [PresetCfg] (o : Oracle) : ∀ (ds : List PendingDeposit) (t t' : BeaconState),
+    ds.foldlM (apply_pending_deposit P o) t = .ok t' →
       t'.pending_consolidations = t.pending_consolidations ∧
         t.validators.length ≤ t'.validators.length
   | [], t, t', h => by cases h; exact ⟨rfl, Nat.le_refl _⟩
@@ -734,8 +735,8 @@ theorem EBBlind.hF2 {B : BeaconState → SpecM BeaconState} (hB : EBBlind B) (i 
   rw [hv, hb]
   exact ⟨rfl, rfl⟩
 
-theorem ebBlind_payments (tab : Gwei) :
-    EBBlind (process_builder_pending_payments Preset.mainnet tab) :=
+theorem ebBlind_payments [PresetCfg] (tab : Gwei) :
+    EBBlind (process_builder_pending_payments P tab) :=
   ⟨payments_frame tab, fun i t e => payments_hF1 tab i t e⟩
 
 theorem ebBlind_pure : EBBlind (pure : BeaconState → SpecM BeaconState) :=
@@ -743,10 +744,10 @@ theorem ebBlind_pure : EBBlind (pure : BeaconState → SpecM BeaconState) :=
 
 /-- The effective balance updates after the builder payments move before them, in three
 groups. -/
-theorem inner_py (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : EBBlind B) (n : Nat) (named : List Nat) (hnd : named.Nodup)
+theorem inner_py [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : EBBlind B) (n : Nat) (named : List Nat) (hnd : named.Nodup)
     (hsub : ∀ i ∈ named, i < n) (t7 : BeaconState) (hn : n ≤ t7.validators.length) :
     SameOk (B t7 >>= fun t8 =>
-        process_effective_balance_updates Preset.mainnet t8 >>= K)
+        process_effective_balance_updates P t8 >>= K)
       ((ebL1 n named ++ ebL2 n t7 ++ named).foldlM ebUpdateAt t7 >>= fun t =>
         B t >>= K) := by
   refine SameOk.trans (y := B t7 >>= fun t8 =>
@@ -775,17 +776,17 @@ theorem ebL12_not_named (n : Nat) (named : List Nat) (hsub : ∀ i ∈ named, i 
     omega
 
 /-- The updates of the first two groups move before the consolidations. -/
-theorem inner_co (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : EBBlind B) (n : Nat) (named : List Nat) (hnd : named.Nodup)
+theorem inner_co [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : EBBlind B) (n : Nat) (named : List Nat) (hnd : named.Nodup)
     (hsub : ∀ i ∈ named, i < n) (t5 : BeaconState) (hn : n ≤ t5.validators.length)
     (hci : consolidationIndices t5 = named) :
-    SameOk (process_pending_consolidations Preset.mainnet t5 >>= fun t7 =>
+    SameOk (process_pending_consolidations P t5 >>= fun t7 =>
         B t7 >>= fun t8 =>
-        process_effective_balance_updates Preset.mainnet t8 >>= K)
+        process_effective_balance_updates P t8 >>= K)
       ((ebL1 n named ++ ebL2 n t5).foldlM ebUpdateAt t5 >>= fun t6 =>
-        process_pending_consolidations Preset.mainnet t6 >>= fun t7 =>
+        process_pending_consolidations P t6 >>= fun t7 =>
         named.foldlM ebUpdateAt t7 >>= fun t8 =>
         B t8 >>= K) := by
-  refine SameOk.trans (y := process_pending_consolidations Preset.mainnet t5 >>= fun t7 =>
+  refine SameOk.trans (y := process_pending_consolidations P t5 >>= fun t7 =>
       (ebL1 n named ++ ebL2 n t5).foldlM ebUpdateAt t7 >>= fun t6 =>
         named.foldlM ebUpdateAt t6 >>= fun t8 =>
         B t8 >>= K)
@@ -811,24 +812,24 @@ theorem consolidationIndices_of_pc {t t' : BeaconState}
 
 /-- The updates of the old validators that no consolidation names move before the deposits for
 new pubkeys. -/
-theorem inner_news (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : EBBlind B) (n : Nat) (named : List Nat) (hnd : named.Nodup)
+theorem inner_news [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : EBBlind B) (n : Nat) (named : List Nat) (hnd : named.Nodup)
     (hsub : ∀ i ∈ named, i < n) (Pk : List BLSPubkey) (ds : List PendingDeposit)
     (hds : ∀ d ∈ ds, d.pubkey ∉ Pk) (t3 : BeaconState) (hlen : t3.validators.length = n)
     (hq : ∀ i ∈ ebL1 n named, NewsQ Pk i t3) (hci : consolidationIndices t3 = named) :
-    SameOk (ds.foldlM (apply_pending_deposit Preset.mainnet o) t3 >>= fun t5 =>
-        process_pending_consolidations Preset.mainnet t5 >>= fun t7 =>
+    SameOk (ds.foldlM (apply_pending_deposit P o) t3 >>= fun t5 =>
+        process_pending_consolidations P t5 >>= fun t7 =>
         B t7 >>= fun t8 =>
-        process_effective_balance_updates Preset.mainnet t8 >>= K)
+        process_effective_balance_updates P t8 >>= K)
       ((ebL1 n named).foldlM ebUpdateAt t3 >>= fun t4 =>
-        ds.foldlM (apply_pending_deposit Preset.mainnet o) t4 >>= fun t5 =>
+        ds.foldlM (apply_pending_deposit P o) t4 >>= fun t5 =>
         (ebL2 n t5).foldlM ebUpdateAt t5 >>= fun t6 =>
-        process_pending_consolidations Preset.mainnet t6 >>= fun t7 =>
+        process_pending_consolidations P t6 >>= fun t7 =>
         named.foldlM ebUpdateAt t7 >>= fun t8 =>
         B t8 >>= K) := by
-  refine SameOk.trans (y := ds.foldlM (apply_pending_deposit Preset.mainnet o) t3 >>= fun t5 =>
+  refine SameOk.trans (y := ds.foldlM (apply_pending_deposit P o) t3 >>= fun t5 =>
       (ebL1 n named).foldlM ebUpdateAt t5 >>= fun t4 =>
         (ebL2 n t4).foldlM ebUpdateAt t4 >>= fun t6 =>
-        process_pending_consolidations Preset.mainnet t6 >>= fun t7 =>
+        process_pending_consolidations P t6 >>= fun t7 =>
         named.foldlM ebUpdateAt t7 >>= fun t8 =>
         B t8 >>= K)
     (SameOk.bind (SameOk.refl _) (fun t5 h5 => ?_)) ?_
@@ -840,7 +841,7 @@ theorem inner_news (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : 
     have hl2 : ebL2 n t4 = ebL2 n t5 := by unfold ebL2; rw [ebFold_len _ _ _ h4]
     rw [hl2]
     exact SameOk.refl _
-  · exact fold_past (fun t => ds.foldlM (apply_pending_deposit Preset.mainnet o) t)
+  · exact fold_past (fun t => ds.foldlM (apply_pending_deposit P o) t)
       (fun t => ∀ i ∈ ebL1 n named, NewsQ Pk i t) _
       (fun i _ t e h j hj => (h j hj).setEB i e)
       (fun i hi t e h => newsFold_hF1 o Pk i e ds hds t (h i hi))
@@ -855,32 +856,32 @@ theorem newsQ_of_pk {Pk : List BLSPubkey} {t : BeaconState} (hpk : t.validators.
 
 /-- The updates of the old validators that no consolidation names move before the eth1 reset,
 the queue write and the deposits for new pubkeys. -/
-theorem inner_t1 (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : EBBlind B) (n : Nat) (named : List Nat) (hnd : named.Nodup)
+theorem inner_t1 [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : EBBlind B) (n : Nat) (named : List Nat) (hnd : named.Nodup)
     (hsub : ∀ i ∈ named, i < n) (Pk : List BLSPubkey) (ds : List PendingDeposit)
     (hds : ∀ d ∈ ds, d.pubkey ∉ Pk) (q : List PendingDeposit) (dbtc : Gwei) (t1 : BeaconState)
     (hpk : t1.validators.map (·.pubkey) = Pk) (hlen : t1.validators.length = n)
     (hci : consolidationIndices t1 = named) :
-    SameOk (process_eth1_data_reset Preset.mainnet t1 >>= fun t2 => writeQueue q dbtc t2 >>=
-        fun t3 => ds.foldlM (apply_pending_deposit Preset.mainnet o) t3 >>= fun t5 =>
-        process_pending_consolidations Preset.mainnet t5 >>= fun t7 =>
+    SameOk (process_eth1_data_reset P t1 >>= fun t2 => writeQueue q dbtc t2 >>=
+        fun t3 => ds.foldlM (apply_pending_deposit P o) t3 >>= fun t5 =>
+        process_pending_consolidations P t5 >>= fun t7 =>
         B t7 >>= fun t8 =>
-        process_effective_balance_updates Preset.mainnet t8 >>= K)
+        process_effective_balance_updates P t8 >>= K)
       ((ebL1 n named).foldlM ebUpdateAt t1 >>= fun t2 =>
-        process_eth1_data_reset Preset.mainnet t2 >>= fun t3 => writeQueue q dbtc t3 >>= fun t4 =>
-        ds.foldlM (apply_pending_deposit Preset.mainnet o) t4 >>= fun t5 =>
+        process_eth1_data_reset P t2 >>= fun t3 => writeQueue q dbtc t3 >>= fun t4 =>
+        ds.foldlM (apply_pending_deposit P o) t4 >>= fun t5 =>
         (ebL2 n t5).foldlM ebUpdateAt t5 >>= fun t6 =>
-        process_pending_consolidations Preset.mainnet t6 >>= fun t7 =>
+        process_pending_consolidations P t6 >>= fun t7 =>
         named.foldlM ebUpdateAt t7 >>= fun t8 =>
         B t8 >>= K) := by
   have hl1 : ∀ i ∈ ebL1 n named, i < n := by
     intro i hi
     unfold ebL1 at hi
     exact List.mem_range.mp (List.mem_filter.mp hi).1
-  refine SameOk.trans (y := process_eth1_data_reset Preset.mainnet t1 >>= fun t2 =>
+  refine SameOk.trans (y := process_eth1_data_reset P t1 >>= fun t2 =>
       writeQueue q dbtc t2 >>= fun t3 => (ebL1 n named).foldlM ebUpdateAt t3 >>= fun t4 =>
-      ds.foldlM (apply_pending_deposit Preset.mainnet o) t4 >>= fun t5 =>
+      ds.foldlM (apply_pending_deposit P o) t4 >>= fun t5 =>
       (ebL2 n t5).foldlM ebUpdateAt t5 >>= fun t6 =>
-      process_pending_consolidations Preset.mainnet t6 >>= fun t7 =>
+      process_pending_consolidations P t6 >>= fun t7 =>
       named.foldlM ebUpdateAt t7 >>= fun t8 =>
       B t8 >>= K)
     (SameOk.bind (SameOk.refl _) (fun t2 h2 =>
@@ -893,7 +894,7 @@ theorem inner_t1 (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : EB
       fold_past (writeQueue q dbtc) (fun _ => True) _ (fun _ _ _ _ _ => trivial)
         (fun i _ t e _ => writeQueue_hF1 q dbtc i t e)
         (fun i _ t t' _ h => writeQueue_hF2 q dbtc i t t' h) t2 trivial _)) ?_
-    exact fold_past (process_eth1_data_reset Preset.mainnet) (fun _ => True) _
+    exact fold_past (process_eth1_data_reset P) (fun _ => True) _
       (fun _ _ _ _ _ => trivial) (fun i _ t e _ => eth1_hF1 i t e)
       (fun i _ t t' _ h => eth1_hF2 i t t' h) t1 trivial _
 
@@ -917,28 +918,28 @@ theorem newsOf_not_mem (s1 : BeaconState) (x : Nat × Gwei × List Bool) :
   exact this.2
 
 /-- After the eth1 reset, the spec steps reach the common form for one decision. -/
-theorem specAfter_nf (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : EBBlind B)
+theorem specAfter_nf [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : EBBlind B)
     (s1 S4 : BeaconState)
     (x : Nat × Gwei × List Bool) (sums : List Gwei)
     (hpk : S4.validators.map (·.pubkey) = s1.validators.map (·.pubkey))
     (hpc : S4.pending_consolidations = s1.pending_consolidations)
     (hnamed : ∀ i ∈ consolidationIndices s1, i < s1.validators.length) :
-    SameOk (process_eth1_data_reset Preset.mainnet S4 >>= fun S5 =>
+    SameOk (process_eth1_data_reset P S4 >>= fun S5 =>
         innerAfterG o B K s1 S5 x sums)
       (specNfAfterG o B K s1 S4 x sums) := by
   have hn : S4.validators.length = s1.validators.length := by
     rw [← List.length_map (f := (·.pubkey)), hpk, List.length_map]
   have hA := addSums_eth1 S4 sums
-  refine SameOk.trans (sameOk_swap_cont (A := process_eth1_data_reset Preset.mainnet)
+  refine SameOk.trans (sameOk_swap_cont (A := process_eth1_data_reset P)
     (B := fun S => addSums S sums) (eth1_comm _ S4 hA.1 hA.2) _) ?_
   unfold specNfAfterG
   refine SameOk.bind (SameOk.refl _) (fun t1 h1 => ?_)
   obtain ⟨bs, rfl⟩ := addSums_shape h1
   refine SameOk.trans (SameOk.bind (SameOk.refl _) (fun t2 _ =>
     SameOk.of_eq (wq_news_comm o (queueOf s1 x) x.2.1 (newsOf s1 x) t2 (fun S6 =>
-      process_pending_consolidations Preset.mainnet S6 >>= fun S7 =>
+      process_pending_consolidations P S6 >>= fun S7 =>
       B S7 >>= fun S8 =>
-      process_effective_balance_updates Preset.mainnet S8 >>= K)))) ?_
+      process_effective_balance_updates P S8 >>= K)))) ?_
   exact inner_t1 o B K hB s1.validators.length (consolidationIndices s1)
     (consolidationIndices_nodup s1) hnamed _ (newsOf s1 x) (newsOf_not_mem s1 x)
     (queueOf s1 x) x.2.1 _ hpk hn (consolidationIndices_of_pc hpc)
@@ -946,14 +947,14 @@ theorem specAfter_nf (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB 
 /-! ## The spec tail reaches the common form -/
 
 /-- After the Lighthouse pass over the rows of `s1`, the validators keep their pubkeys. -/
-theorem pass_pubkeys (ctx : LhStepContext) (bf : Row → Gwei) (s1 : BeaconState)
+theorem pass_pubkeys [PresetCfg] (ctx : LhStepContext) (bf : Row → Gwei) (s1 : BeaconState)
     (churn0 churn : Epoch × Gwei) (rows : List Row) (activation_epoch : Epoch)
     (hfinalized : ctx.finalized_epoch ≤ ctx.current_epoch)
     (hexit : ∀ i (h : i < s1.validators.length), s1.validators[i].exit_epoch ≤ FAR_FUTURE_EPOCH)
     (hcurrent : ctx.current_epoch + 1 < UINT64_SIZE)
-    (hactivation : compute_activation_exit_epoch Preset.mainnet ctx.current_epoch =
+    (hactivation : compute_activation_exit_epoch P ctx.current_epoch =
       .ok activation_epoch)
-    (h : passM (fun c r => lhRowStep Preset.mainnet ctx (bf r) c r) churn0 (rowsOf s1) =
+    (h : passM (fun c r => lhRowStep P ctx (bf r) c r) churn0 (rowsOf s1) =
       .ok (churn, rows)) :
     (rows.map (·.validator)).map (·.pubkey) = s1.validators.map (·.pubkey) := by
   obtain ⟨hlen, hget⟩ := passM_rows_registry ctx bf s1 churn0 churn rows activation_epoch
@@ -969,24 +970,24 @@ theorem pass_pubkeys (ctx : LhStepContext) (bf : Row → Gwei) (s1 : BeaconState
 
 /-- After the four passes, the eth1 reset and `specTailG` give the same `ok` results as
 `tailNFG`. `tab` is the total of the deposit churn. -/
-theorem specRest_nf (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : EBBlind B)
+theorem specRest_nf [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : EBBlind B)
     (s1 : BeaconState) (current_epoch : Epoch)
     (tab : Gwei) (ctx : LhStepContext) (bf : Row → Gwei)
     (churn : Epoch × Gwei) (rows : List Row) (activation_epoch : Epoch)
-    (hpass : passM (fun c r => lhRowStep Preset.mainnet ctx (bf r) c r)
+    (hpass : passM (fun c r => lhRowStep P ctx (bf r) c r)
       (s1.earliest_exit_epoch, s1.exit_balance_to_consume) (rowsOf s1) = .ok (churn, rows))
     (hctxcur : ctx.current_epoch = current_epoch)
     (hctxfin : ctx.finalized_epoch = s1.finalized_checkpoint.epoch)
-    (hcur : get_current_epoch Preset.mainnet s1 = .ok current_epoch)
+    (hcur : get_current_epoch P s1 = .ok current_epoch)
     (hfin : s1.finalized_checkpoint.epoch ≤ current_epoch)
     (hnext : current_epoch + 1 < FAR_FUTURE_EPOCH)
-    (hact : compute_activation_exit_epoch Preset.mainnet current_epoch = .ok activation_epoch)
+    (hact : compute_activation_exit_epoch P current_epoch = .ok activation_epoch)
     (hexit : ∀ i (h : i < s1.validators.length), s1.validators[i].exit_epoch ≤ FAR_FUTURE_EPOCH)
     (hvalid : ∀ v ∈ s1.validators, v.exit_epoch = FAR_FUTURE_EPOCH →
       v.withdrawable_epoch = FAR_FUTURE_EPOCH)
     (hbal4 : ∀ r ∈ rows, r.balance < 2 ^ 64)
     (hnamed : ∀ i ∈ consolidationIndices s1, i < s1.validators.length) :
-    SameOk (process_eth1_data_reset Preset.mainnet (s1.withRowsChurn churn rows) >>=
+    SameOk (process_eth1_data_reset P (s1.withRowsChurn churn rows) >>=
         specTailG o tab B K)
       (tailNFG o (fun t => B t >>= K) s1 (s1.withRowsChurn churn rows) tab current_epoch) := by
   subst hctxcur
@@ -997,14 +998,14 @@ theorem specRest_nf (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB :
     omega
   have hpk := pass_pubkeys ctx bf s1 _ churn rows activation_epoch hfinalized hexit hcur64
     hact hpass
-  refine SameOk.trans (y := process_eth1_data_reset Preset.mainnet (s1.withRowsChurn churn rows) >>=
+  refine SameOk.trans (y := process_eth1_data_reset P (s1.withRowsChurn churn rows) >>=
       fun S5 => decOf s1 tab ctx.current_epoch >>= fun x => sumsOf s1 x >>=
         fun sums => innerAfterG o B K s1 S5 x sums)
     (SameOk.bind (SameOk.refl _) (fun S5 h5 => ?_)) ?_
   · obtain ⟨v, rfl⟩ := eth1_shape h5
     have hviews := views_eq ctx bf s1 _ churn rows activation_epoch hfinalized hexit hvalid
       hnext hact hpass { s1.withRowsChurn churn rows with eth1_data_votes := v } rfl
-      (s1.pending_deposits.take Preset.mainnet.MAX_PENDING_DEPOSITS_PER_EPOCH)
+      (s1.pending_deposits.take P.MAX_PENDING_DEPOSITS_PER_EPOCH)
     refine specTail_inner o B K s1 _ tab ctx.current_epoch hcur (Nat.le_of_lt hnext)
       rfl rfl rfl hpk hviews (by simp [BeaconState.withRowsChurn, BeaconState.withRows]) ?_
     intro i hi
@@ -1017,28 +1018,28 @@ theorem specRest_nf (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB :
     exact specAfter_nf o B K hB s1 _ x sums hpk rfl hnamed
 
 /-- The spec steps after the four passes give the same `ok` results as `tailNF`. -/
-theorem epochRest_nf (o : Oracle) (s1 : BeaconState) (current_epoch : Epoch)
+theorem epochRest_nf [PresetCfg] (o : Oracle) (s1 : BeaconState) (current_epoch : Epoch)
     (total_active_balance : Gwei) (ctx : LhStepContext) (bf : Row → Gwei)
     (churn : Epoch × Gwei) (rows : List Row) (activation_epoch : Epoch)
-    (hpass : passM (fun c r => lhRowStep Preset.mainnet ctx (bf r) c r)
+    (hpass : passM (fun c r => lhRowStep P ctx (bf r) c r)
       (s1.earliest_exit_epoch, s1.exit_balance_to_consume) (rowsOf s1) = .ok (churn, rows))
     (hctxcur : ctx.current_epoch = current_epoch)
     (hctxfin : ctx.finalized_epoch = s1.finalized_checkpoint.epoch)
-    (hcur : get_current_epoch Preset.mainnet s1 = .ok current_epoch)
+    (hcur : get_current_epoch P s1 = .ok current_epoch)
     (hfin : s1.finalized_checkpoint.epoch ≤ current_epoch)
     (hnext : current_epoch + 1 < FAR_FUTURE_EPOCH)
-    (hact : compute_activation_exit_epoch Preset.mainnet current_epoch = .ok activation_epoch)
+    (hact : compute_activation_exit_epoch P current_epoch = .ok activation_epoch)
     (hexit : ∀ i (h : i < s1.validators.length), s1.validators[i].exit_epoch ≤ FAR_FUTURE_EPOCH)
     (hvalid : ∀ v ∈ s1.validators, v.exit_epoch = FAR_FUTURE_EPOCH →
       v.withdrawable_epoch = FAR_FUTURE_EPOCH)
-    (htab4 : get_total_active_balance Preset.mainnet (s1.withRowsChurn churn rows) =
+    (htab4 : get_total_active_balance P (s1.withRowsChurn churn rows) =
       .ok total_active_balance)
     (hbal4 : ∀ r ∈ rows, r.balance < 2 ^ 64)
     (hnamed : ∀ i ∈ consolidationIndices s1, i < s1.validators.length) :
-    SameOk (epochRest Preset.mainnet o (s1.withRowsChurn churn rows))
+    SameOk (epochRest P o (s1.withRowsChurn churn rows))
       (tailNF o s1 (s1.withRowsChurn churn rows) total_active_balance current_epoch) := by
   have hfar : current_epoch < FAR_FUTURE_EPOCH := Nat.lt_trans (Nat.lt_succ_self _) hnext
-  have hcur4 : get_current_epoch Preset.mainnet (s1.withRowsChurn churn rows) =
+  have hcur4 : get_current_epoch P (s1.withRowsChurn churn rows) =
       .ok current_epoch := hcur
   refine SameOk.trans (epochRest_specTail o _ total_active_balance current_epoch hcur4 hfar
     htab4) ?_

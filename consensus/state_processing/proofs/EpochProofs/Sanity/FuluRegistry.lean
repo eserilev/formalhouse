@@ -1,4 +1,6 @@
 import EpochProofs.Sanity.Fulu
+import EpochProofs.Spec.PresetCfg
+import EpochProofs.Spec.FuluCfg
 
 /-!
 # The Fulu churn as the Gloas churn of a smaller total
@@ -23,7 +25,7 @@ apply to Fulu with `fuluTab` in place of the total, and the same preset.
 namespace EpochProofs.Spec
 
 /-- The relations between the Fulu config and the Gloas preset that `fuluTab` needs. They hold
-on mainnet and on minimal (`fuluCompat_mainnet`, `fuluCompat_minimal`). -/
+on mainnet and on minimal (`fuluCompat`, `fuluCompat_minimal`). -/
 structure FuluCompat (p : Preset) (f : FuluConfig) : Prop where
   quotient : f.CHURN_LIMIT_QUOTIENT = 2 * p.CHURN_LIMIT_QUOTIENT_GLOAS
   quotient_pos : 0 < p.CHURN_LIMIT_QUOTIENT_GLOAS
@@ -32,8 +34,14 @@ structure FuluCompat (p : Preset) (f : FuluConfig) : Prop where
   increment_pos : 0 < p.EFFECTIVE_BALANCE_INCREMENT
   cap_le : f.MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT ≤ p.MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS
 
-theorem fuluCompat_mainnet : FuluCompat Preset.mainnet FuluConfig.mainnet :=
+theorem fuluCompat_mainnet : FuluCompat (Preset.ofVar PresetVar.mainnet) FuluConfig.mainnet :=
   ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩
+
+/-- The Fulu config and the preset agree, for the configs of the generic proofs. -/
+class FuluCfg.Ok [PresetCfg] [FuluCfg] : Prop where
+  compat : FuluCompat P FC
+
+theorem fuluCompat [PresetCfg] [FuluCfg] [FuluCfg.Ok] : FuluCompat P FC := FuluCfg.Ok.compat
 
 theorem fuluCompat_minimal : FuluCompat Preset.minimal FuluConfig.minimal :=
   ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩

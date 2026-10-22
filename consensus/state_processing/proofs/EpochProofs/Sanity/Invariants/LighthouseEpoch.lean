@@ -1,4 +1,5 @@
 import EpochProofs.Sanity.LighthouseSinglePass
+import EpochProofs.Spec.PresetCfg
 import EpochProofs.Sanity.Invariants.EpochEnd
 import EpochProofs.Sanity.Invariants.Lengths
 import EpochProofs.Sanity.RowsSlashings
@@ -150,7 +151,7 @@ theorem process_registry_updates_activeKey (p : Preset) (total_active_balance : 
 has at most `k` times the active increments, for any `k ≤ 2^60 / 10^9`. A total effective
 balance below `2^60` Gwei gives such a `k`. In exchange the row has a balance below `2^62` and
 an effective balance at most `MAX_EFFECTIVE_BALANCE_ELECTRA`. -/
-theorem lhRowStep_eq_singlePassStep_of_supply (ctx : LhStepContext)
+theorem lhRowStep_eq_singlePassStep_of_supply [PresetCfg] (ctx : LhStepContext)
     (hgen : ctx.after_genesis = true) (rctx : RewardsContext)
     (r : Row) (churn : Epoch × Gwei) (base_reward : Gwei) (activation_epoch : Epoch)
     (hprev : rctx.previous_epoch = ctx.previous_epoch)
@@ -160,28 +161,28 @@ theorem lhRowStep_eq_singlePassStep_of_supply (ctx : LhStepContext)
     (hhead : rctx.head_increments = ctx.head_increments)
     (hactive : rctx.active_increments = ctx.active_increments)
     (hbase : rewardsEligible ctx.previous_epoch r.validator = .ok true →
-      rewardsBaseReward Preset.mainnet rctx.total_active_balance r.validator = .ok base_reward)
-    (htotal : Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT ≤ rctx.total_active_balance)
+      rewardsBaseReward P rctx.total_active_balance r.validator = .ok base_reward)
+    (htotal : P.EFFECTIVE_BALANCE_INCREMENT ≤ rctx.total_active_balance)
     (k : Nat) (hk : k ≤ 1152921504)
     (hincrements : ctx.source_increments ≤ k * ctx.active_increments ∧
       ctx.target_increments ≤ k * ctx.active_increments ∧
       ctx.head_increments ≤ k * ctx.active_increments)
     (heffective : rewardsEligible ctx.previous_epoch r.validator = .ok true →
       r.validator.effective_balance ≤ 256 * r.balance)
-    (hmax : r.validator.effective_balance ≤ Preset.mainnet.MAX_EFFECTIVE_BALANCE_ELECTRA)
+    (hmax : r.validator.effective_balance ≤ P.MAX_EFFECTIVE_BALANCE_ELECTRA)
     (hbalance : r.balance < 2 ^ 62)
     (hfinalized : ctx.finalized_epoch ≤ ctx.current_epoch)
     (hcurrent : ctx.current_epoch + 1 < UINT64_SIZE)
-    (hactivation : compute_activation_exit_epoch Preset.mainnet ctx.current_epoch =
+    (hactivation : compute_activation_exit_epoch P ctx.current_epoch =
       .ok activation_epoch)
     (hexit : r.validator.exit_epoch ≤ FAR_FUTURE_EPOCH) :
-    lhRowStep Preset.mainnet ctx base_reward churn r =
-      (fun x => (x.1.1.2, x.2)) <$> singlePassStep Preset.mainnet ctx.total_active_balance
+    lhRowStep P ctx base_reward churn r =
+      (fun x => (x.1.1.2, x.2)) <$> singlePassStep P ctx.total_active_balance
         ctx.previous_epoch ctx.in_leak rctx ctx.current_epoch ctx.finalized_epoch
         activation_epoch ctx.slashings_target ctx.penalty_per_increment ((((), ()), churn), ())
         r := by
-  refine lhRowStep_eq_singlePassStep_flags Preset.mainnet ctx hgen rctx r churn base_reward
-    activation_epoch hprev hleak hsource htarget hhead hactive hbase ?_ (by decide)
+  refine lhRowStep_eq_singlePassStep_flags P ctx hgen rctx r churn base_reward
+    activation_epoch hprev hleak hsource htarget hhead hactive hbase ?_ (by pdecide)
     hfinalized hcurrent hactivation hexit
   intro r' deltas hi hd
   obtain ⟨hv, -⟩ := inactivityRowStep_keeps _ _ _ _ _ hi
@@ -207,8 +208,8 @@ theorem lhRowStep_eq_singlePassStep_of_supply (ctx : LhStepContext)
     · exact rewardsBaseReward_bound_mainnet _ _ _ htotal hb
   have hr := hrew k (hsource ▸ hactive ▸ hincrements.1) (htarget ▸ hactive ▸ hincrements.2.1)
     (hhead ▸ hactive ▸ hincrements.2.2)
-  have hq : Preset.mainnet.INACTIVITY_SCORE_BIAS *
-      Preset.mainnet.INACTIVITY_PENALTY_QUOTIENT_BELLATRIX = 67108864 := rfl
+  have hq : P.INACTIVITY_SCORE_BIAS *
+      P.INACTIVITY_PENALTY_QUOTIENT_BELLATRIX = 67108864 := (by prfl)
   rw [hq] at hinact
   subst hds
   obtain ⟨(b : Nat), hbal⟩ : ∃ b : Nat, r.balance = b := ⟨_, rfl⟩
@@ -241,7 +242,7 @@ private theorem sum_filter_map_le {α : Type} (P : α → Bool) (f : α → Nat)
     · simp [hp]; omega
 
 /-- The sum of the effective balances of some rows is at most the supply. -/
-private theorem rows_sum_le (s : BeaconState) (Q : Row → Bool) :
+private theorem rows_sum_le [PresetCfg] (s : BeaconState) (Q : Row → Bool) :
     (((rowsOf s).filter Q).map (·.validator.effective_balance)).sum ≤ totalEffectiveBalance s := by
   have h := sum_filter_map_le Q (·.validator.effective_balance) (rowsOf s)
   have hm : (rowsOf s).map (·.validator.effective_balance) =
@@ -264,7 +265,7 @@ private theorem mapM_rows_effective_balance (s : BeaconState) :
     rfl
 
 /-- `get_total_balance` of the indices of some rows: the sum, at least one increment. -/
-theorem get_total_balance_rows (p : Preset) (s : BeaconState) (Q : Row → Bool)
+theorem get_total_balance_rows [PresetCfg] (p : Preset) (s : BeaconState) (Q : Row → Bool)
     (hsupply : totalEffectiveBalance s < 2 ^ 64) :
     get_total_balance p s (((rowsOf s).filter Q).map (·.index)) =
       .ok (max p.EFFECTIVE_BALANCE_INCREMENT
@@ -278,7 +279,7 @@ theorem get_total_balance_rows (p : Preset) (s : BeaconState) (Q : Row → Bool)
 
 /-- `get_total_active_balance` succeeds below the supply bound, is at least one increment and
 at most the supply. -/
-theorem get_total_active_balance_bounds (p : Preset) (s : BeaconState) (epoch : Epoch)
+theorem get_total_active_balance_bounds [PresetCfg] (p : Preset) (s : BeaconState) (epoch : Epoch)
     (hepoch : get_current_epoch p s = .ok epoch)
     (hsupply : totalEffectiveBalance s < 2 ^ 64) :
     ∃ t, get_total_active_balance p s = .ok t ∧ p.EFFECTIVE_BALANCE_INCREMENT ≤ t ∧
@@ -347,7 +348,7 @@ private theorem has_flag_eq (flags : ParticipationFlags) (flag_index : Nat)
 
 /-- `get_unslashed_participating_indices` for the previous epoch is the indices of the
 participating rows. -/
-private theorem participating_ok (p : Preset) (state : BeaconState) (hrows : RowsOk state)
+private theorem participating_ok [PresetCfg] (p : Preset) (state : BeaconState) (hrows : RowsOk state)
     (current_epoch previous_epoch : Epoch) (flag_index : Nat)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hprevious : get_previous_epoch p state = .ok previous_epoch)
@@ -405,7 +406,7 @@ private theorem participating_ok (p : Preset) (state : BeaconState) (hrows : Row
     cases state.validators[i].slashed <;> rfl
 
 /-- One flag has at most the supply in increments. -/
-theorem rewardsFlagIncrements_bound (p : Preset) (s : BeaconState) (hrows : RowsOk s)
+theorem rewardsFlagIncrements_bound [PresetCfg] (p : Preset) (s : BeaconState) (hrows : RowsOk s)
     (current_epoch previous_epoch : Epoch) (flag_index : Nat)
     (hcurrent : get_current_epoch p s = .ok current_epoch)
     (hprevious : get_previous_epoch p s = .ok previous_epoch)
@@ -427,7 +428,7 @@ theorem rewardsFlagIncrements_bound (p : Preset) (s : BeaconState) (hrows : Rows
 
 /-- The rewards context succeeds below the supply bound, if the finalized epoch is not after the
 previous epoch. Each flag then has at most the supply in increments. -/
-theorem rewardsContextOf_bounds (p : Preset) (total_active_balance : Gwei) (s : BeaconState)
+theorem rewardsContextOf_bounds [PresetCfg] (p : Preset) (total_active_balance : Gwei) (s : BeaconState)
     (hrows : RowsOk s) (current_epoch previous_epoch : Epoch)
     (hcurrent : get_current_epoch p s = .ok current_epoch)
     (hprevious : get_previous_epoch p s = .ok previous_epoch)
@@ -467,7 +468,7 @@ private theorem current_participation_row {state : BeaconState} {r : Row}
 
 /-- `get_unslashed_participating_indices` for the current epoch is the indices of the rows that
 have the flag in the current participation. -/
-private theorem participating_current_ok (p : Preset) (state : BeaconState) (hrows : RowsOk state)
+private theorem participating_current_ok [PresetCfg] (p : Preset) (state : BeaconState) (hrows : RowsOk state)
     (current_epoch previous_epoch : Epoch) (flag_index : Nat)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hprevious : get_previous_epoch p state = .ok previous_epoch)
@@ -526,7 +527,7 @@ private theorem participating_current_ok (p : Preset) (state : BeaconState) (hro
 
 /-- At the genesis epoch, below the supply bound, the rewards context succeeds, and its previous
 epoch is the genesis epoch. The flags read the current participation there. -/
-theorem rewardsContextOf_genesis (p : Preset) (total_active_balance : Gwei) (s : BeaconState)
+theorem rewardsContextOf_genesis [PresetCfg] (p : Preset) (total_active_balance : Gwei) (s : BeaconState)
     (hrows : RowsOk s) (hcurrent : get_current_epoch p s = .ok GENESIS_EPOCH)
     (hinc : p.EFFECTIVE_BALANCE_INCREMENT ≠ 0) (hsupply : totalEffectiveBalance s < 2 ^ 64)
     (hfinalized : s.finalized_checkpoint.epoch = GENESIS_EPOCH) :
@@ -560,57 +561,57 @@ theorem rewardsContextOf_genesis (p : Preset) (total_active_balance : Gwei) (s :
 supply part of `EpochEntry`: each flag has at most `k` times the active increments for some
 `k ≤ 2^60 / 10^9`, each balance is below `2^62`, and each effective balance is at most
 `MAX_EFFECTIVE_BALANCE_ELECTRA`. -/
-theorem lighthouse_single_pass_eq_spec_supply (total_active_balance : Gwei) (state : BeaconState)
+theorem lighthouse_single_pass_eq_spec_supply [PresetCfg] (total_active_balance : Gwei) (state : BeaconState)
     (hrows : RowsOk state) (current_epoch : Epoch)
-    (hcurrent : get_current_epoch Preset.mainnet state = .ok current_epoch)
+    (hcurrent : get_current_epoch P state = .ok current_epoch)
     (hgenesis : current_epoch ≠ GENESIS_EPOCH)
     (rctx : RewardsContext)
-    (hctx : rewardsContextOf Preset.mainnet total_active_balance state = .ok rctx)
+    (hctx : rewardsContextOf P total_active_balance state = .ok rctx)
     (heffective : ∀ i (h : i < state.validators.length),
       rewardsEligible rctx.previous_epoch state.validators[i] = .ok true →
         state.validators[i].effective_balance ≤ 256 * state.balances.getD i 0)
     (hexit : ∀ i (h : i < state.validators.length),
       state.validators[i].exit_epoch ≤ FAR_FUTURE_EPOCH)
     (hmax : ∀ v ∈ state.validators,
-      v.effective_balance ≤ Preset.mainnet.MAX_EFFECTIVE_BALANCE_ELECTRA)
+      v.effective_balance ≤ P.MAX_EFFECTIVE_BALANCE_ELECTRA)
     (hbalance : ∀ i (h : i < state.validators.length), state.balances.getD i 0 < 2 ^ 62)
     (activation_epoch : Epoch)
-    (hactivation : compute_activation_exit_epoch Preset.mainnet current_epoch =
+    (hactivation : compute_activation_exit_epoch P current_epoch =
       .ok activation_epoch)
-    (htarget : current_epoch + Preset.mainnet.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE)
+    (htarget : current_epoch + P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE)
     (adjusted per : Gwei)
-    (hpre : slashingsPreamble Preset.mainnet total_active_balance state.slashings =
+    (hpre : slashingsPreamble P total_active_balance state.slashings =
       .ok (adjusted, per))
     (hfinalized : state.finalized_checkpoint.epoch ≤ current_epoch)
     (hcurrent64 : current_epoch + 1 < UINT64_SIZE)
-    (htotal : Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT ≤ total_active_balance)
+    (htotal : P.EFFECTIVE_BALANCE_INCREMENT ≤ total_active_balance)
     (k : Nat) (hk : k ≤ 1152921504)
     (hincrements : rctx.source_increments ≤ k * rctx.active_increments ∧
       rctx.target_increments ≤ k * rctx.active_increments ∧
       rctx.head_increments ≤ k * rctx.active_increments)
     (base_reward : Row → Gwei)
     (hbase : ∀ r ∈ rowsOf state, rewardsEligible rctx.previous_epoch r.validator = .ok true →
-      rewardsBaseReward Preset.mainnet total_active_balance r.validator = .ok (base_reward r)) :
+      rewardsBaseReward P total_active_balance r.validator = .ok (base_reward r)) :
     SameOk (do
-      let s1 ← process_inactivity_updates Preset.mainnet state
-      let s2 ← process_rewards_and_penalties Preset.mainnet total_active_balance s1
-      let s3 ← process_registry_updates Preset.mainnet total_active_balance s2
-      process_slashings Preset.mainnet total_active_balance s3)
+      let s1 ← process_inactivity_updates P state
+      let s2 ← process_rewards_and_penalties P total_active_balance s1
+      let s3 ← process_registry_updates P total_active_balance s2
+      process_slashings P total_active_balance s3)
     ((fun y => state.withRowsChurn y.1 y.2) <$>
-      passM (fun churn r => lhRowStep Preset.mainnet
+      passM (fun churn r => lhRowStep P
           (lhContextOf state total_active_balance current_epoch rctx per) (base_reward r) churn r)
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
   obtain ⟨hprevious, -, -, -, -, hleak, htab⟩ :=
-    rewardsContextOf_ok Preset.mainnet total_active_balance state rctx hctx
-  refine SameOk.trans (separate_passes_eq_single_pass Preset.mainnet total_active_balance state
+    rewardsContextOf_ok P total_active_balance state rctx hctx
+  refine SameOk.trans (separate_passes_eq_single_pass P total_active_balance state
     hrows current_epoch rctx.previous_epoch rctx.in_leak hcurrent hgenesis hprevious hleak rctx
     hctx activation_epoch hactivation htarget adjusted per hpre) (SameOk.of_eq ?_)
   have hstep : ∀ churn r, r ∈ rowsOf state →
-      lhRowStep Preset.mainnet (lhContextOf state total_active_balance current_epoch rctx per)
+      lhRowStep P (lhContextOf state total_active_balance current_epoch rctx per)
         (base_reward r) churn r =
-      (fun x => (x.1.1.2, x.2)) <$> singlePassStep Preset.mainnet total_active_balance
+      (fun x => (x.1.1.2, x.2)) <$> singlePassStep P total_active_balance
         rctx.previous_epoch rctx.in_leak rctx current_epoch state.finalized_checkpoint.epoch
-        activation_epoch (current_epoch + Preset.mainnet.EPOCHS_PER_SLASHINGS_VECTOR / 2) per
+        activation_epoch (current_epoch + P.EPOCHS_PER_SLASHINGS_VECTOR / 2) per
         ((((), ()), churn), ()) r := by
     intro churn r hr
     obtain ⟨i, hi, hri⟩ := List.mem_iff_getElem.mp hr
@@ -625,9 +626,9 @@ theorem lighthouse_single_pass_eq_spec_supply (total_active_balance : Gwei) (sta
       (heffective i hiv) (hmax _ (List.getElem_mem hiv)) (hbalance i hiv) hfinalized hcurrent64
       hactivation (hexit i hiv)
   rw [passM_congr _ _ (rowsOf state) (fun churn r hr => hstep churn r hr)]
-  rw [passM_proj (singlePassStep Preset.mainnet total_active_balance rctx.previous_epoch
+  rw [passM_proj (singlePassStep P total_active_balance rctx.previous_epoch
     rctx.in_leak rctx current_epoch state.finalized_checkpoint.epoch activation_epoch
-    (current_epoch + Preset.mainnet.EPOCHS_PER_SLASHINGS_VECTOR / 2) per)
+    (current_epoch + P.EPOCHS_PER_SLASHINGS_VECTOR / 2) per)
     (fun c => ((((), ()), c), ())) (fun b => b.1.2) (fun _ => rfl) (fun _ => rfl)]
   cases passM _ _ (rowsOf state) <;> rfl
 
@@ -635,8 +636,8 @@ theorem lighthouse_single_pass_eq_spec_supply (total_active_balance : Gwei) (sta
 
 /-- The base reward of a row, as the epoch cache holds it. It is 0 when `get_base_reward`
 fails, and the pass reads it only for eligible rows. -/
-def lhBaseReward (total_active_balance : Gwei) (r : Row) : Gwei :=
-  match rewardsBaseReward Preset.mainnet total_active_balance r.validator with
+def lhBaseReward [PresetCfg] (total_active_balance : Gwei) (r : Row) : Gwei :=
+  match rewardsBaseReward P total_active_balance r.validator with
   | .ok b => b
   | .error _ => 0
 
@@ -649,13 +650,13 @@ def specFourSteps (p : Preset) (s : BeaconState) : SpecM BeaconState := do
 
 /-- The Lighthouse single pass on mainnet: the inactivity, rewards, registry and slashings
 steps in one pass over the rows. The context comes from the state before the pass. -/
-def lhPass (s : BeaconState) : SpecM BeaconState := do
-  let current_epoch ← get_current_epoch Preset.mainnet s
-  let total_active_balance ← get_total_active_balance Preset.mainnet s
-  let rctx ← rewardsContextOf Preset.mainnet total_active_balance s
-  let (_, per) ← slashingsPreamble Preset.mainnet total_active_balance s.slashings
+def lhPass [PresetCfg] (s : BeaconState) : SpecM BeaconState := do
+  let current_epoch ← get_current_epoch P s
+  let total_active_balance ← get_total_active_balance P s
+  let rctx ← rewardsContextOf P total_active_balance s
+  let (_, per) ← slashingsPreamble P total_active_balance s.slashings
   (fun y => s.withRowsChurn y.1 y.2) <$>
-    passM (fun churn r => lhRowStep Preset.mainnet
+    passM (fun churn r => lhRowStep P
         (lhContextOf s total_active_balance current_epoch rctx per)
         (lhBaseReward total_active_balance r) churn r)
       (s.earliest_exit_epoch, s.exit_balance_to_consume) (rowsOf s)
@@ -686,17 +687,17 @@ theorem process_epoch_parts (p : Preset) (o : Oracle) (s : BeaconState) :
   simp only [process_epoch, specFourSteps, epochRest, bind_assoc]
 
 /-- Justification and finalization, the Lighthouse single pass, then the rest of the epoch. -/
-def process_epoch_lh_core (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
-  let s1 ← process_justification_and_finalization Preset.mainnet s
+def process_epoch_lh_core [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
+  let s1 ← process_justification_and_finalization P s
   let s5 ← lhPass s1
-  epochRest Preset.mainnet o s5
+  epochRest P o s5
 
 /-- The Gloas `process_epoch` on mainnet, with the Lighthouse single pass in place of the
 inactivity, rewards, registry and slashings steps. At the genesis epoch the spec skips the
 inactivity and rewards steps. Lighthouse also skips them there, through `after_genesis`, and
 this one epoch uses the spec path. -/
-def process_epoch_lh (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
-  if s.slot / Preset.mainnet.SLOTS_PER_EPOCH = GENESIS_EPOCH then process_epoch Preset.mainnet o s
+def process_epoch_lh [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
+  if s.slot / P.SLOTS_PER_EPOCH = GENESIS_EPOCH then process_epoch P o s
   else process_epoch_lh_core o s
 
 /-! ## The state after justification and finalization -/
@@ -850,18 +851,18 @@ theorem compute_activation_exit_epoch_of_lt (p : Preset) (epoch : Epoch)
 
 /-- On mainnet, `slashingsPreamble` succeeds if three times the slashed sum fits in a `u64`
 and the total active balance is at least one increment. -/
-theorem slashingsPreamble_ok (total_active_balance : Gwei) (slashings : List Gwei)
+theorem slashingsPreamble_ok [PresetCfg] (total_active_balance : Gwei) (slashings : List Gwei)
     (hmul : slashings.sum * 3 < UINT64_SIZE)
-    (htotal : Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT ≤ total_active_balance) :
+    (htotal : P.EFFECTIVE_BALANCE_INCREMENT ≤ total_active_balance) :
     ∃ adjusted per,
-      slashingsPreamble Preset.mainnet total_active_balance slashings = .ok (adjusted, per) := by
+      slashingsPreamble P total_active_balance slashings = .ok (adjusted, per) := by
   have hsum : slashings.sum < UINT64_SIZE :=
     Nat.lt_of_le_of_lt (Nat.le_mul_of_pos_right _ (by decide)) hmul
-  have hinc : 0 < Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT := by decide
-  have hq : total_active_balance / Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT ≠ 0 :=
+  have hinc : 0 < P.EFFECTIVE_BALANCE_INCREMENT := by pdecide
+  have hq : total_active_balance / P.EFFECTIVE_BALANCE_INCREMENT ≠ 0 :=
     Nat.ne_of_gt (Nat.div_pos htotal hinc)
-  have hm : Preset.mainnet.PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX = 3 := rfl
-  have hinc' : Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT ≠ 0 := by decide
+  have hm : P.PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX = 3 := rfl
+  have hinc' : P.EFFECTIVE_BALANCE_INCREMENT ≠ 0 := by pdecide
   simp [slashingsPreamble, uint64Sum, hsum, uint64Mul, hm, hmul, uint64Div, hq, hinc', bind,
     Except.bind, pure, Except.pure]
 
@@ -872,10 +873,10 @@ private theorem saturating_sub_one (e : Nat) : saturating_sub e 1 = e - 1 := by
 
 /-- On mainnet, `get_base_reward` succeeds when the total is at least one increment and the
 effective balance is at most `MAX_EFFECTIVE_BALANCE_ELECTRA`. -/
-theorem rewardsBaseReward_ok_mainnet (total_active_balance : Gwei) (v : Validator)
-    (htotal : Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT ≤ total_active_balance)
-    (hmax : v.effective_balance ≤ Preset.mainnet.MAX_EFFECTIVE_BALANCE_ELECTRA) :
-    ∃ b, rewardsBaseReward Preset.mainnet total_active_balance v = .ok b := by
+theorem rewardsBaseReward_ok_mainnet [PresetCfg] (total_active_balance : Gwei) (v : Validator)
+    (htotal : P.EFFECTIVE_BALANCE_INCREMENT ≤ total_active_balance)
+    (hmax : v.effective_balance ≤ P.MAX_EFFECTIVE_BALANCE_ELECTRA) :
+    ∃ b, rewardsBaseReward P total_active_balance v = .ok b := by
   have ht : (1000000000 : Nat) ≤ total_active_balance := htotal
   have hroot : 31622 ≤ integer_squareroot total_active_balance :=
     le_integer_squareroot _ _ (Nat.le_trans (by decide) ht)
@@ -891,7 +892,7 @@ theorem rewardsBaseReward_ok_mainnet (total_active_balance : Gwei) (v : Validato
   have hr0 : r ≠ 0 := Nat.ne_of_gt (Nat.lt_of_lt_of_le (by decide) hroot)
   refine ⟨v.effective_balance / 1000000000 * (1000000000 * 64 / r), ?_⟩
   have hm : (1000000000 : Nat) * 64 < UINT64_SIZE := by decide
-  simp only [rewardsBaseReward, get_base_reward_per_increment, Preset.mainnet, uint64Div,
+  simp only [rewardsBaseReward, get_base_reward_per_increment, P, Preset.ofVar, uint64Div,
     uint64Mul, hr, hr0, hm, hprod, bind, Except.bind, pure, Except.pure, if_true, if_false,
     show (1000000000 : Nat) ≠ 0 from by decide]
 
@@ -905,34 +906,34 @@ The hypotheses are facts about the state at the start of the epoch:
 - `hinv`: `FfgInvariant`. After justification and finalization it puts the finalized epoch
   before the current epoch, so the inactivity leak test succeeds.
 - `hgenesis`, `hepoch`: the current epoch is not the genesis epoch, and the slashings target
-  epoch (current + 4096) fits in a `u64`.
+  epoch (current + EPOCHS_PER_SLASHINGS_VECTOR / 2) fits in a `u64`.
 - `heffective`, `hexit`: the effective balance and exit epoch parts of `EpochEntry`.
 - `hmax`, `hbalance`, `hsupply`: each effective balance is at most
   `MAX_EFFECTIVE_BALANCE_ELECTRA`, each balance is below `2^62`, and the sum of the effective
   balances is below `2^60`. They replace the participation bound and the supply part of
   `EpochEntry`.
 - `hslashings`: three times the sum of the slashings vector fits in a `u64`. -/
-theorem process_epoch_lh_sameOk (o : Oracle) (s : BeaconState) (hrows : RowsOk s)
-    (hinv : FfgInvariant Preset.mainnet s) (current_epoch : Epoch)
-    (hcurrent : get_current_epoch Preset.mainnet s = .ok current_epoch)
+theorem process_epoch_lh_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (hrows : RowsOk s)
+    (hinv : FfgInvariant P s) (current_epoch : Epoch)
+    (hcurrent : get_current_epoch P s = .ok current_epoch)
     (hgenesis : current_epoch ≠ GENESIS_EPOCH)
-    (hepoch : current_epoch + Preset.mainnet.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE)
+    (hepoch : current_epoch + P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE)
     (heffective : ∀ i (h : i < s.validators.length),
       rewardsEligible (current_epoch - 1) s.validators[i] = .ok true →
         s.validators[i].effective_balance ≤ 256 * s.balances.getD i 0)
     (hexit : ∀ i (h : i < s.validators.length), s.validators[i].exit_epoch ≤ FAR_FUTURE_EPOCH)
     (hmax : ∀ v ∈ s.validators,
-      v.effective_balance ≤ Preset.mainnet.MAX_EFFECTIVE_BALANCE_ELECTRA)
+      v.effective_balance ≤ P.MAX_EFFECTIVE_BALANCE_ELECTRA)
     (hbalance : ∀ i (h : i < s.validators.length), s.balances.getD i 0 < 2 ^ 62)
     (hsupply : totalEffectiveBalance s < 2 ^ 60)
     (hslashings : s.slashings.sum * 3 < UINT64_SIZE) :
-    SameOk (process_epoch Preset.mainnet o s) (process_epoch_lh_core o s) := by
+    SameOk (process_epoch P o s) (process_epoch_lh_core o s) := by
   rw [process_epoch_parts]
   unfold process_epoch_lh_core
   refine SameOk.bind (SameOk.refl _) (fun s1 h1 => ?_)
   refine SameOk.bind ?_ (fun _ _ => SameOk.refl _)
   obtain ⟨_, _, _, _, hs1⟩ := process_justification_and_finalization_shape _ _ _ h1
-  have hcur1 : get_current_epoch Preset.mainnet s1 = .ok current_epoch := by
+  have hcur1 : get_current_epoch P s1 = .ok current_epoch := by
     rw [hs1]; exact hcurrent
   have hfin := process_justification_and_finalization_finalized _ s s1 current_epoch hcurrent
     hgenesis hinv h1
@@ -944,7 +945,7 @@ theorem process_epoch_lh_sameOk (o : Oracle) (s : BeaconState) (hrows : RowsOk s
   have hexit1 : ∀ i (h : i < s1.validators.length),
       s1.validators[i].exit_epoch ≤ FAR_FUTURE_EPOCH := by rw [hs1]; exact hexit
   have hmax1 : ∀ v ∈ s1.validators,
-      v.effective_balance ≤ Preset.mainnet.MAX_EFFECTIVE_BALANCE_ELECTRA := by
+      v.effective_balance ≤ P.MAX_EFFECTIVE_BALANCE_ELECTRA := by
     rw [hs1]; exact hmax
   have hbal1 : ∀ i (h : i < s1.validators.length), s1.balances.getD i 0 < 2 ^ 62 := by
     rw [hs1]; exact hbalance
@@ -953,36 +954,39 @@ theorem process_epoch_lh_sameOk (o : Oracle) (s : BeaconState) (hrows : RowsOk s
   rw [← hS1] at hsupply
   rw [← hsl1] at hslashings
   simp only [GENESIS_EPOCH] at hgenesis
-  have h4096 : Preset.mainnet.EPOCHS_PER_SLASHINGS_VECTOR / 2 = 4096 := rfl
-  rw [h4096] at hepoch
+  have hepoch0 := hepoch
+  obtain ⟨V, hV, hV64, -⟩ := P_slashings_vector_nat
+  obtain ⟨H, hH⟩ : ∃ H : Nat, V / 2 = H := ⟨_, rfl⟩
+  have hH32 : 32 ≤ H := by omega
+  rw [hV, hH] at hepoch
   have hS64 : totalEffectiveBalance s1 < 2 ^ 64 := Nat.lt_trans hsupply (by decide)
   obtain ⟨tab, htab, htab_lo, htab_hi⟩ :=
-    get_total_active_balance_bounds Preset.mainnet s1 current_epoch hcur1 hS64
-  have hprev : get_previous_epoch Preset.mainnet s1 = .ok (current_epoch - 1) := by
+    get_total_active_balance_bounds P s1 current_epoch hcur1 hS64
+  have hprev : get_previous_epoch P s1 = .ok (current_epoch - 1) := by
     have hsat : saturating_sub current_epoch 1 = current_epoch - 1 :=
       saturating_sub_one current_epoch
     simp only [get_previous_epoch, hcur1, ok_bind, hsat]
     rfl
-  obtain ⟨rctx, hctx, hsrc, htgt, hhd⟩ := rewardsContextOf_bounds Preset.mainnet tab s1 hrows1
-    current_epoch (current_epoch - 1) hcur1 hprev (by epoch_omega) (by decide) hS64 (by epoch_omega)
+  obtain ⟨rctx, hctx, hsrc, htgt, hhd⟩ := rewardsContextOf_bounds P tab s1 hrows1
+    current_epoch (current_epoch - 1) hcur1 hprev (by epoch_omega) (by pdecide) hS64 (by epoch_omega)
   obtain ⟨hprev', -, -, -, hactive, -, -⟩ := rewardsContextOf_ok _ _ _ rctx hctx
   rw [hprev] at hprev'
   have hpe : rctx.previous_epoch = current_epoch - 1 := (Except.ok.inj hprev').symm
-  have hact_eq : rctx.active_increments = tab / Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT := by
+  have hact_eq : rctx.active_increments = tab / P.EFFECTIVE_BALANCE_INCREMENT := by
     simp only [uint64Div] at hactive
     split at hactive
     · cases hactive
     · exact (Except.ok.inj hactive).symm
-  have hactivation := compute_activation_exit_epoch_of_lt Preset.mainnet current_epoch
-    (by simp only [Preset.mainnet]; epoch_omega)
+  have hactivation := compute_activation_exit_epoch_of_lt P current_epoch
+    (by simp only [P, Preset.ofVar]; epoch_omega)
   obtain ⟨adj, per, hpre⟩ := slashingsPreamble_ok tab s1.slashings hslashings htab_lo
-  have hk : max Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) /
-      Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT ≤ 1152921504 := by
-    have : max Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) <
-        2 ^ 60 := Nat.max_lt.mpr ⟨by decide, hsupply⟩
-    have hINC : Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT = 1000000000 := rfl
+  have hk : max P.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) /
+      P.EFFECTIVE_BALANCE_INCREMENT ≤ 1152921504 := by
+    have : max P.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) <
+        2 ^ 60 := Nat.max_lt.mpr ⟨by pdecide, hsupply⟩
+    have hINC : P.EFFECTIVE_BALANCE_INCREMENT = 1000000000 := rfl
     obtain ⟨(m : Nat), hm⟩ : ∃ m : Nat,
-        max Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) = m :=
+        max P.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) = m :=
       ⟨_, rfl⟩
     rw [hm] at this ⊢
     rw [hINC]
@@ -991,28 +995,30 @@ theorem process_epoch_lh_sameOk (o : Oracle) (s : BeaconState) (hrows : RowsOk s
     omega
   have hact1 : 1 ≤ rctx.active_increments := by
     rw [hact_eq]
-    exact (Nat.le_div_iff_mul_le (by decide)).mpr (by simpa using htab_lo)
-  have hle : ∀ x, x ≤ max Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) /
-      Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT →
-      x ≤ max Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) /
-        Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT * rctx.active_increments :=
+    exact (Nat.le_div_iff_mul_le (by pdecide)).mpr (by simpa using htab_lo)
+  have hle : ∀ x, x ≤ max P.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) /
+      P.EFFECTIVE_BALANCE_INCREMENT →
+      x ≤ max P.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) /
+        P.EFFECTIVE_BALANCE_INCREMENT * rctx.active_increments :=
     fun x hx => Nat.le_trans hx (Nat.le_mul_of_pos_right _ hact1)
   have hcfar : current_epoch < FAR_FUTURE_EPOCH := by
-    have h64 : @LT.lt Nat _ (current_epoch + 4096) (2 ^ 64) := hepoch
+    have h64 : @LT.lt Nat _ (current_epoch + H) (2 ^ 64) := hepoch
     show @LT.lt Nat _ current_epoch (2 ^ 64 - 1)
     omega
-  refine SameOk.trans (specFourSteps_sameOk Preset.mainnet s1 tab htab hrows1 current_epoch _
+  refine SameOk.trans (specFourSteps_sameOk P s1 tab htab hrows1 current_epoch _
     hcur1 hactivation hcfar) ?_
   refine SameOk.trans (lighthouse_single_pass_eq_spec_supply tab s1 hrows1 current_epoch hcur1
     (by simpa [GENESIS_EPOCH] using hgenesis) rctx hctx (hpe ▸ heff1) hexit1 hmax1 hbal1 _
-    hactivation (by simp only [h4096]; exact hepoch) adj per hpre
-    (Nat.le_of_succ_le hfin) (Nat.lt_of_le_of_lt (Nat.add_le_add_left (by decide) _) hepoch)
+    hactivation hepoch0 adj per hpre
+    (Nat.le_of_succ_le hfin)
+    (Nat.lt_of_le_of_lt (Nat.add_le_add_left (show 1 ≤ H by omega) current_epoch) hepoch)
     htab_lo
     _ hk ⟨hle _ hsrc, hle _ htgt, hle _ hhd⟩ (lhBaseReward tab) ?_) (SameOk.of_eq ?_)
   · intro r hr _
     obtain ⟨b, hb⟩ := rewardsBaseReward_ok_mainnet tab r.validator htab_lo
       (hmax1 _ (by rw [← rowsOf_map_validator]; exact List.mem_map_of_mem hr))
-    simp only [lhBaseReward, hb]
+    unfold lhBaseReward
+    rw [hb]
   · unfold lhPass
     rw [hcur1, ok_bind, htab, ok_bind, hctx, ok_bind, hpre, ok_bind]
 
@@ -1034,24 +1040,29 @@ private theorem SameOk.symm' {α : Type} {x y : SpecM α} (h : SameOk x y) : Sam
 
 /-- On mainnet, at a state that `process_epoch` starts from, the Lighthouse epoch gives the
 same `ok` results as the spec epoch. -/
-theorem process_epoch_lh_sameOk' (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
-    (hslot : t.slot < 2 ^ 64) (heb : EBOk Preset.mainnet t) (hexit : ExitBounds t)
+theorem process_epoch_lh_sameOk' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
+    (hslot : t.slot < 2 ^ 64) (heb : EBOk P t) (hexit : ExitBounds t)
     (hsupply : EpochSupply t) :
-    SameOk (process_epoch_lh o t) (process_epoch Preset.mainnet o t) := by
+    SameOk (process_epoch_lh o t) (process_epoch P o t) := by
   obtain ⟨hinv, hrows, hentry⟩ := hb
   obtain ⟨hbalance, htotal, hslashings⟩ := hsupply
   unfold process_epoch_lh
   split
   · exact SameOk.refl _
   rename_i hgen
-  have hcurrent : get_current_epoch Preset.mainnet t =
-      .ok (t.slot / Preset.mainnet.SLOTS_PER_EPOCH) := by
-    simp [get_current_epoch, compute_epoch_at_slot, uint64Div, Preset.mainnet, pure,
+  have hcurrent : get_current_epoch P t =
+      .ok (t.slot / P.SLOTS_PER_EPOCH) := by
+    simp [get_current_epoch, compute_epoch_at_slot, uint64Div, Nat.ne_of_gt P_slots_pos, pure,
       Except.pure]
-  have hepoch : t.slot / Preset.mainnet.SLOTS_PER_EPOCH +
-      Preset.mainnet.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE := by
+  have hepoch : t.slot / P.SLOTS_PER_EPOCH +
+      P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE := by
     have h64 : @LT.lt Nat _ t.slot (2 ^ 64) := hslot
-    show @LT.lt Nat _ (t.slot / 32 + 4096) (2 ^ 64)
+    obtain ⟨V, hV', -, hV⟩ := P_slashings_vector_nat
+    obtain ⟨q, hq⟩ : ∃ q : Nat, t.slot / P.SLOTS_PER_EPOCH = q := ⟨_, rfl⟩
+    have h2 : q ≤ t.slot / 2 := by
+      rw [← hq]; exact Nat.div_le_div_left P_slots_gt_one (by decide)
+    rw [hV', hq]
+    show @LT.lt Nat _ (q + V / 2) (2 ^ 64)
     omega
   exact SameOk.symm' (process_epoch_lh_sameOk o t hrows hinv _ hcurrent hgen hepoch hentry
     (fun i h => hexit _ (List.getElem_mem h)) (fun v hv => (heb v hv).2) hbalance htotal
@@ -1060,9 +1071,9 @@ theorem process_epoch_lh_sameOk' (o : Oracle) (t : BeaconState) (hb : BoundaryOk
 
 /-- `process_epoch_lh_sameOk'` in the form of the `hf` hypothesis of
 `reachable_state_transition_sameOk'`, with `EpochSupply` as the epoch condition. -/
-theorem process_epoch_lh_hf (o : Oracle) :
+theorem process_epoch_lh_hf [PresetCfg] [PresetCfg.Ok] (o : Oracle) :
     ∀ t, EpochInputOk EpochSupply t →
-      SameOk (process_epoch_lh o t) (process_epoch Preset.mainnet o t) :=
+      SameOk (process_epoch_lh o t) (process_epoch P o t) :=
   fun t ⟨hb, hslot, heb, hexit, hsupply⟩ =>
     process_epoch_lh_sameOk' o t hb hslot heb hexit hsupply
 

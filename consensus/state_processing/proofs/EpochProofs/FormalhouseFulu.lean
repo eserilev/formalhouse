@@ -5,7 +5,8 @@ import EpochProofs.Sanity.Invariants.TotalityFulu
 /-!
 # Formalhouse: the Fulu epoch of Lighthouse
 
-`formalhouse_fulu_epoch` states, on mainnet, at the last slot of an epoch:
+`formalhouse_fulu_epoch` states, for a preset and config that agree with Etheorem's
+(`EpochPresetAgrees`, proved for mainnet and minimal), at the last slot of an epoch:
 
 1. If Lighthouse's Fulu epoch (`process_epoch_lh_order_fulu`: Lighthouse's Fulu step order, its
    genesis path and the checked Rust of each step) returns `s'`, Etheorem's Fulu `processEpoch`
@@ -25,11 +26,10 @@ namespace EpochProofs.Formalhouse
 open EthCLLib.Spec EthCLLib.Proofs SizzLean.Proofs EthCLSpecs.Proofs.Fulu
 open EpochProofs.Etheorem.Fulu
 
-section Mainnet
+section Generic
 
-attribute [local instance] EthCLSpecs.Fulu.mainnet EthCLSpecs.Fulu.mainnetConfig
-
-variable [HasherTag] [CryptoBackend]
+variable [EthCLSpecs.Fulu.Preset] [EthCLSpecs.Fulu.Config] [HasherTag] [CryptoBackend]
+variable [Spec.PresetCfg] [Spec.PresetCfg.Ok] [Spec.FuluCfg] [Spec.FuluCfg.Ok]
 
 /-- The conditions of `formalhouse_fulu_epoch` on the epoch start state `e`, by kind. -/
 structure FuluEpochCondsAll (o : Spec.Oracle) (e : EState) : Prop where
@@ -42,21 +42,22 @@ structure FuluEpochCondsAll (o : Spec.Oracle) (e : EState) : Prop where
   /-- The conditions of the Etheorem Fulu bridge: state facts before some steps, the Electra
   proposer loop ends before its last pass, and Etheorem's selections return all their items
   (F3). -/
-  etheorem : FuluEpochConds Spec.Preset.mainnet o e
+  etheorem : FuluEpochConds Spec.P o e
   /-- Oracle: the spec Oracle agrees with Etheorem's functions, and `sha` returns 32 bytes. -/
   oracle : OracleAgrees o
   sha : ∀ b : ByteArray, (sha b).size = 32
 
 /-- The Fulu epoch of Lighthouse equals the Fulu spec and Etheorem's Fulu `processEpoch`. -/
-theorem formalhouse_fulu_epoch (o : Spec.Oracle) (e : EState) (hc : FuluEpochCondsAll o e) :
+theorem formalhouse_fulu_epoch (hpa : EpochPresetAgrees Spec.P Spec.FC) (o : Spec.Oracle)
+    (e : EState) (hc : FuluEpochCondsAll o e) :
     (∀ s', Spec.process_epoch_lh_order_fulu o (absEState e) = .ok s' →
       ∃ e', (EthCLSpecs.Fulu.processEpoch (StateTransition := FuluRun)).run (pureState e) =
         .ok ((), pureState e') ∧ absEState e' = s') ∧
-    (∀ s', Spec.process_epoch_fulu Spec.Preset.mainnet Spec.FuluConfig.mainnet o
+    (∀ s', Spec.process_epoch_fulu Spec.P Spec.FC o
         (absEState e) = .ok s' → Spec.process_epoch_lh_order_fulu o (absEState e) = .ok s') := by
   have h := Spec.lighthouse_fulu_epoch_sameOk o (absEState e) hc.reachable hc.boundary
   refine ⟨fun s' hs' => ?_, fun s' hs' => (h s').mpr hs'⟩
-  exact process_epoch_fulu_etheorem epochPresetAgrees_mainnet o hc.oracle hc.sha e hc.etheorem
+  exact process_epoch_fulu_etheorem hpa o hc.oracle hc.sha e hc.etheorem
     ((h s').mp hs')
 
 /-- The Fulu epoch of Lighthouse returns `ok`, and its state equals Etheorem's Fulu
@@ -70,9 +71,10 @@ The conditions beyond `formalhouse_fulu_epoch`:
 - `hcomm`: at the committee steps, the state facts (`FuluCommConds`) and the Fulu pyspec
   preconditions (`FuluCommPreconds`: an active validator at the next epoch and at `current + 2`,
   and selections that end within `2^64` passes). -/
-theorem formalhouse_fulu_epoch_total (o : Spec.Oracle) (e : EState) (hc : FuluEpochCondsAll o e)
+theorem formalhouse_fulu_epoch_total [Spec.PresetCfg.Bounds] (hpa : EpochPresetAgrees Spec.P Spec.FC)
+    (o : Spec.Oracle) (e : EState) (hc : FuluEpochCondsAll o e)
     (hslot : (absEState e).slot + 8192 < 2 ^ 64)
-    (hvec : (absEState e).FuluVectorLengths Spec.Preset.mainnet)
+    (hvec : (absEState e).FuluVectorLengths Spec.P)
     (hrb : Spec.RowBounds (absEState e))
     (hcomm : ∀ s, Spec.CommFrame (absEState e) s →
       Spec.FuluCommConds o s ∧ Spec.FuluCommPreconds o s) :
@@ -83,10 +85,10 @@ theorem formalhouse_fulu_epoch_total (o : Spec.Oracle) (e : EState) (hc : FuluEp
   obtain ⟨⟨⟨hb, -, heb, -, hsup⟩, -, hcons⟩, -, -⟩ := hin
   obtain ⟨s', hs'⟩ := Spec.process_epoch_fulu_total o (absEState e) hb.2.1 hslot hc.boundary.1
     hvec hb.1 heb hcons hsup.2.2 hrb (Spec.committeesOkFulu_of o _ hslot hcomm)
-  have h := formalhouse_fulu_epoch o e hc
+  have h := formalhouse_fulu_epoch hpa o e hc
   have hlh := h.2 s' hs'
   exact ⟨s', hlh, h.1 s' hlh⟩
 
-end Mainnet
+end Generic
 
 end EpochProofs.Formalhouse

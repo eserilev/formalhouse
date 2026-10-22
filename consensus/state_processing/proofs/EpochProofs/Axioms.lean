@@ -803,3 +803,15 @@ open EpochProofs.Spec
 #print axioms EpochProofs.onboard_step_builder
 #print axioms EpochProofs.onboard_loop_spec
 #print axioms EpochProofs.onboard_spec
+#print axioms EpochProofs.Spec.mainnetCfg_bounds
+#print axioms EpochProofs.Spec.minimalCfg_bounds
+#print axioms EpochProofs.Spec.P_ep_bound
+#print axioms EpochProofs.Spec.P_ep_start_bound
+#print axioms EpochProofs.Spec.mapM_range'_head_error
+#print axioms EpochProofs.CacheBridge.cachePresetOf_mainnet
+#print axioms EpochProofs.CacheBridge.cachePresetOf_minimal
+#print axioms EpochProofs.CacheBridge.committeePresetLink_P
+#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_final_mainnet
+#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_final_minimal
+#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_final_mainnet
+#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_final_minimal

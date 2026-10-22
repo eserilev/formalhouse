@@ -1,4 +1,5 @@
 import EpochProofs.Equiv.PendingDeposits
+import EpochProofs.Spec.PresetCfg
 import EpochProofs.Sanity.Invariants.LighthouseTailDeposits
 
 /-!
@@ -12,9 +13,9 @@ import EpochProofs.Sanity.Invariants.LighthouseTailDeposits
 
 namespace EpochProofs.Spec
 
-theorem depositDecisions_postponed_len (fs dbtc churn : Nat) (views : List DepositSpecView)
+theorem depositDecisions_postponed_len [PresetCfg] (fs dbtc churn : Nat) (views : List DepositSpecView)
     (n : Nat) (b : Gwei) (pp : List Bool)
-    (h : depositDecisions Preset.mainnet fs dbtc churn views = .ok (n, b, pp)) :
+    (h : depositDecisions P fs dbtc churn views = .ok (n, b, pp)) :
     pp.length = n := by
   unfold depositDecisions at h
   obtain ⟨avail, -, h⟩ := specM_bind_ok h
@@ -37,13 +38,13 @@ namespace EpochProofs
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
-theorem process_pending_deposits_postponed_len (views : Slice LhDepositView)
+theorem process_pending_deposits_postponed_len [EpochProofs.Spec.PresetCfg] (views : Slice LhDepositView)
     (finalized_slot current_epoch next_epoch deposit_balance_to_consume churn : U64)
-    (c : LhDepositConstants) (hc : DepositConstantsMatch Spec.Preset.mainnet c) :
+    (c : LhDepositConstants) (hc : DepositConstantsMatch Spec.P c) :
     per_epoch_processing.pending_deposits.process_pending_deposits views finalized_slot
       current_epoch next_epoch deposit_balance_to_consume churn c ⦃ r =>
         ∀ o, r = .Ok o → o.postponed.val.length = o.next_deposit_index.val ⦄ := by
-  obtain ⟨r, hr, hq⟩ := spec_imp_exists (process_pending_deposits_equiv Spec.Preset.mainnet views
+  obtain ⟨r, hr, hq⟩ := spec_imp_exists (process_pending_deposits_equiv Spec.P views
     finalized_slot current_epoch next_epoch deposit_balance_to_consume churn c hc)
   apply exists_imp_spec
   refine ⟨r, hr, ?_⟩

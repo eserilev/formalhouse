@@ -1,4 +1,5 @@
 import EpochProofs.Sanity.Invariants.Reachable
+import EpochProofs.Spec.PresetCfg
 import EpochProofs.Sanity.Invariants.LighthouseEpoch
 import EpochProofs.Sanity.Invariants.LighthouseTail
 
@@ -22,11 +23,11 @@ The start state `init` has `FfgInvariant`, `RowsOk`, `ExitDelay`, `ExitEpochsU64
 million ETH. `EpochEcon … EpochSupply` says that each `process_epoch` input of the run has
 balances below `2^62`, effective balances that sum below `2^60`, and a slashed sum whose triple
 fits in a `u64`. Each block of the run has a `u64` slot and at most 512 sync bits. -/
-theorem lighthouse_state_transition_sameOk (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem lighthouse_state_transition_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
-    (hffg : FfgInvariant Preset.mainnet init) (hrows : RowsOk init)
-    (hd : ExitDelay Preset.mainnet init) (hx : ExitEpochsU64 init)
-    (h0 : AfterEB Preset.mainnet init)
+    (hffg : FfgInvariant P init) (hrows : RowsOk init)
+    (hd : ExitDelay P init) (hx : ExitEpochsU64 init)
+    (h0 : AfterEB P init)
     (hsupply : SupplyBound o max_blobs_per_block GLOAS_FORK_EPOCH init)
     (hecon : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH init EpochSupply)
     (s : BeaconState) (hr : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s)
@@ -34,7 +35,7 @@ theorem lighthouse_state_transition_sameOk (o : Oracle) (max_blobs_per_block : E
     (hslot64 : signed_block.message.slot < 2 ^ 64) :
     SameOk (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH (process_epoch_lh o) s
         signed_block validate_result)
-      (state_transition Preset.mainnet o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
+      (state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
         validate_result) :=
   reachable_state_transition_sameOk' o max_blobs_per_block GLOAS_FORK_EPOCH init hffg hrows hd
     hx h0 hsupply EpochSupply hecon (process_epoch_lh o) (process_epoch_lh_hf o) s hr signed_block
@@ -46,11 +47,11 @@ theorem lighthouse_state_transition_sameOk (o : Oracle) (max_blobs_per_block : E
 update, then new deposits, consolidations, the effective balance redo and builder payments, as
 `single_pass.rs` does. The start state also has unique pubkeys, in-range consolidation indices
 and `u64` withdrawable epochs. Genesis does. -/
-theorem lighthouse_full_epoch_state_transition_sameOk (o : Oracle)
+theorem lighthouse_full_epoch_state_transition_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle)
     (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
-    (hffg : FfgInvariant Preset.mainnet init) (hrows : RowsOk init)
-    (hd : ExitDelay Preset.mainnet init) (hx : ExitEpochsU64 init)
-    (h0 : AfterEB Preset.mainnet init) (hpk : PubkeysUnique init)
+    (hffg : FfgInvariant P init) (hrows : RowsOk init)
+    (hd : ExitDelay P init) (hx : ExitEpochsU64 init)
+    (h0 : AfterEB P init) (hpk : PubkeysUnique init)
     (hcr : ConsolidationsInRange init) (hw : WithdrawableU64 init)
     (hsupply : SupplyBound o max_blobs_per_block GLOAS_FORK_EPOCH init)
     (hecon : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH init EpochSupply)
@@ -59,7 +60,7 @@ theorem lighthouse_full_epoch_state_transition_sameOk (o : Oracle)
     (hslot64 : signed_block.message.slot < 2 ^ 64) :
     SameOk (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH
         (process_epoch_lh_full o) s signed_block validate_result)
-      (state_transition Preset.mainnet o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
+      (state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
         validate_result) :=
   reachable_state_transition_sameOk''' o max_blobs_per_block GLOAS_FORK_EPOCH init hffg hrows hd
     hx h0 hpk hcr hw hsupply EpochSupply hecon (process_epoch_lh_full o)

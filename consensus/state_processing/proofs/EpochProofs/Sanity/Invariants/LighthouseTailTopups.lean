@@ -1,4 +1,5 @@
 import EpochProofs.Sanity.Invariants.LighthouseTailDeposits
+import EpochProofs.Spec.PresetCfg
 import EpochProofs.Sanity.Invariants.LighthouseTailEB
 
 /-!
@@ -333,15 +334,15 @@ theorem increase_balance_set (bs : List Gwei) (j k : Nat) (x a : Gwei) (hkj : k 
       · rfl
 
 /-- `add_validator_to_registry` commutes with a balance write at an existing validator. -/
-theorem add_validator_setBal (T : BeaconState) (j : Nat) (x : Gwei)
+theorem add_validator_setBal [PresetCfg] (T : BeaconState) (j : Nat) (x : Gwei)
     (hj : j < T.balances.length) (hjL : j < T.validators.length) (pubkey : BLSPubkey)
     (withdrawal_credentials : Bytes32) (amount : Gwei) :
-    add_validator_to_registry Preset.mainnet (setBal T j x) pubkey withdrawal_credentials amount =
+    add_validator_to_registry P (setBal T j x) pubkey withdrawal_credentials amount =
       (fun T' => setBal T' j x) <$>
-        add_validator_to_registry Preset.mainnet T pubkey withdrawal_credentials amount := by
+        add_validator_to_registry P T pubkey withdrawal_credentials amount := by
   unfold add_validator_to_registry get_index_for_new_validator setBal
   simp only [set_or_append_list_len]
-  cases get_validator_from_deposit Preset.mainnet pubkey withdrawal_credentials amount with
+  cases get_validator_from_deposit P pubkey withdrawal_credentials amount with
   | error e => rfl
   | ok v =>
     simp only [bind, Except.bind, pure, Except.pure]
@@ -361,10 +362,10 @@ theorem add_validator_setBal (T : BeaconState) (j : Nat) (x : Gwei)
           cases set_or_append_list T.inactivity_scores T.validators.length 0 <;> rfl
 
 /-- `apply_pending_deposit` commutes with a balance write at a validator with another pubkey. -/
-theorem apply_setBal (o : Oracle) (d : PendingDeposit) (T : BeaconState) (j : Nat) (x : Gwei)
+theorem apply_setBal [PresetCfg] (o : Oracle) (d : PendingDeposit) (T : BeaconState) (j : Nat) (x : Gwei)
     (hj : j < T.balances.length) (hP : ApplyOther j d T) :
-    apply_pending_deposit Preset.mainnet o (setBal T j x) d =
-      (fun T' => setBal T' j x) <$> apply_pending_deposit Preset.mainnet o T d := by
+    apply_pending_deposit P o (setBal T j x) d =
+      (fun T' => setBal T' j x) <$> apply_pending_deposit P o T d := by
   unfold apply_pending_deposit
   have hv : (setBal T j x).validators = T.validators := rfl
   simp only [hv]
@@ -413,12 +414,12 @@ theorem increaseAt_validators {j : Nat} {a : Gwei} {T T' : BeaconState}
     · cases h
 
 /-- A balance increase at a validator with another pubkey commutes with a deposit. -/
-theorem increaseAt_apply_comm (o : Oracle) (d : PendingDeposit) (T : BeaconState) (j : Nat)
+theorem increaseAt_apply_comm [PresetCfg] (o : Oracle) (d : PendingDeposit) (T : BeaconState) (j : Nat)
     (a : Gwei) (hP : ApplyOther j d T) :
-    SameOk (increaseAt j a T >>= fun t => apply_pending_deposit Preset.mainnet o t d)
-      (apply_pending_deposit Preset.mainnet o T d >>= increaseAt j a) := by
+    SameOk (increaseAt j a T >>= fun t => apply_pending_deposit P o t d)
+      (apply_pending_deposit P o T d >>= increaseAt j a) := by
   intro v
-  have hkeep : ∀ T', apply_pending_deposit Preset.mainnet o T d = .ok T' →
+  have hkeep : ∀ T', apply_pending_deposit P o T d = .ok T' →
       T'.balances[j]? = T.balances[j]? := fun T' hA => (apply_hF2 o d j T T' hP hA).2
   rw [increaseAt_char]
   cases hb : T.balances[j]? with
@@ -427,7 +428,7 @@ theorem increaseAt_apply_comm (o : Oracle) (d : PendingDeposit) (T : BeaconState
     constructor
     · intro h; cases h
     · intro h
-      cases hA : apply_pending_deposit Preset.mainnet o T d with
+      cases hA : apply_pending_deposit P o T d with
       | error e => rw [hA] at h; cases h
       | ok T' =>
         rw [hA] at h
@@ -438,7 +439,7 @@ theorem increaseAt_apply_comm (o : Oracle) (d : PendingDeposit) (T : BeaconState
     by_cases hfit : b + a < UINT64_SIZE
     · simp only [hfit, if_true, ok_bind']
       rw [apply_setBal o d T j (b + a) hj hP]
-      cases hA : apply_pending_deposit Preset.mainnet o T d with
+      cases hA : apply_pending_deposit P o T d with
       | error e => exact Iff.rfl.trans (by simp [Functor.map, Except.map, bind, Except.bind])
       | ok T' =>
         simp only [Functor.map, Except.map, bind, Except.bind]
@@ -448,7 +449,7 @@ theorem increaseAt_apply_comm (o : Oracle) (d : PendingDeposit) (T : BeaconState
       constructor
       · intro h; cases h
       · intro h
-        cases hA : apply_pending_deposit Preset.mainnet o T d with
+        cases hA : apply_pending_deposit P o T d with
         | error e => rw [hA] at h; cases h
         | ok T' =>
           rw [hA] at h
@@ -464,10 +465,10 @@ def topupsF (L : List (ValidatorIndex × Gwei)) (T : BeaconState) : SpecM Beacon
   L.foldlM (fun t x => increaseAt x.1 x.2 t) T
 
 /-- Balance increases at validators with other pubkeys commute with a deposit. -/
-theorem topups_apply_comm (o : Oracle) (d : PendingDeposit) :
+theorem topups_apply_comm [PresetCfg] (o : Oracle) (d : PendingDeposit) :
     ∀ (L : List (ValidatorIndex × Gwei)) (T : BeaconState), (∀ x ∈ L, ApplyOther x.1 d T) →
-      SameOk (apply_pending_deposit Preset.mainnet o T d >>= topupsF L)
-        (topupsF L T >>= fun t => apply_pending_deposit Preset.mainnet o t d)
+      SameOk (apply_pending_deposit P o T d >>= topupsF L)
+        (topupsF L T >>= fun t => apply_pending_deposit P o t d)
   | [], T, _ => by
     apply SameOk.of_eq
     exact bind_pure _
@@ -476,7 +477,7 @@ theorem topups_apply_comm (o : Oracle) (d : PendingDeposit) :
       intro t; rfl
     have hc : topupsF ((j, a) :: L) = fun t => increaseAt j a t >>= topupsF L := funext hcons
     rw [hc, bind_assoc (increaseAt j a T)]
-    rw [← bind_assoc (apply_pending_deposit Preset.mainnet o T d) (increaseAt j a)]
+    rw [← bind_assoc (apply_pending_deposit P o T d) (increaseAt j a)]
     refine SameOk.trans (SameOk.bind
       (increaseAt_apply_comm o d T j a (hL (j, a) (by simp))).flip
       (fun _ _ => SameOk.refl _)) ?_
@@ -488,9 +489,9 @@ theorem topups_apply_comm (o : Oracle) (d : PendingDeposit) :
     exact ⟨by rw [hv]; exact h.1, by rw [hv]; exact h.2⟩
 
 /-- A deposit for a pubkey of `S` is a balance increase, in a state that extends `S`. -/
-theorem apply_known (o : Oracle) (d : PendingDeposit) (S T : BeaconState) (hT : ValExt S T)
+theorem apply_known [PresetCfg] (o : Oracle) (d : PendingDeposit) (S T : BeaconState) (hT : ValExt S T)
     (hm : d.pubkey ∈ S.validators.map (·.pubkey)) :
-    apply_pending_deposit Preset.mainnet o T d =
+    apply_pending_deposit P o T d =
       increaseAt ((S.validators.map (·.pubkey)).idxOf d.pubkey) d.amount T := by
   obtain ⟨extra, hv, -, -⟩ := hT
   have hm' : d.pubkey ∈ T.validators.map (·.pubkey) := by
@@ -528,19 +529,19 @@ theorem increaseAt_valExt {S T T' : BeaconState} {j : Nat} {a : Gwei} (hT : ValE
     · cases h
 
 /-- The general split: from any state that extends `S`. -/
-theorem applyHandled_split_gen (o : Oracle) (S : BeaconState) :
+theorem applyHandled_split_gen [PresetCfg] (o : Oracle) (S : BeaconState) :
     ∀ (handled : List (PendingDeposit × Bool)) (T : BeaconState), ValExt S T →
       SameOk (applyHandled o T handled)
         (topupsF (knownTopups (S.validators.map (·.pubkey)) handled) T >>= fun t =>
           (newDeposits (S.validators.map (·.pubkey)) handled).foldlM
-            (apply_pending_deposit Preset.mainnet o) t)
+            (apply_pending_deposit P o) t)
   | [], T, _ => by
     apply SameOk.of_eq
     simp [applyHandled, topupsF, knownTopups, newDeposits]
   | (d, pp) :: handled, T, hT => by
     have ih := applyHandled_split_gen o S handled
     have hstep : applyHandled o T ((d, pp) :: handled) =
-        (if pp then pure T else apply_pending_deposit Preset.mainnet o T d) >>= fun T1 =>
+        (if pp then pure T else apply_pending_deposit P o T d) >>= fun T1 =>
           applyHandled o T1 handled := rfl
     rw [hstep]
     cases pp with
@@ -601,14 +602,14 @@ theorem applyHandled_split_gen (o : Oracle) (S : BeaconState) :
 
 /-- The spec's deposits split into the top-ups of known validators, then the deposits for new
 pubkeys in order. -/
-theorem applyHandled_split (o : Oracle) (S : BeaconState)
+theorem applyHandled_split [PresetCfg] (o : Oracle) (S : BeaconState)
     (handled : List (PendingDeposit × Bool)) :
     SameOk (applyHandled o S handled)
       (do
         let t ← (knownTopups (S.validators.map (·.pubkey)) handled).foldlM
           (fun t x => increaseAt x.1 x.2 t) S
         (newDeposits (S.validators.map (·.pubkey)) handled).foldlM
-          (apply_pending_deposit Preset.mainnet o) t) :=
+          (apply_pending_deposit P o) t) :=
   applyHandled_split_gen o S handled S (ValExt.refl S)
 
 end EpochProofs.Spec

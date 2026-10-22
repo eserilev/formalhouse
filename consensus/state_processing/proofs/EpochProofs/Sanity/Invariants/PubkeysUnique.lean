@@ -452,7 +452,7 @@ theorem process_pending_deposits_pubkeysUnique (p : Preset) (o : Oracle)
            ‹apply_pending_deposit _ _ _ _ = _› hst)
 
 /-- `process_epoch` keeps `PubkeysUnique`. -/
-theorem process_epoch_pubkeysUnique (p : Preset) (o : Oracle) (s s' : BeaconState)
+theorem process_epoch_pubkeysUnique [PresetCfg] (p : Preset) (o : Oracle) (s s' : BeaconState)
     (h : process_epoch p o s = .ok s') (hs : PubkeysUnique s) : PubkeysUnique s' := by
   unfold process_epoch at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
@@ -494,7 +494,7 @@ theorem process_epoch_pubkeysUnique (p : Preset) (o : Oracle) (s s' : BeaconStat
     (PkSame.of_eq (process_ptc_window_frame p o _ _ h).1.1))))))))).pubkeysUnique d7
 
 /-- `process_slots` with the real `process_epoch` keeps `PubkeysUnique`. -/
-theorem process_slots_pubkeysUnique (p : Preset) (o : Oracle) (s s' : BeaconState) (slot : Slot)
+theorem process_slots_pubkeysUnique [PresetCfg] (p : Preset) (o : Oracle) (s s' : BeaconState) (slot : Slot)
     (h : process_slots p o (process_epoch p o) s slot = .ok s') (hs : PubkeysUnique s) :
     PubkeysUnique s' :=
   process_slots_invariant p o (process_epoch p o) PubkeysUnique
@@ -503,7 +503,7 @@ theorem process_slots_pubkeysUnique (p : Preset) (o : Oracle) (s s' : BeaconStat
     (fun _ _ hP => hP) s s' slot hs h
 
 /-- `state_transition` keeps `PubkeysUnique`. -/
-theorem state_transition_pubkeysUnique (p : Preset) (o : Oracle)
+theorem state_transition_pubkeysUnique [PresetCfg] (p : Preset) (o : Oracle)
     (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch) (s s' : BeaconState)
     (signed_block : SignedBeaconBlock) (validate_result : Bool) (hs : PubkeysUnique s)
     (h : state_transition p o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block

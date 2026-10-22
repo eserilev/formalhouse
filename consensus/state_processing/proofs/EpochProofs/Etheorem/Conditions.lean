@@ -1,4 +1,5 @@
 import EpochProofs.Etheorem.Epoch
+import EpochProofs.Spec.PresetBounds
 
 /-!
 # The Etheorem step conditions from the state at the epoch start
@@ -263,9 +264,9 @@ namespace EpochProofs.Etheorem
 
 open EthCLLib.Spec EthCLLib.Proofs SizzLean.Proofs EthCLSpecs.Proofs.Gloas
 
-section Mainnet
+section Generic
 
-attribute [local instance] EthCLSpecs.Gloas.mainnet EthCLSpecs.Gloas.mainnetConfig
+variable [EthCLSpecs.Gloas.Preset] [EthCLSpecs.Gloas.Config]
 
 /-! ## Facts about the map -/
 
@@ -320,16 +321,17 @@ the finalized epoch condition and the equal list lengths. `hin` holds the facts 
 lemmas carry to the step that reads them. `hhist`: the historical summaries are below
 `HISTORICAL_ROOTS_LIMIT`, a cap that beta.4 keeps. `hsel` holds the facts about Etheorem's
 output. -/
-theorem process_epoch_etheorem_in (o : Spec.Oracle) (ho : OracleAgrees o)
+theorem process_epoch_etheorem_in [Spec.PresetCfg] [Spec.PresetCfg.Ok]
+    (hpa : EpochPresetAgrees Spec.P) (o : Spec.Oracle) (ho : OracleAgrees o)
     (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState)
     (hb0 : Spec.BoundaryOk (absEState e)) (hslot : (absEState e).slot < 2 ^ 64)
     (hin : EpochCondsIn e)
     (hhist : (absEState e).historical_summaries.length < EthCLSpecs.Gloas.Const.historicalRootsLimit)
     (hsel : SelectionsFull e)
-    {s' : Spec.BeaconState} (h : Spec.process_epoch Spec.Preset.mainnet o (absEState e) = .ok s') :
+    {s' : Spec.BeaconState} (h : Spec.process_epoch Spec.P o (absEState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processEpoch (StateTransition := GloasRun)).run (pureState e) =
       .ok ((), pureState e') ∧ absEState e' = s' := by
-  have hp := epochPresetAgrees_mainnet
+  have hp := hpa
   have hpp := hp.passes
   have hb := hp.base
   unfold Spec.process_epoch at h
@@ -365,10 +367,9 @@ theorem process_epoch_etheorem_in (o : Spec.Oracle) (ho : OracleAgrees o)
     rw [← c2.2.1, ← c3.2.1, ← c2.1, ← c3.1] at hf
     have hs : (absEState e3).slot = (absEState e).slot := by rw [c3.1, c2.1, sl1]
     rw [hs] at hf
-    have h32 : Spec.Preset.mainnet.SLOTS_PER_EPOCH = 32 := rfl
-    rw [h32] at hf
-    have hlt : (absEState e).slot / 32 < 2 ^ 64 - 1 :=
-      Nat.div_lt_of_lt_mul (Nat.lt_of_lt_of_le hslot (by decide))
+    have h6 := Spec.P_epoch_le_div6 (absEState e).slot
+    have hslot' : @LT.lt Nat _ (absEState e).slot (2 ^ 64) := hslot
+    have hlt : @LT.lt Nat _ ((absEState e).slot / Spec.P.SLOTS_PER_EPOCH) (2 ^ 64 - 1) := by omega
     unfold Spec.FAR_FUTURE_EPOCH
     exact Nat.lt_of_le_of_lt hf hlt
   obtain ⟨t4, ht4, h⟩ := Spec.specM_bind_ok h
@@ -495,7 +496,8 @@ The conditions that remain:
 - `hhist`: the historical summaries are below `HISTORICAL_ROOTS_LIMIT`. Beta.2 keeps this cap.
 - `hsel`: Etheorem's balance weighted selections return all their items (F3).
 - `ho`, `hsha`: the oracle is Etheorem's hash and BLS functions, and SHA-256 returns 32 bytes. -/
-theorem lighthouse_epoch_etheorem_reachable (o : Spec.Oracle) (ho : OracleAgrees o)
+theorem lighthouse_epoch_etheorem_reachable [Spec.PresetCfg] [Spec.PresetCfg.Ok]
+    (hpa : EpochPresetAgrees Spec.P) (o : Spec.Oracle) (ho : OracleAgrees o)
     (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState)
     (hin : Spec.EpochInputOk'' Spec.EpochSupply (absEState e)) (hcond : EpochCondsIn e)
     (hhist : (absEState e).historical_summaries.length < EthCLSpecs.Gloas.Const.historicalRootsLimit)
@@ -506,8 +508,8 @@ theorem lighthouse_epoch_etheorem_reachable (o : Spec.Oracle) (ho : OracleAgrees
   obtain ⟨⟨⟨hb, hslot, heb, hexit, hsup⟩, _, hcons⟩, _, hvalid⟩ := hin
   have hsame := Spec.process_epoch_lh_full_sameOk' o (absEState e) hb hslot heb hexit hsup hvalid
     hcons
-  exact process_epoch_etheorem_in o ho hsha e hb hslot hcond hhist hsel ((hsame s').mp h)
+  exact process_epoch_etheorem_in hpa o ho hsha e hb hslot hcond hhist hsel ((hsame s').mp h)
 
-end Mainnet
+end Generic
 
 end EpochProofs.Etheorem

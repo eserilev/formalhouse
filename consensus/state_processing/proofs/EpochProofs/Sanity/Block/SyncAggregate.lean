@@ -1,4 +1,5 @@
 import EpochProofs.Spec.Block.SyncAggregate
+import EpochProofs.Spec.PresetCfg
 import EpochProofs.Sanity.Effects
 import EpochProofs.Sanity.RewardsBound
 
@@ -244,34 +245,43 @@ theorem sync_participant_reward_mul_le (p : Preset) (total_active_balance : Gwei
         simp only [Nat.mul_comm, Nat.mul_left_comm]
     _ ≤ SYNC_REWARD_WEIGHT * F * total_active_balance := Nat.mul_le_mul_left _ h3
 
-/-- On mainnet, `participant_reward * 8192 ≤ integer_squareroot(total_active_balance) + 2`.
-The bound holds for every total active balance. -/
-theorem sync_participant_reward_mainnet (total_active_balance : Gwei) :
-    sync_participant_reward Preset.mainnet total_active_balance * 8192 ≤
+/-- `participant_reward * (SLOTS_PER_EPOCH * SYNC_COMMITTEE_SIZE / 2) ≤
+integer_squareroot(total_active_balance) + 2`. On mainnet the factor is 8192. The bound holds for
+every total active balance. -/
+theorem sync_participant_reward_mainnet [PresetCfg] [PresetCfg.Ok] (total_active_balance : Gwei) :
+    sync_participant_reward P total_active_balance *
+        (P.SLOTS_PER_EPOCH * P.SYNC_COMMITTEE_SIZE / 2) ≤
       integer_squareroot total_active_balance + 2 := by
   by_cases hr : integer_squareroot total_active_balance = 0
   · simp only [sync_participant_reward, hr, Nat.div_zero, Nat.zero_mul, Nat.zero_div]
     exact Nat.zero_le _
-  have hmul := sync_participant_reward_mul_le Preset.mainnet total_active_balance
+  have hmul := sync_participant_reward_mul_le P total_active_balance
   have hs := integer_squareroot_spec total_active_balance
-  generalize sync_participant_reward Preset.mainnet total_active_balance = x at hmul ⊢
+  have heven := P_sync_seats_even
+  have hF : P.BASE_REWARD_FACTOR = 64 := rfl
+  obtain ⟨SZ, hSZ⟩ : ∃ SZ : Nat, P.SLOTS_PER_EPOCH * P.SYNC_COMMITTEE_SIZE = SZ := ⟨_, rfl⟩
+  rw [hSZ] at heven ⊢
+  rw [Nat.mul_assoc WEIGHT_DENOMINATOR, hSZ, hF] at hmul
+  generalize sync_participant_reward P total_active_balance = x at hmul ⊢
   generalize integer_squareroot total_active_balance = r at hmul hs hr ⊢
-  simp only [Preset.mainnet, WEIGHT_DENOMINATOR, SYNC_REWARD_WEIGHT] at hmul
-  rw [Nat.mul_right_comm] at hmul
+  simp only [WEIGHT_DENOMINATOR, SYNC_REWARD_WEIGHT] at hmul
+  obtain ⟨K, rfl⟩ : ∃ K, SZ = 2 * K := ⟨SZ / 2, by omega⟩
+  rw [show 2 * K / 2 = K by omega]
   have hsq : (r + 1) * (r + 1) = r * r + 2 * r + 1 := by
     simp only [Uint64] at *
     rw [Nat.add_mul, Nat.mul_add, Nat.mul_add]
     omega
-  have hy : x * 8192 * r ≤ (r + 2) * r := by
-    rw [Nat.mul_right_comm, Nat.add_mul]
+  have hy : x * K * r ≤ (r + 2) * r := by
+    rw [Nat.add_mul]
     rw [hsq] at hs
-    simp only [Nat.reduceMul] at hmul
-    generalize x * r = y at hmul ⊢
+    have h128 : 128 * (x * K * r) ≤ 128 * total_active_balance := by
+      have : x * (64 * (2 * K)) * r = 128 * (x * K * r) := by
+        simp only [Nat.mul_comm, Nat.mul_left_comm, Nat.mul_assoc] <;> omega
+      rw [← this]; simpa [Nat.mul_assoc] using hmul
+    have := Nat.le_of_mul_le_mul_left h128 (by decide)
+    generalize x * K * r = y at this ⊢
     generalize r * r = q at hs ⊢
-    have h128 : 128 * (y * 8192) ≤ 128 * total_active_balance := by
-      rw [Nat.mul_left_comm]
-      exact hmul
-    exact Nat.le_of_lt_succ (Nat.lt_of_le_of_lt (Nat.le_of_mul_le_mul_left h128 (by decide)) hs)
+    exact Nat.le_of_lt_succ (Nat.lt_of_le_of_lt this hs)
   exact Nat.le_of_mul_le_mul_right hy (Nat.pos_of_ne_zero hr)
 
 /-! ## One run of `process_sync_aggregate` -/
@@ -409,25 +419,28 @@ theorem process_sync_aggregate_balance_bound_size (p : Preset) (o : Oracle)
   rw [hlen] at hc
   exact ⟨b', hb', Nat.le_trans hle (Nat.add_le_add_left (Nat.mul_le_mul_right _ hc) _)⟩
 
-/-- On mainnet, one `process_sync_aggregate` call lowers a balance by at most
-`syncPenaltyCount × (integer_squareroot(total_active_balance) + 2) / 8192`. With 34M ETH
-staked, that is about 22,500 Gwei for each seat. -/
-theorem process_sync_aggregate_balance_bound_mainnet (o : Oracle) (state state' : BeaconState)
-    (sync_aggregate : SyncAggregate)
-    (h : process_sync_aggregate Preset.mainnet o state sync_aggregate = .ok state') :
+/-- One `process_sync_aggregate` call lowers a balance by at most
+`syncPenaltyCount × (integer_squareroot(total_active_balance) + 2) / K` with
+`K = SLOTS_PER_EPOCH * SYNC_COMMITTEE_SIZE / 2` (8192 on mainnet). With 34M ETH staked on
+mainnet, that is about 22,500 Gwei for each seat. -/
+theorem process_sync_aggregate_balance_bound_mainnet [PresetCfg] [PresetCfg.Ok] (o : Oracle)
+    (state state' : BeaconState) (sync_aggregate : SyncAggregate)
+    (h : process_sync_aggregate P o state sync_aggregate = .ok state') :
     ∃ total_active_balance : Gwei,
-      get_total_active_balance Preset.mainnet state = .ok total_active_balance ∧
+      get_total_active_balance P state = .ok total_active_balance ∧
       ∀ (i : Nat) (b : Gwei), state.balances[i]? = some b →
         ∃ b' : Gwei, state'.balances[i]? = some b' ∧
-          b * 8192 ≤ b' * 8192 + syncPenaltyCount state sync_aggregate.sync_committee_bits i *
-            (integer_squareroot total_active_balance + 2) := by
+          b * (P.SLOTS_PER_EPOCH * P.SYNC_COMMITTEE_SIZE / 2) ≤
+            b' * (P.SLOTS_PER_EPOCH * P.SYNC_COMMITTEE_SIZE / 2) +
+              syncPenaltyCount state sync_aggregate.sync_committee_bits i *
+                (integer_squareroot total_active_balance + 2) := by
   obtain ⟨tab, htab, hb⟩ := process_sync_aggregate_balance_bound _ o state state' _ h
   refine ⟨tab, htab, fun i b hbi => ?_⟩
   obtain ⟨b', hb', hle⟩ := hb i b hbi
   refine ⟨b', hb', ?_⟩
   have hr := Nat.mul_le_mul_left (syncPenaltyCount state sync_aggregate.sync_committee_bits i)
     (sync_participant_reward_mainnet tab)
-  have h8 := Nat.mul_le_mul_right 8192 hle
+  have h8 := Nat.mul_le_mul_right (P.SLOTS_PER_EPOCH * P.SYNC_COMMITTEE_SIZE / 2) hle
   rw [Nat.add_mul, Nat.mul_assoc] at h8
   exact Nat.le_trans h8 (Nat.add_le_add_left hr _)
 

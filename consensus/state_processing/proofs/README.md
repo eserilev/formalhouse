@@ -41,10 +41,19 @@ EpochProofs/Spec/*.lean  <-- written by hand from the consensus specs
 | The single-pass loop over the validators (`registry_rows.rs`) | Done | Done | Done, under `RowsContract` |
 | The writes after the loop: deposits, builder payments, PTC window shift, effective balances | Done | Done | Done, under the `EpochTail` contracts |
 | Final: `formalhouse_gloas_epoch_final`, `formalhouse_fulu_epoch_final` | Done | - | Done, with the assumptions below |
+| Both presets: `_mainnet` and `_minimal` versions of the two final theorems | Done | - | Done |
 
 ## The final result
 
-`EpochProofs/FormalhouseFinal.lean` states the two final theorems, on mainnet.
+`EpochProofs/FormalhouseFinal.lean` states the two final theorems for any preset that agrees with
+Etheorem's. `formalhouse_gloas_epoch_final_mainnet`, `formalhouse_gloas_epoch_final_minimal`,
+`formalhouse_fulu_epoch_final_mainnet` and `formalhouse_fulu_epoch_final_minimal` instantiate
+them for the two presets.
+
+The proofs read the preset from the class `PresetCfg` (`Spec/PresetCfg.lean`). Two classes hold
+the facts the proofs need about the preset values: `PresetCfg.Ok` and `PresetCfg.Bounds`
+(`Spec/PresetBounds.lean`). Both presets satisfy them by `decide`. On minimal, F12 halts the
+chain below 8 active validators, not 32.
 
 - `formalhouse_gloas_epoch_final`: take a run that starts in Fulu from a state with the genesis
   invariants (`FuluStartOk`) and crosses the Gloas fork (`upgrade_to_gloas`). On every input of

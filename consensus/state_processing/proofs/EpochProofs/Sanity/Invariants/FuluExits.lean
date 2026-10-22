@@ -258,7 +258,7 @@ theorem process_block_fulu_validators_inv (p : Preset) (o : Oracle) (fo : FuluOr
 
 /-- The Fulu `process_epoch` keeps every property of the validators that the registry update,
 the pending deposits and the effective balance update keep. -/
-theorem process_epoch_fulu_validators_inv (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem process_epoch_fulu_validators_inv [PresetCfg] (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
     (o : Oracle) (P : BeaconState → Prop)
     (hv : ∀ s s', s'.validators = s.validators → P s → P s')
     (hReg : ∀ tab a b, process_registry_updates p tab a = .ok b → P a → P b)
@@ -290,7 +290,7 @@ theorem process_epoch_fulu_validators_inv (p : Preset) (f : FuluConfig) (hc : Fu
 
 /-- `state_transition_fulu` keeps every property of the validators that the Fulu operations and
 the three epoch steps keep. -/
-theorem state_transition_fulu_validators_inv (p : Preset) (o : Oracle) (fo : FuluOracle)
+theorem state_transition_fulu_validators_inv [PresetCfg] (p : Preset) (o : Oracle) (fo : FuluOracle)
     (f : FuluConfig) (hc : FuluCompat p f) (c : FuluBlockConfig) (P : BeaconState → Prop)
     (hv : ∀ s s', s'.validators = s.validators → P s → P s')
     (hO : ∀ a b body, process_operations_fulu p o f a body = .ok b → P a → P b)
@@ -311,7 +311,7 @@ theorem state_transition_fulu_validators_inv (p : Preset) (o : Oracle) (fo : Ful
     fs fs' signed_block validate_result hs h
 
 /-- `state_transition_fulu` keeps `ExitEpochsU64`. -/
-theorem state_transition_fulu_exitEpochsU64 (p : Preset) (o : Oracle) (fo : FuluOracle)
+theorem state_transition_fulu_exitEpochsU64 [PresetCfg] (p : Preset) (o : Oracle) (fo : FuluOracle)
     (f : FuluConfig) (hc : FuluCompat p f) (c : FuluBlockConfig) (fs fs' : FuluState)
     (signed_block : FuluSignedBeaconBlock) (validate_result : Bool)
     (hs : ExitEpochsU64 fs.state)
@@ -413,7 +413,7 @@ theorem process_operations_fulu_withdrawableU64 (p : Preset) (o : Oracle) (f : F
     s s' body h hs
 
 /-- `state_transition_fulu` keeps `WithdrawableU64`. -/
-theorem state_transition_fulu_withdrawableU64 (p : Preset) (o : Oracle) (fo : FuluOracle)
+theorem state_transition_fulu_withdrawableU64 [PresetCfg] (p : Preset) (o : Oracle) (fo : FuluOracle)
     (f : FuluConfig) (hc : FuluCompat p f) (c : FuluBlockConfig) (fs fs' : FuluState)
     (signed_block : FuluSignedBeaconBlock) (validate_result : Bool)
     (hs : WithdrawableU64 fs.state)
@@ -587,7 +587,7 @@ theorem process_operations_fulu_exitDelay (p : Preset) (o : Oracle) (f : FuluCon
     s s' body h hs
 
 /-- `state_transition_fulu` keeps `ExitDelay`. -/
-theorem state_transition_fulu_exitDelay (p : Preset) (o : Oracle) (fo : FuluOracle)
+theorem state_transition_fulu_exitDelay [PresetCfg] (p : Preset) (o : Oracle) (fo : FuluOracle)
     (f : FuluConfig) (hc : FuluCompat p f) (c : FuluBlockConfig) (fs fs' : FuluState)
     (signed_block : FuluSignedBeaconBlock) (validate_result : Bool)
     (hs : ExitDelay p fs.state)

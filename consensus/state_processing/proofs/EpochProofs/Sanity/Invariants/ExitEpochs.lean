@@ -468,7 +468,7 @@ theorem process_effective_balance_updates_exitEpochsU64 (p : Preset) (s s' : Bea
     exact hs _ (List.getElem_mem hv)
 
 /-- `process_epoch` keeps `ExitEpochsU64`. -/
-theorem process_epoch_exitEpochsU64 (p : Preset) (o : Oracle) (s s' : BeaconState)
+theorem process_epoch_exitEpochsU64 [PresetCfg] (p : Preset) (o : Oracle) (s s' : BeaconState)
     (h : process_epoch p o s = .ok s') (hs : ExitEpochsU64 s) : ExitEpochsU64 s' := by
   unfold process_epoch at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h

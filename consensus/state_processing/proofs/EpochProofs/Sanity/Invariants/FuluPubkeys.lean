@@ -156,7 +156,7 @@ theorem process_block_fulu_pubkeysUnique (p : Preset) (o : Oracle) (fo : FuluOra
     fs fs' block h hs
 
 /-- The Fulu `process_epoch` keeps `PubkeysUnique`. -/
-theorem process_epoch_fulu_pubkeysUnique (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem process_epoch_fulu_pubkeysUnique [PresetCfg] (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
     (o : Oracle) (s s' : BeaconState) (h : process_epoch_fulu p f o s = .ok s')
     (hs : PubkeysUnique s) : PubkeysUnique s' :=
   process_epoch_fulu_inv p f hc o PubkeysUnique
@@ -187,7 +187,7 @@ theorem process_epoch_fulu_pubkeysUnique (p : Preset) (f : FuluConfig) (hc : Ful
     s s' h hs
 
 /-- `process_slots_fulu` with the Fulu `process_epoch` keeps `PubkeysUnique`. -/
-theorem process_slots_fulu_pubkeysUnique (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem process_slots_fulu_pubkeysUnique [PresetCfg] (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
     (o : Oracle) (fo : FuluOracle) (fs fs' : FuluState) (slot : Slot)
     (h : process_slots_fulu p o fo (process_epoch_fulu p f o) fs slot = .ok fs')
     (hs : PubkeysUnique fs.state) : PubkeysUnique fs'.state :=
@@ -197,7 +197,7 @@ theorem process_slots_fulu_pubkeysUnique (p : Preset) (f : FuluConfig) (hc : Ful
     (fun _ _ hs => hs) fs fs' slot hs h
 
 /-- `state_transition_fulu` keeps `PubkeysUnique`. -/
-theorem state_transition_fulu_pubkeysUnique (p : Preset) (o : Oracle) (fo : FuluOracle)
+theorem state_transition_fulu_pubkeysUnique [PresetCfg] (p : Preset) (o : Oracle) (fo : FuluOracle)
     (f : FuluConfig) (hc : FuluCompat p f) (c : FuluBlockConfig) (fs fs' : FuluState)
     (signed_block : FuluSignedBeaconBlock) (validate_result : Bool)
     (hs : PubkeysUnique fs.state)
