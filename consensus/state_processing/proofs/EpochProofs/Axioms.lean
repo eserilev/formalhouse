@@ -98,6 +98,7 @@ import EpochProofs.Sanity.Invariants.FuluExits
 import EpochProofs.Sanity.Invariants.FuluBalance
 import EpochProofs.Sanity.Invariants.FuluReachable
 import EpochProofs.FormalhouseFuluReachable
+import EpochProofs.Sanity.Invariants.ForkUpgrade
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -690,3 +691,21 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Formalhouse.fuluEpochInput_ok
 #print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_reachable
 #print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_total_reachable
+#print axioms EpochProofs.Spec.onboard_builders_rel
+#print axioms EpochProofs.Spec.onboard_builders_frame
+#print axioms EpochProofs.Spec.upgrade_to_gloas_frame
+#print axioms EpochProofs.Spec.upgrade_to_fulu_frame
+#print axioms EpochProofs.Spec.FuluStartOk.of_frame
+#print axioms EpochProofs.Spec.upgrade_to_fulu_startOk
+#print axioms EpochProofs.Spec.upgrade_to_gloas_startOk
+#print axioms EpochProofs.Spec.compute_balance_weighted_selection_loop_length
+#print axioms EpochProofs.Spec.compute_balance_weighted_selection_length
+#print axioms EpochProofs.Spec.compute_ptc_length
+#print axioms EpochProofs.Spec.initialize_ptc_window_lengths
+#print axioms EpochProofs.Spec.upgrade_to_gloas_vectorLengths
+#print axioms EpochProofs.Spec.fulu_fork_state_startOk
+#print axioms EpochProofs.Spec.fulu_gloas_fork_startOk
+#print axioms EpochProofs.Spec.fulu_then_gloas_sameOk
+#print axioms EpochProofs.Spec.SlotReachG.loopInv
+#print axioms EpochProofs.Spec.gloas_reachable_invariants
+#print axioms EpochProofs.Spec.fulu_then_gloas_reachable_invariants
