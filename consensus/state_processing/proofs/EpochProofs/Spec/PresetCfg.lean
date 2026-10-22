@@ -90,13 +90,39 @@ class PresetCfg where
 /-- The facts about the varying values that the generic proofs use. Both presets satisfy them. -/
 class PresetCfg.Ok [c : PresetCfg] : Prop where
   slots_pos : 0 < c.v.SLOTS_PER_EPOCH
+  slashings_vector_pos : 0 < c.v.EPOCHS_PER_SLASHINGS_VECTOR
+  historical_vector_pos : 0 < c.v.EPOCHS_PER_HISTORICAL_VECTOR
+  eth1_period_pos : 0 < c.v.EPOCHS_PER_ETH1_VOTING_PERIOD
+  sync_size_pos : 0 < c.v.SYNC_COMMITTEE_SIZE
+  sync_seats_even : (c.v.SLOTS_PER_EPOCH * c.v.SYNC_COMMITTEE_SIZE) % 2 = 0
+
+theorem P_slots_pos [PresetCfg] [h : PresetCfg.Ok] : 0 < P.SLOTS_PER_EPOCH := h.slots_pos
+theorem P_slashings_vector_pos [PresetCfg] [h : PresetCfg.Ok] : 0 < P.EPOCHS_PER_SLASHINGS_VECTOR :=
+  h.slashings_vector_pos
+theorem P_historical_vector_pos [PresetCfg] [h : PresetCfg.Ok] :
+    0 < P.EPOCHS_PER_HISTORICAL_VECTOR := h.historical_vector_pos
+theorem P_eth1_period_pos [PresetCfg] [h : PresetCfg.Ok] : 0 < P.EPOCHS_PER_ETH1_VOTING_PERIOD :=
+  h.eth1_period_pos
+
+theorem P_sync_size_pos [PresetCfg] [h : PresetCfg.Ok] : 0 < P.SYNC_COMMITTEE_SIZE :=
+  h.sync_size_pos
+theorem P_sync_seats_even [PresetCfg] [h : PresetCfg.Ok] :
+    (P.SLOTS_PER_EPOCH * P.SYNC_COMMITTEE_SIZE) % 2 = 0 := h.sync_seats_even
 
 @[reducible] def mainnetCfg : PresetCfg := ⟨PresetVar.mainnet⟩
 @[reducible] def minimalCfg : PresetCfg := ⟨PresetVar.minimal⟩
 
-theorem mainnetCfg_ok : @PresetCfg.Ok mainnetCfg := @PresetCfg.Ok.mk mainnetCfg (by decide)
+theorem mainnetCfg_ok : @PresetCfg.Ok mainnetCfg :=
+  letI := mainnetCfg
+  { slots_pos := by decide, slashings_vector_pos := by decide,
+    historical_vector_pos := by decide, eth1_period_pos := by decide,
+    sync_size_pos := by decide, sync_seats_even := by decide }
 
-theorem minimalCfg_ok : @PresetCfg.Ok minimalCfg := @PresetCfg.Ok.mk minimalCfg (by decide)
+theorem minimalCfg_ok : @PresetCfg.Ok minimalCfg :=
+  letI := minimalCfg
+  { slots_pos := by decide, slashings_vector_pos := by decide,
+    historical_vector_pos := by decide, eth1_period_pos := by decide,
+    sync_size_pos := by decide, sync_seats_even := by decide }
 
 theorem P_mainnet : @P mainnetCfg = Preset.mainnet := rfl
 theorem P_minimal : @P minimalCfg = Preset.minimal := rfl
@@ -106,7 +132,11 @@ end EpochProofs.Spec
 namespace EpochProofs.Spec
 
 /-- `decide` after unfolding the generic preset to its mainnet values. -/
-macro "pdecide" : tactic => `(tactic| (simp only [P, Preset.ofVar] <;> decide))
+macro "pdecide" : tactic =>
+  `(tactic| first
+    | (simp only [P, Preset.ofVar] <;> decide)
+    | (simp only [P, Preset.ofVar] <;> omega)
+    | (simp [P, Preset.ofVar]; done))
 
 /-- `rfl` after unfolding the generic preset to its mainnet values. -/
 macro "prfl" : tactic => `(tactic| (simp only [P, Preset.ofVar] <;> rfl))

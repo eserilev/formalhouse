@@ -1,4 +1,5 @@
 import EpochProofs.Equiv.RegistryUpdates
+import EpochProofs.Spec.PresetCfg
 import EpochProofs.Equiv.EffectiveBalanceUpdates
 import EpochProofs.Sanity.Invariants.Totality
 
@@ -45,11 +46,11 @@ theorem participation_increments_ok_preset (p : Spec.Preset) (source target head
   participation_increments_ok source target head total inc (by rw [hinc]; exact hp)
 
 /-- `EffectiveBalancesContext::new` cannot fail on mainnet: the thresholds are constants. -/
-theorem hysteresis_thresholds_ok_mainnet :
+theorem hysteresis_thresholds_ok_mainnet [EpochProofs.Spec.PresetCfg] :
     ∃ d u : U64, per_epoch_processing.effective_balance.hysteresis_thresholds
         1000000000#u64 4#u64 1#u64 5#u64 = ok (.Ok (d, u))
       ∧ d.val = 250000000 ∧ u.val = 1250000000 := by
-  obtain ⟨r, hr, hq⟩ := spec_imp_exists (hysteresis_thresholds_equiv Spec.Preset.mainnet
+  obtain ⟨r, hr, hq⟩ := spec_imp_exists (hysteresis_thresholds_equiv Spec.P
     1000000000#u64 4#u64 1#u64 5#u64 rfl rfl rfl rfl)
   rw [Spec.tot_hysteresis] at hq
   cases r with

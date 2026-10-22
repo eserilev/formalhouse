@@ -1,4 +1,5 @@
 import EpochProofs.Spec.Epoch
+import EpochProofs.Spec.PresetCfg
 
 /-!
 # The Lighthouse new validator equals the spec
@@ -99,8 +100,8 @@ theorem lhApplyPendingDeposit_eq (p : Preset) (h : 0 < p.EFFECTIVE_BALANCE_INCRE
   funext state deposit
   simp only [lhApplyPendingDeposit, apply_pending_deposit, add_validator_to_registry_lh p h]
 
-theorem lhApplyPendingDeposit_mainnet (o : Oracle) :
-    lhApplyPendingDeposit Preset.mainnet o = apply_pending_deposit Preset.mainnet o :=
-  lhApplyPendingDeposit_eq Preset.mainnet (by decide) o
+theorem lhApplyPendingDeposit_mainnet [PresetCfg] (o : Oracle) :
+    lhApplyPendingDeposit P o = apply_pending_deposit P o :=
+  lhApplyPendingDeposit_eq P (by pdecide) o
 
 end EpochProofs.Spec

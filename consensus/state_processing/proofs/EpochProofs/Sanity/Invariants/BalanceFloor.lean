@@ -1,4 +1,5 @@
 import EpochProofs.Sanity.Invariants.ExitDelay
+import EpochProofs.Spec.PresetCfg
 import EpochProofs.Sanity.LighthouseSinglePass
 import EpochProofs.Spec.Block.Block
 
@@ -17,6 +18,43 @@ each `state_transition` of the epoch.
 -/
 
 namespace EpochProofs.Spec
+
+/-- The uniform loss of one sync aggregate: `2 * (integer_squareroot(139M ETH) + 2) /
+SLOTS_PER_EPOCH`. It is 23,301,689 Gwei on mainnet and 93,206,759 Gwei on minimal. -/
+def syncLoss [PresetCfg] : Nat := 745654078 / P.SLOTS_PER_EPOCH
+
+/-- A slot in epoch `E` lies in `[E * S, E * S + S)`. -/
+theorem slot_div_bounds {x S E : Nat} (hS : 0 < S) (h : x / S = E) :
+    E * S ≤ x ∧ x < E * S + S := by
+  subst h
+  refine ⟨Nat.div_mul_le_self x S, ?_⟩
+  have := Nat.lt_div_mul_add (a := x) hS
+  rw [Nat.mul_comm] at this ⊢
+  omega
+
+/-- The last slot `x` of epoch `E` is at least every slot `y` of epoch `E`. -/
+theorem slot_last_ge {S x y E : Nat} (hS : 0 < S) (hx : x / S = E) (hz : (x + 1) % S = 0)
+    (hy : y / S = E) : y ≤ x := by
+  obtain ⟨hx1, hx2⟩ := slot_div_bounds hS hx
+  obtain ⟨-, hy2⟩ := slot_div_bounds hS hy
+  have hq := Nat.div_add_mod (x + 1) S
+  rw [hz, Nat.add_zero] at hq
+  generalize (x + 1) / S = q at hq
+  have hq1 : E < q := by
+    refine Nat.lt_of_not_le fun hle => ?_
+    have := Nat.mul_le_mul_left S hle
+    rw [Nat.mul_comm S E] at this
+    omega
+  have hq2 : q < E + 2 := by
+    refine Nat.lt_of_not_le fun hle => ?_
+    have := Nat.mul_le_mul_left S hle
+    rw [Nat.mul_add, Nat.mul_comm S E] at this
+    omega
+  have : q = E + 1 := by omega
+  subst this
+  rw [Nat.mul_add, Nat.mul_one, Nat.mul_comm S E] at hq
+  omega
+
 
 /-- A slashable validator becomes withdrawable after the epoch. -/
 private theorem lt_withdrawable_of_slashable {v : Validator} {e : Epoch}
@@ -381,17 +419,17 @@ theorem AfterEB.of_eq {p : Preset} {s s' : BeaconState} (hv : s'.validators = s.
 
 /-- On mainnet, `process_effective_balance_updates` establishes `AfterEB`, if every effective
 balance before it is a multiple of the increment and at most `MAX_EFFECTIVE_BALANCE_ELECTRA`. -/
-theorem process_effective_balance_updates_afterEB_mainnet (state state' : BeaconState)
-    (h : process_effective_balance_updates Preset.mainnet state = .ok state')
+theorem process_effective_balance_updates_afterEB_mainnet [PresetCfg] (state state' : BeaconState)
+    (h : process_effective_balance_updates P state = .ok state')
     (hmod : ∀ v ∈ state.validators,
-      v.effective_balance % Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT = 0)
+      v.effective_balance % P.EFFECTIVE_BALANCE_INCREMENT = 0)
     (hmax : ∀ v ∈ state.validators,
-      v.effective_balance ≤ Preset.mainnet.MAX_EFFECTIVE_BALANCE_ELECTRA) :
-    AfterEB Preset.mainnet state' := by
+      v.effective_balance ≤ P.MAX_EFFECTIVE_BALANCE_ELECTRA) :
+    AfterEB P state' := by
   have hfl := process_effective_balance_updates_floor_mainnet state state' h hmod
   refine ⟨hfl.1, fun i hi => ⟨(hfl.2 i hi).1, (hfl.2 i hi).2, ?_⟩⟩
   rw [process_effective_balance_updates_eq] at h
-  cases hm : state.validators.zipIdx.mapM (effectiveBalanceStep Preset.mainnet state.balances) with
+  cases hm : state.validators.zipIdx.mapM (effectiveBalanceStep P state.balances) with
   | error e => simp [hm, Except.map] at h
   | ok validators =>
     simp only [hm, Except.map, Except.ok.injEq] at h
@@ -409,7 +447,7 @@ theorem process_effective_balance_updates_afterEB_mainnet (state state' : Beacon
     unfold get_max_effective_balance
     split
     · exact Nat.le_refl _
-    · decide
+    · pdecide
 
 /-! ## The effective balance part of `EpochEntry` -/
 
@@ -417,13 +455,13 @@ theorem process_effective_balance_updates_afterEB_mainnet (state state' : Beacon
 eligible for rewards at `previous_epoch`, if the allowed losses fit. `hfit` says that the sync
 penalties of `n` sync aggregates, one slashing penalty and `effective_balance / 256` fit in the
 floor `min (3 * effective_balance / 4) MIN_ACTIVATION_BALANCE`. -/
-theorem budget_effective_balance_mainnet (s0 s : BeaconState) (E previous_epoch n : Nat)
-    (L : Nat → Gwei) (h0 : AfterEB Preset.mainnet s0) (hb : Budget Preset.mainnet s0 E L n s)
+theorem budget_effective_balance_mainnet [PresetCfg] (s0 s : BeaconState) (E previous_epoch n : Nat)
+    (L : Nat → Gwei) (h0 : AfterEB P s0) (hb : Budget P s0 E L n s)
     (hfar : E < FAR_FUTURE_EPOCH) (hE : E ≤ previous_epoch + 1)
     (hfit : ∀ (i : Nat) (v0 : Validator), s0.validators[i]? = some v0 →
       0 < v0.effective_balance →
       n * L i + v0.effective_balance / 4096 + v0.effective_balance / 256 ≤
-        min (3 * v0.effective_balance / 4) Preset.mainnet.MIN_ACTIVATION_BALANCE) :
+        min (3 * v0.effective_balance / 4) P.MIN_ACTIVATION_BALANCE) :
     ∀ i (hi : i < s.validators.length),
       rewardsEligible previous_epoch s.validators[i] = .ok true →
         s.validators[i].effective_balance ≤ 256 * s.balances.getD i 0 := by
@@ -444,35 +482,37 @@ theorem budget_effective_balance_mainnet (s0 s : BeaconState) (E previous_epoch 
   rw [hgd, heb]
   rw [hgd0] at h34
   rcases hcase with ⟨hw, hx⟩ | hle
-  · exact absurd helig (rewardsEligible_of_withdrawable (.inr hx) hw hfar (by decide) hE)
+  · exact absurd helig (rewardsEligible_of_withdrawable (.inr hx) hw hfar
+      (show 1 ≤ P.MIN_VALIDATOR_WITHDRAWABILITY_DELAY by pdecide) hE)
   · by_cases h0eb : s0.validators[i].effective_balance = 0
     · rw [h0eb]; exact Nat.zero_le _
     have hf := hfit i _ (List.getElem?_eq_getElem hi0) (Nat.pos_of_ne_zero h0eb)
-    have hsl : slashLoss Preset.mainnet s0.validators[i] v ≤
+    have hsl : slashLoss P s0.validators[i] v ≤
         s0.validators[i].effective_balance / 4096 := by
       unfold slashLoss
       split
       · exact Nat.le_refl _
       · exact Nat.zero_le _
-    have hMIN : Preset.mainnet.MIN_ACTIVATION_BALANCE = 32000000000 := rfl
-    have hINC : Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT = 1000000000 := rfl
+    have hMIN : P.MIN_ACTIVATION_BALANCE = 32000000000 := rfl
+    have hINC : P.EFFECTIVE_BALANCE_INCREMENT = 1000000000 := rfl
     rw [hMIN] at hle hf
     rw [hINC] at hmod
     generalize n * L i = y at hle hf
-    generalize slashLoss Preset.mainnet s0.validators[i] v = z at hle hsl
+    generalize slashLoss P s0.validators[i] v = z at hle hsl
     generalize s0.validators[i].effective_balance = eb at *
     generalize s0.balances[i] = b0 at *
     simp only [Nat.min_def, Gwei] at *
     split at hle <;> split at hf <;> omega
 
-/-- On mainnet, the losses fit for every effective balance up to `MAX_EFFECTIVE_BALANCE_ELECTRA`,
-if there are at most `SLOTS_PER_EPOCH = 32` sync aggregates and one sync aggregate costs at most
-23,307,800 Gwei. The tightest case is an effective balance of 1 ETH and a balance of 0.75 ETH:
-`32 * 23,307,800 + 244,140 + 3,906,250 = 749,999,990 ≤ 750,000,000`. -/
-theorem lossFits_mainnet {n l eb : Nat} (hn : n ≤ 32) (hl : l ≤ 23307800)
+/-- The losses fit for every effective balance up to `MAX_EFFECTIVE_BALANCE_ELECTRA`, if there
+are at most `S = SLOTS_PER_EPOCH` sync aggregates and one sync aggregate costs at most
+`745,654,078 / S` Gwei. The tightest case is an effective balance of 1 ETH and a balance of
+0.75 ETH: `S * (745,654,078 / S) + 244,140 + 3,906,250 ≤ 749,804,468 ≤ 750,000,000`. -/
+theorem lossFits_mainnet {n l eb S : Nat} (hn : n ≤ S) (hl : l ≤ 745654078 / S)
     (hmod : eb % 1000000000 = 0) (hpos : 0 < eb) (hmax : eb ≤ 2048000000000) :
     n * l + eb / 4096 + eb / 256 ≤ min (3 * eb / 4) 32000000000 := by
-  have hnl : n * l ≤ 32 * 23307800 := Nat.mul_le_mul hn hl
+  have hnl : n * l ≤ 745654078 :=
+    Nat.le_trans (Nat.mul_le_mul hn hl) (Nat.mul_div_le 745654078 S)
   generalize n * l = y at hnl ⊢
   simp only [Nat.min_def]
   split <;> omega
@@ -481,9 +521,9 @@ theorem lossFits_mainnet {n l eb : Nat} (hn : n ≤ 32) (hl : l ≤ 23307800)
 `effective_balance ≤ 256 * balance`. The epoch starts at `s0` after the effective balance
 updates. Its blocks run at most 32 sync aggregates, and each one costs each validator at most
 23,307,800 Gwei (`sync_loss_le_mainnet`). -/
-theorem epochEntry_effective_balance_mainnet (s0 s : BeaconState) (E previous_epoch n : Nat)
-    (h0 : AfterEB Preset.mainnet s0)
-    (hb : Budget Preset.mainnet s0 E (fun _ => 23307800) n s) (hn : n ≤ 32)
+theorem epochEntry_effective_balance_mainnet [PresetCfg] (s0 s : BeaconState) (E previous_epoch n : Nat)
+    (h0 : AfterEB P s0)
+    (hb : Budget P s0 E (fun _ => syncLoss) n s) (hn : n ≤ P.SLOTS_PER_EPOCH)
     (hfar : E < FAR_FUTURE_EPOCH) (hE : E ≤ previous_epoch + 1) :
     ∀ i (hi : i < s.validators.length),
       rewardsEligible previous_epoch s.validators[i] = .ok true →
@@ -543,45 +583,60 @@ theorem syncPenaltyCount_le_bits (state : BeaconState) (bits : List Bool) (i : V
   rw [List.length_zip]
   exact Nat.min_le_right _ _
 
-/-- On mainnet, one sync aggregate lowers a balance by at most 23,307,800 Gwei, if it has at most
-512 bits and the total active balance is at most 139 million ETH. Then `integer_squareroot` is
-at most 372,924,813, and 512 seats cost at most `(372,924,813 + 2) / 16` Gwei. -/
-theorem sync_loss_le_mainnet (state : BeaconState) (bits : List Bool) (i : ValidatorIndex)
-    (total_active_balance : Gwei) (hbits : bits.length ≤ 512)
+/-- One sync aggregate lowers a balance by at most `syncLoss` Gwei, if it has at most
+`SYNC_COMMITTEE_SIZE` bits and the total active balance is at most 139 million ETH. Then
+`integer_squareroot` is at most 372,827,037, and the seats cost at most
+`2 * (372,827,037 + 2) / SLOTS_PER_EPOCH` Gwei. -/
+theorem sync_loss_le_mainnet [PresetCfg] [PresetCfg.Ok] (state : BeaconState) (bits : List Bool)
+    (i : ValidatorIndex) (total_active_balance : Gwei) (hbits : bits.length ≤ P.SYNC_COMMITTEE_SIZE)
     (htab : total_active_balance ≤ 139000000000000000) :
-    syncPenaltyCount state bits i * sync_participant_reward Preset.mainnet total_active_balance ≤
-      23307800 := by
+    syncPenaltyCount state bits i * sync_participant_reward P total_active_balance ≤
+      syncLoss := by
   have hc := Nat.le_trans (syncPenaltyCount_le_bits state bits i) hbits
   have hpr := sync_participant_reward_mainnet total_active_balance
   have hsq := integer_squareroot_mul_self_le total_active_balance
+  have hS0 := P_slots_pos
+  have heven := P_sync_seats_even
   generalize integer_squareroot total_active_balance = r at hpr hsq
-  have hr : r ≤ 372924813 := by
+  have hr : r ≤ 372827037 := by
     refine Nat.le_of_not_lt fun hlt => ?_
     have := Nat.mul_self_le_mul_self (Nat.succ_le_of_lt hlt)
-    have h2 : (372924813 + 1) * (372924813 + 1) ≤ total_active_balance :=
+    have h2 : (372827037 + 1) * (372827037 + 1) ≤ total_active_balance :=
       Nat.le_trans this hsq
     exact absurd (Nat.le_trans h2 htab) (by decide)
+  unfold syncLoss
+  obtain ⟨S, hS⟩ : ∃ S : Nat, P.SLOTS_PER_EPOCH = S := ⟨_, rfl⟩
+  obtain ⟨Z, hZ⟩ : ∃ Z : Nat, P.SYNC_COMMITTEE_SIZE = Z := ⟨_, rfl⟩
+  rw [hS] at hS0 heven ⊢
+  rw [hZ] at hc heven
+  rw [hS, hZ] at hpr
   generalize syncPenaltyCount state bits i = c at hc ⊢
-  generalize sync_participant_reward Preset.mainnet total_active_balance = x at hpr ⊢
-  have h1 : c * x * 16 ≤ x * 8192 := by
-    calc c * x * 16 ≤ 512 * x * 16 := Nat.mul_le_mul_right _ (Nat.mul_le_mul_right _ hc)
-      _ = x * 8192 := by rw [Nat.mul_comm 512 x, Nat.mul_assoc]
-  have h2 : c * x * 16 ≤ 372924815 :=
-    Nat.le_trans h1 (Nat.le_trans hpr (by simp only [Uint64] at *; omega))
-  generalize c * x = y at h2 ⊢
+  generalize sync_participant_reward P total_active_balance = x at hpr ⊢
+  obtain ⟨K, hK⟩ : ∃ K, S * Z = 2 * K := ⟨S * Z / 2, by omega⟩
+  rw [hK, show 2 * K / 2 = K by omega] at hpr
+  rw [Nat.le_div_iff_mul_le hS0]
+  have h1 : c * x * S ≤ 2 * (x * K) := by
+    calc c * x * S ≤ Z * x * S := Nat.mul_le_mul_right _ (Nat.mul_le_mul_right _ hc)
+      _ = x * (S * Z) := by simp only [Nat.mul_comm, Nat.mul_left_comm]
+      _ = 2 * (x * K) := by
+        rw [hK, Nat.mul_comm x (2 * K), Nat.mul_assoc, Nat.mul_comm K x]
+  have h2 : x * K ≤ 372827039 := Nat.le_trans hpr (by simp only [Uint64] at *; omega)
+  generalize c * x * S = y at h1 ⊢
+  generalize x * K = z at h1 h2
+  simp only [Gwei, Uint64] at *
   omega
 
 /-- On mainnet, `process_sync_aggregate` keeps the budget with the uniform loss 23,307,800
 Gwei and one more sync aggregate, if it has at most 512 bits and the total active balance is at
 most 139 million ETH. -/
-theorem Budget.of_sync_mainnet {s0 : BeaconState} {E : Epoch} {n : Nat} {o : Oracle}
+theorem Budget.of_sync_mainnet [PresetCfg] [PresetCfg.Ok] {s0 : BeaconState} {E : Epoch} {n : Nat} {o : Oracle}
     {s s' : BeaconState} {sync_aggregate : SyncAggregate}
-    (h : process_sync_aggregate Preset.mainnet o s sync_aggregate = .ok s')
-    (hbits : sync_aggregate.sync_committee_bits.length ≤ 512)
-    (htab : ∀ tab, get_total_active_balance Preset.mainnet s = .ok tab →
+    (h : process_sync_aggregate P o s sync_aggregate = .ok s')
+    (hbits : sync_aggregate.sync_committee_bits.length ≤ P.SYNC_COMMITTEE_SIZE)
+    (htab : ∀ tab, get_total_active_balance P s = .ok tab →
       tab ≤ 139000000000000000)
-    (hb : Budget Preset.mainnet s0 E (fun _ => 23307800) n s) :
-    Budget Preset.mainnet s0 E (fun _ => 23307800) (n + 1) s' :=
+    (hb : Budget P s0 E (fun _ => syncLoss) n s) :
+    Budget P s0 E (fun _ => syncLoss) (n + 1) s' :=
   Budget.of_sync h (fun tab htab' i => sync_loss_le_mainnet s _ i tab hbits (htab tab htab')) hb
 
 /-! ## The total active balance within an epoch -/
@@ -834,17 +889,17 @@ theorem process_operations_keeps (p : Preset) (o : Oracle) (GLOAS_FORK_EPOCH : E
 at `E`, and keeps the budget with one more sync aggregate. The sync aggregate has at most 512
 bits (it is a `BitVector[SYNC_COMMITTEE_SIZE]`), and the total active balance is at most 139
 million ETH. The block does not change the total active balance before the sync aggregate. -/
-theorem process_block_budget_mainnet (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem process_block_budget_mainnet [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (s0 : BeaconState) (E : Epoch) (n : Nat) (s s' : BeaconState)
     (block : BeaconBlock)
-    (h : process_block Preset.mainnet o max_blobs_per_block GLOAS_FORK_EPOCH s block = .ok s')
-    (hE : s.slot / Preset.mainnet.SLOTS_PER_EPOCH = E) (hfar : E < FAR_FUTURE_EPOCH)
-    (hd : ExitDelay Preset.mainnet s)
-    (hb : Budget Preset.mainnet s0 E (fun _ => 23307800) n s)
-    (hbits : block.body.sync_aggregate.sync_committee_bits.length ≤ 512)
-    (htab : ∀ tab, get_total_active_balance Preset.mainnet s = .ok tab →
+    (h : process_block P o max_blobs_per_block GLOAS_FORK_EPOCH s block = .ok s')
+    (hE : s.slot / P.SLOTS_PER_EPOCH = E) (hfar : E < FAR_FUTURE_EPOCH)
+    (hd : ExitDelay P s)
+    (hb : Budget P s0 E (fun _ => syncLoss) n s)
+    (hbits : block.body.sync_aggregate.sync_committee_bits.length ≤ P.SYNC_COMMITTEE_SIZE)
+    (htab : ∀ tab, get_total_active_balance P s = .ok tab →
       tab ≤ 139000000000000000) :
-    Budget Preset.mainnet s0 E (fun _ => 23307800) (n + 1) s' ∧ ExitDelay Preset.mainnet s' ∧
+    Budget P s0 E (fun _ => syncLoss) (n + 1) s' ∧ ExitDelay P s' ∧
       s'.slot = s.slot ∧ ActiveAgree E s s' := by
   unfold process_block at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
@@ -854,30 +909,30 @@ theorem process_block_budget_mainnet (o : Oracle) (max_blobs_per_block : Epoch �
   obtain ⟨s5, h5, h⟩ := specM_bind_ok h
   obtain ⟨s6, h6, h⟩ := specM_bind_ok h
   obtain ⟨s7, h7, h⟩ := specM_bind_ok h
-  let K := Keeps Preset.mainnet s0 E (fun _ => 23307800) n
+  let K := Keeps P s0 E (fun _ => syncLoss) n
   have k1 : K s s1 :=
     .of_opStep hE hfar (process_parent_execution_payload_opStep _ o s s1 block h1)
-  have hE1 : s1.slot / Preset.mainnet.SLOTS_PER_EPOCH = E := by rw [k1.1]; exact hE
+  have hE1 : s1.slot / P.SLOTS_PER_EPOCH = E := by rw [k1.1]; exact hE
   have k2 : K s1 s2 := .of_opStep hE1 hfar (process_block_header_opStep _ o s1 s2 block h2)
-  have hE2 : s2.slot / Preset.mainnet.SLOTS_PER_EPOCH = E := by rw [k2.1]; exact hE1
-  have k3 : K s2 s3 := .of_withdrawals hE2 hfar (by decide) h3
-  have hE3 : s3.slot / Preset.mainnet.SLOTS_PER_EPOCH = E := by rw [k3.1]; exact hE2
+  have hE2 : s2.slot / P.SLOTS_PER_EPOCH = E := by rw [k2.1]; exact hE1
+  have k3 : K s2 s3 := .of_withdrawals hE2 hfar (by pdecide) h3
+  have hE3 : s3.slot / P.SLOTS_PER_EPOCH = E := by rw [k3.1]; exact hE2
   have k4 : K s3 s4 :=
     .of_opStep hE3 hfar (process_execution_payload_bid_opStep _ o _ s3 s4 _ h4)
-  have hE4 : s4.slot / Preset.mainnet.SLOTS_PER_EPOCH = E := by rw [k4.1]; exact hE3
+  have hE4 : s4.slot / P.SLOTS_PER_EPOCH = E := by rw [k4.1]; exact hE3
   have k5 : K s4 s5 := .of_opStep hE4 hfar (process_randao_opStep _ o s4 s5 _ h5)
-  have hE5 : s5.slot / Preset.mainnet.SLOTS_PER_EPOCH = E := by rw [k5.1]; exact hE4
+  have hE5 : s5.slot / P.SLOTS_PER_EPOCH = E := by rw [k5.1]; exact hE4
   have k6 : K s5 s6 := .of_opStep hE5 hfar (process_eth1_data_opStep _ s5 s6 _ h6)
-  have hE6 : s6.slot / Preset.mainnet.SLOTS_PER_EPOCH = E := by rw [k6.1]; exact hE5
+  have hE6 : s6.slot / P.SLOTS_PER_EPOCH = E := by rw [k6.1]; exact hE5
   have k7 : K s6 s7 :=
     process_operations_keeps _ o GLOAS_FORK_EPOCH s0 E _ n s6 s7 _ _ hE6 hfar h7
   have k : K s s7 := k1.trans (k2.trans (k3.trans (k4.trans (k5.trans (k6.trans k7)))))
   obtain ⟨hslot, hagree, hkeep⟩ := k
   obtain ⟨hd7, hb7⟩ := hkeep hd
-  have htab7 : ∀ tab, get_total_active_balance Preset.mainnet s7 = .ok tab →
+  have htab7 : ∀ tab, get_total_active_balance P s7 = .ok tab →
       tab ≤ 139000000000000000 := by
     intro tab ht
-    rw [get_total_active_balance_congr Preset.mainnet s s7 (by rw [hslot]) (hE ▸ hagree)] at ht
+    rw [get_total_active_balance_congr P s s7 (by rw [hslot]) (hE ▸ hagree)] at ht
     exact htab tab ht
   obtain ⟨hfr, -⟩ := process_sync_aggregate_frame _ o s7 s' _ h
   have hvs : s'.validators = s7.validators := by rw [hfr]
@@ -889,7 +944,7 @@ theorem process_block_budget_mainnet (o : Oracle) (max_blobs_per_block : Epoch �
 /-! ## One epoch of blocks on mainnet -/
 
 /-- A successful `uint64Mod` is the `Nat` remainder. -/
-private theorem uint64Mod_ok' {a b c : Nat} (h : uint64Mod a b = .ok c) : c = a % b := by
+private theorem uint64Mod_ok' [PresetCfg] {a b c : Nat} (h : uint64Mod a b = .ok c) : c = a % b := by
   unfold uint64Mod at h
   split at h
   · cases h
@@ -897,7 +952,7 @@ private theorem uint64Mod_ok' {a b c : Nat} (h : uint64Mod a b = .ok c) : c = a 
 
 /-- The `process_slots` loop with the real `process_epoch` keeps `P`, if each step keeps `P`
 while the slot is below the target. -/
-theorem process_slots_loop_guard (p : Preset) (o : Oracle) (slot : Slot)
+theorem process_slots_loop_guard [PresetCfg] (p : Preset) (o : Oracle) (slot : Slot)
     (P : BeaconState → Prop)
     (hslot : ∀ s s', process_slot p o s = .ok s' → s.slot < slot → P s → P s')
     (hepoch : ∀ s s', s.slot < slot → (s.slot + 1) % p.SLOTS_PER_EPOCH = 0 →
@@ -945,26 +1000,26 @@ theorem process_slots_loop_guard (p : Preset) (o : Oracle) (slot : Slot)
 /-- The state of the blocks of epoch `E` on mainnet, from the start `s0` of the epoch. `r` is a
 state of epoch `E` with the validators of the epoch. `n` sync aggregates ran, and there were at
 most as many slots in the epoch so far. -/
-def EpochInv (s0 r : BeaconState) (E n : Nat) (t : BeaconState) : Prop :=
-  Budget Preset.mainnet s0 E (fun _ => 23307800) n t ∧ ExitDelay Preset.mainnet t ∧
-    t.slot / Preset.mainnet.SLOTS_PER_EPOCH = E ∧ ActiveAgree E r t ∧
-    n + E * Preset.mainnet.SLOTS_PER_EPOCH ≤ t.slot + 1
+def EpochInv [PresetCfg] (s0 r : BeaconState) (E n : Nat) (t : BeaconState) : Prop :=
+  Budget P s0 E (fun _ => syncLoss) n t ∧ ExitDelay P t ∧
+    t.slot / P.SLOTS_PER_EPOCH = E ∧ ActiveAgree E r t ∧
+    n + E * P.SLOTS_PER_EPOCH ≤ t.slot + 1
 
 /-- At the start of epoch `E`, with the state `t` right after the slot moves into `E`.
 `t` keeps the validators and balances of `s0`. -/
-theorem EpochInv.start (s0 t : BeaconState) (E : Nat) (hd : ExitDelay Preset.mainnet s0)
+theorem EpochInv.start [PresetCfg] [PresetCfg.Ok] (s0 t : BeaconState) (E : Nat) (hd : ExitDelay P s0)
     (hv : t.validators = s0.validators) (hb : t.balances = s0.balances)
-    (hslot : t.slot = E * Preset.mainnet.SLOTS_PER_EPOCH) : EpochInv s0 t E 0 t := by
+    (hslot : t.slot = E * P.SLOTS_PER_EPOCH) : EpochInv s0 t E 0 t := by
   refine ⟨Budget.of_eq hv hb (Budget.init _ s0 E _), ExitDelay.of_validators_eq hv hd, ?_,
     ActiveAgree.refl E t, ?_⟩
-  · rw [hslot]; simp [Preset.mainnet]
+  · rw [hslot]; exact Nat.mul_div_cancel _ P_slots_pos
   · rw [hslot]; omega
 
 /-- `process_slots` inside epoch `E` keeps `EpochInv`. It runs no `process_epoch`, because the
 target slot is in `E`. -/
-theorem process_slots_epochInv (o : Oracle) (s0 r : BeaconState) (E n : Nat)
-    (s s' : BeaconState) (slot : Slot) (hslotE : slot / Preset.mainnet.SLOTS_PER_EPOCH = E)
-    (h : process_slots Preset.mainnet o (process_epoch Preset.mainnet o) s slot = .ok s')
+theorem process_slots_epochInv [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s0 r : BeaconState) (E n : Nat)
+    (s s' : BeaconState) (slot : Slot) (hslotE : slot / P.SLOTS_PER_EPOCH = E)
+    (h : process_slots P o (process_epoch P o) s slot = .ok s')
     (hinv : EpochInv s0 r E n s) : EpochInv s0 r E n s' := by
   unfold process_slots at h
   simp only [bind, Except.bind, pure, Except.pure] at h
@@ -979,35 +1034,34 @@ theorem process_slots_epochInv (o : Oracle) (s0 r : BeaconState) (E n : Nat)
   · intro t t' hlt hz _ hP
     exfalso
     have h3 := hP.2.2.1
-    have hS : Preset.mainnet.SLOTS_PER_EPOCH = 32 := rfl
-    rw [hS] at h3 hz hslotE
+    have := slot_last_ge P_slots_pos h3 hz hslotE
     simp only [Slot] at *
     omega
   · intro t hlt hP
     obtain ⟨h1, h2, h3, h4, h5⟩ := hP
     refine ⟨h1, h2, ?_, h4, ?_⟩
-    · show (t.slot + 1) / Preset.mainnet.SLOTS_PER_EPOCH = E
-      have hS : Preset.mainnet.SLOTS_PER_EPOCH = 32 := rfl
-      rw [hS] at h3 hslotE ⊢
+    · show (t.slot + 1) / P.SLOTS_PER_EPOCH = E
+      obtain ⟨a1, -⟩ := slot_div_bounds P_slots_pos h3
+      obtain ⟨-, b2⟩ := slot_div_bounds P_slots_pos hslotE
       simp only [Slot] at *
-      omega
-    · show n + E * Preset.mainnet.SLOTS_PER_EPOCH ≤ t.slot + 1 + 1
+      exact Nat.div_eq_of_lt_le (by omega) (by rw [Nat.add_mul, Nat.one_mul]; omega)
+    · show n + E * P.SLOTS_PER_EPOCH ≤ t.slot + 1 + 1
       simp only [Slot] at *
       omega
 
 /-- On mainnet, one `state_transition` inside epoch `E` keeps `EpochInv` with one more sync
 aggregate. The block's slot is in `E`, its sync aggregate has at most 512 bits, and the total
 active balance of `E` is at most 139 million ETH. -/
-theorem state_transition_epochInv (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem state_transition_epochInv [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (s0 r : BeaconState) (E n : Nat) (s s' : BeaconState)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
-    (hblockE : signed_block.message.slot / Preset.mainnet.SLOTS_PER_EPOCH = E)
+    (hblockE : signed_block.message.slot / P.SLOTS_PER_EPOCH = E)
     (hfar : E < FAR_FUTURE_EPOCH)
-    (hbits : signed_block.message.body.sync_aggregate.sync_committee_bits.length ≤ 512)
-    (hr : r.slot / Preset.mainnet.SLOTS_PER_EPOCH = E)
-    (htab : ∀ tab, get_total_active_balance Preset.mainnet r = .ok tab →
+    (hbits : signed_block.message.body.sync_aggregate.sync_committee_bits.length ≤ P.SYNC_COMMITTEE_SIZE)
+    (hr : r.slot / P.SLOTS_PER_EPOCH = E)
+    (htab : ∀ tab, get_total_active_balance P r = .ok tab →
       tab ≤ 139000000000000000)
-    (h : state_transition Preset.mainnet o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
+    (h : state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
       validate_result = .ok s')
     (hinv : EpochInv s0 r E n s) : EpochInv s0 r E (n + 1) s' := by
   unfold state_transition at h
@@ -1022,12 +1076,12 @@ theorem state_transition_epochInv (o : Oracle) (max_blobs_per_block : Epoch → 
   have hn0 := hinv.2.2.2.2
   have hinv1 := process_slots_epochInv o s0 r E n s s1 _ hblockE h1 hinv
   obtain ⟨hb1, hd1, hE1, hag1, hn1⟩ := hinv1
-  have htab1 : ∀ tab, get_total_active_balance Preset.mainnet s1 = .ok tab →
+  have htab1 : ∀ tab, get_total_active_balance P s1 = .ok tab →
       tab ≤ 139000000000000000 := by
     intro tab ht
     rw [get_total_active_balance_congr _ r s1 (by rw [hE1, hr]) (hr ▸ hag1)] at ht
     exact htab tab ht
-  have hblock : ∀ s2, process_block Preset.mainnet o max_blobs_per_block GLOAS_FORK_EPOCH s1
+  have hblock : ∀ s2, process_block P o max_blobs_per_block GLOAS_FORK_EPOCH s1
       signed_block.message = .ok s2 → EpochInv s0 r E (n + 1) s2 := by
     intro s2 h2
     obtain ⟨hb2, hd2, hsl2, hag2⟩ :=
@@ -1046,16 +1100,15 @@ theorem state_transition_epochInv (o : Oracle) (max_blobs_per_block : Epoch → 
 `effective_balance ≤ 256 * balance` for every validator that is eligible for rewards at the
 previous epoch `E - 1`. `s0` is the state after the effective balance updates of epoch
 `E - 1`. -/
-theorem boundary_effective_balance_mainnet (s0 r t : BeaconState) (E n previous_epoch : Nat)
-    (h0 : AfterEB Preset.mainnet s0) (hinv : EpochInv s0 r E n t)
+theorem boundary_effective_balance_mainnet [PresetCfg] [PresetCfg.Ok] (s0 r t : BeaconState) (E n previous_epoch : Nat)
+    (h0 : AfterEB P s0) (hinv : EpochInv s0 r E n t)
     (hfar : E < FAR_FUTURE_EPOCH) (hE : E ≤ previous_epoch + 1) :
     ∀ i (hi : i < t.validators.length),
       rewardsEligible previous_epoch t.validators[i] = .ok true →
         t.validators[i].effective_balance ≤ 256 * t.balances.getD i 0 := by
   obtain ⟨hb, -, hslot, -, hn⟩ := hinv
-  have hn32 : n ≤ 32 := by
-    have hS : Preset.mainnet.SLOTS_PER_EPOCH = 32 := rfl
-    rw [hS] at hslot hn
+  have hn32 : n ≤ P.SLOTS_PER_EPOCH := by
+    obtain ⟨-, h2⟩ := slot_div_bounds P_slots_pos hslot
     simp only [Slot] at *
     omega
   exact epochEntry_effective_balance_mainnet s0 t E previous_epoch n h0 hb hn32 hfar hE

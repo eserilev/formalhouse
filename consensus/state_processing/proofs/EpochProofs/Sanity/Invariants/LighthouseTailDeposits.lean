@@ -1,4 +1,5 @@
 import EpochProofs.Sanity.Invariants.LighthouseTailModel
+import EpochProofs.Spec.PresetCfg
 
 /-!
 # The spec's pending deposits: decide first, then apply
@@ -16,10 +17,10 @@ namespace EpochProofs.Spec
 abbrev DepAcc := MProd (List PendingDeposit) (MProd Bool (MProd Uint64 (MProd Uint64 BeaconState)))
 
 /-- The part of the spec's loop body after the status: apply, postpone, or check the churn. -/
-def depCont (o : Oracle) (avail : Nat) (d : PendingDeposit) (r : DepAcc) (ex wd : Bool) :
+def depCont [PresetCfg] (o : Oracle) (avail : Nat) (d : PendingDeposit) (r : DepAcc) (ex wd : Bool) :
     SpecM (ForInStep DepAcc) :=
   if wd = true then do
-    let T ← apply_pending_deposit Preset.mainnet o r.2.2.2.2 d
+    let T ← apply_pending_deposit P o r.2.2.2.2 d
     pure (.yield ⟨r.1, r.2.1, r.2.2.1 + 1, r.2.2.2.1, T⟩)
   else if ex = true then pure (.yield ⟨r.1 ++ [d], r.2.1, r.2.2.1 + 1, r.2.2.2.1, r.2.2.2.2⟩)
   else do
@@ -28,14 +29,14 @@ def depCont (o : Oracle) (avail : Nat) (d : PendingDeposit) (r : DepAcc) (ex wd 
       pure (.done ⟨r.1, decide (x > avail), r.2.2.1, r.2.2.2.1, r.2.2.2.2⟩)
     else do
       let proc ← uint64Add r.2.2.2.1 d.amount
-      let T ← apply_pending_deposit Preset.mainnet o r.2.2.2.2 d
+      let T ← apply_pending_deposit P o r.2.2.2.2 d
       pure (.yield ⟨r.1, decide (x > avail), r.2.2.1 + 1, proc, T⟩)
 
 /-- The body of the spec's deposit loop, with the status read from the loop state. -/
-def depBody (o : Oracle) (fs avail next : Nat) (d : PendingDeposit) (r : DepAcc) :
+def depBody [PresetCfg] (o : Oracle) (fs avail next : Nat) (d : PendingDeposit) (r : DepAcc) :
     SpecM (ForInStep DepAcc) :=
   if d.slot > fs then pure (.done r)
-  else if r.2.2.1 ≥ Preset.mainnet.MAX_PENDING_DEPOSITS_PER_EPOCH then pure (.done r)
+  else if r.2.2.1 ≥ P.MAX_PENDING_DEPOSITS_PER_EPOCH then pure (.done r)
   else if d.pubkey ∈ r.2.2.2.2.validators.map (·.pubkey) then do
     let v ← listGet r.2.2.2.2.validators
       ((r.2.2.2.2.validators.map (·.pubkey)).idxOf d.pubkey)
@@ -52,15 +53,15 @@ def depFinish (avail : Nat) (r : DepAcc) : SpecM BeaconState :=
   else pure { T with deposit_balance_to_consume := 0 }
 
 /-- The spec's `process_pending_deposits` with its loop body and its end named. -/
-theorem process_pending_deposits_eq (o : Oracle) (total_active_balance : Gwei)
+theorem process_pending_deposits_eq [PresetCfg] (o : Oracle) (total_active_balance : Gwei)
     (s : BeaconState) :
-    process_pending_deposits Preset.mainnet total_active_balance
-        (apply_pending_deposit Preset.mainnet o) s = (do
-      let c ← get_current_epoch Preset.mainnet s
+    process_pending_deposits P total_active_balance
+        (apply_pending_deposit P o) s = (do
+      let c ← get_current_epoch P s
       let next_epoch ← uint64Add c 1
-      let cl ← get_activation_churn_limit Preset.mainnet total_active_balance
+      let cl ← get_activation_churn_limit P total_active_balance
       let avail ← uint64Add s.deposit_balance_to_consume cl
-      let fs ← compute_start_slot_at_epoch Preset.mainnet s.finalized_checkpoint.epoch
+      let fs ← compute_start_slot_at_epoch P s.finalized_checkpoint.epoch
       let r ← forIn s.pending_deposits ⟨[], false, 0, 0, s⟩ (depBody o fs avail next_epoch)
       depFinish avail r) := by
   rfl
@@ -91,8 +92,8 @@ theorem get_validator_from_deposit_far (p : Preset) (pubkey : BLSPubkey)
     | (cases h; exact ⟨rfl, rfl⟩)
 
 /-- `apply_pending_deposit` keeps `ValExt`. -/
-theorem apply_pending_deposit_valExt (o : Oracle) (s T T' : BeaconState) (d : PendingDeposit)
-    (hT : ValExt s T) (h : apply_pending_deposit Preset.mainnet o T d = .ok T') :
+theorem apply_pending_deposit_valExt [PresetCfg] (o : Oracle) (s T T' : BeaconState) (d : PendingDeposit)
+    (hT : ValExt s T) (h : apply_pending_deposit P o T d = .ok T') :
     ValExt s T' := by
   obtain ⟨extra, hv, hextra, hpd⟩ := hT
   unfold apply_pending_deposit at h
@@ -161,12 +162,12 @@ theorem status_eq {β : Type} (s T : BeaconState) (hT : ValExt s T) (next : Nat)
     · rw [if_neg ht]
 
 /-- The loop body reads the status of `s` when the loop state has `ValExt`. -/
-theorem depBody_view (o : Oracle) (fs avail next : Nat) (s : BeaconState)
+theorem depBody_view [PresetCfg] (o : Oracle) (fs avail next : Nat) (s : BeaconState)
     (hnext : next ≤ FAR_FUTURE_EPOCH) (d : PendingDeposit) (r : DepAcc)
     (hT : ValExt s r.2.2.2.2) :
     depBody o fs avail next d r =
       if d.slot > fs then pure (.done r)
-      else if r.2.2.1 ≥ Preset.mainnet.MAX_PENDING_DEPOSITS_PER_EPOCH then pure (.done r)
+      else if r.2.2.1 ≥ P.MAX_PENDING_DEPOSITS_PER_EPOCH then pure (.done r)
       else depCont o avail d r (specDepositView s next d).is_exited
         (specDepositView s next d).is_withdrawn := by
   unfold depBody
@@ -198,18 +199,18 @@ theorem specM_bind_ok_intro {α β : Type} {x : SpecM α} {f : α → SpecM β} 
   rw [hx]; exact hf
 
 /-- Apply a deposit unless it is postponed. -/
-def applyIf (o : Oracle) (pp : Bool) (T : BeaconState) (d : PendingDeposit) :
+def applyIf [PresetCfg] (o : Oracle) (pp : Bool) (T : BeaconState) (d : PendingDeposit) :
     SpecM BeaconState :=
-  if pp = true then pure T else apply_pending_deposit Preset.mainnet o T d
+  if pp = true then pure T else apply_pending_deposit P o T d
 
 /-- The spec loop on views: one `depositStep`, then the apply of a deposit that is not
 postponed. It also collects the postponed deposits. -/
-def decideApplyLoop (o : Oracle) (fs avail : Nat) (view : PendingDeposit → DepositSpecView) :
+def decideApplyLoop [PresetCfg] (o : Oracle) (fs avail : Nat) (view : PendingDeposit → DepositSpecView) :
     DepositLoopState → List PendingDeposit → BeaconState → List PendingDeposit →
       SpecM (DepositLoopResult × List PendingDeposit × BeaconState)
   | ls, post, T, [] => pure (⟨ls, false, false⟩, post, T)
   | ls, post, T, d :: l => do
-    let r ← depositStep Preset.mainnet fs avail ls (view d)
+    let r ← depositStep P fs avail ls (view d)
     if r.stopped = true then pure (r, post, T)
     else do
       let pp := !(view d).is_withdrawn && (view d).is_exited
@@ -221,7 +222,7 @@ def decideApplyAcc (x : DepositLoopResult × List PendingDeposit × BeaconState)
   ⟨x.2.1, x.1.churn_reached, x.1.state.next_deposit_index, x.1.state.processed_amount, x.2.2⟩
 
 /-- The spec loop equals `decideApplyLoop` on the views of `s`. -/
-theorem forIn_depBody_decideApply (o : Oracle) (fs avail next : Nat) (s : BeaconState)
+theorem forIn_depBody_decideApply [PresetCfg] (o : Oracle) (fs avail next : Nat) (s : BeaconState)
     (hnext : next ≤ FAR_FUTURE_EPOCH) :
     ∀ (l : List PendingDeposit) (ls : DepositLoopState) (post : List PendingDeposit)
       (T : BeaconState), ValExt s T →
@@ -235,7 +236,7 @@ theorem forIn_depBody_decideApply (o : Oracle) (fs avail next : Nat) (s : Beacon
       specDepositView_amount, Bool.false_or, applyIf]
     by_cases h1 : d.slot > fs
     · simp [h1, pure, Except.pure, bind, Except.bind, Functor.map, Except.map, decideApplyAcc]
-    by_cases h2 : ls.next_deposit_index ≥ Preset.mainnet.MAX_PENDING_DEPOSITS_PER_EPOCH
+    by_cases h2 : ls.next_deposit_index ≥ P.MAX_PENDING_DEPOSITS_PER_EPOCH
     · simp [h1, h2, pure, Except.pure, bind, Except.bind, Functor.map, Except.map, decideApplyAcc]
     simp only [h1, h2, decide_false, Bool.false_or, if_false, Bool.false_eq_true]
     unfold depCont
@@ -249,7 +250,7 @@ theorem forIn_depBody_decideApply (o : Oracle) (fs avail next : Nat) (s : Beacon
           · simp [h3, bind, Except.bind, pure, Except.pure, Functor.map, Except.map, decideApplyAcc]
           · simp only [h3, decide_false, Bool.false_eq_true, if_false, bind, Except.bind,
               pure, Except.pure]
-            cases hap : apply_pending_deposit Preset.mainnet o T d with
+            cases hap : apply_pending_deposit P o T d with
             | error e => rfl
             | ok T' =>
               exact forIn_depBody_decideApply o fs avail next s hnext l
@@ -261,7 +262,7 @@ theorem forIn_depBody_decideApply (o : Oracle) (fs avail next : Nat) (s : Beacon
           ⟨ls.processed_amount, ls.next_deposit_index + 1, ls.postponed ++ [true]⟩ _ T hT
     · simp only [if_true, Bool.not_true, Bool.false_and, Bool.false_eq_true, if_false, pure,
         Except.pure, bind, Except.bind]
-      cases hap : apply_pending_deposit Preset.mainnet o T d with
+      cases hap : apply_pending_deposit P o T d with
       | error e => rfl
       | ok T' =>
         exact forIn_depBody_decideApply o fs avail next s hnext l
@@ -270,8 +271,8 @@ theorem forIn_depBody_decideApply (o : Oracle) (fs avail next : Nat) (s : Beacon
 
 /-- One `depositStep` either stops and keeps the loop state, or handles the deposit: it adds
 one to the index and appends the postponed flag. -/
-theorem depositStep_cases (fs avail : Nat) (ls : DepositLoopState) (v : DepositSpecView)
-    (r : DepositLoopResult) (h : depositStep Preset.mainnet fs avail ls v = .ok r) :
+theorem depositStep_cases [PresetCfg] (fs avail : Nat) (ls : DepositLoopState) (v : DepositSpecView)
+    (r : DepositLoopResult) (h : depositStep P fs avail ls v = .ok r) :
     (r.stopped = true ∧ r.state = ls) ∨
       (r.stopped = false ∧ r.churn_reached = false ∧
         r.state.next_deposit_index = ls.next_deposit_index + 1 ∧
@@ -285,9 +286,9 @@ theorem depositStep_cases (fs avail : Nat) (ls : DepositLoopState) (v : DepositS
     | (cases h; exact .inr ⟨rfl, rfl, rfl, by simp_all⟩)
 
 /-- The loop only appends postponed flags, one for each handled deposit. -/
-theorem depositLoop_growth (fs avail : Nat) :
+theorem depositLoop_growth [PresetCfg] (fs avail : Nat) :
     ∀ (vs : List DepositSpecView) (ls : DepositLoopState) (r : DepositLoopResult),
-      depositLoop Preset.mainnet fs avail ls vs = .ok r →
+      depositLoop P fs avail ls vs = .ok r →
       ∃ flags : List Bool, r.state.postponed = ls.postponed ++ flags ∧
         r.state.next_deposit_index = ls.next_deposit_index + flags.length
   | [], ls, r, h => by
@@ -337,12 +338,12 @@ def postponedOf (hd : List (PendingDeposit × Bool)) : List PendingDeposit :=
   (hd.filter (·.2)).map (·.1)
 
 /-- `decideApplyLoop` succeeds exactly when the decisions succeed and the handled deposits apply. -/
-theorem decideApplyLoop_iff (o : Oracle) (fs avail : Nat) (view : PendingDeposit → DepositSpecView) :
+theorem decideApplyLoop_iff [PresetCfg] (o : Oracle) (fs avail : Nat) (view : PendingDeposit → DepositSpecView) :
     ∀ (l : List PendingDeposit) (ls : DepositLoopState) (post : List PendingDeposit)
       (T : BeaconState) (r : DepositLoopResult) (post' : List PendingDeposit)
       (T' : BeaconState),
       decideApplyLoop o fs avail view ls post T l = .ok (r, post', T') ↔
-        depositLoop Preset.mainnet fs avail ls (l.map view) = .ok r ∧
+        depositLoop P fs avail ls (l.map view) = .ok r ∧
           applyHandled o T (handledOf l ls r) = .ok T' ∧
           post' = post ++ postponedOf (handledOf l ls r)
   | [], ls, post, T, r, post', T' => by
@@ -356,7 +357,7 @@ theorem decideApplyLoop_iff (o : Oracle) (fs avail : Nat) (view : PendingDeposit
       exact ⟨rfl, by simp_all, by simp_all⟩
   | d :: l, ls, post, T, r, post', T' => by
     simp only [decideApplyLoop, depositLoop, List.map_cons]
-    cases h1 : depositStep Preset.mainnet fs avail ls (view d) with
+    cases h1 : depositStep P fs avail ls (view d) with
     | error e => simp [bind, Except.bind]
     | ok r1 =>
       rcases depositStep_cases fs avail ls (view d) r1 h1 with ⟨hs, hst⟩ | ⟨hs, -, hn1, hp1⟩
@@ -428,18 +429,18 @@ theorem depFinish_decideApply (avail : Nat) (s : BeaconState) (r : DepositLoopRe
 /-- On mainnet, the spec's `process_pending_deposits` has the same `ok` results as deciding all
 deposits on the input state with `depositDecisions`, then applying the handled deposits that are
 not postponed, in queue order. -/
-theorem process_pending_deposits_decide (o : Oracle) (total_active_balance : Gwei)
+theorem process_pending_deposits_decide [PresetCfg] (o : Oracle) (total_active_balance : Gwei)
     (s : BeaconState) (current_epoch : Epoch)
-    (hcurrent : get_current_epoch Preset.mainnet s = .ok current_epoch)
+    (hcurrent : get_current_epoch P s = .ok current_epoch)
     (hfar : current_epoch + 1 ≤ FAR_FUTURE_EPOCH) :
-    SameOk (process_pending_deposits Preset.mainnet total_active_balance
-        (apply_pending_deposit Preset.mainnet o) s)
+    SameOk (process_pending_deposits P total_active_balance
+        (apply_pending_deposit P o) s)
       (do
         let finalized_slot ←
-          compute_start_slot_at_epoch Preset.mainnet s.finalized_checkpoint.epoch
-        let (next, dbtc, postponed) ← depositDecisions Preset.mainnet finalized_slot
+          compute_start_slot_at_epoch P s.finalized_checkpoint.epoch
+        let (next, dbtc, postponed) ← depositDecisions P finalized_slot
           s.deposit_balance_to_consume
-          (← get_activation_churn_limit Preset.mainnet total_active_balance)
+          (← get_activation_churn_limit P total_active_balance)
           (s.pending_deposits.map (specDepositView s (current_epoch + 1)))
         let handled := (s.pending_deposits.take next).zip postponed
         let s' ← applyHandled o s handled
@@ -452,12 +453,12 @@ theorem process_pending_deposits_decide (o : Oracle) (total_active_balance : Gwe
     simp [uint64Add, this, pure, Except.pure]
   rw [process_pending_deposits_eq, hcurrent, ok_bind', hne, ok_bind']
   intro v
-  cases hcl : get_activation_churn_limit Preset.mainnet total_active_balance with
+  cases hcl : get_activation_churn_limit P total_active_balance with
   | error e =>
     simp only [bind, Except.bind]
     constructor <;> intro h <;> (repeat' split at h) <;> simp_all
   | ok cl =>
-  cases hfs : compute_start_slot_at_epoch Preset.mainnet s.finalized_checkpoint.epoch with
+  cases hfs : compute_start_slot_at_epoch P s.finalized_checkpoint.epoch with
   | error e =>
     cases hx : uint64Add s.deposit_balance_to_consume cl <;> simp [bind, Except.bind, hx]
   | ok fs =>

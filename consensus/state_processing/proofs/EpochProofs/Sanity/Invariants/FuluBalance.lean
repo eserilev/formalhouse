@@ -1,4 +1,6 @@
 import EpochProofs.Sanity.Invariants.FuluExits
+import EpochProofs.Spec.PresetCfg
+import EpochProofs.Spec.FuluCfg
 import EpochProofs.Sanity.Invariants.Reachable
 
 /-!
@@ -472,19 +474,19 @@ theorem process_operations_fulu_keeps (p : Preset) (o : Oracle) (f : FuluConfig)
 /-- On mainnet, one Fulu `process_block` at epoch `E` keeps `ExitDelay`, the slot and the
 activity at `E`, and keeps the budget with one more sync aggregate. The sync aggregate has at
 most 512 bits, and the total active balance is at most 139 million ETH. -/
-theorem process_block_fulu_budget_mainnet (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
+theorem process_block_fulu_budget_mainnet [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
     (s0 : BeaconState) (E : Epoch) (n : Nat) (fs fs' : FuluState) (block : FuluBeaconBlock)
-    (h : process_block_fulu Preset.mainnet o fo FuluConfig.mainnet c fs block = .ok fs')
-    (hE : fs.state.slot / Preset.mainnet.SLOTS_PER_EPOCH = E) (hfar : E < FAR_FUTURE_EPOCH)
-    (hd : ExitDelay Preset.mainnet fs.state)
-    (hb : Budget Preset.mainnet s0 E (fun _ => 23307800) n fs.state)
+    (h : process_block_fulu P o fo FC c fs block = .ok fs')
+    (hE : fs.state.slot / P.SLOTS_PER_EPOCH = E) (hfar : E < FAR_FUTURE_EPOCH)
+    (hd : ExitDelay P fs.state)
+    (hb : Budget P s0 E (fun _ => 23307800) n fs.state)
     (hbits : block.body.sync_aggregate.sync_committee_bits.length ≤ 512)
-    (htab : ∀ tab, get_total_active_balance Preset.mainnet fs.state = .ok tab →
+    (htab : ∀ tab, get_total_active_balance P fs.state = .ok tab →
       tab ≤ 139000000000000000) :
-    Budget Preset.mainnet s0 E (fun _ => 23307800) (n + 1) fs'.state ∧
-      ExitDelay Preset.mainnet fs'.state ∧ fs'.state.slot = fs.state.slot ∧
+    Budget P s0 E (fun _ => 23307800) (n + 1) fs'.state ∧
+      ExitDelay P fs'.state ∧ fs'.state.slot = fs.state.slot ∧
       ActiveAgree E fs.state fs'.state := by
-  have hc := fuluCompat_mainnet
+  have hc := fuluCompat
   unfold process_block_fulu at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
   obtain ⟨s2, h2, h⟩ := specM_bind_ok h
@@ -494,28 +496,28 @@ theorem process_block_fulu_budget_mainnet (o : Oracle) (fo : FuluOracle) (c : Fu
   obtain ⟨s6, h6, h⟩ := specM_bind_ok h
   obtain ⟨s7, h7, h⟩ := specM_bind_ok h
   cases h
-  have hs3 := process_execution_payload_fulu_state Preset.mainnet o fo c _ _ _ h3
+  have hs3 := process_execution_payload_fulu_state P o fo c _ _ _ h3
   simp only at hs3
-  let K := Keeps Preset.mainnet s0 E (fun _ => 23307800) n
+  let K := Keeps P s0 E (fun _ => 23307800) n
   have k1 : K fs.state s1 := .of_opStep hE hfar
     (process_block_header_fulu_opStep _ o fo _ _ block h1)
-  have hE1 : s1.slot / Preset.mainnet.SLOTS_PER_EPOCH = E := by rw [k1.1]; exact hE
+  have hE1 : s1.slot / P.SLOTS_PER_EPOCH = E := by rw [k1.1]; exact hE
   have k2 : K s1 s2 := .of_withdrawals_fulu hE1 hfar (by decide) h2
-  have hE2 : s2.slot / Preset.mainnet.SLOTS_PER_EPOCH = E := by rw [k2.1]; exact hE1
+  have hE2 : s2.slot / P.SLOTS_PER_EPOCH = E := by rw [k2.1]; exact hE1
   rw [hs3] at h4
   have k4 : K s2 s4 := .of_opStep hE2 hfar (process_randao_opStep _ o s2 s4 _ h4)
-  have hE4 : s4.slot / Preset.mainnet.SLOTS_PER_EPOCH = E := by rw [k4.1]; exact hE2
+  have hE4 : s4.slot / P.SLOTS_PER_EPOCH = E := by rw [k4.1]; exact hE2
   have k5 : K s4 s5 := .of_opStep hE4 hfar (process_eth1_data_opStep _ s4 s5 _ h5)
-  have hE5 : s5.slot / Preset.mainnet.SLOTS_PER_EPOCH = E := by rw [k5.1]; exact hE4
+  have hE5 : s5.slot / P.SLOTS_PER_EPOCH = E := by rw [k5.1]; exact hE4
   have k6 : K s5 s6 :=
     process_operations_fulu_keeps _ o _ hc s0 E _ n s5 s6 _ hE5 hfar h6
   have k : K fs.state s6 := k1.trans (k2.trans (k4.trans (k5.trans k6)))
   obtain ⟨hslot, hagree, hkeep⟩ := k
   obtain ⟨hd6, hb6⟩ := hkeep hd
-  have htab6 : ∀ tab, get_total_active_balance Preset.mainnet s6 = .ok tab →
+  have htab6 : ∀ tab, get_total_active_balance P s6 = .ok tab →
       tab ≤ 139000000000000000 := by
     intro tab ht
-    rw [get_total_active_balance_congr Preset.mainnet fs.state s6 (by rw [hslot])
+    rw [get_total_active_balance_congr P fs.state s6 (by rw [hslot])
       (hE ▸ hagree)] at ht
     exact htab tab ht
   obtain ⟨hfr, -⟩ := process_sync_aggregate_frame _ o s6 s7 _ h7
@@ -528,12 +530,12 @@ theorem process_block_fulu_budget_mainnet (o : Oracle) (fo : FuluOracle) (c : Fu
 /-! ## The Fulu epoch -/
 
 /-- On mainnet, the Fulu `process_epoch` keeps `EBOk` and ends with `EffectiveBalanceFloor`. -/
-theorem process_epoch_fulu_effective_balances (o : Oracle) (s s' : BeaconState)
-    (h : process_epoch_fulu Preset.mainnet FuluConfig.mainnet o s = .ok s')
-    (hs : EBOk Preset.mainnet s) :
-    EBOk Preset.mainnet s' ∧ EffectiveBalanceFloor Preset.mainnet s' := by
+theorem process_epoch_fulu_effective_balances [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (s s' : BeaconState)
+    (h : process_epoch_fulu P FC o s = .ok s')
+    (hs : EBOk P s) :
+    EBOk P s' ∧ EffectiveBalanceFloor P s' := by
   have hp := ebPresetOk_mainnet
-  rw [process_epoch_fulu_eq_tab _ _ fuluCompat_mainnet] at h
+  rw [process_epoch_fulu_eq_tab _ _ fuluCompat] at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
   obtain ⟨s2, h2, h⟩ := specM_bind_ok h
   obtain ⟨_, -, h⟩ := specM_bind_ok h

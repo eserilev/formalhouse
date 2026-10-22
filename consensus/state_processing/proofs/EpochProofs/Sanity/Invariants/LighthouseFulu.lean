@@ -1,4 +1,6 @@
 import EpochProofs.Sanity.Invariants.LighthouseTail
+import EpochProofs.Spec.PresetCfg
+import EpochProofs.Spec.FuluCfg
 import EpochProofs.Sanity.FuluEpoch
 import EpochProofs.Sanity.FuluSinglePass
 
@@ -22,18 +24,18 @@ namespace EpochProofs.Spec
 /-! ## The model -/
 
 /-- The Fulu churn total on mainnet. -/
-def fuluTabM (total_active_balance : Gwei) : Gwei :=
-  fuluTab Preset.mainnet FuluConfig.mainnet total_active_balance
+def fuluTabM [PresetCfg] [FuluCfg] (total_active_balance : Gwei) : Gwei :=
+  fuluTab P FC total_active_balance
 
 /-- The Fulu steps after the effective balance updates, in the spec order. The sync committee
 update is the Gloas function, which Lighthouse runs from Electra on. -/
-def epochRest2Fulu (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
-  let state ← process_slashings_reset Preset.mainnet state
-  let state ← process_randao_mixes_reset Preset.mainnet state
-  let state ← process_historical_summaries_update Preset.mainnet o state
+def epochRest2Fulu [PresetCfg] (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
+  let state ← process_slashings_reset P state
+  let state ← process_randao_mixes_reset P state
+  let state ← process_historical_summaries_update P o state
   let state := process_participation_flag_updates state
-  let state ← process_sync_committee_updates Preset.mainnet o state
-  process_proposer_lookahead_fulu Preset.mainnet o state
+  let state ← process_sync_committee_updates P o state
+  process_proposer_lookahead_fulu P o state
 
 /-- The Lighthouse Fulu steps after justification and finalization. -/
 def lhFullTailFulu (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
@@ -41,105 +43,105 @@ def lhFullTailFulu (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
 
 /-- The Fulu `process_epoch` on mainnet as Lighthouse runs it, with the pending deposits and the
 effective balance updates in the single pass. -/
-def process_epoch_lh_full_fulu (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
-  let s1 ← lhJustificationAndFinalization Preset.mainnet s
+def process_epoch_lh_full_fulu [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
+  let s1 ← lhJustificationAndFinalization P s
   lhFullTailFulu o s1
 
 /-! ## The spec in parts -/
 
 /-- The Fulu inactivity, rewards, registry and slashings steps, with the registry update written
 as the Gloas function at `fuluTab`. -/
-def specFourStepsFulu (s : BeaconState) : SpecM BeaconState := do
-  let s ← process_inactivity_updates Preset.mainnet s
-  let s ← process_rewards_and_penalties Preset.mainnet
-    (← get_total_active_balance Preset.mainnet s) s
-  let s ← process_registry_updates Preset.mainnet
-    (fuluTabM (← get_total_active_balance Preset.mainnet s)) s
-  process_slashings Preset.mainnet (← get_total_active_balance Preset.mainnet s) s
+def specFourStepsFulu [PresetCfg] (s : BeaconState) : SpecM BeaconState := do
+  let s ← process_inactivity_updates P s
+  let s ← process_rewards_and_penalties P
+    (← get_total_active_balance P s) s
+  let s ← process_registry_updates P
+    (fuluTabM (← get_total_active_balance P s)) s
+  process_slashings P (← get_total_active_balance P s) s
 
 /-- The Fulu steps after `process_slashings`. -/
-def epochRestFulu (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
-  let state ← process_eth1_data_reset Preset.mainnet state
-  let state ← process_pending_deposits Preset.mainnet
-    (fuluTabM (← get_total_active_balance Preset.mainnet state))
-    (apply_pending_deposit Preset.mainnet o) state
-  let state ← process_pending_consolidations Preset.mainnet state
-  let state ← process_effective_balance_updates Preset.mainnet state
-  let state ← process_slashings_reset Preset.mainnet state
-  let state ← process_randao_mixes_reset Preset.mainnet state
-  let state ← process_historical_summaries_update Preset.mainnet o state
+def epochRestFulu [PresetCfg] (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
+  let state ← process_eth1_data_reset P state
+  let state ← process_pending_deposits P
+    (fuluTabM (← get_total_active_balance P state))
+    (apply_pending_deposit P o) state
+  let state ← process_pending_consolidations P state
+  let state ← process_effective_balance_updates P state
+  let state ← process_slashings_reset P state
+  let state ← process_randao_mixes_reset P state
+  let state ← process_historical_summaries_update P o state
   let state := process_participation_flag_updates state
-  let state ← process_sync_committee_updates_fulu Preset.mainnet o state
-  process_proposer_lookahead_fulu Preset.mainnet o state
+  let state ← process_sync_committee_updates_fulu P o state
+  process_proposer_lookahead_fulu P o state
 
 /-- The Fulu `process_epoch` on mainnet in three parts. -/
-theorem process_epoch_fulu_parts (o : Oracle) (s : BeaconState) :
-    process_epoch_fulu Preset.mainnet FuluConfig.mainnet o s = (do
-      let s1 ← process_justification_and_finalization Preset.mainnet s
+theorem process_epoch_fulu_parts [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (s : BeaconState) :
+    process_epoch_fulu P FC o s = (do
+      let s1 ← process_justification_and_finalization P s
       let s5 ← specFourStepsFulu s1
       epochRestFulu o s5) := by
-  rw [process_epoch_fulu_eq_tab Preset.mainnet FuluConfig.mainnet fuluCompat_mainnet]
+  rw [process_epoch_fulu_eq_tab P FC fuluCompat]
   simp only [specFourStepsFulu, epochRestFulu, fuluTabM, bind_assoc]
 
 /-- `specFourStepsFulu` with one total active balance. -/
-theorem specFourStepsFulu_sameOk (s1 : BeaconState) (total_active_balance : Gwei)
-    (htab : get_total_active_balance Preset.mainnet s1 = .ok total_active_balance)
+theorem specFourStepsFulu_sameOk [PresetCfg] (s1 : BeaconState) (total_active_balance : Gwei)
+    (htab : get_total_active_balance P s1 = .ok total_active_balance)
     (hrows : RowsOk s1) (current_epoch activation_epoch : Epoch)
-    (hcurrent : get_current_epoch Preset.mainnet s1 = .ok current_epoch)
-    (hactivation : compute_activation_exit_epoch Preset.mainnet current_epoch =
+    (hcurrent : get_current_epoch P s1 = .ok current_epoch)
+    (hactivation : compute_activation_exit_epoch P current_epoch =
       .ok activation_epoch)
     (hcur : current_epoch < FAR_FUTURE_EPOCH) :
     SameOk (specFourStepsFulu s1) (do
-      let s2 ← process_inactivity_updates Preset.mainnet s1
-      let s3 ← process_rewards_and_penalties Preset.mainnet total_active_balance s2
-      let s4 ← process_registry_updates Preset.mainnet (fuluTabM total_active_balance) s3
-      process_slashings Preset.mainnet total_active_balance s4) := by
+      let s2 ← process_inactivity_updates P s1
+      let s3 ← process_rewards_and_penalties P total_active_balance s2
+      let s4 ← process_registry_updates P (fuluTabM total_active_balance) s3
+      process_slashings P total_active_balance s4) := by
   unfold specFourStepsFulu
   refine SameOk.bind (SameOk.refl _) (fun s2 h2 => ?_)
-  have hv2 := process_inactivity_updates_validators Preset.mainnet _ _ h2
-  have hslot2 := (process_inactivity_updates_checkpointsStable Preset.mainnet _ _ h2).1
-  have hl2 := process_inactivity_updates_len Preset.mainnet _ _ h2
-  have t2 : get_total_active_balance Preset.mainnet s2 = .ok total_active_balance := by
-    rw [get_total_active_balance_congr_key Preset.mainnet s1 s2 current_epoch hcurrent hslot2
+  have hv2 := process_inactivity_updates_validators P _ _ h2
+  have hslot2 := (process_inactivity_updates_checkpointsStable P _ _ h2).1
+  have hl2 := process_inactivity_updates_len P _ _ h2
+  have t2 : get_total_active_balance P s2 = .ok total_active_balance := by
+    rw [get_total_active_balance_congr_key P s1 s2 current_epoch hcurrent hslot2
       (by rw [hv2])]
     exact htab
   rw [t2, ok_bind'']
   refine SameOk.bind (SameOk.refl _) (fun s3 h3 => ?_)
-  have hv3 := process_rewards_and_penalties_validators Preset.mainnet _ _ _ h3
-  have hslot3 := (process_rewards_and_penalties_checkpointsStable Preset.mainnet _ _ _ h3).1
-  have hl3 := process_rewards_and_penalties_len Preset.mainnet _ _ _ h3
-  have hc3 : get_current_epoch Preset.mainnet s3 = .ok current_epoch :=
+  have hv3 := process_rewards_and_penalties_validators P _ _ _ h3
+  have hslot3 := (process_rewards_and_penalties_checkpointsStable P _ _ _ h3).1
+  have hl3 := process_rewards_and_penalties_len P _ _ _ h3
+  have hc3 : get_current_epoch P s3 = .ok current_epoch :=
     current_epoch_of_slot' hcurrent (hslot3.trans hslot2)
-  have t3 : get_total_active_balance Preset.mainnet s3 = .ok total_active_balance := by
-    rw [get_total_active_balance_congr_key Preset.mainnet s2 s3 current_epoch
+  have t3 : get_total_active_balance P s3 = .ok total_active_balance := by
+    rw [get_total_active_balance_congr_key P s2 s3 current_epoch
       (current_epoch_of_slot' hcurrent hslot2) hslot3 (by rw [hv3])]
     exact t2
   rw [t3, ok_bind'']
   refine SameOk.bind (SameOk.refl _) (fun s4 h4 => ?_)
-  have hslot4 := (process_registry_updates_checkpointsStable Preset.mainnet _ _ _ h4).1
+  have hslot4 := (process_registry_updates_checkpointsStable P _ _ _ h4).1
   have hrows3 : RowsOk s3 := (hl2.trans hl3).rowsOk hrows
-  have hkey := process_registry_updates_activeKey Preset.mainnet _ s3 s4 hrows3 current_epoch
+  have hkey := process_registry_updates_activeKey P _ s3 s4 hrows3 current_epoch
     activation_epoch hc3 hactivation hcur h4
-  have t4 : get_total_active_balance Preset.mainnet s4 = .ok total_active_balance := by
-    rw [get_total_active_balance_congr_key Preset.mainnet s3 s4 current_epoch hc3 hslot4 hkey]
+  have t4 : get_total_active_balance P s4 = .ok total_active_balance := by
+    rw [get_total_active_balance_congr_key P s3 s4 current_epoch hc3 hslot4 hkey]
     exact t3
   rw [t4, ok_bind'']
   exact SameOk.refl _
 
 /-- The four Fulu steps with one total keep the total active balance. -/
-theorem fourStepsFulu_total (s1 : BeaconState) (total_active_balance : Gwei)
-    (htab : get_total_active_balance Preset.mainnet s1 = .ok total_active_balance)
+theorem fourStepsFulu_total [PresetCfg] (s1 : BeaconState) (total_active_balance : Gwei)
+    (htab : get_total_active_balance P s1 = .ok total_active_balance)
     (hrows : RowsOk s1) (current_epoch activation_epoch : Epoch)
-    (hcurrent : get_current_epoch Preset.mainnet s1 = .ok current_epoch)
-    (hactivation : compute_activation_exit_epoch Preset.mainnet current_epoch =
+    (hcurrent : get_current_epoch P s1 = .ok current_epoch)
+    (hactivation : compute_activation_exit_epoch P current_epoch =
       .ok activation_epoch)
     (hcur : current_epoch < FAR_FUTURE_EPOCH) (S : BeaconState)
     (h : (do
-      let s2 ← process_inactivity_updates Preset.mainnet s1
-      let s3 ← process_rewards_and_penalties Preset.mainnet total_active_balance s2
-      let s4 ← process_registry_updates Preset.mainnet (fuluTabM total_active_balance) s3
-      process_slashings Preset.mainnet total_active_balance s4) = .ok S) :
-    get_total_active_balance Preset.mainnet S = .ok total_active_balance := by
+      let s2 ← process_inactivity_updates P s1
+      let s3 ← process_rewards_and_penalties P total_active_balance s2
+      let s4 ← process_registry_updates P (fuluTabM total_active_balance) s3
+      process_slashings P total_active_balance s4) = .ok S) :
+    get_total_active_balance P S = .ok total_active_balance := by
   obtain ⟨s2, h2, h⟩ := specM_bind_ok h
   obtain ⟨s3, h3, h⟩ := specM_bind_ok h
   obtain ⟨s4, h4, h5⟩ := specM_bind_ok h
@@ -166,35 +168,35 @@ theorem fourStepsFulu_total (s1 : BeaconState) (total_active_balance : Gwei)
 
 /-- `epochRest2Fulu` with the Fulu sync committee update gives the same `ok` results as with the
 Gloas one. -/
-theorem epochRest2Fulu_sameOk (o : Oracle) (S : BeaconState) :
+theorem epochRest2Fulu_sameOk [PresetCfg] (o : Oracle) (S : BeaconState) :
     SameOk (do
-        let state ← process_slashings_reset Preset.mainnet S
-        let state ← process_randao_mixes_reset Preset.mainnet state
-        let state ← process_historical_summaries_update Preset.mainnet o state
+        let state ← process_slashings_reset P S
+        let state ← process_randao_mixes_reset P state
+        let state ← process_historical_summaries_update P o state
         let state := process_participation_flag_updates state
-        let state ← process_sync_committee_updates_fulu Preset.mainnet o state
-        process_proposer_lookahead_fulu Preset.mainnet o state)
+        let state ← process_sync_committee_updates_fulu P o state
+        process_proposer_lookahead_fulu P o state)
       (epochRest2Fulu o S) := by
   unfold epochRest2Fulu
   refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
   refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
   refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
-  exact SameOk.bind (process_sync_committee_updates_fulu_sameOk Preset.mainnet o _ (by decide))
+  exact SameOk.bind (process_sync_committee_updates_fulu_sameOk P o _ (by decide))
     (fun _ _ => SameOk.refl _)
 
 /-- In `epochRestFulu`, the deposit churn total is `fuluTab` of the total of the state before
 it, and the rest is `specTailG` with no step in place of the builder payments. -/
-theorem epochRestFulu_specTail (o : Oracle) (S4 : BeaconState) (tab : Gwei) (cur : Epoch)
-    (hcur : get_current_epoch Preset.mainnet S4 = .ok cur) (hfar : cur < FAR_FUTURE_EPOCH)
-    (htab : get_total_active_balance Preset.mainnet S4 = .ok tab) :
+theorem epochRestFulu_specTail [PresetCfg] (o : Oracle) (S4 : BeaconState) (tab : Gwei) (cur : Epoch)
+    (hcur : get_current_epoch P S4 = .ok cur) (hfar : cur < FAR_FUTURE_EPOCH)
+    (htab : get_total_active_balance P S4 = .ok tab) :
     SameOk (epochRestFulu o S4)
-      (process_eth1_data_reset Preset.mainnet S4 >>=
+      (process_eth1_data_reset P S4 >>=
         specTailG o (fuluTabM tab) pure (epochRest2Fulu o)) := by
   unfold epochRestFulu
   refine SameOk.bind (SameOk.refl _) (fun S5 h5 => ?_)
   obtain ⟨v, rfl⟩ := eth1_shape h5
-  have hcur5 : get_current_epoch Preset.mainnet { S4 with eth1_data_votes := v } = .ok cur := hcur
-  have htab5 : get_total_active_balance Preset.mainnet { S4 with eth1_data_votes := v } =
+  have hcur5 : get_current_epoch P { S4 with eth1_data_votes := v } = .ok cur := hcur
+  have htab5 : get_total_active_balance P { S4 with eth1_data_votes := v } =
       .ok tab := by
     rw [get_total_active_balance_append S4 { S4 with eth1_data_votes := v } [] cur hcur rfl
       (by simp) (by simp) hfar]
@@ -211,59 +213,59 @@ theorem epochRestFulu_specTail (o : Oracle) (S4 : BeaconState) (tab : Gwei) (cur
 
 /-- `lighthouse_single_pass_eq_spec_supply` for Fulu: the registry pass reads `fuluTab`, and
 Lighthouse's context holds `fuluTab` as its churn total. -/
-theorem lighthouse_single_pass_eq_spec_supply_fulu (total_active_balance : Gwei)
+theorem lighthouse_single_pass_eq_spec_supply_fulu [PresetCfg] (total_active_balance : Gwei)
     (state : BeaconState) (hrows : RowsOk state) (current_epoch : Epoch)
-    (hcurrent : get_current_epoch Preset.mainnet state = .ok current_epoch)
+    (hcurrent : get_current_epoch P state = .ok current_epoch)
     (hgenesis : current_epoch ≠ GENESIS_EPOCH)
     (rctx : RewardsContext)
-    (hctx : rewardsContextOf Preset.mainnet total_active_balance state = .ok rctx)
+    (hctx : rewardsContextOf P total_active_balance state = .ok rctx)
     (heffective : ∀ i (h : i < state.validators.length),
       rewardsEligible rctx.previous_epoch state.validators[i] = .ok true →
         state.validators[i].effective_balance ≤ 256 * state.balances.getD i 0)
     (hexit : ∀ i (h : i < state.validators.length),
       state.validators[i].exit_epoch ≤ FAR_FUTURE_EPOCH)
     (hmax : ∀ v ∈ state.validators,
-      v.effective_balance ≤ Preset.mainnet.MAX_EFFECTIVE_BALANCE_ELECTRA)
+      v.effective_balance ≤ P.MAX_EFFECTIVE_BALANCE_ELECTRA)
     (hbalance : ∀ i (h : i < state.validators.length), state.balances.getD i 0 < 2 ^ 62)
     (activation_epoch : Epoch)
-    (hactivation : compute_activation_exit_epoch Preset.mainnet current_epoch =
+    (hactivation : compute_activation_exit_epoch P current_epoch =
       .ok activation_epoch)
-    (htarget : current_epoch + Preset.mainnet.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE)
+    (htarget : current_epoch + P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE)
     (adjusted per : Gwei)
-    (hpre : slashingsPreamble Preset.mainnet total_active_balance state.slashings =
+    (hpre : slashingsPreamble P total_active_balance state.slashings =
       .ok (adjusted, per))
     (hfinalized : state.finalized_checkpoint.epoch ≤ current_epoch)
     (hcurrent64 : current_epoch + 1 < UINT64_SIZE)
-    (htotal : Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT ≤ total_active_balance)
+    (htotal : P.EFFECTIVE_BALANCE_INCREMENT ≤ total_active_balance)
     (k : Nat) (hk : k ≤ 1152921504)
     (hincrements : rctx.source_increments ≤ k * rctx.active_increments ∧
       rctx.target_increments ≤ k * rctx.active_increments ∧
       rctx.head_increments ≤ k * rctx.active_increments)
     (base_reward : Row → Gwei)
     (hbase : ∀ r ∈ rowsOf state, rewardsEligible rctx.previous_epoch r.validator = .ok true →
-      rewardsBaseReward Preset.mainnet total_active_balance r.validator = .ok (base_reward r)) :
+      rewardsBaseReward P total_active_balance r.validator = .ok (base_reward r)) :
     SameOk (do
-      let s1 ← process_inactivity_updates Preset.mainnet state
-      let s2 ← process_rewards_and_penalties Preset.mainnet total_active_balance s1
-      let s3 ← process_registry_updates Preset.mainnet (fuluTabM total_active_balance) s2
-      process_slashings Preset.mainnet total_active_balance s3)
+      let s1 ← process_inactivity_updates P state
+      let s2 ← process_rewards_and_penalties P total_active_balance s1
+      let s3 ← process_registry_updates P (fuluTabM total_active_balance) s2
+      process_slashings P total_active_balance s3)
     ((fun y => state.withRowsChurn y.1 y.2) <$>
-      passM (fun churn r => lhRowStep Preset.mainnet
+      passM (fun churn r => lhRowStep P
           (lhContextOf state (fuluTabM total_active_balance) current_epoch rctx per)
           (base_reward r) churn r)
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
   obtain ⟨hprevious, -, -, -, -, hleak, htab⟩ :=
-    rewardsContextOf_ok Preset.mainnet total_active_balance state rctx hctx
-  refine SameOk.trans (separate_passes_eq_single_pass_tab Preset.mainnet total_active_balance
+    rewardsContextOf_ok P total_active_balance state rctx hctx
+  refine SameOk.trans (separate_passes_eq_single_pass_tab P total_active_balance
     (fuluTabM total_active_balance) state hrows current_epoch rctx.previous_epoch rctx.in_leak
     hcurrent hgenesis hprevious hleak rctx hctx activation_epoch hactivation htarget adjusted per
     hpre) (SameOk.of_eq ?_)
   have hstep : ∀ churn r, r ∈ rowsOf state →
-      lhRowStep Preset.mainnet (lhContextOf state (fuluTabM total_active_balance) current_epoch
+      lhRowStep P (lhContextOf state (fuluTabM total_active_balance) current_epoch
         rctx per) (base_reward r) churn r =
-      (fun x => (x.1.1.2, x.2)) <$> singlePassStep Preset.mainnet (fuluTabM total_active_balance)
+      (fun x => (x.1.1.2, x.2)) <$> singlePassStep P (fuluTabM total_active_balance)
         rctx.previous_epoch rctx.in_leak rctx current_epoch state.finalized_checkpoint.epoch
-        activation_epoch (current_epoch + Preset.mainnet.EPOCHS_PER_SLASHINGS_VECTOR / 2) per
+        activation_epoch (current_epoch + P.EPOCHS_PER_SLASHINGS_VECTOR / 2) per
         ((((), ()), churn), ()) r := by
     intro churn r hr
     obtain ⟨i, hi, hri⟩ := List.mem_iff_getElem.mp hr
@@ -278,9 +280,9 @@ theorem lighthouse_single_pass_eq_spec_supply_fulu (total_active_balance : Gwei)
       (heffective i hiv) (hmax _ (List.getElem_mem hiv)) (hbalance i hiv) hfinalized hcurrent64
       hactivation (hexit i hiv)
   rw [passM_congr _ _ (rowsOf state) (fun churn r hr => hstep churn r hr)]
-  rw [passM_proj (singlePassStep Preset.mainnet (fuluTabM total_active_balance)
+  rw [passM_proj (singlePassStep P (fuluTabM total_active_balance)
     rctx.previous_epoch rctx.in_leak rctx current_epoch state.finalized_checkpoint.epoch
-    activation_epoch (current_epoch + Preset.mainnet.EPOCHS_PER_SLASHINGS_VECTOR / 2) per)
+    activation_epoch (current_epoch + P.EPOCHS_PER_SLASHINGS_VECTOR / 2) per)
     (fun c => ((((), ()), c), ())) (fun b => b.1.2) (fun _ => rfl) (fun _ => rfl)]
   cases passM _ _ (rowsOf state) <;> rfl
 
@@ -327,76 +329,76 @@ theorem genesis_passes_eq_single_pass_tab (p : Preset) (total_active_balance reg
     y3.2 <;> rfl
 
 /-- `lighthouse_single_pass_eq_spec_genesis` for Fulu. -/
-theorem lighthouse_single_pass_eq_spec_genesis_fulu (total_active_balance : Gwei)
+theorem lighthouse_single_pass_eq_spec_genesis_fulu [PresetCfg] (total_active_balance : Gwei)
     (state : BeaconState) (hrows : RowsOk state)
-    (hcurrent : get_current_epoch Preset.mainnet state = .ok GENESIS_EPOCH)
+    (hcurrent : get_current_epoch P state = .ok GENESIS_EPOCH)
     (rctx : RewardsContext) (hprev : rctx.previous_epoch = GENESIS_EPOCH)
     (hexit : ∀ i (h : i < state.validators.length),
       state.validators[i].exit_epoch ≤ FAR_FUTURE_EPOCH)
     (activation_epoch : Epoch)
-    (hactivation : compute_activation_exit_epoch Preset.mainnet GENESIS_EPOCH =
+    (hactivation : compute_activation_exit_epoch P GENESIS_EPOCH =
       .ok activation_epoch)
     (adjusted per : Gwei)
-    (hpre : slashingsPreamble Preset.mainnet total_active_balance state.slashings =
+    (hpre : slashingsPreamble P total_active_balance state.slashings =
       .ok (adjusted, per))
     (hfinalized : state.finalized_checkpoint.epoch ≤ GENESIS_EPOCH)
     (base_reward : Row → Gwei) :
     SameOk (do
-      let s1 ← process_inactivity_updates Preset.mainnet state
-      let s2 ← process_rewards_and_penalties Preset.mainnet total_active_balance s1
-      let s3 ← process_registry_updates Preset.mainnet (fuluTabM total_active_balance) s2
-      process_slashings Preset.mainnet total_active_balance s3)
+      let s1 ← process_inactivity_updates P state
+      let s2 ← process_rewards_and_penalties P total_active_balance s1
+      let s3 ← process_registry_updates P (fuluTabM total_active_balance) s2
+      process_slashings P total_active_balance s3)
     ((fun y => state.withRowsChurn y.1 y.2) <$>
-      passM (fun churn r => lhRowStep Preset.mainnet
+      passM (fun churn r => lhRowStep P
           (lhContextOf state (fuluTabM total_active_balance) GENESIS_EPOCH rctx per)
           (base_reward r) churn r)
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
-  refine SameOk.trans (genesis_passes_eq_single_pass_tab Preset.mainnet total_active_balance
+  refine SameOk.trans (genesis_passes_eq_single_pass_tab P total_active_balance
     (fuluTabM total_active_balance) state hrows hcurrent activation_epoch hactivation (by decide)
     adjusted per hpre) (SameOk.of_eq ?_)
   have hstep : ∀ churn r, r ∈ rowsOf state →
-      lhRowStep Preset.mainnet (lhContextOf state (fuluTabM total_active_balance) GENESIS_EPOCH
+      lhRowStep P (lhContextOf state (fuluTabM total_active_balance) GENESIS_EPOCH
         rctx per) (base_reward r) churn r =
-      (fun x => (x.1.1, x.2)) <$> bothSteps (registryRowStep Preset.mainnet
+      (fun x => (x.1.1, x.2)) <$> bothSteps (registryRowStep P
         (fuluTabM total_active_balance) GENESIS_EPOCH state.finalized_checkpoint.epoch
         activation_epoch)
-        (slashingsRowStep Preset.mainnet
-          (GENESIS_EPOCH + Preset.mainnet.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) (churn, ()) r := by
+        (slashingsRowStep P
+          (GENESIS_EPOCH + P.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) (churn, ()) r := by
     intro churn r hr
     obtain ⟨i, hi, hri⟩ := List.mem_iff_getElem.mp hr
     have hiv : i < state.validators.length := by rw [← rowsOf_length]; exact hi
     have hrow := rowsOf_getElem state i hi
     rw [hri] at hrow
     subst hrow
-    exact lhRowStep_genesis Preset.mainnet _ rfl _ churn _ activation_epoch
+    exact lhRowStep_genesis P _ rfl _ churn _ activation_epoch
       (by simp only [lhContextOf, hprev, GENESIS_EPOCH, UINT64_SIZE]; decide) (by decide)
       (by simpa only [lhContextOf] using hfinalized)
       (by simp only [lhContextOf, GENESIS_EPOCH, UINT64_SIZE]; decide) hactivation (hexit i hiv)
   rw [passM_congr _ _ (rowsOf state) (fun churn r hr => hstep churn r hr)]
-  rw [passM_proj (bothSteps (registryRowStep Preset.mainnet (fuluTabM total_active_balance)
+  rw [passM_proj (bothSteps (registryRowStep P (fuluTabM total_active_balance)
       GENESIS_EPOCH state.finalized_checkpoint.epoch activation_epoch)
-      (slashingsRowStep Preset.mainnet
-        (GENESIS_EPOCH + Preset.mainnet.EPOCHS_PER_SLASHINGS_VECTOR / 2) per))
+      (slashingsRowStep P
+        (GENESIS_EPOCH + P.EPOCHS_PER_SLASHINGS_VECTOR / 2) per))
     (fun c => (c, ())) (fun b => b.1) (fun _ => rfl) (fun _ => rfl)]
   cases passM _ _ (rowsOf state) <;> rfl
 
 /-- The Fulu spec steps after the four passes give the same `ok` results as `tailNFG` at the
 Fulu churn total, with `epochRest2Fulu` after the consolidations. -/
-theorem epochRestFulu_nf (o : Oracle) (s1 : BeaconState) (current_epoch : Epoch)
+theorem epochRestFulu_nf [PresetCfg] (o : Oracle) (s1 : BeaconState) (current_epoch : Epoch)
     (total_active_balance : Gwei) (ctx : LhStepContext) (bf : Row → Gwei)
     (churn : Epoch × Gwei) (rows : List Row) (activation_epoch : Epoch)
-    (hpass : passM (fun c r => lhRowStep Preset.mainnet ctx (bf r) c r)
+    (hpass : passM (fun c r => lhRowStep P ctx (bf r) c r)
       (s1.earliest_exit_epoch, s1.exit_balance_to_consume) (rowsOf s1) = .ok (churn, rows))
     (hctxcur : ctx.current_epoch = current_epoch)
     (hctxfin : ctx.finalized_epoch = s1.finalized_checkpoint.epoch)
-    (hcur : get_current_epoch Preset.mainnet s1 = .ok current_epoch)
+    (hcur : get_current_epoch P s1 = .ok current_epoch)
     (hfin : s1.finalized_checkpoint.epoch ≤ current_epoch)
     (hnext : current_epoch + 1 < FAR_FUTURE_EPOCH)
-    (hact : compute_activation_exit_epoch Preset.mainnet current_epoch = .ok activation_epoch)
+    (hact : compute_activation_exit_epoch P current_epoch = .ok activation_epoch)
     (hexit : ∀ i (h : i < s1.validators.length), s1.validators[i].exit_epoch ≤ FAR_FUTURE_EPOCH)
     (hvalid : ∀ v ∈ s1.validators, v.exit_epoch = FAR_FUTURE_EPOCH →
       v.withdrawable_epoch = FAR_FUTURE_EPOCH)
-    (htab4 : get_total_active_balance Preset.mainnet (s1.withRowsChurn churn rows) =
+    (htab4 : get_total_active_balance P (s1.withRowsChurn churn rows) =
       .ok total_active_balance)
     (hbal4 : ∀ r ∈ rows, r.balance < 2 ^ 64)
     (hnamed : ∀ i ∈ consolidationIndices s1, i < s1.validators.length) :
@@ -404,7 +406,7 @@ theorem epochRestFulu_nf (o : Oracle) (s1 : BeaconState) (current_epoch : Epoch)
       (tailNFG o (epochRest2Fulu o) s1 (s1.withRowsChurn churn rows)
         (fuluTabM total_active_balance) current_epoch) := by
   have hfar : current_epoch < FAR_FUTURE_EPOCH := Nat.lt_trans (Nat.lt_succ_self _) hnext
-  have hcur4 : get_current_epoch Preset.mainnet (s1.withRowsChurn churn rows) =
+  have hcur4 : get_current_epoch P (s1.withRowsChurn churn rows) =
       .ok current_epoch := hcur
   refine SameOk.trans (epochRestFulu_specTail o _ total_active_balance current_epoch hcur4 hfar
     htab4) ?_
@@ -419,17 +421,17 @@ theorem epochRestFulu_nf (o : Oracle) (s1 : BeaconState) (current_epoch : Epoch)
 /-- `process_epoch_lh_full_fulu_sameOk'` at the genesis epoch. Justification and finalization return
 the state, the spec skips the inactivity and rewards steps, and the single pass skips them
 through `after_genesis`. -/
-theorem process_epoch_lh_full_fulu_genesis (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
+theorem process_epoch_lh_full_fulu_genesis [PresetCfg] [FuluCfg] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
     (hexitb : ExitBounds t) (hsupply_t : EpochSupply t) (hvalid : WithdrawableValid t)
     (hcons : ConsolidationsInRange t)
-    (hgen : t.slot / Preset.mainnet.SLOTS_PER_EPOCH = GENESIS_EPOCH) :
+    (hgen : t.slot / P.SLOTS_PER_EPOCH = GENESIS_EPOCH) :
     SameOk (process_epoch_lh_full_fulu o t)
-      (process_epoch_fulu Preset.mainnet FuluConfig.mainnet o t) := by
+      (process_epoch_fulu P FC o t) := by
   obtain ⟨hinv, hrows, -⟩ := hb
   obtain ⟨hbalance, hsupply, hslashings⟩ := hsupply_t
-  have hcurrent : get_current_epoch Preset.mainnet t = .ok GENESIS_EPOCH := by
+  have hcurrent : get_current_epoch P t = .ok GENESIS_EPOCH := by
     rw [← hgen]
-    simp [get_current_epoch, compute_epoch_at_slot, uint64Div, Preset.mainnet, pure,
+    simp [get_current_epoch, compute_epoch_at_slot, uint64Div, P, Preset.ofVar, pure,
       Except.pure]
   unfold process_epoch_lh_full_fulu
   rw [process_epoch_fulu_parts]
@@ -447,10 +449,10 @@ theorem process_epoch_lh_full_fulu_genesis (o : Oracle) (t : BeaconState) (hb : 
     exact Nat.le_zero.mp h
   have hS64 : totalEffectiveBalance s1 < 2 ^ 64 := Nat.lt_trans hsupply (by decide)
   obtain ⟨tab, htab, htab_lo, -⟩ :=
-    get_total_active_balance_bounds Preset.mainnet s1 GENESIS_EPOCH hcurrent hS64
+    get_total_active_balance_bounds P s1 GENESIS_EPOCH hcurrent hS64
   obtain ⟨rctx, hctx, hprevr⟩ :=
-    rewardsContextOf_genesis Preset.mainnet tab s1 hrows hcurrent (by decide) hS64 hfin0
-  have hactivation := compute_activation_exit_epoch_of_lt Preset.mainnet GENESIS_EPOCH
+    rewardsContextOf_genesis P tab s1 hrows hcurrent (by decide) hS64 hfin0
+  have hactivation := compute_activation_exit_epoch_of_lt P GENESIS_EPOCH
     (by decide)
   obtain ⟨adj, per, hpre⟩ := slashingsPreamble_ok tab s1.slashings hslashings htab_lo
   have hexit1 : ∀ i (h : i < s1.validators.length),
@@ -485,34 +487,34 @@ with the deposits and effective balance updates in the single pass gives the sam
 as the Fulu spec epoch. Beyond the hypotheses of `process_epoch_lh_sameOk'` it needs `WithdrawableValid`,
 for the deposit statuses that Lighthouse predicts, and `ConsolidationsInRange`, so that the
 validators that consolidations name are existing validators. -/
-theorem process_epoch_lh_full_fulu_sameOk' (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
-    (hslot : t.slot < 2 ^ 64) (heb : EBOk Preset.mainnet t) (hexitb : ExitBounds t)
+theorem process_epoch_lh_full_fulu_sameOk' [PresetCfg] [FuluCfg] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
+    (hslot : t.slot < 2 ^ 64) (heb : EBOk P t) (hexitb : ExitBounds t)
     (hsupply_t : EpochSupply t) (hvalid : WithdrawableValid t)
     (hcons : ConsolidationsInRange t) :
     SameOk (process_epoch_lh_full_fulu o t)
-      (process_epoch_fulu Preset.mainnet FuluConfig.mainnet o t) := by
+      (process_epoch_fulu P FC o t) := by
   obtain ⟨hinv, hrows, heffective⟩ := hb
   obtain ⟨hbalance, hsupply, hslashings⟩ := hsupply_t
-  by_cases hgen : t.slot / Preset.mainnet.SLOTS_PER_EPOCH = GENESIS_EPOCH
+  by_cases hgen : t.slot / P.SLOTS_PER_EPOCH = GENESIS_EPOCH
   · exact process_epoch_lh_full_fulu_genesis o t ⟨hinv, hrows, heffective⟩ hexitb
       ⟨hbalance, hsupply, hslashings⟩ hvalid hcons hgen
   unfold process_epoch_lh_full_fulu
-  have hcurrent : get_current_epoch Preset.mainnet t =
-      .ok (t.slot / Preset.mainnet.SLOTS_PER_EPOCH) := by
-    simp [get_current_epoch, compute_epoch_at_slot, uint64Div, Preset.mainnet, pure,
+  have hcurrent : get_current_epoch P t =
+      .ok (t.slot / P.SLOTS_PER_EPOCH) := by
+    simp [get_current_epoch, compute_epoch_at_slot, uint64Div, P, Preset.ofVar, pure,
       Except.pure]
-  have hepoch : t.slot / Preset.mainnet.SLOTS_PER_EPOCH + 4096 < UINT64_SIZE := by
+  have hepoch : t.slot / P.SLOTS_PER_EPOCH + 4096 < UINT64_SIZE := by
     have h64 : @LT.lt Nat _ t.slot (2 ^ 64) := hslot
     show @LT.lt Nat _ (t.slot / 32 + 4096) (2 ^ 64)
     omega
   unfold EntryEB at heffective
-  generalize hce : t.slot / Preset.mainnet.SLOTS_PER_EPOCH = current_epoch
+  generalize hce : t.slot / P.SLOTS_PER_EPOCH = current_epoch
   rw [hce] at hcurrent hepoch hgen heffective
   rw [process_epoch_fulu_parts]
   refine SameOk.bind (lhJustificationAndFinalization_sameOk _ _) (fun s1 h1 => ?_)
   replace h1 := (lhJustificationAndFinalization_sameOk _ _ s1).mp h1
   obtain ⟨_, _, _, _, hs1⟩ := process_justification_and_finalization_shape _ _ _ h1
-  have hcur1 : get_current_epoch Preset.mainnet s1 = .ok current_epoch := by
+  have hcur1 : get_current_epoch P s1 = .ok current_epoch := by
     rw [hs1]; exact hcurrent
   have hfin := process_justification_and_finalization_finalized _ t s1 current_epoch hcurrent
     hgen hinv h1
@@ -525,7 +527,7 @@ theorem process_epoch_lh_full_fulu_sameOk' (o : Oracle) (t : BeaconState) (hb : 
       s1.validators[i].exit_epoch ≤ FAR_FUTURE_EPOCH := by
     rw [hs1]; exact fun i h => hexitb _ (List.getElem_mem h)
   have hmax1 : ∀ v ∈ s1.validators,
-      v.effective_balance ≤ Preset.mainnet.MAX_EFFECTIVE_BALANCE_ELECTRA := by
+      v.effective_balance ≤ P.MAX_EFFECTIVE_BALANCE_ELECTRA := by
     rw [hs1]; exact fun v hv => (heb v hv).2
   have hbal1 : ∀ i (h : i < s1.validators.length), s1.balances.getD i 0 < 2 ^ 62 := by
     rw [hs1]; exact hbalance
@@ -553,33 +555,33 @@ theorem process_epoch_lh_full_fulu_sameOk' (o : Oracle) (t : BeaconState) (hb : 
   simp only [GENESIS_EPOCH] at hgen
   have hS64 : totalEffectiveBalance s1 < 2 ^ 64 := Nat.lt_trans hsupply (by decide)
   obtain ⟨tab, htab, htab_lo, -⟩ :=
-    get_total_active_balance_bounds Preset.mainnet s1 current_epoch hcur1 hS64
-  have hprev : get_previous_epoch Preset.mainnet s1 = .ok (current_epoch - 1) := by
+    get_total_active_balance_bounds P s1 current_epoch hcur1 hS64
+  have hprev : get_previous_epoch P s1 = .ok (current_epoch - 1) := by
     have hsat : saturating_sub current_epoch 1 = current_epoch - 1 :=
       saturating_sub_one' current_epoch
     simp only [get_previous_epoch, hcur1, ok_bind'', hsat]
     rfl
-  obtain ⟨rctx, hctx, hsrc, htgt, hhd⟩ := rewardsContextOf_bounds Preset.mainnet tab s1 hrows1
+  obtain ⟨rctx, hctx, hsrc, htgt, hhd⟩ := rewardsContextOf_bounds P tab s1 hrows1
     current_epoch (current_epoch - 1) hcur1 hprev (by epoch_omega) (by decide) hS64
     (by epoch_omega)
   obtain ⟨hprev', -, -, -, hactive, -, -⟩ := rewardsContextOf_ok _ _ _ rctx hctx
   rw [hprev] at hprev'
   have hpe : rctx.previous_epoch = current_epoch - 1 := (Except.ok.inj hprev').symm
-  have hact_eq : rctx.active_increments = tab / Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT := by
+  have hact_eq : rctx.active_increments = tab / P.EFFECTIVE_BALANCE_INCREMENT := by
     simp only [uint64Div] at hactive
     split at hactive
     · cases hactive
     · exact (Except.ok.inj hactive).symm
-  have hactivation := compute_activation_exit_epoch_of_lt Preset.mainnet current_epoch
-    (by simp only [Preset.mainnet]; epoch_omega)
+  have hactivation := compute_activation_exit_epoch_of_lt P current_epoch
+    (by simp only [P, Preset.ofVar]; epoch_omega)
   obtain ⟨adj, per, hpre⟩ := slashingsPreamble_ok tab s1.slashings hslashings htab_lo
-  have hk : max Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) /
-      Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT ≤ 1152921504 := by
-    have : max Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) <
+  have hk : max P.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) /
+      P.EFFECTIVE_BALANCE_INCREMENT ≤ 1152921504 := by
+    have : max P.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) <
         2 ^ 60 := Nat.max_lt.mpr ⟨by decide, hsupply⟩
-    have hINC : Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT = 1000000000 := rfl
+    have hINC : P.EFFECTIVE_BALANCE_INCREMENT = 1000000000 := rfl
     obtain ⟨(m : Nat), hm⟩ : ∃ m : Nat,
-        max Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) = m :=
+        max P.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) = m :=
       ⟨_, rfl⟩
     rw [hm] at this ⊢
     rw [hINC]
@@ -589,10 +591,10 @@ theorem process_epoch_lh_full_fulu_sameOk' (o : Oracle) (t : BeaconState) (hb : 
   have hact1 : 1 ≤ rctx.active_increments := by
     rw [hact_eq]
     exact (Nat.le_div_iff_mul_le (by decide)).mpr (by simpa using htab_lo)
-  have hle : ∀ x, x ≤ max Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) /
-      Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT →
-      x ≤ max Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) /
-        Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT * rctx.active_increments :=
+  have hle : ∀ x, x ≤ max P.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) /
+      P.EFFECTIVE_BALANCE_INCREMENT →
+      x ≤ max P.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) /
+        P.EFFECTIVE_BALANCE_INCREMENT * rctx.active_increments :=
     fun x hx => Nat.le_trans hx (Nat.le_mul_of_pos_right _ hact1)
   have hcfar : current_epoch < FAR_FUTURE_EPOCH := by
     have h64 : @LT.lt Nat _ (current_epoch + 4096) (2 ^ 64) := hepoch
@@ -602,7 +604,7 @@ theorem process_epoch_lh_full_fulu_sameOk' (o : Oracle) (t : BeaconState) (hb : 
     have h64 : @LT.lt Nat _ (current_epoch + 4096) (2 ^ 64) := hepoch
     show @LT.lt Nat _ (current_epoch + 1) (2 ^ 64 - 1)
     omega
-  have h4096 : Preset.mainnet.EPOCHS_PER_SLASHINGS_VECTOR / 2 = 4096 := rfl
+  have h4096 : P.EPOCHS_PER_SLASHINGS_VECTOR / 2 = 4096 := rfl
   -- The four spec steps equal the first Lighthouse pass.
   have hfour := SameOk.trans (specFourStepsFulu_sameOk s1 tab htab hrows1
     current_epoch _ hcur1 hactivation hcfar)

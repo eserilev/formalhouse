@@ -1,4 +1,5 @@
 import EpochProofs.Trusted.EpochTail
+import EpochProofs.Spec.PresetCfg
 import EpochProofs.Equiv.DepositWrites
 import EpochProofs.Equiv.BuilderPendingPayments
 import EpochProofs.Equiv.EpochCommittees
@@ -108,7 +109,7 @@ theorem push_withdrawals_loop_spec {S E : Type} (inst : LhPaymentWrites S E)
 /-- `apply_builder_pending_payments` does what `lighthouseBuilderPendingPayments` models by hand,
 under the trusted `PaymentWritesContract`. So `builder_pending_payments_equiv` now holds for the
 Lighthouse code, not for a hand model. -/
-theorem apply_builder_pending_payments_spec {S E : Type} (inst : LhPaymentWrites S E)
+theorem apply_builder_pending_payments_spec [EpochProofs.Spec.PresetCfg] {S E : Type} (inst : LhPaymentWrites S E)
     (wview : S → List LhWithdrawal) (pview : S → List LhPayment)
     (hc : PaymentWritesContract inst wview pview) (s : S) (tab spe64 : U64) (spe : Usize)
     (hspe : spe.val ≤ (pview s).length) (pslice : Slice LhPayment) (hps : pslice.val = pview s) :
@@ -120,7 +121,7 @@ theorem apply_builder_pending_payments_spec {S E : Type} (inst : LhPaymentWrites
             ok (.Err e)
         | (.Err (.State _), _) => False ⦄ := by
   obtain ⟨q, hq, -⟩ := spec_imp_exists (quorum_equiv
-    { Spec.Preset.mainnet with SLOTS_PER_EPOCH := spe64.val } tab spe64 rfl)
+    { Spec.P with SLOTS_PER_EPOCH := spe64.val } tab spe64 rfl)
   unfold per_epoch_processing.list_writes.apply_builder_pending_payments
     lighthouseBuilderPendingPayments
   rw [hq, bind_tc_ok]

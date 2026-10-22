@@ -1,4 +1,5 @@
 import EpochProofs.Sanity.Invariants.LighthouseOrder
+import EpochProofs.Spec.PresetCfg
 import EpochProofs.Generated
 
 /-!
@@ -45,7 +46,7 @@ abbrev LhDepositWrites (S D E : Type) := per_epoch_processing.deposit_writes.Dep
 /-- Trusted: what the `DepositWrites` implementation in `single_pass.rs` does. `view` gives the
 spec state that an implementation value holds, `absDep` the spec deposit of a deposit, and
 `postOf` the postponed deposits that the value holds. -/
-structure DepositWritesContract {S D E : Type} (inst : LhDepositWrites S D E) (o : Spec.Oracle)
+structure DepositWritesContract [EpochProofs.Spec.PresetCfg] {S D E : Type} (inst : LhDepositWrites S D E) (o : Spec.Oracle)
     (view : S → Spec.BeaconState) (absDep : D → Spec.PendingDeposit)
     (postOf : S → List Spec.PendingDeposit) : Prop where
   write_queue : ∀ (s : S) (next : Usize) (dbtc : U64),
@@ -66,14 +67,14 @@ structure DepositWritesContract {S D E : Type} (inst : LhDepositWrites S D E) (o
     ∃ s', inst.set_balance s i b = ok (.Ok (), s') ∧
       view s' = { view s with balances := (view s).balances.set i.val b.val }
   is_valid_signature : ∀ (s : S) (d : D), inst.is_valid_signature s d =
-    ok (Spec.is_valid_deposit_signature Spec.Preset.mainnet o (absDep d).pubkey
+    ok (Spec.is_valid_deposit_signature Spec.P o (absDep d).pubkey
       (absDep d).withdrawal_credentials (absDep d).amount (absDep d).signature)
   add_validator : ∀ (s : S) (d : D),
-    (∀ t', Spec.add_validator_to_registry Spec.Preset.mainnet (view s) (absDep d).pubkey
+    (∀ t', Spec.add_validator_to_registry Spec.P (view s) (absDep d).pubkey
         (absDep d).withdrawal_credentials (absDep d).amount = .ok t' →
       ∃ (i : Usize) (s' : S), inst.add_validator s d = ok (.Ok i, s') ∧ view s' = t' ∧
         i.val = (view s).validators.length) ∧
-    (∀ e, Spec.add_validator_to_registry Spec.Preset.mainnet (view s) (absDep d).pubkey
+    (∀ e, Spec.add_validator_to_registry Spec.P (view s) (absDep d).pubkey
         (absDep d).withdrawal_credentials (absDep d).amount = .error e →
       ∃ (e' : E) (s' : S), inst.add_validator s d = ok (.Err e', s'))
   update_effective_balance : ∀ (s : S) (i : Usize),

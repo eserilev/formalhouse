@@ -1,4 +1,5 @@
 import EpochProofs.Sanity.Invariants.Totality
+import EpochProofs.Spec.PresetCfg
 
 /-!
 # The per-validator epoch steps and the pending deposits succeed
@@ -71,9 +72,9 @@ theorem inactivityScoreStep_total (p : Preset) (participating in_leak : Bool) (s
     · exact Nat.le_trans h1 h2
     · exact Nat.le_trans (trw_sub_le _ _) (Nat.le_trans h1 h2)
 
-theorem inactivityRowStep_total (previous_epoch : Epoch) (in_leak : Bool) (r : Row)
+theorem inactivityRowStep_total [PresetCfg] (previous_epoch : Epoch) (in_leak : Bool) (r : Row)
     (hprev : previous_epoch + 1 < 2 ^ 64) (hscore : r.inactivity_score + 4 < 2 ^ 64) :
-    ∃ x, inactivityRowStep Preset.mainnet previous_epoch in_leak () r = .ok ((), x) ∧
+    ∃ x, inactivityRowStep P previous_epoch in_leak () r = .ok ((), x) ∧
       x = { r with inactivity_score := x.inactivity_score } ∧
       x.inactivity_score ≤ r.inactivity_score + 4 := by
   unfold inactivityRowStep
@@ -81,7 +82,7 @@ theorem inactivityRowStep_total (previous_epoch : Epoch) (in_leak : Bool) (r : R
   rw [hb, trw_bind_ok]
   cases b
   · exact ⟨r, rfl, rfl, Nat.le_add_right _ _⟩
-  · obtain ⟨x, hx, hle⟩ := inactivityScoreStep_total Preset.mainnet (rowHitsTarget previous_epoch r)
+  · obtain ⟨x, hx, hle⟩ := inactivityScoreStep_total P (rowHitsTarget previous_epoch r)
       in_leak r.inactivity_score hscore
     simp only [if_true]
     rw [hx, trw_bind_ok]
@@ -106,8 +107,8 @@ theorem flagDelta_total (base w : Nat) (part head leak : Bool) (inc act : Nat)
       exact ⟨_, rfl⟩
     · exact ⟨_, rfl⟩
 
-theorem inactivityDelta_total (eb score : Nat) (target : Bool) (h : eb * score < 2 ^ 64) :
-    ∃ x, inactivityDelta Preset.mainnet eb score target = .ok x := by
+theorem inactivityDelta_total [PresetCfg] (eb score : Nat) (target : Bool) (h : eb * score < 2 ^ 64) :
+    ∃ x, inactivityDelta P eb score target = .ok x := by
   unfold inactivityDelta
   split
   · rw [tot_mul h, trw_bind_ok, tot_mul (by decide), trw_bind_ok, tot_div (by decide)]
@@ -116,9 +117,9 @@ theorem inactivityDelta_total (eb score : Nat) (target : Bool) (h : eb * score <
 
 /-- On mainnet, with a total active balance of at least one increment, the base reward of a
 validator with at most `MAX_EFFECTIVE_BALANCE_ELECTRA` is at most `2048 * 2023907`. -/
-theorem rewardsBaseReward_small (tab : Gwei) (v : Validator) (htab : 1000000000 ≤ tab)
+theorem rewardsBaseReward_small [PresetCfg] (tab : Gwei) (v : Validator) (htab : 1000000000 ≤ tab)
     (hmax : v.effective_balance ≤ 2048000000000) :
-    ∃ b, rewardsBaseReward Preset.mainnet tab v = .ok b ∧ b ≤ 4144961536 := by
+    ∃ b, rewardsBaseReward P tab v = .ok b ∧ b ≤ 4144961536 := by
   have hroot : 31622 ≤ integer_squareroot tab :=
     le_integer_squareroot _ _ (Nat.le_trans (by decide) htab)
   obtain ⟨(r : Nat), hr⟩ : ∃ r : Nat, integer_squareroot tab = r := ⟨_, rfl⟩
@@ -134,7 +135,7 @@ theorem rewardsBaseReward_small (tab : Gwei) (v : Validator) (htab : 1000000000 
   have hm : (1000000000 : Nat) * 64 < UINT64_SIZE := by decide
   have hlt : v.effective_balance / 1000000000 * (1000000000 * 64 / r) < UINT64_SIZE :=
     Nat.lt_of_le_of_lt hprod (by decide)
-  simp only [rewardsBaseReward, get_base_reward_per_increment, Preset.mainnet, uint64Div,
+  simp only [rewardsBaseReward, get_base_reward_per_increment, P, Preset.ofVar, uint64Div,
     uint64Mul, hr, hr0, hm, hlt, bind, Except.bind, pure, Except.pure, if_true, if_false,
     show (1000000000 : Nat) ≠ 0 from by decide]
 
@@ -151,10 +152,10 @@ structure RewardsCtxOk (ctx : RewardsContext) : Prop where
   rhead : ctx.head_increments ≤ 1024 * ctx.active_increments
   prev : ctx.previous_epoch + 1 < 2 ^ 64
 
-theorem rewardsRowDeltas_total (ctx : RewardsContext) (hc : RewardsCtxOk ctx) (r : Row)
+theorem rewardsRowDeltas_total [PresetCfg] (ctx : RewardsContext) (hc : RewardsCtxOk ctx) (r : Row)
     (hmax : r.validator.effective_balance ≤ 2048000000000)
     (hscore : r.inactivity_score < 2 ^ 23) :
-    ∃ ds, rewardsRowDeltas Preset.mainnet ctx r = .ok ds := by
+    ∃ ds, rewardsRowDeltas P ctx r = .ok ds := by
   unfold rewardsRowDeltas
   have hel : ∃ b, rewardsEligible ctx.previous_epoch r.validator = .ok b := by
     unfold rewardsEligible
@@ -228,16 +229,16 @@ theorem rewardsSequential_total (b : Nat) (ds : List (Nat × Nat))
       exact Nat.le_trans hle' (Nat.le_trans (Nat.add_le_add_right hle _)
         (Nat.le_of_eq (Nat.add_assoc _ _ _)))
 
-theorem rewardsRowStep_total (ctx : RewardsContext) (hc : RewardsCtxOk ctx) (r : Row)
+theorem rewardsRowStep_total [PresetCfg] (ctx : RewardsContext) (hc : RewardsCtxOk ctx) (r : Row)
     (hmax : r.validator.effective_balance ≤ 2048000000000)
     (hscore : r.inactivity_score < 2 ^ 23)
     (hbal : r.balance + 4 * r.validator.effective_balance < 2 ^ 64) :
-    ∃ x : Row, rewardsRowStep Preset.mainnet ctx () r = .ok ((), x) ∧
+    ∃ x : Row, rewardsRowStep P ctx () r = .ok ((), x) ∧
       x = { r with balance := x.balance } ∧
       @LE.le Nat _ x.balance (r.balance + 4 * r.validator.effective_balance) := by
   obtain ⟨ds, hds⟩ := rewardsRowDeltas_total ctx hc r hmax hscore
   obtain ⟨st, tt, ht, i, base, rfl, hbase, -, hrew, -⟩ :=
-    rewardsRowDeltas_bounds Preset.mainnet ctx r ds hds
+    rewardsRowDeltas_bounds P ctx r ds hds
   have h256 : 256 * base ≤ r.validator.effective_balance := by
     rcases hbase with rfl | hb
     · exact Nat.zero_le _
@@ -262,15 +263,15 @@ theorem rewardsRowStep_total (ctx : RewardsContext) (hc : RewardsCtxOk ctx) (r :
 
 /-! ## Registry -/
 
-theorem exit_churn_total (tab : Gwei) (htab : tab < 2 ^ 60) :
-    ∃ c : Nat, get_exit_churn_limit Preset.mainnet tab = .ok c ∧ 128000000000 ≤ c ∧ c < 2 ^ 60 := by
+theorem exit_churn_total [PresetCfg] (tab : Gwei) (htab : tab < 2 ^ 60) :
+    ∃ c : Nat, get_exit_churn_limit P tab = .ok c ∧ 128000000000 ≤ c ∧ c < 2 ^ 60 := by
   unfold get_exit_churn_limit
   rw [tot_div (by decide), trw_bind_ok]
   dsimp only
   rw [tot_mod (by decide), trw_bind_ok]
-  have hm : Preset.mainnet.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA = 128000000000 := rfl
-  have hq : Preset.mainnet.CHURN_LIMIT_QUOTIENT_GLOAS = 32768 := rfl
-  have hi : Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT = 1000000000 := rfl
+  have hm : P.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA = 128000000000 := rfl
+  have hq : P.CHURN_LIMIT_QUOTIENT_GLOAS = 32768 := rfl
+  have hi : P.EFFECTIVE_BALANCE_INCREMENT = 1000000000 := rfl
   rw [hm, hq, hi]
   obtain ⟨(x : Nat), hx⟩ : ∃ x : Nat, max 128000000000 (tab / 32768) = x := ⟨_, rfl⟩
   have hx1 : 128000000000 ≤ x := by rw [← hx]; exact Nat.le_max_left _ _
@@ -281,16 +282,16 @@ theorem exit_churn_total (tab : Gwei) (htab : tab < 2 ^ 60) :
   rw [hx, tot_sub (Nat.mod_le _ _)]
   refine ⟨_, rfl, ?_, ?_⟩ <;> omega
 
-theorem exitChurnStep_total (tab : Gwei) (cur : Nat) (eb E B c : Nat)
-    (hc : get_exit_churn_limit Preset.mainnet tab = .ok c) (hc1 : 128000000000 ≤ c)
+theorem exitChurnStep_total [PresetCfg] (tab : Gwei) (cur : Nat) (eb E B c : Nat)
+    (hc : get_exit_churn_limit P tab = .ok c) (hc1 : 128000000000 ≤ c)
     (hc2 : c < 2 ^ 60) (hcur : cur + 5 < 2 ^ 62) (heb : eb ≤ 16000000000)
     (hE : E < 2 ^ 63) (hB : B < 2 ^ 62) :
-    ∃ e E' B' : Nat, exitChurnStep Preset.mainnet tab cur eb E B = .ok (e, E', B') ∧
+    ∃ e E' B' : Nat, exitChurnStep P tab cur eb E B = .ok (e, E', B') ∧
       e = E' ∧ E' ≤ max E (cur + 5) + 1 ∧ B' ≤ max B c := by
-  have hact : compute_activation_exit_epoch Preset.mainnet cur = .ok (cur + 5) := by
+  have hact : compute_activation_exit_epoch P cur = .ok (cur + 5) := by
     have h1 : cur + 1 < 2 ^ 64 := by omega
     have h2 : cur + 1 + 4 < 2 ^ 64 := by omega
-    simp [compute_activation_exit_epoch, tot_add h1, tot_add h2, Preset.mainnet, bind,
+    simp [compute_activation_exit_epoch, tot_add h1, tot_add h2, P, Preset.ofVar, bind,
       Except.bind]
   have hEmax : max E (cur + 5) + 1 < 2 ^ 64 := by
     have := Nat.max_lt.mpr ⟨hE, show cur + 5 < 2 ^ 63 by omega⟩
@@ -326,12 +327,12 @@ theorem exitChurnStep_total (tab : Gwei) (cur : Nat) (eb E B c : Nat)
     rw [tot_sub hle', trw_bind_ok]
     exact ⟨_, _, _, rfl, rfl, by omega, by omega⟩
 
-theorem registryRowStep_total (tab : Gwei) (cur fin act c : Nat)
-    (hc : get_exit_churn_limit Preset.mainnet tab = .ok c) (hc1 : 128000000000 ≤ c)
+theorem registryRowStep_total [PresetCfg] (tab : Gwei) (cur fin act c : Nat)
+    (hc : get_exit_churn_limit P tab = .ok c) (hc1 : 128000000000 ≤ c)
     (hc2 : c < 2 ^ 60) (hcur : cur + 5 < 2 ^ 62) (E B : Nat) (hE : E < 2 ^ 63)
     (hB : B < 2 ^ 62) (r : Row) :
     ∃ (E' B' : Nat) (f : RegistryFields),
-      registryRowStep Preset.mainnet tab cur fin act (E, B) r =
+      registryRowStep P tab cur fin act (E, B) r =
         .ok ((E', B'), { r with validator := r.validator.withRegistryFields f }) ∧
       E' ≤ max E (cur + 5) + 1 ∧ B' ≤ max B c := by
   have hcur1 : cur + 1 < 2 ^ 64 := by omega
@@ -358,7 +359,7 @@ theorem registryRowStep_total (tab : Gwei) (cur fin act c : Nat)
           omega
         simp only [registryFieldsOf] at hx ⊢
         rw [hx, trw_bind_ok]
-        have hd : Preset.mainnet.MIN_VALIDATOR_WITHDRAWABILITY_DELAY = 256 := rfl
+        have hd : P.MIN_VALIDATOR_WITHDRAWABILITY_DELAY = 256 := rfl
         simp only [hd, pure_bind]
         rw [tot_add hw, trw_bind_ok]
         try simp only [pure_bind]
@@ -371,9 +372,9 @@ theorem registryRowStep_total (tab : Gwei) (cur fin act c : Nat)
 
 /-! ## Slashings -/
 
-theorem slashingsPreamble_per (tab : Gwei) (slashings : List Gwei) (adj per : Gwei)
+theorem slashingsPreamble_per [PresetCfg] (tab : Gwei) (slashings : List Gwei) (adj per : Gwei)
     (htab : 1000000000 ≤ tab)
-    (h : slashingsPreamble Preset.mainnet tab slashings = .ok (adj, per)) :
+    (h : slashingsPreamble P tab slashings = .ok (adj, per)) :
     @LE.le Nat _ per 2000000000 := by
   unfold slashingsPreamble at h
   obtain ⟨(sm : Nat), -, h⟩ := except_bind_ok h
@@ -384,7 +385,7 @@ theorem slashingsPreamble_per (tab : Gwei) (slashings : List Gwei) (adj per : Gw
   obtain ⟨rfl, rfl⟩ := h
   obtain ⟨rfl, -⟩ := uint64Div_ok_eq hq
   obtain ⟨rfl, -⟩ := uint64Div_ok_eq hd
-  have hi : Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT = 1000000000 := rfl
+  have hi : P.EFFECTIVE_BALANCE_INCREMENT = 1000000000 := rfl
   rw [hi]
   have htab' : @LE.le Nat _ 1000000000 tab := htab
   obtain ⟨(t : Nat), ht⟩ : ∃ t : Nat, tab = t := ⟨_, rfl⟩
@@ -395,16 +396,16 @@ theorem slashingsPreamble_per (tab : Gwei) (slashings : List Gwei) (adj per : Gw
   apply (Nat.div_le_iff_le_mul_add_pred (by omega)).mpr
   omega
 
-theorem slashingsRowStep_total (target per : Nat) (hper : per ≤ 2000000000) (r : Row)
+theorem slashingsRowStep_total [PresetCfg] (target per : Nat) (hper : per ≤ 2000000000) (r : Row)
     (hmax : r.validator.effective_balance ≤ 2048000000000) :
-    ∃ x : Row, slashingsRowStep Preset.mainnet target per () r = .ok ((), x) ∧
+    ∃ x : Row, slashingsRowStep P target per () r = .ok ((), x) ∧
       x = { r with balance := x.balance } ∧ @LE.le Nat _ x.balance r.balance := by
   unfold slashingsRowStep slashingBalanceStep
   split
   · rw [tot_div (by decide), trw_bind_ok]
-    have he : r.validator.effective_balance / Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT ≤ 2048 :=
+    have he : r.validator.effective_balance / P.EFFECTIVE_BALANCE_INCREMENT ≤ 2048 :=
       Nat.le_trans (Nat.div_le_div_right hmax) (by decide)
-    have hm : per * (r.validator.effective_balance / Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT) <
+    have hm : per * (r.validator.effective_balance / P.EFFECTIVE_BALANCE_INCREMENT) <
         2 ^ 64 := Nat.lt_of_le_of_lt (Nat.mul_le_mul hper he) (by decide)
     rw [tot_mul hm, trw_bind_ok, pure_bind]
     exact ⟨_, rfl, rfl, trw_sub_le _ _⟩
@@ -419,10 +420,10 @@ def RowRel (P : Row → Row → Prop) : List Row → List Row → Prop
   | x :: xs, y :: ys => P x y ∧ RowRel P xs ys
   | _, _ => False
 
-theorem RowRel.cons {P : Row → Row → Prop} {x y : Row} {xs ys : List Row}
+theorem RowRel.cons [PresetCfg] {P : Row → Row → Prop} {x y : Row} {xs ys : List Row}
     (h : RowRel P (x :: xs) (y :: ys)) : P x y ∧ RowRel P xs ys := h
 
-theorem passM_rel {A : Type} (f : A → Row → SpecM (A × Row)) (I : Nat → A → Prop)
+theorem passM_rel [PresetCfg] {A : Type} (f : A → Row → SpecM (A × Row)) (I : Nat → A → Prop)
     (P : Row → Row → Prop) (Q : Row → Prop)
     (hf : ∀ r j a, Q r → I j a → ∃ a' r', f a r = .ok (a', r') ∧ I (j + 1) a' ∧ P r r') :
     ∀ (rows : List Row) (k : Nat) (a : A), I k a → (∀ r ∈ rows, Q r) →
@@ -440,7 +441,7 @@ theorem passM_rel {A : Type} (f : A → Row → SpecM (A × Row)) (I : Nat → A
       have : k + 1 + rs.length = k + (rs.length + 1) := by omega
       rw [← this]; exact hI2
 
-theorem RowRel.length {P : Row → Row → Prop} :
+theorem RowRel.length [PresetCfg] {P : Row → Row → Prop} :
     ∀ {xs ys : List Row}, RowRel P xs ys → ys.length = xs.length
   | [], [], _ => rfl
   | _ :: _, _ :: _, h => by
@@ -449,7 +450,7 @@ theorem RowRel.length {P : Row → Row → Prop} :
   | [], _ :: _, h => h.elim
   | _ :: _, [], h => h.elim
 
-theorem RowRel.map_eq {P : Row → Row → Prop} {β : Type} (g : Row → β)
+theorem RowRel.map_eq [PresetCfg] {P : Row → Row → Prop} {β : Type} (g : Row → β)
     (hg : ∀ a b, P a b → g b = g a) :
     ∀ {xs ys : List Row}, RowRel P xs ys → ys.map g = xs.map g
   | [], [], _ => rfl
@@ -459,7 +460,7 @@ theorem RowRel.map_eq {P : Row → Row → Prop} {β : Type} (g : Row → β)
   | [], _ :: _, h => h.elim
   | _ :: _, [], h => h.elim
 
-theorem RowRel.sum_le {P : Row → Row → Prop} (g h : Row → Nat)
+theorem RowRel.sum_le [PresetCfg] {P : Row → Row → Prop} (g h : Row → Nat)
     (hg : ∀ a b, P a b → g b ≤ g a + h a) :
     ∀ {xs ys : List Row}, RowRel P xs ys → (ys.map g).sum ≤ (xs.map g).sum + (xs.map h).sum
   | [], [], _ => by simp
@@ -472,7 +473,7 @@ theorem RowRel.sum_le {P : Row → Row → Prop} (g h : Row → Nat)
   | [], _ :: _, hr => hr.elim
   | _ :: _, [], hr => hr.elim
 
-theorem RowRel.forall {P : Row → Row → Prop} (Q Q' : Row → Prop)
+theorem RowRel.forall [PresetCfg] {P : Row → Row → Prop} (Q Q' : Row → Prop)
     (hq : ∀ a b, Q a → P a b → Q' b) :
     ∀ {xs ys : List Row}, RowRel P xs ys → (∀ r ∈ xs, Q r) → ∀ r ∈ ys, Q' r
   | [], [], _, _ => by simp
@@ -487,7 +488,7 @@ theorem RowRel.forall {P : Row → Row → Prop} (Q Q' : Row → Prop)
   | _ :: _, [], hr, _ => hr.elim
 
 /-- `passM_rel` where the step may use a bound `K` on the number of rows done. -/
-theorem passM_rel_bounded {A : Type} (f : A → Row → SpecM (A × Row)) (I : Nat → A → Prop)
+theorem passM_rel_bounded [PresetCfg] {A : Type} (f : A → Row → SpecM (A × Row)) (I : Nat → A → Prop)
     (P : Row → Row → Prop) (K : Nat)
     (hf : ∀ r j a, I j a → j < K → ∃ a' r', f a r = .ok (a', r') ∧ I (j + 1) a' ∧ P r r') :
     ∀ (rows : List Row) (k : Nat) (a : A), I k a → k + rows.length ≤ K →
@@ -522,11 +523,11 @@ def PReg (a b : Row) : Prop :=
 def PSlash (a b : Row) : Prop :=
   b = { a with balance := b.balance } ∧ @LE.le Nat _ b.balance a.balance
 
-theorem inactivity_pass_total (rows : List Row) (prev : Epoch) (in_leak : Bool)
+theorem inactivity_pass_total [PresetCfg] (rows : List Row) (prev : Epoch) (in_leak : Bool)
     (hprev : prev + 1 < 2 ^ 64) (hs : ∀ r ∈ rows, @LT.lt Nat _ r.inactivity_score (2 ^ 22)) :
-    ∃ ys, passM (inactivityRowStep Preset.mainnet prev in_leak) () rows = .ok ((), ys) ∧
+    ∃ ys, passM (inactivityRowStep P prev in_leak) () rows = .ok ((), ys) ∧
       RowRel PInact rows ys := by
-  obtain ⟨u, ys, h, -, hr⟩ := passM_rel (inactivityRowStep Preset.mainnet prev in_leak)
+  obtain ⟨u, ys, h, -, hr⟩ := passM_rel (inactivityRowStep P prev in_leak)
     (fun _ _ => True) PInact (fun r => @LT.lt Nat _ r.inactivity_score (2 ^ 22))
     (fun r _ _ hq _ => by
       obtain ⟨x, hx, he, hle⟩ := inactivityRowStep_total prev in_leak r hprev
@@ -534,13 +535,13 @@ theorem inactivity_pass_total (rows : List Row) (prev : Epoch) (in_leak : Bool)
       exact ⟨(), x, hx, trivial, he, hle⟩) rows 0 () trivial hs
   exact ⟨ys, h, hr⟩
 
-theorem rewards_pass_total (rows : List Row) (ctx : RewardsContext) (hc : RewardsCtxOk ctx)
+theorem rewards_pass_total [PresetCfg] (rows : List Row) (ctx : RewardsContext) (hc : RewardsCtxOk ctx)
     (hs : ∀ r ∈ rows, r.validator.effective_balance ≤ 2048000000000 ∧
       @LT.lt Nat _ r.inactivity_score (2 ^ 23) ∧
       r.balance + 4 * r.validator.effective_balance < 2 ^ 64) :
-    ∃ ys, passM (rewardsRowStep Preset.mainnet ctx) () rows = .ok ((), ys) ∧
+    ∃ ys, passM (rewardsRowStep P ctx) () rows = .ok ((), ys) ∧
       RowRel PBal rows ys := by
-  obtain ⟨u, ys, h, -, hr⟩ := passM_rel (rewardsRowStep Preset.mainnet ctx)
+  obtain ⟨u, ys, h, -, hr⟩ := passM_rel (rewardsRowStep P ctx)
     (fun _ _ => True) PBal (fun r => r.validator.effective_balance ≤ 2048000000000 ∧
       @LT.lt Nat _ r.inactivity_score (2 ^ 23) ∧
       r.balance + 4 * r.validator.effective_balance < 2 ^ 64)
@@ -549,14 +550,14 @@ theorem rewards_pass_total (rows : List Row) (ctx : RewardsContext) (hc : Reward
       exact ⟨(), x, hx, trivial, he, hle⟩) rows 0 () trivial hs
   exact ⟨ys, h, hr⟩
 
-theorem registry_pass_total (rows : List Row) (tab : Gwei) (cur fin act c : Nat)
-    (hc : get_exit_churn_limit Preset.mainnet tab = .ok c) (hc1 : 128000000000 ≤ c)
+theorem registry_pass_total [PresetCfg] (rows : List Row) (tab : Gwei) (cur fin act c : Nat)
+    (hc : get_exit_churn_limit P tab = .ok c) (hc1 : 128000000000 ≤ c)
     (hc2 : c < 2 ^ 60) (hcur : cur + 5 < 2 ^ 62) (E B : Nat) (hE : E < 2 ^ 62)
     (hB : B < 2 ^ 61) (hn : rows.length < 2 ^ 40) :
-    ∃ E' B' ys, passM (registryRowStep Preset.mainnet tab cur fin act) (E, B) rows =
+    ∃ E' B' ys, passM (registryRowStep P tab cur fin act) (E, B) rows =
       .ok ((E', B'), ys) ∧ RowRel PReg rows ys := by
   obtain ⟨⟨E', B'⟩, ys, h, -, hr⟩ := passM_rel_bounded
-    (registryRowStep Preset.mainnet tab cur fin act)
+    (registryRowStep P tab cur fin act)
     (fun j a => @LE.le Nat _ a.1 (max E (cur + 5) + j) ∧ @LE.le Nat _ a.2 (max B c)) PReg
     rows.length
     (fun r j a hI hj => by
@@ -585,18 +586,18 @@ theorem registry_pass_total (rows : List Row) (tab : Gwei) (cur fin act c : Nat)
     rows 0 (E, B) ⟨Nat.le_max_left _ _, Nat.le_max_left _ _⟩ (by omega)
   exact ⟨E', B', ys, h, hr⟩
 
-theorem slashings_pass_total (rows : List Row) (target per : Nat) (hper : per ≤ 2000000000)
+theorem slashings_pass_total [PresetCfg] (rows : List Row) (target per : Nat) (hper : per ≤ 2000000000)
     (hs : ∀ r ∈ rows, r.validator.effective_balance ≤ 2048000000000) :
-    ∃ ys, passM (slashingsRowStep Preset.mainnet target per) () rows = .ok ((), ys) ∧
+    ∃ ys, passM (slashingsRowStep P target per) () rows = .ok ((), ys) ∧
       RowRel PSlash rows ys := by
-  obtain ⟨u, ys, h, -, hr⟩ := passM_rel (slashingsRowStep Preset.mainnet target per)
+  obtain ⟨u, ys, h, -, hr⟩ := passM_rel (slashingsRowStep P target per)
     (fun _ _ => True) PSlash (fun r => r.validator.effective_balance ≤ 2048000000000)
     (fun r _ _ hq _ => by
       obtain ⟨x, hx, he, hle⟩ := slashingsRowStep_total target per hper r hq
       exact ⟨(), x, hx, trivial, he, hle⟩) rows 0 () trivial hs
   exact ⟨ys, h, hr⟩
 
-theorem RowRel.comp {P Q : Row → Row → Prop} :
+theorem RowRel.comp [PresetCfg] {P Q : Row → Row → Prop} :
     ∀ {xs ys zs : List Row}, RowRel P xs ys → RowRel Q ys zs →
       RowRel (fun a c => ∃ b, P a b ∧ Q b c) xs zs
   | [], [], [], _, _ => trivial
@@ -631,18 +632,18 @@ def RegSlashOut (s3 s5 : BeaconState) : Prop :=
 
 /-- The registry update at the churn total `rtab`, then the slashings at `tab`. Fulu runs the
 registry update at a different churn total than the slashings. -/
-theorem regSlash_total_g (s3 : BeaconState) (tab rtab : Gwei) (hrows : RowsOk s3)
+theorem regSlash_total_g [PresetCfg] (s3 : BeaconState) (tab rtab : Gwei) (hrows : RowsOk s3)
     (hslot : s3.slot + 8192 < 2 ^ 64) (hrtab : rtab < 2 ^ 60) (htab_lo : 1000000000 ≤ tab)
     (heb : ∀ v ∈ s3.validators, v.effective_balance ≤ 2048000000000)
     (hn : s3.validators.length < 2 ^ 40) (hE : s3.earliest_exit_epoch < 2 ^ 62)
     (hB : s3.exit_balance_to_consume < 2 ^ 61) (hsl : s3.slashings.sum * 3 < 2 ^ 64) :
     OkWith (do
-      let s4 ← process_registry_updates Preset.mainnet rtab s3
-      process_slashings Preset.mainnet tab s4) (RegSlashOut s3) := by
+      let s4 ← process_registry_updates P rtab s3
+      process_slashings P tab s4) (RegSlashOut s3) := by
   have hcur := tot_current_epoch s3
   have hslot' : @LT.lt Nat _ (s3.slot + 8192) (2 ^ 64) := hslot
   have he5 : @LT.lt Nat _ (s3.slot / 32 + 5) (2 ^ 62) := by omega
-  have hact := compute_activation_exit_epoch_of_lt Preset.mainnet (s3.slot / 32)
+  have hact := compute_activation_exit_epoch_of_lt P (s3.slot / 32)
     (by show @LT.lt Nat _ (s3.slot / 32 + 1 + 4) (2 ^ 64); omega)
   obtain ⟨c, hc, hc1, hc2⟩ := exit_churn_total rtab hrtab
   obtain ⟨E', B', ys4, hp4, hr4⟩ := registry_pass_total (rowsOf s3) rtab (s3.slot / 32)
@@ -650,7 +651,7 @@ theorem regSlash_total_g (s3 : BeaconState) (tab rtab : Gwei) (hrows : RowsOk s3
     s3.exit_balance_to_consume hE hB (by rw [rowsOf_length]; exact hn)
   let s4 : BeaconState :=
     { s3.withRows ys4 with earliest_exit_epoch := E', exit_balance_to_consume := B' }
-  have hreg := (process_registry_updates_rows Preset.mainnet rtab s3 _ _ hrows hcur hact s4).mpr
+  have hreg := (process_registry_updates_rows P rtab s3 _ _ hrows hcur hact s4).mpr
     (by rw [hp4]; rfl)
   refine OkWith.bind (OkWith.of_eq hreg rfl) (fun s4' hs4 => ?_)
   subst hs4
@@ -672,21 +673,21 @@ theorem regSlash_total_g (s3 : BeaconState) (tab rtab : Gwei) (hrows : RowsOk s3
       rw [rowsOf_getElem]
       exact heb _ (List.getElem_mem _)
   obtain ⟨ys5, hp5, hr5⟩ := slashings_pass_total ys4 (s3.slot / 32 + 4096) per hper heb4
-  have hcur4 : get_current_epoch Preset.mainnet s4 = .ok (s3.slot / 32) := tot_current_epoch s4
-  rw [process_slashings_rows Preset.mainnet tab s4 (s3.slot / 32) hcur4
+  have hcur4 : get_current_epoch P s4 = .ok (s3.slot / 32) := tot_current_epoch s4
+  rw [process_slashings_rows P tab s4 (s3.slot / 32) hcur4
     (by show @LT.lt Nat _ (s3.slot / 32 + 4096) (2 ^ 64); omega) adj per hpre hrows4, hrw4]
-  have h4096 : Preset.mainnet.EPOCHS_PER_SLASHINGS_VECTOR / 2 = 4096 := rfl
+  have h4096 : P.EPOCHS_PER_SLASHINGS_VECTOR / 2 = 4096 := rfl
   rw [h4096, hp5]
   exact OkWith.of_eq rfl ⟨ys5, E', B', rfl, RowRel.comp hr4 hr5⟩
 
-theorem regSlash_total (s3 : BeaconState) (tab : Gwei) (hrows : RowsOk s3)
+theorem regSlash_total [PresetCfg] (s3 : BeaconState) (tab : Gwei) (hrows : RowsOk s3)
     (hslot : s3.slot + 8192 < 2 ^ 64) (htab : tab < 2 ^ 60) (htab_lo : 1000000000 ≤ tab)
     (heb : ∀ v ∈ s3.validators, v.effective_balance ≤ 2048000000000)
     (hn : s3.validators.length < 2 ^ 40) (hE : s3.earliest_exit_epoch < 2 ^ 62)
     (hB : s3.exit_balance_to_consume < 2 ^ 61) (hsl : s3.slashings.sum * 3 < 2 ^ 64) :
     OkWith (do
-      let s4 ← process_registry_updates Preset.mainnet tab s3
-      process_slashings Preset.mainnet tab s4) (RegSlashOut s3) :=
+      let s4 ← process_registry_updates P tab s3
+      process_slashings P tab s4) (RegSlashOut s3) :=
   regSlash_total_g s3 tab tab hrows hslot htab htab_lo heb hn hE hB hsl
 
 /-! ## The four steps -/
@@ -704,7 +705,7 @@ deposits need. Each one is a time or supply bound; the pyspec raises without the
 - `participation`: each flag's participating increments of the previous epoch are at most
   `1024` times the active increments of the current epoch. Exits are churn limited, so the
   active balance cannot drop by that factor in one epoch unless almost nothing is staked. -/
-structure RowBounds (t : BeaconState) : Prop where
+structure RowBounds [PresetCfg] (t : BeaconState) : Prop where
   scores : ∀ x ∈ t.inactivity_scores, @LT.lt Nat _ x (2 ^ 22)
   supply : totalEffectiveBalance t < 2 ^ 57
   funds : t.balances.sum + (t.pending_deposits.map (·.amount)).sum +
@@ -712,8 +713,8 @@ structure RowBounds (t : BeaconState) : Prop where
   earliest : t.earliest_exit_epoch < 2 ^ 62
   exit_balance : t.exit_balance_to_consume < 2 ^ 61
   count : t.validators.length < 2 ^ 40
-  participation : ∀ tab, get_total_active_balance Preset.mainnet t = .ok tab →
-    ∀ f, f < 3 → ∀ x, rewardsFlagIncrements Preset.mainnet t (t.slot / 32 - 1) f = .ok x →
+  participation : ∀ tab, get_total_active_balance P t = .ok tab →
+    ∀ f, f < 3 → ∀ x, rewardsFlagIncrements P t (t.slot / 32 - 1) f = .ok x →
       @LE.le Nat _ x (1024 * (tab / 1000000000))
 
 theorem trw_sat_one (e : Nat) (h : e ≠ 0) : saturating_sub e 1 = e - 1 := by
@@ -759,9 +760,9 @@ theorem trw_sum_map_mul (l : List Row) (g : Row → Nat) (k : Nat) :
   | nil => simp
   | cons x xs ih => simp only [List.map_cons, List.sum_cons, ih, Nat.mul_add]
 
-theorem post_of_regSlash (t s1 s3 s5 : BeaconState) (hrl : t.randao_mixes.length = 65536)
+theorem post_of_regSlash [PresetCfg] (t s1 s3 s5 : BeaconState) (hrl : t.randao_mixes.length = 65536)
     (hsll : t.slashings.length = 8192)
-    (heb : EBOk Preset.mainnet t) (hcons : ConsolidationsInRange t) (hrb : RowBounds t)
+    (heb : EBOk P t) (hcons : ConsolidationsInRange t) (hrb : RowBounds t)
     (hfin0 : s1.finalized_checkpoint.epoch ≤ t.slot / 32) (h3 : S3Facts t s1 s3)
     (h5 : RegSlashOut s3 s5) : TailFrame t s5 ∧ DepFrame t s5 := by
   obtain ⟨ys, E, B, rfl, hr⟩ := h5
@@ -827,14 +828,14 @@ theorem post_of_regSlash (t s1 s3 s5 : BeaconState) (hrl : t.randao_mixes.length
   · show (ys.map (·.validator)).length = t.validators.length
     rw [List.length_map, hlt]
 
-theorem trw_inact_genesis (s : BeaconState) (h : s.slot / 32 = 0) :
-    process_inactivity_updates Preset.mainnet s = .ok s := by
+theorem trw_inact_genesis [PresetCfg] (s : BeaconState) (h : s.slot / 32 = 0) :
+    process_inactivity_updates P s = .ok s := by
   unfold process_inactivity_updates
   rw [tot_current_epoch, trw_bind_ok, h]
   rfl
 
-theorem trw_rewards_genesis (tab : Gwei) (s : BeaconState) (h : s.slot / 32 = 0) :
-    process_rewards_and_penalties Preset.mainnet tab s = .ok s := by
+theorem trw_rewards_genesis [PresetCfg] (tab : Gwei) (s : BeaconState) (h : s.slot / 32 = 0) :
+    process_rewards_and_penalties P tab s = .ok s := by
   unfold process_rewards_and_penalties
   rw [tot_current_epoch, trw_bind_ok, h]
   rfl
@@ -842,21 +843,21 @@ theorem trw_rewards_genesis (tab : Gwei) (s : BeaconState) (h : s.slot / 32 = 0)
 /-- The inactivity, rewards, registry and slashings steps after justification and
 finalization, with one total active balance `tab` and the registry update at the churn total
 `g tab`. Gloas uses `g = id`. Fulu uses `fuluTabM`. -/
-def MidCore (g : Gwei → Gwei) (t : BeaconState) : Prop :=
+def MidCore [PresetCfg] (g : Gwei → Gwei) (t : BeaconState) : Prop :=
   ∀ s1, JFShape t s1 → s1.finalized_checkpoint.epoch ≤ t.slot / 32 →
     (t.slot / 32 ≠ 0 → s1.finalized_checkpoint.epoch + 1 ≤ t.slot / 32) →
-    ∀ tab, get_total_active_balance Preset.mainnet s1 = .ok tab →
+    ∀ tab, get_total_active_balance P s1 = .ok tab →
     OkWith (do
-      let s2 ← process_inactivity_updates Preset.mainnet s1
-      let s3 ← process_rewards_and_penalties Preset.mainnet tab s2
-      let s4 ← process_registry_updates Preset.mainnet (g tab) s3
-      process_slashings Preset.mainnet tab s4) (fun s => TailFrame t s ∧ DepFrame t s)
+      let s2 ← process_inactivity_updates P s1
+      let s3 ← process_rewards_and_penalties P tab s2
+      let s4 ← process_registry_updates P (g tab) s3
+      process_slashings P tab s4) (fun s => TailFrame t s ∧ DepFrame t s)
 
 /-- On mainnet, the inactivity, rewards, registry and slashings steps succeed after
 justification and finalization, under `RowBounds`, for any churn total `g tab` below `2^60`. -/
-theorem midCore_of_rowBounds (g : Gwei → Gwei) (hg : ∀ x, x < 2 ^ 57 → g x < 2 ^ 60)
+theorem midCore_of_rowBounds [PresetCfg] (g : Gwei → Gwei) (hg : ∀ x, x < 2 ^ 57 → g x < 2 ^ 60)
     (t : BeaconState) (hrows : RowsOk t) (hslot : t.slot + 8192 < 2 ^ 64)
-    (heb : EBOk Preset.mainnet t) (hrl : t.randao_mixes.length = 65536)
+    (heb : EBOk P t) (hrl : t.randao_mixes.length = 65536)
     (hsll : t.slashings.length = 8192)
     (hcons : ConsolidationsInRange t) (hsl : t.slashings.sum * 3 < 2 ^ 64)
     (hrb : RowBounds t) : MidCore g t := by
@@ -865,18 +866,18 @@ theorem midCore_of_rowBounds (g : Gwei → Gwei) (hg : ∀ x, x < 2 ^ 57 → g x
   have hv1 : s1.validators = t.validators := by rw [hs1]
   have hrows1 : RowsOk s1 := by rw [hs1]; exact hrows
   have hslot1 : s1.slot = t.slot := by rw [hs1]
-  have htabeq : get_total_active_balance Preset.mainnet s1 =
-      get_total_active_balance Preset.mainnet t := by rw [hs1]; rfl
-  have hincq : ∀ e f, rewardsFlagIncrements Preset.mainnet s1 e f =
-      rewardsFlagIncrements Preset.mainnet t e f := by intro e f; rw [hs1]; rfl
+  have htabeq : get_total_active_balance P s1 =
+      get_total_active_balance P t := by rw [hs1]; rfl
+  have hincq : ∀ e f, rewardsFlagIncrements P s1 e f =
+      rewardsFlagIncrements P t e f := by intro e f; rw [hs1]; rfl
   have hteb1 : totalEffectiveBalance s1 = totalEffectiveBalance t := by rw [hs1]; rfl
   have hslot' : @LT.lt Nat _ (t.slot + 8192) (2 ^ 64) := hslot
   have hsup : @LT.lt Nat _ (totalEffectiveBalance t) (2 ^ 57) := hrb.supply
   have hfunds : @LT.lt Nat _ (t.balances.sum + (t.pending_deposits.map (·.amount)).sum +
       t.deposit_balance_to_consume) (2 ^ 61) := hrb.funds
-  have hcur : get_current_epoch Preset.mainnet s1 = .ok (t.slot / 32) := by
+  have hcur : get_current_epoch P s1 = .ok (t.slot / 32) := by
     rw [← hslot1]; exact tot_current_epoch s1
-  obtain ⟨tab', htab', htab_lo, htab_hi⟩ := get_total_active_balance_bounds Preset.mainnet s1
+  obtain ⟨tab', htab', htab_lo, htab_hi⟩ := get_total_active_balance_bounds P s1
     (t.slot / 32) hcur (by rw [hteb1]; exact Nat.lt_trans hsup (by decide))
   rw [htab] at htab'
   cases htab'
@@ -890,8 +891,8 @@ theorem midCore_of_rowBounds (g : Gwei → Gwei) (hg : ∀ x, x < 2 ^ 57 → g x
     fun v hv => (heb v hv).2
   -- the last two steps from a state with the facts `S3Facts`
   have hlast : ∀ s3, S3Facts t s1 s3 → OkWith (do
-      let s4 ← process_registry_updates Preset.mainnet (g tab) s3
-      process_slashings Preset.mainnet tab s4) (fun s => TailFrame t s ∧ DepFrame t s) := by
+      let s4 ← process_registry_updates P (g tab) s3
+      process_slashings P tab s4) (fun s => TailFrame t s ∧ DepFrame t s) := by
     intro s3 h3
     refine OkWith.mono (regSlash_total_g s3 tab (g tab) h3.rows (by rw [h3.slot]; exact hslot)
       (hg tab htab57) htab_lo' (by rw [h3.vals]; exact hebmax)
@@ -912,12 +913,12 @@ theorem midCore_of_rowBounds (g : Gwei → Gwei) (hg : ∀ x, x < 2 ^ 57 → g x
   · have he : t.slot / 32 ≠ 0 := hgen
     have heN : ¬ (@Eq Nat (t.slot / 32) 0) := hgen
     have hgen' : t.slot / 32 ≠ GENESIS_EPOCH := by simpa [GENESIS_EPOCH] using he
-    have hprev : get_previous_epoch Preset.mainnet s1 = .ok (t.slot / 32 - 1) := by
+    have hprev : get_previous_epoch P s1 = .ok (t.slot / 32 - 1) := by
       rw [tot_previous_epoch, hslot1, trw_sat_one _ he]
     have hfinp : @LE.le Nat _ s1.finalized_checkpoint.epoch (t.slot / 32 - 1) := by
       have h' : @LE.le Nat _ (s1.finalized_checkpoint.epoch + 1) (t.slot / 32) := hfin he
       omega
-    have hleak : ∃ b, is_in_inactivity_leak Preset.mainnet s1 = .ok b := by
+    have hleak : ∃ b, is_in_inactivity_leak P s1 = .ok b := by
       unfold is_in_inactivity_leak get_finality_delay
       rw [hprev, trw_bind_ok, tot_sub hfinp, trw_bind_ok]
       exact ⟨_, rfl⟩
@@ -932,7 +933,7 @@ theorem midCore_of_rowBounds (g : Gwei → Gwei) (hg : ∀ x, x < 2 ^ 57 → g x
       exact ⟨hebmax _ m1, hrb.scores _ m3, Nat.lt_of_le_of_lt (tot_mem_le_sum m2) hbt⟩
     obtain ⟨ys2, hp2, hr2⟩ := inactivity_pass_total (rowsOf s1) (t.slot / 32 - 1) lk
       (by show @LT.lt Nat _ (t.slot / 32 - 1 + 1) (2 ^ 64); omega) (fun r hr => (hQ1 r hr).2.1)
-    have hi := (process_inactivity_updates_rows Preset.mainnet s1 (t.slot / 32) (t.slot / 32 - 1)
+    have hi := (process_inactivity_updates_rows P s1 (t.slot / 32) (t.slot / 32 - 1)
       lk hrows1 hcur hgen' hprev hlk (s1.withRows ys2)).mpr (by rw [hp2]; rfl)
     rw [hi, trw_bind_ok]
     have hk2 : ys2.map rowKey = (rowsOf s1).map rowKey :=
@@ -946,11 +947,11 @@ theorem midCore_of_rowBounds (g : Gwei → Gwei) (hg : ∀ x, x < 2 ^ 57 → g x
     have hrows2 : RowsOk (s1.withRows ys2) := rowsOk_withRows s1 ys2 hrows1 hl2
     have hrw2 : rowsOf (s1.withRows ys2) = ys2 := rowsOf_withRows s1 ys2 hk2
     -- the rewards context
-    obtain ⟨ctx, hctx, hsrc, htgt, hhd⟩ := rewardsContextOf_bounds Preset.mainnet tab s1 hrows1
+    obtain ⟨ctx, hctx, hsrc, htgt, hhd⟩ := rewardsContextOf_bounds P tab s1 hrows1
       (t.slot / 32) (t.slot / 32 - 1) hcur hprev
       (by show @Ne Nat (t.slot / 32 - 1) (t.slot / 32); omega) (by decide)
       (by rw [hteb1]; exact Nat.lt_trans hsup (by decide)) hfinp
-    obtain ⟨hcp, hcs, hct, hch, hca, -, hctot⟩ := rewardsContextOf_ok Preset.mainnet tab s1 ctx hctx
+    obtain ⟨hcp, hcs, hct, hch, hca, -, hctot⟩ := rewardsContextOf_ok P tab s1 ctx hctx
     have hpe : ctx.previous_epoch = t.slot / 32 - 1 := by
       rw [hprev] at hcp; exact (Except.ok.inj hcp).symm
     have hact_eq : ctx.active_increments = tab / 1000000000 := by
@@ -958,15 +959,15 @@ theorem midCore_of_rowBounds (g : Gwei → Gwei) (hg : ∀ x, x < 2 ^ 57 → g x
       split at hca
       · cases hca
       · exact (Except.ok.inj hca).symm
-    have htab_t : get_total_active_balance Preset.mainnet t = .ok tab := htabeq ▸ htab
-    have hratio : ∀ f, f < 3 → ∀ x, rewardsFlagIncrements Preset.mainnet s1 ctx.previous_epoch f =
+    have htab_t : get_total_active_balance P t = .ok tab := htabeq ▸ htab
+    have hratio : ∀ f, f < 3 → ∀ x, rewardsFlagIncrements P s1 ctx.previous_epoch f =
         .ok x → @LE.le Nat _ x (1024 * ctx.active_increments) := by
       intro f hf x hx
       rw [hincq, hpe] at hx
       rw [hact_eq]
       exact hrb.participation tab htab_t f hf x hx
-    have hmaxinc : @LE.le Nat _ (max Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT
-        (totalEffectiveBalance s1) / Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT) 144115188 := by
+    have hmaxinc : @LE.le Nat _ (max P.EFFECTIVE_BALANCE_INCREMENT
+        (totalEffectiveBalance s1) / P.EFFECTIVE_BALANCE_INCREMENT) 144115188 := by
       rw [hteb1]
       have hm : @LT.lt Nat _ (max 1000000000 (totalEffectiveBalance t)) (2 ^ 57) :=
         Nat.max_lt.mpr ⟨by decide, hsup⟩
@@ -979,7 +980,7 @@ theorem midCore_of_rowBounds (g : Gwei → Gwei) (hg : ∀ x, x < 2 ^ 57 → g x
         Nat.le_trans hsrc hmaxinc, Nat.le_trans htgt hmaxinc, Nat.le_trans hhd hmaxinc,
         hratio _ (by decide) _ hcs, hratio _ (by decide) _ hct, hratio _ (by decide) _ hch, ?_⟩
       rw [hpe]; show @LT.lt Nat _ (t.slot / 32 - 1 + 1) (2 ^ 64); omega
-    have hctx2 : rewardsContextOf Preset.mainnet tab (s1.withRows ys2) = .ok ctx := by
+    have hctx2 : rewardsContextOf P tab (s1.withRows ys2) = .ok ctx := by
       rw [rewardsContextOf_withRows _ _ _ _ hvr2]; exact hctx
     have hQ2 : ∀ r ∈ ys2, r.validator.effective_balance ≤ 2048000000000 ∧
         @LT.lt Nat _ r.inactivity_score (2 ^ 23) ∧
@@ -994,8 +995,8 @@ theorem midCore_of_rowBounds (g : Gwei → Gwei) (hg : ∀ x, x < 2 ^ 57 → g x
         have h1 : @LE.le Nat _ a.validator.effective_balance 2048000000000 := hq1
         omega
     obtain ⟨ys3, hp3, hr3⟩ := rewards_pass_total ys2 ctx hc hQ2
-    have hcur2 : get_current_epoch Preset.mainnet (s1.withRows ys2) = .ok (t.slot / 32) := hcur
-    have hrw := (process_rewards_and_penalties_rows Preset.mainnet tab (s1.withRows ys2) hrows2
+    have hcur2 : get_current_epoch P (s1.withRows ys2) = .ok (t.slot / 32) := hcur
+    have hrw := (process_rewards_and_penalties_rows P tab (s1.withRows ys2) hrows2
       (t.slot / 32) hcur2 hgen' ctx hctx2 ((s1.withRows ys2).withRows ys3)).mpr
       (by rw [hrw2, hp3]; rfl)
     rw [hrw, trw_bind_ok]
@@ -1022,8 +1023,8 @@ theorem midCore_of_rowBounds (g : Gwei → Gwei) (hg : ∀ x, x < 2 ^ 57 → g x
 
 /-- On mainnet, the inactivity, rewards, registry and slashings steps succeed after
 justification and finalization, under `RowBounds`. -/
-theorem midOk_of_rowBounds (t : BeaconState) (hrows : RowsOk t) (hslot : t.slot + 8192 < 2 ^ 64)
-    (heb : EBOk Preset.mainnet t) (hvec : t.VectorLengths Preset.mainnet)
+theorem midOk_of_rowBounds [PresetCfg] (t : BeaconState) (hrows : RowsOk t) (hslot : t.slot + 8192 < 2 ^ 64)
+    (heb : EBOk P t) (hvec : t.VectorLengths P)
     (hcons : ConsolidationsInRange t) (hsl : t.slashings.sum * 3 < 2 ^ 64)
     (hrb : RowBounds t) : MidOk t := by
   intro s1 hshape hfin0 hfin
@@ -1034,15 +1035,15 @@ theorem midOk_of_rowBounds (t : BeaconState) (hrows : RowsOk t) (hslot : t.slot 
   have hslot1 : s1.slot = t.slot := by rw [hs1]
   have hteb1 : totalEffectiveBalance s1 = totalEffectiveBalance t := by rw [hs1]; rfl
   have hslot' : @LT.lt Nat _ (t.slot + 8192) (2 ^ 64) := hslot
-  have hcur : get_current_epoch Preset.mainnet s1 = .ok (t.slot / 32) := by
+  have hcur : get_current_epoch P s1 = .ok (t.slot / 32) := by
     rw [← hslot1]; exact tot_current_epoch s1
-  obtain ⟨tab, htab, -, -⟩ := get_total_active_balance_bounds Preset.mainnet s1
+  obtain ⟨tab, htab, -, -⟩ := get_total_active_balance_bounds P s1
     (t.slot / 32) hcur (by rw [hteb1]; exact Nat.lt_trans hrb.supply (by decide))
-  have hact := compute_activation_exit_epoch_of_lt Preset.mainnet (t.slot / 32)
+  have hact := compute_activation_exit_epoch_of_lt P (t.slot / 32)
     (by show @LT.lt Nat _ (t.slot / 32 + 1 + 4) (2 ^ 64); omega)
   have hfar : t.slot / 32 < FAR_FUTURE_EPOCH := by
     show @LT.lt Nat _ (t.slot / 32) (2 ^ 64 - 1); omega
-  have hsame := specFourSteps_sameOk Preset.mainnet s1 tab htab hrows1 (t.slot / 32) _ hcur
+  have hsame := specFourSteps_sameOk P s1 tab htab hrows1 (t.slot / 32) _ hcur
     hact hfar
   obtain ⟨v, hv, hp⟩ := hcore tab htab
   exact ⟨v, (hsame v).mpr hv, hp⟩
@@ -1069,8 +1070,8 @@ theorem forIn_total_rest {α β : Type} (I : List α → β → Prop) (F : β �
     | done c => exact ⟨c, rfl, hdone c rfl⟩
     | yield c => exact ih c (hyield c rfl)
 
-theorem act_churn_total (tab : Gwei) :
-    ∃ c : Nat, get_activation_churn_limit Preset.mainnet tab = .ok c ∧ c ≤ 256000000000 := by
+theorem act_churn_total [PresetCfg] (tab : Gwei) :
+    ∃ c : Nat, get_activation_churn_limit P tab = .ok c ∧ c ≤ 256000000000 := by
   unfold get_activation_churn_limit
   rw [tot_div (by decide), trw_bind_ok]
   dsimp only
@@ -1141,18 +1142,18 @@ theorem DepInv.skip {s : BeaconState} {avail : Nat} {a : PendingDeposit}
 
 /-- `process_pending_deposits` at the churn total `g tab` succeeds after the eth1 data reset.
 Gloas uses `g = id`. Fulu uses `fuluTabM`. -/
-def DepCore (g : Gwei → Gwei) (o : Oracle) (t : BeaconState) : Prop :=
-  ∀ s tab, TailFrame t s → DepFrame t s → get_total_active_balance Preset.mainnet s = .ok tab →
-    OkWith (process_pending_deposits Preset.mainnet (g tab) (apply_pending_deposit Preset.mainnet o)
+def DepCore [PresetCfg] (g : Gwei → Gwei) (o : Oracle) (t : BeaconState) : Prop :=
+  ∀ s tab, TailFrame t s → DepFrame t s → get_total_active_balance P s = .ok tab →
+    OkWith (process_pending_deposits P (g tab) (apply_pending_deposit P o)
       s) (TailFrame t)
 
-theorem depCore_of_rowBounds (g : Gwei → Gwei) (o : Oracle) (t : BeaconState)
+theorem depCore_of_rowBounds [PresetCfg] (g : Gwei → Gwei) (o : Oracle) (t : BeaconState)
     (hslot0 : t.slot + 8192 < 2 ^ 64) (hrb : RowBounds t) : DepCore g o t := by
   intro s tab hf hd htab
   have hteb : @LT.lt Nat _ (totalEffectiveBalance t) (2 ^ 57) := hrb.supply
   have hfunds : @LT.lt Nat _ (t.balances.sum + (t.pending_deposits.map (·.amount)).sum +
       t.deposit_balance_to_consume) (2 ^ 61) := hrb.funds
-  obtain ⟨tab', htab', -, htab_hi⟩ := get_total_active_balance_bounds Preset.mainnet s _
+  obtain ⟨tab', htab', -, htab_hi⟩ := get_total_active_balance_bounds P s _
     (tot_current_epoch s) (Nat.lt_trans hf.teb (by decide))
   rw [htab] at htab'
   cases htab'
@@ -1170,10 +1171,10 @@ theorem depCore_of_rowBounds (g : Gwei → Gwei) (o : Oracle) (t : BeaconState)
   rw [hc, trw_bind_ok,
     tot_add (show @LT.lt Nat _ (s.deposit_balance_to_consume + c) (2 ^ 64) by omega), trw_bind_ok]
   dsimp only
-  have hfs : compute_start_slot_at_epoch Preset.mainnet s.finalized_checkpoint.epoch =
+  have hfs : compute_start_slot_at_epoch P s.finalized_checkpoint.epoch =
       .ok (s.finalized_checkpoint.epoch * 32) := by
     unfold compute_start_slot_at_epoch
-    have h32 : Preset.mainnet.SLOTS_PER_EPOCH = 32 := rfl
+    have h32 : P.SLOTS_PER_EPOCH = 32 := rfl
     rw [h32]
     exact tot_mul (show @LT.lt Nat _ (s.finalized_checkpoint.epoch * 32) (2 ^ 64) by omega)
   rw [hfs, trw_bind_ok]
@@ -1293,12 +1294,12 @@ theorem depOk_of_rowBounds (o : Oracle) (t : BeaconState) (hslot0 : t.slot + 819
 /-- `process_epoch_total` with the per-validator steps and the pending deposits proved: on
 mainnet, the spec `process_epoch` succeeds from the facts at its input, `RowBounds`, and the
 committee steps (`CommitteesOk`). -/
-theorem process_epoch_total_rows (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
+theorem process_epoch_total_rows [PresetCfg] (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
     (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % 32 = 0)
-    (hvec : t.VectorLengths Preset.mainnet) (hffg : FfgInvariant Preset.mainnet t)
-    (heb : EBOk Preset.mainnet t) (hcons : ConsolidationsInRange t)
+    (hvec : t.VectorLengths P) (hffg : FfgInvariant P t)
+    (heb : EBOk P t) (hcons : ConsolidationsInRange t)
     (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : RowBounds t) (hcomm : CommitteesOk o t) :
-    ∃ s', process_epoch Preset.mainnet o t = .ok s' :=
+    ∃ s', process_epoch P o t = .ok s' :=
   process_epoch_total o t hrows hslot hlast hvec hffg
     (Nat.lt_trans hrb.supply (by decide))
     (midOk_of_rowBounds t hrows hslot heb hvec hcons hsl hrb)

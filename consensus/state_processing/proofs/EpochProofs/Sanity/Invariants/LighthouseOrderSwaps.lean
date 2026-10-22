@@ -1,4 +1,5 @@
 import EpochProofs.Sanity.Invariants.LighthouseResets
+import EpochProofs.Spec.PresetCfg
 import EpochProofs.Sanity.Invariants.LighthouseTail
 import EpochProofs.Sanity.EpochCommittees
 
@@ -136,17 +137,17 @@ def setPL (s : BeaconState) (l : List ValidatorIndex) : BeaconState :=
   { s with proposer_lookahead := l }
 
 /-- The new `proposer_lookahead` that `process_proposer_lookahead` writes. -/
-def plNew (o : Oracle) (s : BeaconState) : SpecM (List ValidatorIndex) := do
-  let last_epoch_start ← uint64Sub s.proposer_lookahead.length Preset.mainnet.SLOTS_PER_EPOCH
-  let st := setPL s (s.proposer_lookahead.drop Preset.mainnet.SLOTS_PER_EPOCH ++
+def plNew [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM (List ValidatorIndex) := do
+  let last_epoch_start ← uint64Sub s.proposer_lookahead.length P.SLOTS_PER_EPOCH
+  let st := setPL s (s.proposer_lookahead.drop P.SLOTS_PER_EPOCH ++
     s.proposer_lookahead.drop last_epoch_start)
-  let last_epoch_proposers ← get_beacon_proposer_indices Preset.mainnet o st
-    (← uint64Add (← uint64Add (s.slot / Preset.mainnet.SLOTS_PER_EPOCH)
-      Preset.mainnet.MIN_SEED_LOOKAHEAD) 1)
+  let last_epoch_proposers ← get_beacon_proposer_indices P o st
+    (← uint64Add (← uint64Add (s.slot / P.SLOTS_PER_EPOCH)
+      P.MIN_SEED_LOOKAHEAD) 1)
   pure (st.proposer_lookahead.take last_epoch_start ++ last_epoch_proposers)
 
-theorem process_proposer_lookahead_eq (o : Oracle) (s : BeaconState) :
-    process_proposer_lookahead Preset.mainnet o s = (fun l => setPL s l) <$> plNew o s := by
+theorem process_proposer_lookahead_eq [PresetCfg] (o : Oracle) (s : BeaconState) :
+    process_proposer_lookahead P o s = (fun l => setPL s l) <$> plNew o s := by
   unfold process_proposer_lookahead plNew setPL
   simp only [get_current_epoch_mainnet, ok_bind']
   simp only [bind, Except.bind, pure, Except.pure, Functor.map, Except.map]
@@ -167,32 +168,32 @@ theorem uint64Add_of_ge (a b : Nat) (h : ¬ a + b < 2 ^ 64) :
 
 /-- `plNew` reads `proposer_lookahead`, `slot`, `validators` and the proposer seed two epochs
 ahead. -/
-theorem plNew_congr (o : Oracle) (s1 s2 : BeaconState)
+theorem plNew_congr [PresetCfg] (o : Oracle) (s1 s2 : BeaconState)
     (hpl : s1.proposer_lookahead = s2.proposer_lookahead) (hs : s1.slot = s2.slot)
     (hv : s1.validators = s2.validators)
-    (hseed : get_seed Preset.mainnet o s1 (s2.slot / Preset.mainnet.SLOTS_PER_EPOCH + 1 + 1)
+    (hseed : get_seed P o s1 (s2.slot / P.SLOTS_PER_EPOCH + 1 + 1)
         DOMAIN_BEACON_PROPOSER =
-      get_seed Preset.mainnet o s2 (s2.slot / Preset.mainnet.SLOTS_PER_EPOCH + 1 + 1)
+      get_seed P o s2 (s2.slot / P.SLOTS_PER_EPOCH + 1 + 1)
         DOMAIN_BEACON_PROPOSER) :
     plNew o s1 = plNew o s2 := by
-  have hg : ∀ l, get_beacon_proposer_indices Preset.mainnet o (setPL s1 l)
-      (s2.slot / Preset.mainnet.SLOTS_PER_EPOCH + 1 + 1) =
-    get_beacon_proposer_indices Preset.mainnet o (setPL s2 l)
-      (s2.slot / Preset.mainnet.SLOTS_PER_EPOCH + 1 + 1) := fun l =>
+  have hg : ∀ l, get_beacon_proposer_indices P o (setPL s1 l)
+      (s2.slot / P.SLOTS_PER_EPOCH + 1 + 1) =
+    get_beacon_proposer_indices P o (setPL s2 l)
+      (s2.slot / P.SLOTS_PER_EPOCH + 1 + 1) := fun l =>
     get_beacon_proposer_indices_congr hv
       ((congrFun (congrFun (get_seed_congr (s1 := setPL s1 l) (s2 := s1) rfl) _) _).trans
         (hseed.trans (congrFun (congrFun (get_seed_congr (s1 := s2) (s2 := setPL s2 l) rfl) _) _)))
   unfold plNew
   rw [hpl, hs]
-  have hmsl : Preset.mainnet.MIN_SEED_LOOKAHEAD = 1 := rfl
+  have hmsl : P.MIN_SEED_LOOKAHEAD = 1 := rfl
   rw [hmsl]
-  cases uint64Sub s2.proposer_lookahead.length Preset.mainnet.SLOTS_PER_EPOCH with
+  cases uint64Sub s2.proposer_lookahead.length P.SLOTS_PER_EPOCH with
   | error e => rfl
   | ok les =>
     simp only [ok_bind']
-    by_cases h1 : s2.slot / Preset.mainnet.SLOTS_PER_EPOCH + 1 < 2 ^ 64
+    by_cases h1 : s2.slot / P.SLOTS_PER_EPOCH + 1 < 2 ^ 64
     · simp only [uint64Add_of_lt _ _ h1, ok_bind']
-      by_cases h2 : s2.slot / Preset.mainnet.SLOTS_PER_EPOCH + 1 + 1 < 2 ^ 64
+      by_cases h2 : s2.slot / P.SLOTS_PER_EPOCH + 1 + 1 < 2 ^ 64
       · simp only [uint64Add_of_lt _ _ h2, ok_bind', hg]
         rfl
       · simp only [uint64Add_of_ge _ _ h2, error_bind']
@@ -205,21 +206,21 @@ def setPTC (s : BeaconState) (w : List (List ValidatorIndex)) : BeaconState :=
   { s with ptc_window := w }
 
 /-- The new `ptc_window` that `process_ptc_window` writes. -/
-def ptcNew (o : Oracle) (s : BeaconState) : SpecM (List (List ValidatorIndex)) := do
-  let shift_end ← uint64Sub s.ptc_window.length Preset.mainnet.SLOTS_PER_EPOCH
-  let st := setPTC s (s.ptc_window.drop Preset.mainnet.SLOTS_PER_EPOCH ++
+def ptcNew [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM (List (List ValidatorIndex)) := do
+  let shift_end ← uint64Sub s.ptc_window.length P.SLOTS_PER_EPOCH
+  let st := setPTC s (s.ptc_window.drop P.SLOTS_PER_EPOCH ++
     s.ptc_window.drop shift_end)
-  let next_epoch ← uint64Add (← uint64Add (s.slot / Preset.mainnet.SLOTS_PER_EPOCH)
-    Preset.mainnet.MIN_SEED_LOOKAHEAD) 1
-  let start_slot ← compute_start_slot_at_epoch Preset.mainnet next_epoch
-  let end_slot ← uint64Add start_slot Preset.mainnet.SLOTS_PER_EPOCH
+  let next_epoch ← uint64Add (← uint64Add (s.slot / P.SLOTS_PER_EPOCH)
+    P.MIN_SEED_LOOKAHEAD) 1
+  let start_slot ← compute_start_slot_at_epoch P next_epoch
+  let end_slot ← uint64Add start_slot P.SLOTS_PER_EPOCH
   let ptcs ← (List.range' start_slot (end_slot - start_slot)).mapM fun slot =>
-    compute_ptc Preset.mainnet o st slot
-  let fill_start ← uint64Sub st.ptc_window.length Preset.mainnet.SLOTS_PER_EPOCH
+    compute_ptc P o st slot
+  let fill_start ← uint64Sub st.ptc_window.length P.SLOTS_PER_EPOCH
   pure (st.ptc_window.take fill_start ++ ptcs)
 
-theorem process_ptc_window_eq (o : Oracle) (s : BeaconState) :
-    process_ptc_window Preset.mainnet o s = (fun w => setPTC s w) <$> ptcNew o s := by
+theorem process_ptc_window_eq [PresetCfg] (o : Oracle) (s : BeaconState) :
+    process_ptc_window P o s = (fun w => setPTC s w) <$> ptcNew o s := by
   unfold process_ptc_window ptcNew setPTC
   simp only [get_current_epoch_mainnet, ok_bind']
   simp only [bind, Except.bind, pure, Except.pure, Functor.map, Except.map]
@@ -241,35 +242,35 @@ theorem uint64Mul_of_ge (a b : Nat) (h : ¬ a * b < 2 ^ 64) :
   rfl
 
 /-- `ptcNew` reads `ptc_window`, `slot`, `validators` and the seeds two epochs ahead. -/
-theorem ptcNew_congr (o : Oracle) (s1 s2 : BeaconState)
+theorem ptcNew_congr [PresetCfg] (o : Oracle) (s1 s2 : BeaconState)
     (hptc : s1.ptc_window = s2.ptc_window) (hs : s1.slot = s2.slot)
     (hv : s1.validators = s2.validators)
-    (hseed : ∀ d, get_seed Preset.mainnet o s1 (s2.slot / Preset.mainnet.SLOTS_PER_EPOCH + 1 + 1)
-        d = get_seed Preset.mainnet o s2 (s2.slot / Preset.mainnet.SLOTS_PER_EPOCH + 1 + 1) d) :
+    (hseed : ∀ d, get_seed P o s1 (s2.slot / P.SLOTS_PER_EPOCH + 1 + 1)
+        d = get_seed P o s2 (s2.slot / P.SLOTS_PER_EPOCH + 1 + 1) d) :
     ptcNew o s1 = ptcNew o s2 := by
   unfold ptcNew
   rw [hptc, hs]
-  have hmsl : Preset.mainnet.MIN_SEED_LOOKAHEAD = 1 := rfl
+  have hmsl : P.MIN_SEED_LOOKAHEAD = 1 := rfl
   rw [hmsl]
-  cases uint64Sub s2.ptc_window.length Preset.mainnet.SLOTS_PER_EPOCH with
+  cases uint64Sub s2.ptc_window.length P.SLOTS_PER_EPOCH with
   | error e => simp only [error_bind']
   | ok shift_end =>
     simp only [ok_bind']
-    by_cases h1 : s2.slot / Preset.mainnet.SLOTS_PER_EPOCH + 1 < 2 ^ 64
+    by_cases h1 : s2.slot / P.SLOTS_PER_EPOCH + 1 < 2 ^ 64
     · simp only [uint64Add_of_lt _ _ h1, ok_bind']
-      by_cases h2 : s2.slot / Preset.mainnet.SLOTS_PER_EPOCH + 1 + 1 < 2 ^ 64
+      by_cases h2 : s2.slot / P.SLOTS_PER_EPOCH + 1 + 1 < 2 ^ 64
       · simp only [uint64Add_of_lt _ _ h2, ok_bind', compute_start_slot_at_epoch]
-        generalize hN : s2.slot / Preset.mainnet.SLOTS_PER_EPOCH + 1 + 1 = N at hseed ⊢
-        by_cases h3 : N * Preset.mainnet.SLOTS_PER_EPOCH < 2 ^ 64
+        generalize hN : s2.slot / P.SLOTS_PER_EPOCH + 1 + 1 = N at hseed ⊢
+        by_cases h3 : N * P.SLOTS_PER_EPOCH < 2 ^ 64
         · simp only [uint64Mul_of_lt _ _ h3, ok_bind']
-          by_cases h4 : N * Preset.mainnet.SLOTS_PER_EPOCH + Preset.mainnet.SLOTS_PER_EPOCH < 2 ^ 64
+          by_cases h4 : N * P.SLOTS_PER_EPOCH + P.SLOTS_PER_EPOCH < 2 ^ 64
           · simp only [uint64Add_of_lt _ _ h4, ok_bind']
-            rw [mapM_congr_mem' (fun slot => compute_ptc Preset.mainnet o (setPTC s1 _) slot)
-              (fun slot => compute_ptc Preset.mainnet o (setPTC s2 _) slot)]
+            rw [mapM_congr_mem' (fun slot => compute_ptc P o (setPTC s1 _) slot)
+              (fun slot => compute_ptc P o (setPTC s2 _) slot)]
             · rfl
             intro slot hslot
             refine compute_ptc_congr hv (fun epoch he d => ?_)
-            have hspe : Preset.mainnet.SLOTS_PER_EPOCH = 32 := rfl
+            have hspe : P.SLOTS_PER_EPOCH = 32 := rfl
             have he' : epoch = N := by
               simp only [compute_epoch_at_slot, uint64Div, hspe,
                 show (32 : Nat) ≠ 0 by decide, if_false, pure, Except.pure] at he

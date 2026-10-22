@@ -1,4 +1,5 @@
 import EpochProofs.Sanity.Invariants.LighthouseEpoch
+import EpochProofs.Spec.PresetCfg
 
 /-!
 # The Lighthouse single pass at the genesis epoch
@@ -100,53 +101,53 @@ theorem genesis_passes_eq_single_pass (p : Preset) (total_active_balance : Gwei)
 
 /-- On mainnet, at the genesis epoch, one pass of `lhRowStep` with `after_genesis = false`
 gives the same `ok` results as the spec's inactivity, rewards, registry and slashings steps. -/
-theorem lighthouse_single_pass_eq_spec_genesis (total_active_balance : Gwei)
+theorem lighthouse_single_pass_eq_spec_genesis [PresetCfg] (total_active_balance : Gwei)
     (state : BeaconState) (hrows : RowsOk state)
-    (hcurrent : get_current_epoch Preset.mainnet state = .ok GENESIS_EPOCH)
+    (hcurrent : get_current_epoch P state = .ok GENESIS_EPOCH)
     (rctx : RewardsContext) (hprev : rctx.previous_epoch = GENESIS_EPOCH)
     (hexit : ∀ i (h : i < state.validators.length),
       state.validators[i].exit_epoch ≤ FAR_FUTURE_EPOCH)
     (activation_epoch : Epoch)
-    (hactivation : compute_activation_exit_epoch Preset.mainnet GENESIS_EPOCH =
+    (hactivation : compute_activation_exit_epoch P GENESIS_EPOCH =
       .ok activation_epoch)
     (adjusted per : Gwei)
-    (hpre : slashingsPreamble Preset.mainnet total_active_balance state.slashings =
+    (hpre : slashingsPreamble P total_active_balance state.slashings =
       .ok (adjusted, per))
     (hfinalized : state.finalized_checkpoint.epoch ≤ GENESIS_EPOCH)
     (base_reward : Row → Gwei) :
     SameOk (do
-      let s1 ← process_inactivity_updates Preset.mainnet state
-      let s2 ← process_rewards_and_penalties Preset.mainnet total_active_balance s1
-      let s3 ← process_registry_updates Preset.mainnet total_active_balance s2
-      process_slashings Preset.mainnet total_active_balance s3)
+      let s1 ← process_inactivity_updates P state
+      let s2 ← process_rewards_and_penalties P total_active_balance s1
+      let s3 ← process_registry_updates P total_active_balance s2
+      process_slashings P total_active_balance s3)
     ((fun y => state.withRowsChurn y.1 y.2) <$>
-      passM (fun churn r => lhRowStep Preset.mainnet
+      passM (fun churn r => lhRowStep P
           (lhContextOf state total_active_balance GENESIS_EPOCH rctx per) (base_reward r) churn r)
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
-  refine SameOk.trans (genesis_passes_eq_single_pass Preset.mainnet total_active_balance state
+  refine SameOk.trans (genesis_passes_eq_single_pass P total_active_balance state
     hrows hcurrent activation_epoch hactivation (by decide) adjusted per hpre) (SameOk.of_eq ?_)
   have hstep : ∀ churn r, r ∈ rowsOf state →
-      lhRowStep Preset.mainnet (lhContextOf state total_active_balance GENESIS_EPOCH rctx per)
+      lhRowStep P (lhContextOf state total_active_balance GENESIS_EPOCH rctx per)
         (base_reward r) churn r =
-      (fun x => (x.1.1, x.2)) <$> bothSteps (registryRowStep Preset.mainnet total_active_balance
+      (fun x => (x.1.1, x.2)) <$> bothSteps (registryRowStep P total_active_balance
         GENESIS_EPOCH state.finalized_checkpoint.epoch activation_epoch)
-        (slashingsRowStep Preset.mainnet
-          (GENESIS_EPOCH + Preset.mainnet.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) (churn, ()) r := by
+        (slashingsRowStep P
+          (GENESIS_EPOCH + P.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) (churn, ()) r := by
     intro churn r hr
     obtain ⟨i, hi, hri⟩ := List.mem_iff_getElem.mp hr
     have hiv : i < state.validators.length := by rw [← rowsOf_length]; exact hi
     have hrow := rowsOf_getElem state i hi
     rw [hri] at hrow
     subst hrow
-    exact lhRowStep_genesis Preset.mainnet _ rfl _ churn _ activation_epoch
+    exact lhRowStep_genesis P _ rfl _ churn _ activation_epoch
       (by simp only [lhContextOf, hprev, GENESIS_EPOCH, UINT64_SIZE]; decide) (by decide)
       (by simpa only [lhContextOf] using hfinalized)
       (by simp only [lhContextOf, GENESIS_EPOCH, UINT64_SIZE]; decide) hactivation (hexit i hiv)
   rw [passM_congr _ _ (rowsOf state) (fun churn r hr => hstep churn r hr)]
-  rw [passM_proj (bothSteps (registryRowStep Preset.mainnet total_active_balance GENESIS_EPOCH
+  rw [passM_proj (bothSteps (registryRowStep P total_active_balance GENESIS_EPOCH
       state.finalized_checkpoint.epoch activation_epoch)
-      (slashingsRowStep Preset.mainnet
-        (GENESIS_EPOCH + Preset.mainnet.EPOCHS_PER_SLASHINGS_VECTOR / 2) per))
+      (slashingsRowStep P
+        (GENESIS_EPOCH + P.EPOCHS_PER_SLASHINGS_VECTOR / 2) per))
     (fun c => (c, ())) (fun b => b.1) (fun _ => rfl) (fun _ => rfl)]
   cases passM _ _ (rowsOf state) <;> rfl
 

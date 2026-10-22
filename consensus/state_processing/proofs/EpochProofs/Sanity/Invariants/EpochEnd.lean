@@ -1,4 +1,5 @@
 import EpochProofs.Sanity.Driver
+import EpochProofs.Spec.PresetCfg
 import EpochProofs.Sanity.EffectiveBalanceInvariant
 
 /-!
@@ -28,7 +29,7 @@ def EBPresetOk (p : Preset) : Prop :=
   PresetIncrementOk p ∧ p.MIN_ACTIVATION_BALANCE ≤ p.MAX_EFFECTIVE_BALANCE_ELECTRA
 
 /-- Mainnet holds `EBPresetOk`. -/
-theorem ebPresetOk_mainnet : EBPresetOk Preset.mainnet :=
+theorem ebPresetOk_mainnet [PresetCfg] : EBPresetOk P :=
   ⟨presetIncrementOk_mainnet, by decide⟩
 
 /-- `EBOk` reads only `validators`. -/
@@ -74,7 +75,7 @@ private theorem set_or_append_list_forall {α : Type} {Q : α → Prop} {l l' : 
   · exact listSet_forall hl ha h
 
 /-- A `for` loop in `SpecM` keeps every property that each successful pass keeps. -/
-private theorem forIn_ok_invariant {α β : Type} (P : β → Prop)
+private theorem forIn_ok_invariant [PresetCfg] {α β : Type} (P : β → Prop)
     (f : α → β → SpecM (ForInStep β)) (hf : ∀ a b r, P b → f a b = .ok r → P r.value) :
     ∀ (l : List α) (b b' : β), P b → forIn l b f = .ok b' → P b' := by
   intro l
@@ -332,9 +333,9 @@ theorem process_effective_balance_updates_le_max (p : Preset) (hp : EBPresetOk p
 /-- On mainnet, `process_epoch` keeps `EBOk` and ends with `EffectiveBalanceFloor`: each
 validator has a balance, and each effective balance is a multiple of the increment, at most
 `MAX_EFFECTIVE_BALANCE_ELECTRA` and at most `4/3` of the balance. -/
-theorem process_epoch_effective_balances (o : Oracle) (s s' : BeaconState)
-    (h : process_epoch Preset.mainnet o s = .ok s') (hs : EBOk Preset.mainnet s) :
-    EBOk Preset.mainnet s' ∧ EffectiveBalanceFloor Preset.mainnet s' := by
+theorem process_epoch_effective_balances [PresetCfg] (o : Oracle) (s s' : BeaconState)
+    (h : process_epoch P o s = .ok s') (hs : EBOk P s) :
+    EBOk P s' ∧ EffectiveBalanceFloor P s' := by
   have hp := ebPresetOk_mainnet
   unfold process_epoch at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
@@ -391,8 +392,8 @@ theorem process_epoch_effective_balances (o : Oracle) (s s' : BeaconState)
 
 /-- On mainnet, after `process_epoch` the balance list is at least as long as the validator
 list. -/
-theorem process_epoch_balances_length (o : Oracle) (s s' : BeaconState)
-    (h : process_epoch Preset.mainnet o s = .ok s') (hs : EBOk Preset.mainnet s) :
+theorem process_epoch_balances_length [PresetCfg] (o : Oracle) (s s' : BeaconState)
+    (h : process_epoch P o s = .ok s') (hs : EBOk P s) :
     s'.validators.length ≤ s'.balances.length :=
   (process_epoch_effective_balances o s s' h hs).2.1
 

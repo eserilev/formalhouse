@@ -1,4 +1,5 @@
 import EpochProofs.Sanity.Invariants.LighthouseOrder
+import EpochProofs.Spec.PresetCfg
 
 /-!
 # The spec epoch succeeds on reachable states
@@ -29,22 +30,22 @@ namespace EpochProofs.Spec
 /-! ## Success of `SpecM` values -/
 
 /-- `x` returns `ok` with a value that has `P`. -/
-def OkWith {α : Type} (x : SpecM α) (P : α → Prop) : Prop := ∃ v, x = .ok v ∧ P v
+def OkWith [PresetCfg] {α : Type} (x : SpecM α) (P : α → Prop) : Prop := ∃ v, x = .ok v ∧ P v
 
-theorem OkWith.pure {α : Type} {a : α} {P : α → Prop} (h : P a) : OkWith (pure a : SpecM α) P :=
+theorem OkWith.pure [PresetCfg] {α : Type} {a : α} {P : α → Prop} (h : P a) : OkWith (pure a : SpecM α) P :=
   ⟨a, rfl, h⟩
 
-theorem OkWith.of_eq {α : Type} {x : SpecM α} {a : α} {P : α → Prop} (hx : x = .ok a) (h : P a) :
+theorem OkWith.of_eq [PresetCfg] {α : Type} {x : SpecM α} {a : α} {P : α → Prop} (hx : x = .ok a) (h : P a) :
     OkWith x P :=
   ⟨a, hx, h⟩
 
-theorem OkWith.bind {α β : Type} {x : SpecM α} {f : α → SpecM β} {P : α → Prop} {Q : β → Prop}
+theorem OkWith.bind [PresetCfg] {α β : Type} {x : SpecM α} {f : α → SpecM β} {P : α → Prop} {Q : β → Prop}
     (hx : OkWith x P) (hf : ∀ a, P a → OkWith (f a) Q) : OkWith (x >>= f) Q := by
   obtain ⟨a, ha, hp⟩ := hx
   obtain ⟨b, hb, hq⟩ := hf a hp
   exact ⟨b, by rw [ha]; exact hb, hq⟩
 
-theorem OkWith.mono {α : Type} {x : SpecM α} {P Q : α → Prop} (h : OkWith x P)
+theorem OkWith.mono [PresetCfg] {α : Type} {x : SpecM α} {P Q : α → Prop} (h : OkWith x P)
     (hpq : ∀ a, P a → Q a) : OkWith x Q := by
   obtain ⟨a, ha, hp⟩ := h
   exact ⟨a, ha, hpq a hp⟩
@@ -97,12 +98,12 @@ theorem tot_slot_bound {x : Nat} (h : x < 2 ^ 64) : x / 32 + 1 < 2 ^ 64 := by
   show x / 32 + 1 < 18446744073709551616
   omega
 
-theorem tot_current_epoch (s : BeaconState) :
-    get_current_epoch Preset.mainnet s = .ok (s.slot / 32) := by
+theorem tot_current_epoch [PresetCfg] (s : BeaconState) :
+    get_current_epoch P s = .ok (s.slot / 32) := by
   unfold get_current_epoch compute_epoch_at_slot; exact tot_div (by decide)
 
-theorem tot_previous_epoch (s : BeaconState) :
-    get_previous_epoch Preset.mainnet s = .ok (saturating_sub (s.slot / 32) 1) := by
+theorem tot_previous_epoch [PresetCfg] (s : BeaconState) :
+    get_previous_epoch P s = .ok (saturating_sub (s.slot / 32) 1) := by
   simp [get_previous_epoch, tot_current_epoch, bind, Except.bind, pure, Except.pure]
 
 theorem tot_quorum_bound {x : Nat} (h : x < 2 ^ 64) : x / 32 * 6 < 2 ^ 64 := by
@@ -113,35 +114,35 @@ theorem tot_quorum_bound {x : Nat} (h : x < 2 ^ 64) : x / 32 * 6 < 2 ^ 64 := by
 /-! ## The resets and the participation rotation -/
 
 /-- `process_eth1_data_reset` succeeds and writes only `eth1_data_votes`. -/
-theorem process_eth1_data_reset_total (s : BeaconState) (hslot : s.slot < 2 ^ 64) :
-    OkWith (process_eth1_data_reset Preset.mainnet s)
+theorem process_eth1_data_reset_total [PresetCfg] (s : BeaconState) (hslot : s.slot < 2 ^ 64) :
+    OkWith (process_eth1_data_reset P s)
       (fun s' => s' = s ∨ s' = { s with eth1_data_votes := [] }) := by
   have hadd : s.slot / 32 + 1 < 2 ^ 64 := tot_slot_bound hslot
   unfold process_eth1_data_reset
   rw [tot_current_epoch]
-  simp only [bind, Except.bind, tot_add hadd, tot_mod (show (Preset.mainnet).EPOCHS_PER_ETH1_VOTING_PERIOD ≠ 0 by decide)]
+  simp only [bind, Except.bind, tot_add hadd, tot_mod (show (P).EPOCHS_PER_ETH1_VOTING_PERIOD ≠ 0 by decide)]
   split
   · exact OkWith.pure (Or.inr rfl)
   · exact OkWith.pure (Or.inl rfl)
 
 /-- `process_slashings_reset` succeeds and keeps the length of `slashings`. -/
-theorem process_slashings_reset_total (s : BeaconState) (hslot : s.slot < 2 ^ 64)
+theorem process_slashings_reset_total [PresetCfg] (s : BeaconState) (hslot : s.slot < 2 ^ 64)
     (hlen : s.slashings.length = 8192) :
-    OkWith (process_slashings_reset Preset.mainnet s)
+    OkWith (process_slashings_reset P s)
       (fun s' => ∃ i a, s' = { s with slashings := s.slashings.set i a }) := by
   have hadd : s.slot / 32 + 1 < 2 ^ 64 := tot_slot_bound hslot
   have hlt : (s.slot / 32 + 1) % 8192 < s.slashings.length := by rw [hlen]; exact Nat.mod_lt _ (by decide)
   unfold process_slashings_reset
   rw [tot_current_epoch]
   simp only [bind, Except.bind, tot_add hadd,
-    tot_mod (show (Preset.mainnet).EPOCHS_PER_SLASHINGS_VECTOR ≠ 0 by decide)]
-  rw [show (Preset.mainnet).EPOCHS_PER_SLASHINGS_VECTOR = 8192 from rfl, tot_set 0 hlt]
+    tot_mod (show (P).EPOCHS_PER_SLASHINGS_VECTOR ≠ 0 by decide)]
+  rw [show (P).EPOCHS_PER_SLASHINGS_VECTOR = 8192 from rfl, tot_set 0 hlt]
   exact OkWith.pure ⟨_, _, rfl⟩
 
 /-- `process_randao_mixes_reset` succeeds and keeps the length of `randao_mixes`. -/
-theorem process_randao_mixes_reset_total (s : BeaconState) (hslot : s.slot < 2 ^ 64)
+theorem process_randao_mixes_reset_total [PresetCfg] (s : BeaconState) (hslot : s.slot < 2 ^ 64)
     (hlen : s.randao_mixes.length = 65536) :
-    OkWith (process_randao_mixes_reset Preset.mainnet s)
+    OkWith (process_randao_mixes_reset P s)
       (fun s' => ∃ i a, s' = { s with randao_mixes := s.randao_mixes.set i a }) := by
   have hadd : s.slot / 32 + 1 < 2 ^ 64 := tot_slot_bound hslot
   have hlt : (s.slot / 32 + 1) % 65536 < s.randao_mixes.length := by
@@ -151,22 +152,22 @@ theorem process_randao_mixes_reset_total (s : BeaconState) (hslot : s.slot < 2 ^
   unfold process_randao_mixes_reset get_randao_mix
   rw [tot_current_epoch]
   simp only [bind, Except.bind, tot_add hadd,
-    tot_mod (show (Preset.mainnet).EPOCHS_PER_HISTORICAL_VECTOR ≠ 0 by decide)]
-  rw [show (Preset.mainnet).EPOCHS_PER_HISTORICAL_VECTOR = 65536 from rfl]
+    tot_mod (show (P).EPOCHS_PER_HISTORICAL_VECTOR ≠ 0 by decide)]
+  rw [show (P).EPOCHS_PER_HISTORICAL_VECTOR = 65536 from rfl]
   simp only [tot_get hlt', tot_set _ hlt]
   exact OkWith.pure ⟨_, _, rfl⟩
 
 /-- `process_historical_summaries_update` succeeds and only appends to
 `historical_summaries`. The spec list has no limit in beta.4. -/
-theorem process_historical_summaries_update_total (o : Oracle) (s : BeaconState)
+theorem process_historical_summaries_update_total [PresetCfg] (o : Oracle) (s : BeaconState)
     (hslot : s.slot < 2 ^ 64) :
-    OkWith (process_historical_summaries_update Preset.mainnet o s)
+    OkWith (process_historical_summaries_update P o s)
       (fun s' => ∃ l, s' = { s with historical_summaries := s.historical_summaries ++ l }) := by
   have hadd : s.slot / 32 + 1 < 2 ^ 64 := tot_slot_bound hslot
   unfold process_historical_summaries_update
   rw [tot_current_epoch]
-  simp only [bind, Except.bind, tot_add hadd, tot_div (show (Preset.mainnet).SLOTS_PER_EPOCH ≠ 0 by decide),
-    show (Preset.mainnet).SLOTS_PER_HISTORICAL_ROOT / (Preset.mainnet).SLOTS_PER_EPOCH = 256 from rfl,
+  simp only [bind, Except.bind, tot_add hadd, tot_div (show (P).SLOTS_PER_EPOCH ≠ 0 by decide),
+    show (P).SLOTS_PER_HISTORICAL_ROOT / (P).SLOTS_PER_EPOCH = 256 from rfl,
     tot_mod (show (256 : Nat) ≠ 0 by decide)]
   split
   · exact OkWith.pure ⟨_, rfl⟩
@@ -175,14 +176,14 @@ theorem process_historical_summaries_update_total (o : Oracle) (s : BeaconState)
 /-! ## Builder payments -/
 
 /-- `process_builder_pending_payments` succeeds for any total below `2^64`. -/
-theorem process_builder_pending_payments_total (tab : Gwei) (htab : tab < 2 ^ 64)
+theorem process_builder_pending_payments_total [PresetCfg] (tab : Gwei) (htab : tab < 2 ^ 64)
     (s : BeaconState) :
-    OkWith (process_builder_pending_payments Preset.mainnet tab s)
+    OkWith (process_builder_pending_payments P tab s)
       (fun s' => ∃ w q, s' = { s with
         builder_pending_withdrawals := w
         builder_pending_payments := q }) := by
   unfold process_builder_pending_payments get_builder_payment_quorum_threshold
-  rw [show (Preset.mainnet).SLOTS_PER_EPOCH = 32 from rfl]
+  rw [show (P).SLOTS_PER_EPOCH = 32 from rfl]
   simp only [BUILDER_PAYMENT_THRESHOLD_NUMERATOR, BUILDER_PAYMENT_THRESHOLD_DENOMINATOR]
   rw [tot_div (show (32 : Nat) ≠ 0 by decide)]
   simp only [bind, Except.bind]
@@ -215,10 +216,10 @@ theorem tot_get_rows_current {state : BeaconState} (hrows : RowsOk state) {r : R
 
 /-- `get_unslashed_participating_indices` succeeds at the previous and the current epoch, and
 gives the indices of the rows that are active, have the flag and are not slashed. -/
-theorem participating_total (s : BeaconState) (hrows : RowsOk s) (f : Nat) (hf : f < 3)
+theorem participating_total [PresetCfg] (s : BeaconState) (hrows : RowsOk s) (f : Nat) (hf : f < 3)
     (epoch : Epoch)
     (hepoch : epoch = saturating_sub (s.slot / 32) 1 ∨ epoch = s.slot / 32) :
-    get_unslashed_participating_indices Preset.mainnet s f epoch =
+    get_unslashed_participating_indices P s f epoch =
       .ok (((((rowsOf s).filter fun r => is_active_validator r.validator epoch).filter
         fun r => rewardsHasFlag (rowFlags epoch (s.slot / 32) r) f).filter
           fun r => !r.validator.slashed).map (·.index)) := by
@@ -267,27 +268,27 @@ theorem participating_total (s : BeaconState) (hrows : RowsOk s) (f : Nat) (hf :
     simp only [bind, Except.bind, listGet_rows_validator hr', pure, Except.pure]
 
 /-- Filtering rows twice more is filtering once with the conjunction. -/
-theorem tot_filter3 (l : List Row) (P Q R : Row → Bool) :
+theorem tot_filter3 [PresetCfg] (l : List Row) (P Q R : Row → Bool) :
     ((l.filter P).filter Q).filter R = l.filter fun r => P r && Q r && R r := by
   simp [List.filter_filter, Bool.and_comm, Bool.and_left_comm]
 
 theorem tot_nat_add_lt {a b c : Nat} (h1 : a ≤ b) (h2 : b < 2 ^ 64) (hc : c ≤ 8192) :
     a + c < 2 ^ 64 + 8192 := by omega
 
-theorem get_block_root_total (s : BeaconState) (e : Epoch) (h1 : e * 32 < s.slot)
+theorem get_block_root_total [PresetCfg] (s : BeaconState) (e : Epoch) (h1 : e * 32 < s.slot)
     (h2 : s.slot ≤ e * 32 + 8192) (hslot : s.slot + 8192 < 2 ^ 64)
     (hbr : s.block_roots.length = 8192) :
-    ∃ r, get_block_root Preset.mainnet s e = .ok r := by
+    ∃ r, get_block_root P s e = .ok r := by
   have hm : e * 32 < 2 ^ 64 := Nat.lt_of_lt_of_le h1 (Nat.le_trans (Nat.le_add_right _ _)
     (Nat.le_of_lt hslot))
   have ha : e * 32 + 8192 < 2 ^ 64 :=
     Nat.lt_of_le_of_lt (Nat.add_le_add_right (Nat.le_of_lt h1) _) hslot
   have hidx : e * 32 % 8192 < s.block_roots.length := by rw [hbr]; exact Nat.mod_lt _ (by decide)
   unfold get_block_root get_block_root_at_slot compute_start_slot_at_epoch
-  rw [show (Preset.mainnet).SLOTS_PER_EPOCH = 32 from rfl, tot_mul hm]
+  rw [show (P).SLOTS_PER_EPOCH = 32 from rfl, tot_mul hm]
   have hc1 : (!decide (e * 32 < s.slot)) = false := by simp [h1]
   have hc2 : (!decide (s.slot ≤ e * 32 + 8192)) = false := by simp [h2]
-  rw [show (Preset.mainnet).SLOTS_PER_HISTORICAL_ROOT = 8192 from rfl]
+  rw [show (P).SLOTS_PER_HISTORICAL_ROOT = 8192 from rfl]
   refine ⟨s.block_roots[e * 32 % 8192], ?_⟩
   change (Except.bind (Except.ok (e * 32)) fun __do_lift => _) = _
   dsimp only [Except.bind]
@@ -325,16 +326,16 @@ theorem tot_lt63_add {a k : Nat} (h : a < 2 ^ 63) (hk : k ≤ 3) : a + k < 2 ^ 6
 theorem tot_set_length {α : Type} (l : List α) (i : Nat) (a : α) :
     (l.set i a).length = l.length := List.length_set
 
-theorem get_block_root_congr (t s : BeaconState) (e : Epoch) (h1 : t.slot = s.slot)
+theorem get_block_root_congr [PresetCfg] (t s : BeaconState) (e : Epoch) (h1 : t.slot = s.slot)
     (h2 : t.block_roots = s.block_roots) :
-    get_block_root Preset.mainnet t e = get_block_root Preset.mainnet s e := by
+    get_block_root P t e = get_block_root P s e := by
   unfold get_block_root get_block_root_at_slot
   rw [h1, h2]
 
 /-- The justification bits have their `BitVector[4]` length. -/
 def BL4 (st : BeaconState) : Prop := st.justification_bits.length = 4
 
-theorem fin_block {P : BeaconState → Prop} (b : Bool) (cp k E : Nat) (hcp : cp + k < 2 ^ 64)
+theorem fin_block [PresetCfg] {P : BeaconState → Prop} (b : Bool) (cp k E : Nat) (hcp : cp + k < 2 ^ 64)
     (A B : BeaconState) (hA : P A) (hB : P B) :
     OkWith (if b = true then (do
         let x ← uint64Add cp k
@@ -346,13 +347,13 @@ theorem fin_block {P : BeaconState → Prop} (b : Bool) (cp k E : Nat) (hcp : cp
     · exact OkWith.pure hB
   · exact OkWith.pure hB
 
-theorem weigh_total (s : BeaconState) (tab pb cb : Gwei) (htab : tab < 2 ^ 62) (hpb : pb < 2 ^ 62)
+theorem weigh_total [PresetCfg] (s : BeaconState) (tab pb cb : Gwei) (htab : tab < 2 ^ 62) (hpb : pb < 2 ^ 62)
     (hcb : cb < 2 ^ 62) (hslot : s.slot + 8192 < 2 ^ 64) (h64 : 64 ≤ s.slot)
     (hlast : (s.slot + 1) % 32 = 0)
     (hbr : s.block_roots.length = 8192) (hbits : s.justification_bits.length = 4)
     (hcp : s.previous_justified_checkpoint.epoch < 2 ^ 63 ∧
       s.current_justified_checkpoint.epoch < 2 ^ 63) :
-    OkWith (weigh_justification_and_finalization Preset.mainnet s tab pb cb)
+    OkWith (weigh_justification_and_finalization P s tab pb cb)
       (fun s' => s'.justification_bits.length = 4) := by
   obtain ⟨hp1, hp2, hc1, hc2, hsat⟩ := tot_epoch_facts hlast h64 hslot
   have hb' : (s.justification_bits.take 1 ++
@@ -369,7 +370,7 @@ theorem weigh_total (s : BeaconState) (tab pb cb : Gwei) (htab : tab < 2 ^ 62) (
     split
     · obtain ⟨r, hr⟩ := get_block_root_total s (s.slot / 32 - 1) hp1 hp2 hslot hbr
       have hr2 : ∀ t : BeaconState, t.slot = s.slot → t.block_roots = s.block_roots →
-          get_block_root Preset.mainnet t (s.slot / 32 - 1) = .ok r := fun t h1 h2 => by
+          get_block_root P t (s.slot / 32 - 1) = .ok r := fun t h1 h2 => by
         rw [get_block_root_congr t s _ h1 h2, hr]
       rw [hsat, hr2, tot_bind_ok]
       · rw [tot_set _ (by simp [hb']), tot_bind_ok]
@@ -396,7 +397,7 @@ theorem weigh_total (s : BeaconState) (tab pb cb : Gwei) (htab : tab < 2 ^ 62) (
       refine OkWith.bind (fin_block (P := BL4) _ _ _ _ hcc2 _ _ h4 h4) (fun st5 h5 => ?_)
       exact fin_block (P := BL4) _ _ _ _ hcc1 _ _ h5 h5
 
-theorem tot_sum_filter_le {α : Type} (P : α → Bool) (f : α → Nat) (l : List α) :
+theorem tot_sum_filter_le [PresetCfg] {α : Type} (P : α → Bool) (f : α → Nat) (l : List α) :
     ((l.filter P).map f).sum ≤ (l.map f).sum := by
   induction l with
   | nil => simp
@@ -412,20 +413,20 @@ theorem tot_rows_sum_le (s : BeaconState) (Q : Row → Bool) :
   rw [hm] at h
   exact h
 
-theorem tot_max_lt {x : Nat} (h : x < 2 ^ 60) : max (Preset.mainnet).EFFECTIVE_BALANCE_INCREMENT x < 2 ^ 62 := by
+theorem tot_max_lt [PresetCfg] {x : Nat} (h : x < 2 ^ 60) : max (P).EFFECTIVE_BALANCE_INCREMENT x < 2 ^ 62 := by
   have h' : x < 1152921504606846976 := h
   show max 1000000000 x < 4611686018427387904
   omega
 
 theorem tot_ge64 {x : Nat} (h : ¬ x / 32 ≤ 1) : 64 ≤ x := by omega
 
-theorem process_justification_and_finalization_total (s : BeaconState) (hrows : RowsOk s)
+theorem process_justification_and_finalization_total [PresetCfg] (s : BeaconState) (hrows : RowsOk s)
     (hslot : s.slot + 8192 < 2 ^ 64) (hlast : (s.slot + 1) % 32 = 0)
     (hbr : s.block_roots.length = 8192) (hbits : s.justification_bits.length = 4)
     (hcp : s.previous_justified_checkpoint.epoch < 2 ^ 63 ∧
       s.current_justified_checkpoint.epoch < 2 ^ 63)
     (hsup : totalEffectiveBalance s < 2 ^ 60) :
-    OkWith (process_justification_and_finalization Preset.mainnet s) BL4 := by
+    OkWith (process_justification_and_finalization P s) BL4 := by
   unfold process_justification_and_finalization
   rw [tot_current_epoch, tot_bind_ok]
   split
@@ -438,7 +439,7 @@ theorem process_justification_and_finalization_total (s : BeaconState) (hrows : 
       participating_total s hrows TIMELY_TARGET_FLAG_INDEX (by decide) _ (Or.inl rfl), tot_bind_ok,
       tot_bind_ok,
       participating_total s hrows TIMELY_TARGET_FLAG_INDEX (by decide) _ (Or.inr rfl), tot_bind_ok]
-    obtain ⟨t, ht, -, htle⟩ := get_total_active_balance_bounds Preset.mainnet s _
+    obtain ⟨t, ht, -, htle⟩ := get_total_active_balance_bounds P s _
       (tot_current_epoch s) hsup64
     rw [ht, tot_bind_ok, tot_filter3, get_total_balance_rows _ _ _ hsup64, tot_bind_ok,
       tot_filter3, get_total_balance_rows _ _ _ hsup64, tot_bind_ok]
@@ -462,7 +463,7 @@ theorem passM_total {A R : Type} (f : A → R → SpecM (A × R)) (rows : List R
 
 /-! ## Effective balance updates -/
 
-theorem tot_hysteresis : hysteresisThresholds Preset.mainnet = .ok (250000000, 1250000000) := by
+theorem tot_hysteresis [PresetCfg] : hysteresisThresholds P = .ok (250000000, 1250000000) := by
   rfl
 
 theorem tot_lt63_add_small {a k : Nat} (h : a < 2 ^ 63) (hk : k ≤ 1250000000) : a + k < 2 ^ 64 := by
@@ -470,9 +471,9 @@ theorem tot_lt63_add_small {a k : Nat} (h : a < 2 ^ 63) (hk : k ≤ 1250000000) 
   show a + k < 18446744073709551616
   omega
 
-theorem newEffectiveBalance_total (v : Validator) (b : Gwei) (hb : b < 2 ^ 63)
+theorem newEffectiveBalance_total [PresetCfg] (v : Validator) (b : Gwei) (hb : b < 2 ^ 63)
     (hv : v.effective_balance < 2 ^ 63) :
-    ∃ e, newEffectiveBalance Preset.mainnet 250000000 1250000000 v b = .ok e := by
+    ∃ e, newEffectiveBalance P 250000000 1250000000 v b = .ok e := by
   unfold newEffectiveBalance
   rw [tot_add (tot_lt63_add_small hb (by decide)), tot_bind_ok]
   have hup := tot_add (tot_lt63_add_small hv (le_refl _))
@@ -488,13 +489,13 @@ theorem newEffectiveBalance_total (v : Validator) (b : Gwei) (hb : b < 2 ^ 63)
 
 /-- `process_effective_balance_updates` succeeds when the balances and the effective balances
 are below `2^63`. It changes only `validators`, and keeps their number. -/
-theorem process_effective_balance_updates_total (s : BeaconState) (hrows : RowsOk s)
+theorem process_effective_balance_updates_total [PresetCfg] (s : BeaconState) (hrows : RowsOk s)
     (hb : ∀ b ∈ s.balances, b < 2 ^ 63) (hv : ∀ v ∈ s.validators, v.effective_balance < 2 ^ 63) :
-    OkWith (process_effective_balance_updates Preset.mainnet s)
+    OkWith (process_effective_balance_updates P s)
       (fun s' => ∃ vs : List Validator, vs.length = s.validators.length ∧
         s' = { s with validators := vs }) := by
-  rw [process_effective_balance_updates_rows Preset.mainnet s _ _ tot_hysteresis hrows]
-  obtain ⟨y, hy⟩ := passM_total (effectiveBalanceRowStep Preset.mainnet 250000000 1250000000)
+  rw [process_effective_balance_updates_rows P s _ _ tot_hysteresis hrows]
+  obtain ⟨y, hy⟩ := passM_total (effectiveBalanceRowStep P 250000000 1250000000)
     (rowsOf s) (fun a r hr => by
       have hrb : r.balance ∈ s.balances := by
         rw [← rowsOf_map_balance s hrows.1]; exact List.mem_map_of_mem hr
@@ -594,9 +595,9 @@ def ConsInv (s : BeaconState) (r : MProd Nat BeaconState) : Prop :=
   ∃ B : List Gwei, r.snd = { s with balances := B } ∧ B.length = s.validators.length ∧
     B.sum ≤ s.balances.sum
 
-theorem process_pending_consolidations_total (s : BeaconState) (hrows : RowsOk s)
+theorem process_pending_consolidations_total [PresetCfg] (s : BeaconState) (hrows : RowsOk s)
     (hslot : s.slot < 2 ^ 64) (hcr : ConsolidationsInRange s) (hsum : s.balances.sum < 2 ^ 64) :
-    OkWith (process_pending_consolidations Preset.mainnet s) (fun s' => ∃ (B : List Gwei) (k : Nat),
+    OkWith (process_pending_consolidations P s) (fun s' => ∃ (B : List Gwei) (k : Nat),
       s' = { s with balances := B, pending_consolidations := s.pending_consolidations.drop k } ∧
       B.length = s.validators.length ∧ B.sum ≤ s.balances.sum) := by
   unfold process_pending_consolidations
@@ -671,9 +672,9 @@ theorem tot_sum_set_add (B : List Nat) (i : Nat) (hi : i < B.length) (x : Nat) :
   have := tot_sum_set_le B i (B[i] + x) hi
   omega
 
-theorem apply_pending_deposit_total (o : Oracle) (s : BeaconState) (d : PendingDeposit)
+theorem apply_pending_deposit_total [PresetCfg] (o : Oracle) (s : BeaconState) (d : PendingDeposit)
     (hrows : RowsOk s) (hsum : s.balances.sum + d.amount < 2 ^ 64) :
-    OkWith (apply_pending_deposit Preset.mainnet o s d) (fun s' => DepStep s s' d.amount) := by
+    OkWith (apply_pending_deposit P o s d) (fun s' => DepStep s s' d.amount) := by
   obtain ⟨h1, h2, h3, h4⟩ := hrows
   unfold apply_pending_deposit
   dsimp only
@@ -753,25 +754,25 @@ structure DepFrame (t s : BeaconState) : Prop where
 
 /-- The inactivity, rewards, registry and slashings steps succeed after justification and
 finalization. `TotalityRows.lean` proves it (`midOk_of_rowBounds`). -/
-def MidOk (t : BeaconState) : Prop :=
+def MidOk [PresetCfg] (t : BeaconState) : Prop :=
   ∀ s1, JFShape t s1 → s1.finalized_checkpoint.epoch ≤ t.slot / 32 →
     (t.slot / 32 ≠ 0 → s1.finalized_checkpoint.epoch + 1 ≤ t.slot / 32) →
-    OkWith (specFourSteps Preset.mainnet s1) (fun s => TailFrame t s ∧ DepFrame t s)
+    OkWith (specFourSteps P s1) (fun s => TailFrame t s ∧ DepFrame t s)
 
 /-- `process_pending_deposits` succeeds after the eth1 data reset. `TotalityRows.lean` proves it
 (`depOk_of_rowBounds`). -/
-def DepOk (o : Oracle) (t : BeaconState) : Prop :=
-  ∀ s tab, TailFrame t s → DepFrame t s → get_total_active_balance Preset.mainnet s = .ok tab →
-    OkWith (process_pending_deposits Preset.mainnet tab (apply_pending_deposit Preset.mainnet o) s)
+def DepOk [PresetCfg] (o : Oracle) (t : BeaconState) : Prop :=
+  ∀ s tab, TailFrame t s → DepFrame t s → get_total_active_balance P s = .ok tab →
+    OkWith (process_pending_deposits P tab (apply_pending_deposit P o) s)
       (TailFrame t)
 
 /-- The sync committee, proposer lookahead and PTC window steps succeed on every state with the
 facts that the earlier steps keep. `committeesOk_of` proves it. -/
-def CommitteesOk (o : Oracle) (t : BeaconState) : Prop :=
+def CommitteesOk [PresetCfg] (o : Oracle) (t : BeaconState) : Prop :=
   ∀ s, CommFrame t s → OkWith (do
-      let s ← process_sync_committee_updates Preset.mainnet o s
-      let s ← process_proposer_lookahead Preset.mainnet o s
-      process_ptc_window Preset.mainnet o s) (fun _ => True)
+      let s ← process_sync_committee_updates P o s
+      let s ← process_proposer_lookahead P o s
+      process_ptc_window P o s) (fun _ => True)
 
 theorem tot_cp {a b x : Nat} (hab : a ≤ b) (hb : b < x / 32 ∨ b = 0) (hx : x < 2 ^ 64) :
     a < 2 ^ 63 ∧ b < 2 ^ 63 := by
@@ -795,20 +796,20 @@ theorem tot_rowsOk_validators {s : BeaconState} (h : RowsOk s) (vs : List Valida
   obtain ⟨h1, h2, h3, h4⟩ := h
   exact ⟨h1.trans hl.symm, h2.trans hl.symm, h3.trans hl.symm, h4.trans hl.symm⟩
 
-theorem tot_tab_lt (s : BeaconState) (h : totalEffectiveBalance s < 2 ^ 62) :
-    ∃ tab, get_total_active_balance Preset.mainnet s = .ok tab ∧ tab < 2 ^ 64 := by
-  obtain ⟨tab, ht, -, hle⟩ := get_total_active_balance_bounds Preset.mainnet s _
+theorem tot_tab_lt [PresetCfg] (s : BeaconState) (h : totalEffectiveBalance s < 2 ^ 62) :
+    ∃ tab, get_total_active_balance P s = .ok tab ∧ tab < 2 ^ 64 := by
+  obtain ⟨tab, ht, -, hle⟩ := get_total_active_balance_bounds P s _
     (tot_current_epoch s) (Nat.lt_trans h (by decide))
   exact ⟨tab, ht, Nat.lt_of_le_of_lt hle (tot_max_lt64 h)⟩
 
 /-- The spec `process_epoch` succeeds on mainnet at the last slot of an epoch, from the
 reachable-state facts at its input and the open steps. -/
-theorem process_epoch_total (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
+theorem process_epoch_total [PresetCfg] (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
     (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % 32 = 0)
-    (hvec : t.VectorLengths Preset.mainnet) (hffg : FfgInvariant Preset.mainnet t)
+    (hvec : t.VectorLengths P) (hffg : FfgInvariant P t)
     (hsup : totalEffectiveBalance t < 2 ^ 60) (hmid : MidOk t) (hdep : DepOk o t)
     (hcomm : CommitteesOk o t) :
-    ∃ s', process_epoch Preset.mainnet o t = .ok s' := by
+    ∃ s', process_epoch P o t = .ok s' := by
   have hslot64 : t.slot < 2 ^ 64 := Nat.lt_of_le_of_lt (Nat.le_add_right _ _) hslot
   obtain ⟨hbr, -, -, -, hbits, -⟩ := hvec
   have hcp := tot_cp hffg.1.2 hffg.2 hslot64

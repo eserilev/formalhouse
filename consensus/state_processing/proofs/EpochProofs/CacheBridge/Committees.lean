@@ -1,4 +1,5 @@
 import EpochProofs.Caches
+import EpochProofs.Spec.PresetCfg
 import EpochProofs.Sanity.PtcIndices
 import EpochProofs.Sanity.ShuffleClosedForm
 import EpochProofs.Equiv.EpochCommittees
@@ -203,8 +204,8 @@ structure CommitteePresetLink (p : Spec.Preset) (cp : CacheProofs.Spec.Committee
   rounds_le : p.SHUFFLE_ROUND_COUNT ≤ 256
   rounds_pos : 0 < p.SHUFFLE_ROUND_COUNT
 
-theorem committeePresetLink_mainnet :
-    CommitteePresetLink Spec.Preset.mainnet CacheProofs.Spec.CommitteeCache.Preset.mainnet where
+theorem committeePresetLink_mainnet [EpochProofs.Spec.PresetCfg] :
+    CommitteePresetLink Spec.P CacheProofs.Spec.CommitteeCache.P where
   slots_per_epoch := rfl
   max_committees_per_slot := rfl
   target_committee_size := rfl

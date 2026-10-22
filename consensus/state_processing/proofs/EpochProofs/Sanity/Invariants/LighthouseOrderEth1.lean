@@ -1,4 +1,5 @@
 import EpochProofs.Sanity.Invariants.LighthouseOrderTail
+import EpochProofs.Spec.PresetCfg
 
 /-!
 # Moving the eth1 reset after the deposits, consolidations and payments
@@ -65,10 +66,10 @@ theorem slotKeep_foldlM {α : Type} (f : BeaconState → α → SpecM BeaconStat
 
 /-! ## The steps between the two positions -/
 
-theorem add_validator_votesBlind (t : BeaconState) (pubkey : BLSPubkey)
+theorem add_validator_votesBlind [PresetCfg] (t : BeaconState) (pubkey : BLSPubkey)
     (withdrawal_credentials : Bytes32) (amount : Gwei) :
-    add_validator_to_registry Preset.mainnet (clearVotes t) pubkey withdrawal_credentials amount =
-      clearVotes <$> add_validator_to_registry Preset.mainnet t pubkey withdrawal_credentials
+    add_validator_to_registry P (clearVotes t) pubkey withdrawal_credentials amount =
+      clearVotes <$> add_validator_to_registry P t pubkey withdrawal_credentials
         amount := by
   unfold add_validator_to_registry get_index_for_new_validator clearVotes
   simp only [bind, Except.bind, pure, Except.pure, Functor.map, Except.map]
@@ -78,9 +79,9 @@ theorem add_validator_votesBlind (t : BeaconState) (pubkey : BLSPubkey)
     | (rename_i h; cases h; rfl)
     | (rename_i h; cases h)
 
-theorem add_validator_slot (t t' : BeaconState) (pubkey : BLSPubkey)
+theorem add_validator_slot [PresetCfg] (t t' : BeaconState) (pubkey : BLSPubkey)
     (withdrawal_credentials : Bytes32) (amount : Gwei)
-    (h : add_validator_to_registry Preset.mainnet t pubkey withdrawal_credentials amount =
+    (h : add_validator_to_registry P t pubkey withdrawal_credentials amount =
       .ok t') : t'.slot = t.slot ∧ t'.historical_summaries = t.historical_summaries := by
   unfold add_validator_to_registry get_index_for_new_validator at h
   simp only [bind, Except.bind, pure, Except.pure] at h
@@ -89,8 +90,8 @@ theorem add_validator_slot (t t' : BeaconState) (pubkey : BLSPubkey)
   cases h
   exact ⟨rfl, rfl⟩
 
-theorem apply_votesBlind (o : Oracle) (d : PendingDeposit) :
-    VotesBlind (fun t => apply_pending_deposit Preset.mainnet o t d) := by
+theorem apply_votesBlind [PresetCfg] (o : Oracle) (d : PendingDeposit) :
+    VotesBlind (fun t => apply_pending_deposit P o t d) := by
   intro t
   simp only
   unfold apply_pending_deposit
@@ -106,8 +107,8 @@ theorem apply_votesBlind (o : Oracle) (d : PendingDeposit) :
     | error err => rfl
     | ok bs => rfl
 
-theorem apply_slotKeep (o : Oracle) (d : PendingDeposit) :
-    SlotKeep (fun t => apply_pending_deposit Preset.mainnet o t d) := by
+theorem apply_slotKeep [PresetCfg] (o : Oracle) (d : PendingDeposit) :
+    SlotKeep (fun t => apply_pending_deposit P o t d) := by
   intro t t' h
   simp only at h
   unfold apply_pending_deposit at h
@@ -117,7 +118,7 @@ theorem apply_slotKeep (o : Oracle) (d : PendingDeposit) :
     cases h
     exact ⟨rfl, rfl⟩
   · simp only [hm, not_false_eq_true, if_true] at h
-    by_cases hs : is_valid_deposit_signature Preset.mainnet o d.pubkey d.withdrawal_credentials
+    by_cases hs : is_valid_deposit_signature P o d.pubkey d.withdrawal_credentials
         d.amount d.signature = true
     · simp only [hs, if_true] at h
       exact add_validator_slot t t' _ _ _ h
@@ -152,16 +153,16 @@ theorem ebUpdateAt_slotKeep (i : Nat) : SlotKeep (fun t => ebUpdateAt t i) := by
   unfold setEB
   split <;> exact ⟨rfl, rfl⟩
 
-theorem payments_votesBlind (tab : Gwei) :
-    VotesBlind (process_builder_pending_payments Preset.mainnet tab) := by
+theorem payments_votesBlind [PresetCfg] (tab : Gwei) :
+    VotesBlind (process_builder_pending_payments P tab) := by
   intro t
   unfold process_builder_pending_payments clearVotes
   simp only [bind, Except.bind, pure, Except.pure, Functor.map, Except.map]
   repeat' split
   all_goals rfl
 
-theorem payments_slotKeep (tab : Gwei) :
-    SlotKeep (process_builder_pending_payments Preset.mainnet tab) := by
+theorem payments_slotKeep [PresetCfg] (tab : Gwei) :
+    SlotKeep (process_builder_pending_payments P tab) := by
   intro t t' h
   unfold process_builder_pending_payments at h
   simp only [bind, Except.bind, pure, Except.pure] at h
@@ -170,14 +171,14 @@ theorem payments_slotKeep (tab : Gwei) :
     | contradiction
     | (cases h; exact ⟨rfl, rfl⟩)
 
-theorem consolidations_votesBlind :
-    VotesBlind (process_pending_consolidations Preset.mainnet) := by
+theorem consolidations_votesBlind [PresetCfg] :
+    VotesBlind (process_pending_consolidations P) := by
   intro t
   unfold process_pending_consolidations
-  have hc : get_current_epoch Preset.mainnet (clearVotes t) =
-      get_current_epoch Preset.mainnet t := rfl
+  have hc : get_current_epoch P (clearVotes t) =
+      get_current_epoch P t := rfl
   rw [hc]
-  cases get_current_epoch Preset.mainnet t with
+  cases get_current_epoch P t with
   | error err => rfl
   | ok ce =>
     simp only [ok_bind']
@@ -203,7 +204,7 @@ theorem consolidations_votesBlind :
       · intro _ _ _ _ _ _
         trivial
 
-theorem consolidations_slotKeep : SlotKeep (process_pending_consolidations Preset.mainnet) := by
+theorem consolidations_slotKeep [PresetCfg] : SlotKeep (process_pending_consolidations P) := by
   intro t t' h
   unfold process_pending_consolidations at h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
