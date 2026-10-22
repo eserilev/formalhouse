@@ -183,3 +183,5 @@ import EpochProofs.Sanity.Invariants.FuluExits
 import EpochProofs.Sanity.Invariants.FuluBalance
 import EpochProofs.Sanity.Invariants.FuluReachable
 import EpochProofs.FormalhouseFuluReachable
+import EpochProofs.Spec.Block.Upgrade
+import EpochProofs.Sanity.Invariants.ForkUpgrade

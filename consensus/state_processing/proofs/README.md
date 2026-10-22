@@ -35,6 +35,7 @@ EpochProofs/Spec/*.lean  <-- written by hand from the consensus specs
 | Fulu: whole epoch against Etheorem's Fulu `processEpoch` | Done | - | Done, with conditions |
 | Fulu: whole Lighthouse epoch (`formalhouse_fulu_epoch`, `formalhouse_fulu_epoch_total`) | Done | Done (shared with Gloas) | Done, with conditions; total |
 | Fulu: reachable-state invariants (`fulu_reachable_invariants`) | Done | - | Done, from `FuluStartOk` with the supply hypotheses |
+| Fork upgrades: `upgrade_to_fulu`, `upgrade_to_gloas` (start facts, Gloas vector lengths) | Done | - | - |
 
 ## The final result
 
@@ -96,8 +97,24 @@ every input of the Fulu `process_epoch` in a run of `state_transition_fulu` step
 (`EpochProofs/FormalhouseFuluReachable.lean`) state both results on such inputs. The run starts
 from a state with the invariants of a genesis state (`FuluStartOk`). The supply bound before each
 block (`SupplyBoundFulu`) and `EpochSupply` at each epoch input (`EpochEconFulu`) stay hypotheses
-on the run, as for Gloas. No proof shows that a Fulu genesis state or `upgrade_to_fulu` gives
-`FuluStartOk`.
+on the run, as for Gloas. `upgrade_to_fulu_startOk` shows that `upgrade_to_fulu` keeps
+`FuluStartOk` of the Electra state. No proof shows the Electra facts, or `FuluStartOk` of a Fulu
+genesis state.
+
+## The fork upgrades
+
+`Spec/Block/Upgrade.lean` transcribes `upgrade_to_fulu` and `upgrade_to_gloas`. Both upgrades
+keep every field that the start facts read (`UpgradeFrame`), so they keep `FuluStartOk`, the
+eight start facts that the Gloas theorems take too (`Sanity/Invariants/ForkUpgrade.lean`).
+`upgrade_to_gloas_vectorLengths` gives the Gloas vector lengths, with a PTC window of
+`(2 + MIN_SEED_LOOKAHEAD) * SLOTS_PER_EPOCH` committees of `PTC_SIZE` validators.
+
+In a reachable Fulu run, the upgrade runs on the state after the Fulu `process_epoch` of the last
+Fulu epoch and the slot increment. `fulu_gloas_fork_startOk` proves the start facts of the
+upgraded state. `fulu_then_gloas_reachable_invariants` then gives `EpochInputOk''` at every
+input of the Gloas `process_epoch` after the fork (through `gloas_reachable_invariants`, the
+Gloas form of `fulu_reachable_invariants`), and `fulu_then_gloas_sameOk` runs the Gloas state
+transitions from the upgraded state. The supply and economic hypotheses stay on each run.
 
 ## Each epoch step and what checks it
 
