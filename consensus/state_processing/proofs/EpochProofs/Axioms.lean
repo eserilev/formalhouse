@@ -70,6 +70,7 @@ import EpochProofs.Sanity.Invariants.LighthouseOrder
 import EpochProofs.Etheorem.LighthouseOrder
 import EpochProofs.Etheorem.Final
 import EpochProofs.Equiv.SinglePassLoopModel
+import EpochProofs.Equiv.DepositWrites
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -312,3 +313,18 @@ open EpochProofs.Spec
 #print axioms EpochProofs.rowsContract_stepSpec
 #print axioms EpochProofs.single_pass_rows_eq_passM
 #print axioms EpochProofs.single_pass_rows_model
+#print axioms EpochProofs.Spec.depositWritesSpec_eq
+#print axioms EpochProofs.Spec.add_validator_to_registry_len
+#print axioms EpochProofs.Spec.apply_pending_deposit_known
+#print axioms EpochProofs.Spec.apply_pending_deposit_new
+#print axioms EpochProofs.Spec.foldlM_take_succ'
+#print axioms EpochProofs.Spec.depositLoop_next_le
+#print axioms EpochProofs.Spec.lhDepositPlan_next_le
+#print axioms EpochProofs.slice_get_some
+#print axioms EpochProofs.foldlM_take_succ
+#print axioms EpochProofs.foldlM_error_of_take
+#print axioms EpochProofs.update_effective_balances_loop_spec
+#print axioms EpochProofs.range'_snoc
+#print axioms EpochProofs.apply_new_validator_deposits_loop_spec
+#print axioms EpochProofs.apply_deposit_writes_spec
+#print axioms EpochProofs.apply_deposit_writes_model

@@ -126,4 +126,6 @@ import EpochProofs.Etheorem.Final
 import EpochProofs.Trusted.RegistryRows
 import EpochProofs.Equiv.SinglePassLoop
 import EpochProofs.Equiv.SinglePassLoopModel
+import EpochProofs.Trusted.EpochTail
+import EpochProofs.Equiv.DepositWrites
 import EpochProofs.Axioms
