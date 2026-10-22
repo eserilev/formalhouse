@@ -198,3 +198,6 @@ import EpochProofs.Equiv.PendingDepositsLen
 import EpochProofs.CacheBridge.EpochCacheBuild
 import EpochProofs.CacheBridge.BuildPath
 import EpochProofs.FormalhouseCachePath
+import EpochProofs.Sanity.ConsolidationTable
+import EpochProofs.Trusted.Consolidations
+import EpochProofs.Equiv.ConsolidationTable

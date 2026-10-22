@@ -84,7 +84,7 @@ reads or writes milhouse lists:
 | Justification and finalization | `justification.rs` | read the bits and roots, write the checkpoints (by review); progressive balances build fact | none |
 | Inactivity, rewards, registry, slashings, deposit top-up, effective balance (Gloas and Fulu) | `single_pass_step.rs`, the step modules, the loop `registry_rows.rs` (`single_pass_rows_model`) | `RowsContract`; epoch cache build fact | `RowBounds` |
 | Pending deposits | `pending_deposits.rs`, `deposit_balance.rs`, `deposit_writes.rs` (`apply_deposit_writes_model`) | `DepositWritesContract`; pubkey cache `Coherent`, `IndexMapLaws` | none |
-| Pending consolidations | `pending_consolidations.rs`, `list_writes.rs` (`update_effective_balances_at_spec`) | `EffectiveBalanceContract`; the consolidation table equals the full-registry run; the `BTreeSet` order equals `consolidationIndices` | none |
+| Pending consolidations | `pending_consolidations.rs` (`process_on_table_spec`), `list_writes.rs` (`update_effective_balances_at_spec`) | `ConsolidationStateContract`, `BTreeSetIter`, `EffectiveBalanceContract` | none |
 | Builder pending payments (Gloas) | `builder_pending_payments.rs`, `list_writes.rs` (`apply_builder_pending_payments_equiv`) | `PaymentWritesContract` | none |
 | Proposer lookahead | `epoch_committees.rs`, `balance_weighted_selection.rs`, `compute_shuffled_index_with.rs` | `SeedMixLink`, `EBLink`, the index lists, `Vector::new` | Gloas: F4; Fulu: `ProposerFin` |
 | PTC window (Gloas) | as the lookahead; `list_writes.rs` (`ptc_window_writes_spec`) | `WindowContract`; `CommitteesFromCache`; `CommitteeCacheBuilt` | F12 |
@@ -97,15 +97,16 @@ reads or writes milhouse lists:
 
 ### Error sites argued by review only
 
-`single_pass.rs` has 178 `?` sites. 44 sit inside contract implementations: they fail only when
-the spec fails, or never. 45 are on the pre-Electra path only. About 89 on the Gloas path are
-excluded by argument only, not by a proof:
+`single_pass.rs` has 175 `?` sites. 48 sit inside contract implementations: they fail only when
+the spec fails, or never. 2 pass on errors of translated code that a proof covers: the
+consolidation table (`process_on_table_spec`) and the effective balance updates after it. 45 are
+on the pre-Electra path only. About 80 on the Gloas path are excluded by argument only, not by a
+proof:
 
 - `process_epoch_single_pass`: 45 (cache setup and context building)
 - the context constructors: 16
 - the proposer lookahead: 9
 - the PTC committee building: 9
-- the consolidation table: 9
 - `default`: 1
 
 The cache builders in `altair.rs` and the two churn reads before the loop are also argued only.
@@ -357,9 +358,21 @@ generic over two traits, so Aeneas translates the order and the error handling.
 - `update_effective_balances_at_spec` shows that the effective balance updates after the
   consolidations are `(consolidationIndices s).foldlM ebUpdateAt`, when the Rust indices are the
   model indices. Lighthouse collects them from a `BTreeSet`, in ascending order without
-  duplicates.
+  duplicates. `btreeSetIter_consolidationIndices` proves that this order is
+  `consolidationIndices`, from `BTreeSetIter`.
 
-The trusted parts are `PaymentWritesContract`, `WindowContract` and `EffectiveBalanceContract`.
+- `process_on_table_spec` (`EpochProofs/Equiv/ConsolidationTable.lean`) shows that
+  `process_on_table` in `pending_consolidations.rs` equals the spec
+  `process_pending_consolidations`: if the spec succeeds, Lighthouse succeeds with the same
+  state, and if the spec fails, Lighthouse fails. `process_on_table` builds the table of the
+  referenced validators, finds each index by binary search (`position_spec`), runs the moves,
+  writes the balances back and drops the handled consolidations. `stepLoop_table`
+  (`EpochProofs/Sanity/ConsolidationTable.lean`) shows that the moves on the table are the moves
+  on the full registry, seen through the table, and `writeBack_table` shows that the write-back
+  gives the full-registry balances.
+
+The trusted parts are `PaymentWritesContract`, `WindowContract`, `EffectiveBalanceContract`,
+`ConsolidationStateContract` and `BTreeSetIter`.
 
 ## Justification and finalization
 
@@ -831,10 +844,10 @@ copies the rest of the body into each branch, and the generated code grows expon
   pubkeys again in each iteration, so a deposit for a validator added earlier in the same loop
   finds it. Lighthouse takes the same path: such a deposit counts as a new validator, consumes
   churn, and is applied to the added validator after the loop.
-- `single_pass.rs` builds the consolidation table from the validators that consolidations
-  reference, in index order, and maps each index to its position in the table. The moves read
-  and write only these rows, so the table run equals the full-registry run of
-  `process_pending_consolidations_eq`. The glue writes the new balances back.
+- `ConsolidationStateContract` (`EpochProofs/Trusted/Consolidations.lean`): `StateConsolidations`
+  in `single_pass.rs` reads the next epoch, the pending consolidations, a table row and a balance
+  of one validator, sets one balance, and drops handled consolidations. `BTreeSetIter`: the
+  `BTreeSet` of source and target indices iterates in increasing order, each index once.
 - `PaymentWritesContract` and `WindowContract` (`EpochProofs/Trusted/EpochTail.lean`):
   `StateBuilderPayments` reads the payments, appends a withdrawal (never fails: the list has no
   limit) and writes the payments when their number is unchanged. `PtcWindowWrites` drops entries
@@ -898,9 +911,8 @@ copies the rest of the body into each branch, and the generated code grows expon
   `Generated.lean` files load together. It changes no definition.
 - `IndexMapLaws`: `HashTrieMap` behaves as a finite map, and `update_pubkey_cache` inserts the
   new pubkeys in order (`insertAll` models it).
-- The consolidation table: the moves on the table of referenced validators equal the moves on the
-  full registry, and the `BTreeSet` of named indices iterates in the order of
-  `consolidationIndices`.
+- `ConsolidationStateContract` and `BTreeSetIter`: the milhouse reads and writes of the
+  consolidation step, and the iteration order of a Rust `BTreeSet`.
 - The builder onboarding at the Gloas fork (`upgrade/gloas.rs`), checked against the spec by
   review only.
 - The Electra state before `upgrade_to_fulu`: no Electra spec exists, so `FuluStartOk` of the
