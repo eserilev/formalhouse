@@ -185,17 +185,17 @@ theorem rrNew_seed [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (v 
     get_seed P o { s with randao_mixes := v }
         (s.slot / P.SLOTS_PER_EPOCH + 1 + 1) d =
       get_seed P o s (s.slot / P.SLOTS_PER_EPOCH + 1 + 1) d := by
-  have hspe : P.SLOTS_PER_EPOCH = 32 := rfl
-  have hehv : P.EPOCHS_PER_HISTORICAL_VECTOR = 65536 := rfl
+  obtain ⟨H, hehv, hH2, hH⟩ := P_historical_vector_nat
   have hmsl : P.MIN_SEED_LOOKAHEAD = 1 := rfl
   obtain ⟨n, hn⟩ : ∃ n : Nat, s.slot / P.SLOTS_PER_EPOCH = n := ⟨_, rfl⟩
   rw [hn] at hfit ⊢
   have hf : @LT.lt Nat _ (n + 65538) (2 ^ 64) := hfit
   have h1 : n + 1 < 2 ^ 64 := by omega
+  have hH0 : H ≠ 0 := by omega
   unfold rrNew at hv
   simp only [get_current_epoch_mainnet, hn, ok_bind', uint64Add_of_lt _ _ h1, get_randao_mix,
-    uint64Mod, hehv, show (65536 : Nat) ≠ 0 by decide, if_false, pure, Except.pure] at hv
-  cases hmix : listGet s.randao_mixes (n % 65536) with
+    uint64Mod, hehv, hH0, if_false, pure, Except.pure] at hv
+  cases hmix : listGet s.randao_mixes (n % H) with
   | error e => rw [hmix] at hv; cases hv
   | ok mix =>
     rw [hmix, ok_bind'] at hv
@@ -203,13 +203,17 @@ theorem rrNew_seed [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (v 
     split at hv
     · cases hv
       unfold get_seed get_randao_mix
-      have h2 : n + 1 + 1 + 65536 < 2 ^ 64 := by omega
+      have h2 : n + 1 + 1 + H < 2 ^ 64 := by omega
       simp only [hehv, hmsl, uint64Add_of_lt _ _ h2, ok_bind']
-      have h3 : 1 ≤ n + 1 + 1 + 65536 := by omega
-      have h4 : 1 ≤ n + 1 + 1 + 65536 - 1 := by omega
-      simp only [uint64Sub, h3, h4, if_true, pure, Except.pure, ok_bind', uint64Mod,
-        show (65536 : Nat) ≠ 0 by decide, if_false]
-      have hidx : (n + 1 + 1 + 65536 - 1 - 1) % 65536 ≠ (n + 1) % 65536 := by omega
+      have h3 : 1 ≤ n + 1 + 1 + H := by omega
+      have h4 : 1 ≤ n + 1 + 1 + H - 1 := by omega
+      simp only [uint64Sub, h3, h4, if_true, pure, Except.pure, ok_bind', uint64Mod, hH0, if_false]
+      have hidx : (n + 1 + 1 + H - 1 - 1) % H ≠ (n + 1) % H := by
+        rw [show n + 1 + 1 + H - 1 - 1 = n + H by omega, Nat.add_mod_right]
+        intro heq
+        have := Nat.sub_mod_eq_zero_of_mod_eq heq.symm
+        rw [show n + 1 - n = 1 by omega, Nat.mod_eq_of_lt (by omega)] at this
+        exact absurd this (by decide)
       simp only [listGet, List.getElem?_set_ne (Ne.symm hidx)]
     · cases hv
 
@@ -219,18 +223,18 @@ theorem rrNew_seed [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (v 
 def SlotRoom [PresetCfg] (s : BeaconState) : Prop :=
   s.slot / P.SLOTS_PER_EPOCH + 65538 < 2 ^ 64
 
-theorem plNew_set (o : Oracle) (s t : BeaconState) (hpl : t.proposer_lookahead = s.proposer_lookahead)
+theorem plNew_set [PresetCfg] (o : Oracle) (s t : BeaconState) (hpl : t.proposer_lookahead = s.proposer_lookahead)
     (hs : t.slot = s.slot) (hv : t.validators = s.validators)
     (hr : t.randao_mixes = s.randao_mixes) : plNew o t = plNew o s :=
   plNew_congr o t s hpl hs hv (by rw [get_seed_congr hr])
 
-theorem ptcNew_set (o : Oracle) (s t : BeaconState) (hptc : t.ptc_window = s.ptc_window)
+theorem ptcNew_set [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s t : BeaconState) (hptc : t.ptc_window = s.ptc_window)
     (hs : t.slot = s.slot) (hv : t.validators = s.validators)
     (hr : t.randao_mixes = s.randao_mixes) : ptcNew o t = ptcNew o s :=
   ptcNew_congr o t s hptc hs hv (fun d => by rw [get_seed_congr hr])
 
 /-- A step `X` swaps with the proposer lookahead and with the PTC window. -/
-structure SwapsWithCommittees (o : Oracle) (X : BeaconState → SpecM BeaconState) : Prop where
+structure SwapsWithCommittees [PresetCfg] (o : Oracle) (X : BeaconState → SpecM BeaconState) : Prop where
   pl : ∀ s, SlotRoom s → SameOk (X s >>= process_proposer_lookahead P o)
     (process_proposer_lookahead P o s >>= X)
   ptc : ∀ s, SlotRoom s → SameOk (X s >>= process_ptc_window P o)
@@ -277,7 +281,7 @@ theorem historical_swaps [PresetCfg] [PresetCfg.Ok] (o : Oracle) :
     (process_ptc_window_eq o)
     (fun _ _ => ptcNew_set o s _ rfl rfl rfl rfl) (fun _ _ => rfl) (fun _ _ => rfl)
 
-theorem participation_swaps (o : Oracle) : SwapsWithCommittees o pfStep where
+theorem participation_swaps [PresetCfg] [PresetCfg.Ok] (o : Oracle) : SwapsWithCommittees o pfStep where
   pl s _ := swap_shapes _ _ pfNew (fun v t => setPF t v) (plNew o) (fun w t => setPL t w) s
     pfStep_eq (process_proposer_lookahead_eq o)
     (fun _ _ => plNew_set o s _ rfl rfl rfl rfl) (fun _ _ => rfl) (fun _ _ => rfl)
@@ -327,7 +331,7 @@ theorem slotRoom_keeps_hs [PresetCfg] (o : Oracle) :
     StepKeeps SlotRoom (process_historical_summaries_update P o) :=
   keeps_of_shape _ _ _ _ (process_historical_summaries_update_eq o) (fun _ _ h => h)
 
-theorem slotRoom_keeps_pf : StepKeeps SlotRoom pfStep :=
+theorem slotRoom_keeps_pf [PresetCfg] : StepKeeps SlotRoom pfStep :=
   keeps_of_shape _ _ _ _ pfStep_eq (fun _ _ h => h)
 
 theorem slotRoom_keeps_sc [PresetCfg] (o : Oracle) :

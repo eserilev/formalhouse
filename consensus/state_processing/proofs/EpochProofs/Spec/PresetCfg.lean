@@ -95,6 +95,8 @@ class PresetCfg.Ok [c : PresetCfg] : Prop where
   slashings_vector_ge : 64 ≤ c.v.EPOCHS_PER_SLASHINGS_VECTOR
   slashings_vector_le : c.v.EPOCHS_PER_SLASHINGS_VECTOR ≤ 8192
   historical_vector_pos : 0 < c.v.EPOCHS_PER_HISTORICAL_VECTOR
+  historical_vector_ge : 2 ≤ c.v.EPOCHS_PER_HISTORICAL_VECTOR
+  historical_vector_le : c.v.EPOCHS_PER_HISTORICAL_VECTOR ≤ 65536
   eth1_period_pos : 0 < c.v.EPOCHS_PER_ETH1_VOTING_PERIOD
   sync_size_pos : 0 < c.v.SYNC_COMMITTEE_SIZE
   sync_seats_even : (c.v.SLOTS_PER_EPOCH * c.v.SYNC_COMMITTEE_SIZE) % 2 = 0
@@ -155,6 +157,10 @@ theorem P_target_far [PresetCfg] [PresetCfg.Ok] {e : Nat}
   omega
 theorem P_historical_vector_pos [PresetCfg] [h : PresetCfg.Ok] :
     0 < P.EPOCHS_PER_HISTORICAL_VECTOR := h.historical_vector_pos
+/-- The historical vector length as a `Nat` with its bounds. -/
+theorem P_historical_vector_nat [PresetCfg] [h : PresetCfg.Ok] :
+    ∃ H : Nat, P.EPOCHS_PER_HISTORICAL_VECTOR = H ∧ 2 ≤ H ∧ H ≤ 65536 :=
+  ⟨_, rfl, h.historical_vector_ge, h.historical_vector_le⟩
 theorem P_eth1_period_pos [PresetCfg] [h : PresetCfg.Ok] : 0 < P.EPOCHS_PER_ETH1_VOTING_PERIOD :=
   h.eth1_period_pos
 
@@ -170,14 +176,16 @@ theorem mainnetCfg_ok : @PresetCfg.Ok mainnetCfg :=
   letI := mainnetCfg
   { slots_pos := by decide, slots_gt_one := by decide, slashings_vector_pos := by decide, slashings_vector_ge := by decide,
     slashings_vector_le := by decide,
-    historical_vector_pos := by decide, eth1_period_pos := by decide,
+    historical_vector_pos := by decide, historical_vector_ge := by decide,
+    historical_vector_le := by decide, eth1_period_pos := by decide,
     sync_size_pos := by decide, sync_seats_even := by decide }
 
 theorem minimalCfg_ok : @PresetCfg.Ok minimalCfg :=
   letI := minimalCfg
   { slots_pos := by decide, slots_gt_one := by decide, slashings_vector_pos := by decide, slashings_vector_ge := by decide,
     slashings_vector_le := by decide,
-    historical_vector_pos := by decide, eth1_period_pos := by decide,
+    historical_vector_pos := by decide, historical_vector_ge := by decide,
+    historical_vector_le := by decide, eth1_period_pos := by decide,
     sync_size_pos := by decide, sync_seats_even := by decide }
 
 theorem P_mainnet : @P mainnetCfg = Preset.mainnet := rfl
