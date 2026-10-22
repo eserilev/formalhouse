@@ -77,6 +77,32 @@ pub fn next_proposer_lookahead<H: ShuffleHash, B: EffectiveBalances>(
         .ok_or(SelectionError::IndexOutOfBounds(lookahead.len()))
 }
 
+/// Returns the proposer indices of `epoch`, as `get_beacon_proposer_indices` does.
+///
+/// `indices` are the proposer candidates of `epoch`. `mix` is the RANDAO mix that
+/// `get_seed(state, epoch, DOMAIN_BEACON_PROPOSER)` reads.
+#[allow(clippy::too_many_arguments)]
+pub fn proposer_indices_for_epoch<H: ShuffleHash, B: EffectiveBalances>(
+    balances: &B,
+    indices: &[usize],
+    domain_beacon_proposer: &[u8; 4],
+    epoch: u64,
+    mix: &[u8; 32],
+    start_slot: u64,
+    constants: &SelectionConstants,
+) -> Result<Vec<usize>, SelectionError> {
+    let seed = compute_seed::<H>(domain_beacon_proposer, epoch, mix);
+    compute_proposer_indices::<H, B>(
+        balances,
+        indices,
+        &seed,
+        start_slot,
+        constants.slots_per_epoch,
+        constants.shuffle_round_count,
+        constants.max_effective_balance,
+    )
+}
+
 /// Returns the PTC of each slot of `epoch`, the epoch that `process_ptc_window` appends.
 ///
 /// `committees[i]` holds the beacon committees of slot `start_slot + i`, joined in order. `mix`

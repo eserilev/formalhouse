@@ -11,8 +11,8 @@ validator indices.
 
 namespace EpochProofs.Spec
 
-/-- The steps of `lhFullTail` after the pass, for a plan and the result of the pass. -/
-def lhAfterPass (o : Oracle) (s : BeaconState) (total_active_balance : Gwei)
+/-- The steps of `lhFullTailG` after the pass, for a plan and the result of the pass. -/
+def lhAfterPassG (o : Oracle) (K : BeaconState → SpecM BeaconState) (s : BeaconState)
     (plan : LhDepositPlan) (x : (Epoch × Gwei) × List Row) : SpecM BeaconState := do
   let s1 ← process_eth1_data_reset Preset.mainnet (s.withRowsChurn x.1 x.2)
   let s2 := { s1 with
@@ -23,11 +23,16 @@ def lhAfterPass (o : Oracle) (s : BeaconState) (total_active_balance : Gwei)
     ebUpdateAt s3
   let s5 ← process_pending_consolidations Preset.mainnet s4
   let s6 ← (consolidationIndices s).foldlM ebUpdateAt s5
-  let s7 ← process_builder_pending_payments Preset.mainnet total_active_balance s6
-  epochRest2 o s7
+  K s6
 
-/-- `lhFullTail` once the context values are known. -/
-theorem lhFullTail_eq (o : Oracle) (s1 : BeaconState) (current_epoch : Epoch)
+/-- The steps of `lhFullTail` after the pass. -/
+def lhAfterPass (o : Oracle) (s : BeaconState) (total_active_balance : Gwei)
+    (plan : LhDepositPlan) (x : (Epoch × Gwei) × List Row) : SpecM BeaconState :=
+  lhAfterPassG o (gloasFin o total_active_balance) s plan x
+
+/-- `lhFullTailG` once the context values are known. -/
+theorem lhFullTailG_eq (o : Oracle) (rt : Gwei → Gwei)
+    (fin : Gwei → BeaconState → SpecM BeaconState) (s1 : BeaconState) (current_epoch : Epoch)
     (total_active_balance : Gwei) (rctx : RewardsContext) (adjusted per : Gwei)
     (downward upward : Uint64)
     (hcur : get_current_epoch Preset.mainnet s1 = .ok current_epoch)
@@ -36,14 +41,14 @@ theorem lhFullTail_eq (o : Oracle) (s1 : BeaconState) (current_epoch : Epoch)
     (hpre : slashingsPreamble Preset.mainnet total_active_balance s1.slashings =
       .ok (adjusted, per))
     (hthr : hysteresisThresholds Preset.mainnet = .ok (downward, upward)) :
-    lhFullTail o s1 = (lhDepositPlan s1 total_active_balance current_epoch >>= fun plan =>
-      passM (fun churn r => lhRowStepFull Preset.mainnet
-          (lhContextOf s1 total_active_balance current_epoch rctx per) downward upward
+    lhFullTailG o rt fin s1 = (lhDepositPlan s1 (rt total_active_balance) current_epoch >>=
+      fun plan => passM (fun churn r => lhRowStepFull Preset.mainnet
+          (lhContextOf s1 (rt total_active_balance) current_epoch rctx per) downward upward
           ⟨lhBaseReward total_active_balance r, plan.topups.getD r.index 0,
             decide (r.index ∈ consolidationIndices s1)⟩ churn r)
         (s1.earliest_exit_epoch, s1.exit_balance_to_consume) (rowsOf s1) >>=
-      lhAfterPass o s1 total_active_balance plan) := by
-  unfold lhFullTail
+      lhAfterPassG o (fin total_active_balance) s1 plan) := by
+  unfold lhFullTailG
   rw [hcur, ok_bind', htab, ok_bind', hctx, ok_bind', hpre, ok_bind']
   simp only [hthr, ok_bind']
   rfl
@@ -105,7 +110,7 @@ theorem lhDepositPlan_eq (s : BeaconState) (total_active_balance : Gwei)
         | ok sums => rfl
 
 /-- The steps of `tailNF` after the top-up sums. -/
-def nfAfter (o : Oracle) (s1 S4 : BeaconState) (total_active_balance : Gwei)
+def nfAfterG (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 S4 : BeaconState)
     (dec : Nat × Gwei × List Bool) (sums : List Gwei) : SpecM BeaconState := do
   let handled := handledOfDec s1 dec
   let pubkeys := s1.validators.map (·.pubkey)
@@ -120,16 +125,15 @@ def nfAfter (o : Oracle) (s1 S4 : BeaconState) (total_active_balance : Gwei)
   let t6 ← (List.range' n (t5.validators.length - n)).foldlM ebUpdateAt t5
   let t7 ← process_pending_consolidations Preset.mainnet t6
   let t8 ← named.foldlM ebUpdateAt t7
-  let t9 ← process_builder_pending_payments Preset.mainnet total_active_balance t8
-  epochRest2 o t9
+  K t8
 
-/-- `tailNF` is the decisions, the top-up sums, then `nfAfter`. -/
-theorem tailNF_eq (o : Oracle) (s1 S4 : BeaconState) (total_active_balance : Gwei)
-    (current_epoch : Epoch) :
-    tailNF o s1 S4 total_active_balance current_epoch =
+/-- `tailNFG` is the decisions, the top-up sums, then `nfAfterG`. -/
+theorem tailNFG_eq (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 S4 : BeaconState)
+    (total_active_balance : Gwei) (current_epoch : Epoch) :
+    tailNFG o K s1 S4 total_active_balance current_epoch =
       (planDec s1 total_active_balance current_epoch >>= fun dec =>
-        sumsOfDec s1 dec >>= fun sums => nfAfter o s1 S4 total_active_balance dec sums) := by
-  unfold tailNF planDec
+        sumsOfDec s1 dec >>= fun sums => nfAfterG o K s1 S4 dec sums) := by
+  unfold tailNFG planDec
   cases compute_start_slot_at_epoch Preset.mainnet s1.finalized_checkpoint.epoch with
   | error e => rfl
   | ok fs =>
@@ -167,7 +171,7 @@ theorem lhRowStep_rowKey (ctx : LhStepContext) (base : Gwei) (churn : Epoch × G
 /-! ## After the pass -/
 
 /-- The steps of `lhAfterPass` from the state after the pass. -/
-def lhRest (o : Oracle) (s : BeaconState) (total_active_balance : Gwei)
+def lhRest (o : Oracle) (K : BeaconState → SpecM BeaconState) (s : BeaconState)
     (plan : LhDepositPlan) (T : BeaconState) : SpecM BeaconState := do
   let s1 ← process_eth1_data_reset Preset.mainnet T
   let s2 := { s1 with
@@ -178,12 +182,11 @@ def lhRest (o : Oracle) (s : BeaconState) (total_active_balance : Gwei)
     ebUpdateAt s3
   let s5 ← process_pending_consolidations Preset.mainnet s4
   let s6 ← (consolidationIndices s).foldlM ebUpdateAt s5
-  let s7 ← process_builder_pending_payments Preset.mainnet total_active_balance s6
-  epochRest2 o s7
+  K s6
 
-/-- The steps of `nfAfter` from the state after the updates of the validators that are not
+/-- The steps of `nfAfterG` from the state after the updates of the validators that are not
 named. -/
-def nfRest (o : Oracle) (s1 : BeaconState) (total_active_balance : Gwei)
+def nfRest (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 : BeaconState)
     (dec : Nat × Gwei × List Bool) (t2 : BeaconState) : SpecM BeaconState := do
   let handled := handledOfDec s1 dec
   let n := s1.validators.length
@@ -195,15 +198,13 @@ def nfRest (o : Oracle) (s1 : BeaconState) (total_active_balance : Gwei)
   let t6 ← (List.range' n (t5.validators.length - n)).foldlM ebUpdateAt t5
   let t7 ← process_pending_consolidations Preset.mainnet t6
   let t8 ← (consolidationIndices s1).foldlM ebUpdateAt t7
-  let t9 ← process_builder_pending_payments Preset.mainnet total_active_balance t8
-  epochRest2 o t9
+  K t8
 
 /-- With a state of `n` validators, the two rests are equal. -/
-theorem lhRest_eq_nfRest (o : Oracle) (s1 : BeaconState) (total_active_balance : Gwei)
+theorem lhRest_eq_nfRest (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 : BeaconState)
     (dec : Nat × Gwei × List Bool) (sums : List Gwei) (T : BeaconState)
     (hT : T.validators.length = s1.validators.length) :
-    lhRest o s1 total_active_balance (planOf s1 dec sums) T =
-      nfRest o s1 total_active_balance dec T := by
+    lhRest o K s1 (planOf s1 dec sums) T = nfRest o K s1 dec T := by
   unfold lhRest nfRest
   cases he : process_eth1_data_reset Preset.mainnet T with
   | error e => rfl
@@ -237,17 +238,17 @@ theorem ebFold_length :
 
 /-! ## The main theorem -/
 
-/-- After the first pass, the second pass and the rest of `lhFullTail` give the same `ok`
-results as `nfAfter`. -/
-theorem lhAfter_pass2_nf (o : Oracle) (s1 : BeaconState) (total_active_balance : Gwei)
+/-- After the first pass, the second pass and the rest of `lhFullTailG` give the same `ok`
+results as `nfAfterG`. -/
+theorem lhAfter_pass2_nf (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 : BeaconState)
     (downward upward : Uint64)
     (hthr : hysteresisThresholds Preset.mainnet = .ok (downward, upward)) (hrows : RowsOk s1)
     (dec : Nat × Gwei × List Bool) (sums : List Gwei) (x : (Epoch × Gwei) × List Row)
     (hkey : x.2.map rowKey = (rowsOf s1).map rowKey) :
     SameOk (passM (fun _ r => (fun r' => ((), r')) <$> lhRowStep2 downward upward
         (sums.getD r.index 0) (decide (r.index ∈ consolidationIndices s1)) r) () x.2 >>=
-        fun y => lhAfterPass o s1 total_active_balance (planOf s1 dec sums) (x.1, y.2))
-      (nfAfter o s1 (s1.withRowsChurn x.1 x.2) total_active_balance dec sums) := by
+        fun y => lhAfterPassG o K s1 (planOf s1 dec sums) (x.1, y.2))
+      (nfAfterG o K s1 (s1.withRowsChurn x.1 x.2) dec sums) := by
   let S4 := s1.withRowsChurn x.1 x.2
   let td := fun i => sums.getD i 0
   let nm := fun i => decide (i ∈ consolidationIndices s1)
@@ -260,23 +261,23 @@ theorem lhAfter_pass2_nf (o : Oracle) (s1 : BeaconState) (total_active_balance :
     rw [List.length_map, hlen2]
   have hL : (passM (fun _ r => (fun r' => ((), r')) <$> lhRowStep2 downward upward
         (td r.index) (nm r.index) r) () x.2 >>=
-        fun y => lhAfterPass o s1 total_active_balance (planOf s1 dec sums) (x.1, y.2)) =
+        fun y => lhAfterPassG o K s1 (planOf s1 dec sums) (x.1, y.2)) =
       ((fun y => S4.withRows y.2) <$> passM (fun _ r => (fun r' => ((), r')) <$>
         lhRowStep2 downward upward (td r.index) (nm r.index) r) () (rowsOf S4)) >>=
-        lhRest o s1 total_active_balance (planOf s1 dec sums) := by
+        lhRest o K s1 (planOf s1 dec sums) := by
     rw [bind_map_left, hrowsS4]
     rfl
-  have hR : nfAfter o s1 S4 total_active_balance dec sums =
+  have hR : nfAfterG o K s1 S4 dec sums =
       (((List.range S4.validators.length).foldlM (fun t i => increaseAt i (td i) t) S4) >>=
         fun t => ((List.range S4.validators.length).filter (fun i => !nm i)).foldlM
-          ebUpdateAt t) >>= nfRest o s1 total_active_balance dec := by
-    simp only [nfAfter, addSums]
+          ebUpdateAt t) >>= nfRest o K s1 dec := by
+    simp only [nfAfterG, addSums]
     rw [hlen, bind_assoc]
     rfl
   show SameOk (passM (fun _ r => (fun r' => ((), r')) <$> lhRowStep2 downward upward
       (td r.index) (nm r.index) r) () x.2 >>=
-      fun y => lhAfterPass o s1 total_active_balance (planOf s1 dec sums) (x.1, y.2))
-    (nfAfter o s1 S4 total_active_balance dec sums)
+      fun y => lhAfterPassG o K s1 (planOf s1 dec sums) (x.1, y.2))
+    (nfAfterG o K s1 S4 dec sums)
   rw [hL, hR]
   refine SameOk.bind ((rows_pass2_fold S4 hokS4 downward upward hthr td nm).trans
     (fold_interleave td nm _ S4)) (fun T2 hT2 => SameOk.of_eq ?_)
@@ -285,6 +286,50 @@ theorem lhAfter_pass2_nf (o : Oracle) (s1 : BeaconState) (total_active_balance :
   have hyl := (passM_rows _ _ _ _ hy).1
   show (y.2.map (·.validator)).length = _
   rw [List.length_map, hyl, rowsOf_length, hlen]
+
+/-- `lhFullTailG` gives the same `ok` results as the first pass followed by `tailNFG`. -/
+theorem lhFullTailG_nf (o : Oracle) (rt : Gwei → Gwei)
+    (fin : Gwei → BeaconState → SpecM BeaconState) (s1 : BeaconState) (current_epoch : Epoch)
+    (total_active_balance : Gwei) (rctx : RewardsContext) (adjusted per : Gwei)
+    (downward upward : Uint64)
+    (hcur : get_current_epoch Preset.mainnet s1 = .ok current_epoch)
+    (htab : get_total_active_balance Preset.mainnet s1 = .ok total_active_balance)
+    (hctx : rewardsContextOf Preset.mainnet total_active_balance s1 = .ok rctx)
+    (hpre : slashingsPreamble Preset.mainnet total_active_balance s1.slashings =
+      .ok (adjusted, per))
+    (hthr : hysteresisThresholds Preset.mainnet = .ok (downward, upward))
+    (hrows : RowsOk s1) :
+    SameOk (lhFullTailG o rt fin s1)
+      (do
+        let x ← passM (fun c r => lhRowStep Preset.mainnet
+            (lhContextOf s1 (rt total_active_balance) current_epoch rctx per)
+            (lhBaseReward total_active_balance r) c r)
+          (s1.earliest_exit_epoch, s1.exit_balance_to_consume) (rowsOf s1)
+        tailNFG o (fin total_active_balance) s1 (s1.withRowsChurn x.1 x.2)
+          (rt total_active_balance) current_epoch) := by
+  let ctx := lhContextOf s1 (rt total_active_balance) current_epoch rctx per
+  let c0 := (s1.earliest_exit_epoch, s1.exit_balance_to_consume)
+  let pass1 := passM (fun c r => lhRowStep Preset.mainnet ctx
+    (lhBaseReward total_active_balance r) c r) c0 (rowsOf s1)
+  let K := fin total_active_balance
+  rw [lhFullTailG_eq o rt fin s1 current_epoch total_active_balance rctx adjusted per downward
+    upward hcur htab hctx hpre hthr, lhDepositPlan_eq]
+  simp only [tailNFG_eq, bind_assoc, bind_map_left]
+  refine SameOk.trans ?_ (sameOk_bind_swap (planDec s1 (rt total_active_balance) current_epoch)
+    pass1 (fun dec x => sumsOfDec s1 dec >>= fun sums =>
+      nfAfterG o K s1 (s1.withRowsChurn x.1 x.2) dec sums))
+  refine SameOk.bind (SameOk.refl _) (fun dec _ => ?_)
+  refine SameOk.trans ?_ (sameOk_bind_swap (sumsOfDec s1 dec) pass1 (fun sums x =>
+      nfAfterG o K s1 (s1.withRowsChurn x.1 x.2) dec sums))
+  refine SameOk.bind (SameOk.refl _) (fun sums _ => ?_)
+  refine SameOk.trans (SameOk.bind (lhRowStepFull_split ctx downward upward
+    (lhBaseReward total_active_balance) (fun i => sums.getD i 0)
+    (fun i => decide (i ∈ consolidationIndices s1)) c0 (rowsOf s1))
+    (fun _ _ => SameOk.refl _)) ?_
+  simp only [bind_assoc, pure_bind]
+  refine SameOk.bind (SameOk.refl _) (fun x hx => ?_)
+  exact lhAfter_pass2_nf o K s1 downward upward hthr hrows dec sums x
+    (passM_rowKey _ (fun c r y h => lhRowStep_rowKey ctx _ c r y h) c0 (rowsOf s1) x hx)
 
 /-- `lhFullTail` gives the same `ok` results as the first pass followed by `tailNF`. -/
 theorem lhFullTail_nf (o : Oracle) (s1 : BeaconState) (current_epoch : Epoch)
@@ -303,28 +348,8 @@ theorem lhFullTail_nf (o : Oracle) (s1 : BeaconState) (current_epoch : Epoch)
             (lhContextOf s1 total_active_balance current_epoch rctx per)
             (lhBaseReward total_active_balance r) c r)
           (s1.earliest_exit_epoch, s1.exit_balance_to_consume) (rowsOf s1)
-        tailNF o s1 (s1.withRowsChurn x.1 x.2) total_active_balance current_epoch) := by
-  let ctx := lhContextOf s1 total_active_balance current_epoch rctx per
-  let c0 := (s1.earliest_exit_epoch, s1.exit_balance_to_consume)
-  let pass1 := passM (fun c r => lhRowStep Preset.mainnet ctx
-    (lhBaseReward total_active_balance r) c r) c0 (rowsOf s1)
-  rw [lhFullTail_eq o s1 current_epoch total_active_balance rctx adjusted per downward upward
-    hcur htab hctx hpre hthr, lhDepositPlan_eq]
-  simp only [tailNF_eq, bind_assoc, bind_map_left]
-  refine SameOk.trans ?_ (sameOk_bind_swap (planDec s1 total_active_balance current_epoch)
-    pass1 (fun dec x => sumsOfDec s1 dec >>= fun sums =>
-      nfAfter o s1 (s1.withRowsChurn x.1 x.2) total_active_balance dec sums))
-  refine SameOk.bind (SameOk.refl _) (fun dec _ => ?_)
-  refine SameOk.trans ?_ (sameOk_bind_swap (sumsOfDec s1 dec) pass1 (fun sums x =>
-      nfAfter o s1 (s1.withRowsChurn x.1 x.2) total_active_balance dec sums))
-  refine SameOk.bind (SameOk.refl _) (fun sums _ => ?_)
-  refine SameOk.trans (SameOk.bind (lhRowStepFull_split ctx downward upward
-    (lhBaseReward total_active_balance) (fun i => sums.getD i 0)
-    (fun i => decide (i ∈ consolidationIndices s1)) c0 (rowsOf s1))
-    (fun _ _ => SameOk.refl _)) ?_
-  simp only [bind_assoc, pure_bind]
-  refine SameOk.bind (SameOk.refl _) (fun x hx => ?_)
-  exact lhAfter_pass2_nf o s1 total_active_balance downward upward hthr hrows dec sums x
-    (passM_rowKey _ (fun c r y h => lhRowStep_rowKey ctx _ c r y h) c0 (rowsOf s1) x hx)
+        tailNF o s1 (s1.withRowsChurn x.1 x.2) total_active_balance current_epoch) :=
+  lhFullTailG_nf o id (gloasFin o) s1 current_epoch total_active_balance rctx adjusted per
+    downward upward hcur htab hctx hpre hthr hrows
 
 end EpochProofs.Spec
