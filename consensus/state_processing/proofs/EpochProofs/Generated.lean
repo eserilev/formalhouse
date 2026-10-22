@@ -99,6 +99,18 @@ def U64.Insts.Safe_arithSafeArithU64.safe_add
   let o ← lift (U64.checked_add self other)
   core.option.Option.ok_or o safe_arith.ArithError.Overflow
 
+/-- [safe_arith::{impl safe_arith::SafeArith<usize> for usize}::safe_add]:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/safe_arith-0.1.0/src/lib.rs', lines 140:12-140:59
+    Name pattern: [safe_arith::{safe_arith::SafeArith<usize, usize>}::safe_add]
+    Visibility: public -/
+@[rust_fun "safe_arith::{safe_arith::SafeArith<usize, usize>}::safe_add"]
+def Usize.Insts.Safe_arithSafeArithUsize.safe_add
+  (self : Std.Usize) (other : Std.Usize) :
+  Result (core.result.Result Std.Usize safe_arith.ArithError)
+  := do
+  let o ← lift (Usize.checked_add self other)
+  core.option.Option.ok_or o safe_arith.ArithError.Overflow
+
 /-- [safe_arith::{impl safe_arith::SafeArith<u64> for u64}::safe_sub]:
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/safe_arith-0.1.0/src/lib.rs', lines 145:12-145:59
     Name pattern: [safe_arith::{safe_arith::SafeArith<u64, u64>}::safe_sub]
@@ -2675,14 +2687,50 @@ def per_epoch_processing.pending_deposits.process_pending_deposits
       per_epoch_processing.pending_deposits.DepositsOutcome
       (core.convert.FromSame safe_arith.ArithError) residual
 
-/-- [state_processing::per_epoch_processing::registry_update::RegistryFields]
-    Source: 'consensus/state_processing/src/per_epoch_processing/registry_update.rs', lines 9:0-16:1
+/-- [state_processing::per_epoch_processing::registry_rows::RowsError]
+    Source: 'consensus/state_processing/src/per_epoch_processing/registry_rows.rs', lines 13:0-18:1
     Visibility: public -/
-structure per_epoch_processing.registry_update.RegistryFields where
-  activation_eligibility_epoch : Std.U64
-  activation_epoch : Std.U64
-  exit_epoch : Std.U64
-  withdrawable_epoch : Std.U64
+@[discriminant isize]
+inductive per_epoch_processing.registry_rows.RowsError (E : Type) where
+| Step :
+  safe_arith.ArithError →
+  per_epoch_processing.registry_rows.RowsError E
+| Rows : E → per_epoch_processing.registry_rows.RowsError E
+
+/-- [state_processing::per_epoch_processing::single_pass_step::StepContext]
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 40:0-67:1
+    Visibility: public -/
+structure per_epoch_processing.single_pass_step.StepContext where
+  current_epoch : Std.U64
+  previous_epoch : Std.U64
+  finalized_epoch : Std.U64
+  is_in_inactivity_leak : Bool
+  inactivity_score_bias : Std.U64
+  inactivity_score_recovery_rate : Std.U64
+  inactivity_penalty_quotient : Std.U64
+  source_increments : Std.U64
+  target_increments : Std.U64
+  head_increments : Std.U64
+  active_increments : Std.U64
+  total_active_balance : Std.U64
+  target_withdrawable_epoch : Std.U64
+  adjusted_total_slashing_balance : Std.U64
+  penalty_per_effective_balance_increment : Std.U64
+  effective_balance_increment : Std.U64
+  downward_threshold : Std.U64
+  upward_threshold : Std.U64
+  after_genesis : Bool
+  inactivity_updates : Bool
+  rewards_and_penalties : Bool
+  registry_updates : Bool
+  slashings : Bool
+  pending_deposits : Bool
+  effective_balance_updates : Bool
+
+/-- [state_processing::per_epoch_processing::single_pass_step::ExitChurn]
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 33:0-36:1
+    Visibility: public -/
+structure per_epoch_processing.single_pass_step.ExitChurn where
   earliest_exit_epoch : Std.U64
   exit_balance_to_consume : Std.U64
 
@@ -2699,6 +2747,105 @@ structure per_epoch_processing.registry_update.RegistryConstants where
   churn_limit_quotient : Std.U64
   effective_balance_increment : Std.U64
   exit_churn_cap : Std.U64
+
+/-- Trait declaration: [state_processing::per_epoch_processing::registry_rows::RegistryRows]
+    Source: 'consensus/state_processing/src/per_epoch_processing/registry_rows.rs', lines 21:0-34:1
+    Visibility: public -/
+structure per_epoch_processing.registry_rows.RegistryRows (Self : Type) (E :
+  Type) where
+  row_count : Self → Result Std.Usize
+  apply_step : Self → Std.Usize →
+    per_epoch_processing.single_pass_step.ExitChurn →
+    per_epoch_processing.single_pass_step.StepContext →
+    per_epoch_processing.registry_update.RegistryConstants → Result
+    ((core.result.Result per_epoch_processing.single_pass_step.ExitChurn
+    (per_epoch_processing.registry_rows.RowsError E)) × Self)
+
+/-- [state_processing::per_epoch_processing::registry_rows::single_pass_rows]: loop body 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/registry_rows.rs', lines 46:4-54:1
+    Visibility: public -/
+@[rust_loop_body]
+def per_epoch_processing.registry_rows.single_pass_rows_loop.body
+  {E : Type} {R : Type} (RegistryRowsInst :
+  per_epoch_processing.registry_rows.RegistryRows R E)
+  (ctx : per_epoch_processing.single_pass_step.StepContext)
+  (constants : per_epoch_processing.registry_update.RegistryConstants)
+  (len : Std.Usize) (rows : R)
+  (churn : per_epoch_processing.single_pass_step.ExitChurn) (index : Std.Usize)
+  :
+  Result (ControlFlow (R × per_epoch_processing.single_pass_step.ExitChurn ×
+    Std.Usize) ((core.result.Result
+    per_epoch_processing.single_pass_step.ExitChurn
+    (per_epoch_processing.registry_rows.RowsError E)) × R))
+  := do
+  if index < len
+  then
+    let (r, rows1) ←
+      RegistryRowsInst.apply_step rows index churn ctx constants
+    let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+    match cf with
+    | core.ops.control_flow.ControlFlow.Continue val =>
+      let r1 ← Usize.Insts.Safe_arithSafeArithUsize.safe_add index 1#usize
+      match r1 with
+      | core.result.Result.Ok next => ok (cont (rows1, val, next))
+      | core.result.Result.Err e =>
+        ok (done (core.result.Result.Err
+          (per_epoch_processing.registry_rows.RowsError.Step e), rows1))
+    | core.ops.control_flow.ControlFlow.Break residual =>
+      let r1 ←
+        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+          per_epoch_processing.single_pass_step.ExitChurn
+          (core.convert.FromSame (per_epoch_processing.registry_rows.RowsError
+          E)) residual
+      ok (done (r1, rows1))
+  else ok (done (core.result.Result.Ok churn, rows))
+
+/-- [state_processing::per_epoch_processing::registry_rows::single_pass_rows]: loop 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/registry_rows.rs', lines 46:4-54:1
+    Visibility: public -/
+@[rust_loop]
+def per_epoch_processing.registry_rows.single_pass_rows_loop
+  {E : Type} {R : Type} (RegistryRowsInst :
+  per_epoch_processing.registry_rows.RegistryRows R E) (rows : R)
+  (ctx : per_epoch_processing.single_pass_step.StepContext)
+  (constants : per_epoch_processing.registry_update.RegistryConstants)
+  (len : Std.Usize) (churn : per_epoch_processing.single_pass_step.ExitChurn)
+  (index : Std.Usize) :
+  Result ((core.result.Result per_epoch_processing.single_pass_step.ExitChurn
+    (per_epoch_processing.registry_rows.RowsError E)) × R)
+  := do
+  loop
+    (fun (rows1, churn1, index1) =>
+      per_epoch_processing.registry_rows.single_pass_rows_loop.body
+      RegistryRowsInst ctx constants len rows1 churn1 index1)
+    (rows, churn, index)
+
+/-- [state_processing::per_epoch_processing::registry_rows::single_pass_rows]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/registry_rows.rs', lines 37:0-54:1
+    Visibility: public -/
+def per_epoch_processing.registry_rows.single_pass_rows
+  {E : Type} {R : Type} (RegistryRowsInst :
+  per_epoch_processing.registry_rows.RegistryRows R E) (rows : R)
+  (churn : per_epoch_processing.single_pass_step.ExitChurn)
+  (ctx : per_epoch_processing.single_pass_step.StepContext)
+  (constants : per_epoch_processing.registry_update.RegistryConstants) :
+  Result ((core.result.Result per_epoch_processing.single_pass_step.ExitChurn
+    (per_epoch_processing.registry_rows.RowsError E)) × R)
+  := do
+  let len ← RegistryRowsInst.row_count rows
+  per_epoch_processing.registry_rows.single_pass_rows_loop RegistryRowsInst
+    rows ctx constants len churn 0#usize
+
+/-- [state_processing::per_epoch_processing::registry_update::RegistryFields]
+    Source: 'consensus/state_processing/src/per_epoch_processing/registry_update.rs', lines 9:0-16:1
+    Visibility: public -/
+structure per_epoch_processing.registry_update.RegistryFields where
+  activation_eligibility_epoch : Std.U64
+  activation_epoch : Std.U64
+  exit_epoch : Std.U64
+  withdrawable_epoch : Std.U64
+  earliest_exit_epoch : Std.U64
+  exit_balance_to_consume : Std.U64
 
 /-- [state_processing::per_epoch_processing::registry_update::compute_activation_exit_epoch]:
     Source: 'consensus/state_processing/src/per_epoch_processing/registry_update.rs', lines 32:0-37:1
@@ -3294,13 +3441,6 @@ def per_epoch_processing.single_pass_step.ValidatorRow.Insts.CoreMarkerCopy :
     per_epoch_processing.single_pass_step.ValidatorRow.Insts.CoreCloneClone
 }
 
-/-- [state_processing::per_epoch_processing::single_pass_step::ExitChurn]
-    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 33:0-36:1
-    Visibility: public -/
-structure per_epoch_processing.single_pass_step.ExitChurn where
-  earliest_exit_epoch : Std.U64
-  exit_balance_to_consume : Std.U64
-
 /-- [state_processing::per_epoch_processing::single_pass_step::{impl core::clone::Clone for state_processing::per_epoch_processing::single_pass_step::ExitChurn}::clone]:
     Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 32:9-32:14
     Visibility: public -/
@@ -3327,36 +3467,6 @@ def per_epoch_processing.single_pass_step.ExitChurn.Insts.CoreMarkerCopy :
   cloneInst :=
     per_epoch_processing.single_pass_step.ExitChurn.Insts.CoreCloneClone
 }
-
-/-- [state_processing::per_epoch_processing::single_pass_step::StepContext]
-    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 40:0-67:1
-    Visibility: public -/
-structure per_epoch_processing.single_pass_step.StepContext where
-  current_epoch : Std.U64
-  previous_epoch : Std.U64
-  finalized_epoch : Std.U64
-  is_in_inactivity_leak : Bool
-  inactivity_score_bias : Std.U64
-  inactivity_score_recovery_rate : Std.U64
-  inactivity_penalty_quotient : Std.U64
-  source_increments : Std.U64
-  target_increments : Std.U64
-  head_increments : Std.U64
-  active_increments : Std.U64
-  total_active_balance : Std.U64
-  target_withdrawable_epoch : Std.U64
-  adjusted_total_slashing_balance : Std.U64
-  penalty_per_effective_balance_increment : Std.U64
-  effective_balance_increment : Std.U64
-  downward_threshold : Std.U64
-  upward_threshold : Std.U64
-  after_genesis : Bool
-  inactivity_updates : Bool
-  rewards_and_penalties : Bool
-  registry_updates : Bool
-  slashings : Bool
-  pending_deposits : Bool
-  effective_balance_updates : Bool
 
 /-- [state_processing::per_epoch_processing::single_pass_step::{impl core::clone::Clone for state_processing::per_epoch_processing::single_pass_step::StepContext}::clone]:
     Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 39:9-39:14

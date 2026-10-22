@@ -69,6 +69,7 @@ import EpochProofs.Sanity.Invariants.LighthouseResets
 import EpochProofs.Sanity.Invariants.LighthouseOrder
 import EpochProofs.Etheorem.LighthouseOrder
 import EpochProofs.Etheorem.Final
+import EpochProofs.Equiv.SinglePassLoopModel
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -304,3 +305,10 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.lighthouse_order_epoch_state_transition_sameOk
 #print axioms EpochProofs.Etheorem.lighthouse_order_epoch_etheorem
 #print axioms EpochProofs.Etheorem.lighthouse_order_epoch_etheorem_reachable
+#print axioms EpochProofs.passM_append
+#print axioms EpochProofs.single_pass_rows_loop_spec
+#print axioms EpochProofs.single_pass_rows_spec
+#print axioms EpochProofs.lhRowStepFull_base_reward
+#print axioms EpochProofs.rowsContract_stepSpec
+#print axioms EpochProofs.single_pass_rows_eq_passM
+#print axioms EpochProofs.single_pass_rows_model
