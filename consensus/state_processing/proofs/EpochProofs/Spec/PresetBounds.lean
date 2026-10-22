@@ -65,4 +65,66 @@ theorem P_epoch_le_div6 [PresetCfg] [PresetCfg.Ok] (x : Nat) : x / P.SLOTS_PER_E
 theorem P_epoch_mul_le [PresetCfg] (x : Nat) : x / P.SLOTS_PER_EPOCH * P.SLOTS_PER_EPOCH ≤ x :=
   Nat.div_mul_le_self _ _
 
+theorem P_slots_ne [PresetCfg] [PresetCfg.Ok] : P.SLOTS_PER_EPOCH ≠ 0 :=
+  Nat.pos_iff_ne_zero.mp P_slots_pos
+theorem P_slots_le [PresetCfg] [b : PresetCfg.Bounds] : P.SLOTS_PER_EPOCH ≤ 32 := b.slots_le
+theorem P_slots_ge6 [PresetCfg] [h : PresetCfg.Ok] : 6 ≤ P.SLOTS_PER_EPOCH := h.slots_ge_six
+theorem P_target_ne [PresetCfg] [b : PresetCfg.Bounds] : P.TARGET_COMMITTEE_SIZE ≠ 0 :=
+  Nat.pos_iff_ne_zero.mp b.target_committee_pos
+theorem P_max_committees_le [PresetCfg] [b : PresetCfg.Bounds] :
+    @LE.le Nat _ P.MAX_COMMITTEES_PER_SLOT 64 :=
+  b.max_committees_le
+theorem P_shuffle_le [PresetCfg] [b : PresetCfg.Bounds] :
+    @LE.le Nat _ P.SHUFFLE_ROUND_COUNT 256 :=
+  b.shuffle_rounds_le
+theorem P_hist_ne [PresetCfg] [PresetCfg.Ok] : P.EPOCHS_PER_HISTORICAL_VECTOR ≠ 0 :=
+  Nat.pos_iff_ne_zero.mp P_historical_vector_pos
+theorem P_hist_ge2 [PresetCfg] [h : PresetCfg.Ok] :
+    @LE.le Nat _ 2 P.EPOCHS_PER_HISTORICAL_VECTOR :=
+  h.historical_vector_ge
+theorem P_hist_le [PresetCfg] [h : PresetCfg.Ok] :
+    @LE.le Nat _ P.EPOCHS_PER_HISTORICAL_VECTOR 65536 :=
+  h.historical_vector_le
+theorem P_sync_period_ne [PresetCfg] [b : PresetCfg.Bounds] :
+    P.EPOCHS_PER_SYNC_COMMITTEE_PERIOD ≠ 0 := Nat.pos_iff_ne_zero.mp b.sync_period_pos
+theorem P_ptc_pos [PresetCfg] [b : PresetCfg.Bounds] : @LT.lt Nat _ 0 P.PTC_SIZE := b.ptc_pos
+theorem P_ptc_le [PresetCfg] [b : PresetCfg.Bounds] : @LE.le Nat _ P.PTC_SIZE 512 := b.ptc_le
+theorem P_sync_le [PresetCfg] [b : PresetCfg.Bounds] : @LE.le Nat _ P.SYNC_COMMITTEE_SIZE 512 :=
+  b.sync_le
+theorem P_sync_pos [PresetCfg] [h : PresetCfg.Ok] : @LT.lt Nat _ 0 P.SYNC_COMMITTEE_SIZE :=
+  h.sync_size_pos
+theorem P_target_pos [PresetCfg] [b : PresetCfg.Bounds] : @LT.lt Nat _ 0 P.TARGET_COMMITTEE_SIZE :=
+  b.target_committee_pos
+theorem P_slv_le [PresetCfg] [h : PresetCfg.Ok] : @LE.le Nat _ P.EPOCHS_PER_SLASHINGS_VECTOR 8192 :=
+  h.slashings_vector_le
+theorem P_maxeb [PresetCfg] : P.MAX_EFFECTIVE_BALANCE_ELECTRA = 2048000000000 := rfl
+theorem P_min_seed [PresetCfg] : P.MIN_SEED_LOOKAHEAD = 1 := rfl
+
+/-- `x + 8192 < 2 ^ 64` leaves room for a few epochs and the historical vector. -/
+theorem P_ep_bound [PresetCfg] [PresetCfg.Ok] {x : Nat} (h : x + 8192 < 2 ^ 64) (k : Nat)
+    (hk : k ≤ 3) : x / P.SLOTS_PER_EPOCH + k + P.EPOCHS_PER_HISTORICAL_VECTOR < 2 ^ 64 := by
+  have h6 := P_epoch_le_div6 x
+  have hH := P_hist_le (h := inferInstance)
+  have h' : x < 18446744073709543424 := by
+    have : (2 : Nat) ^ 64 = 18446744073709551616 := by decide
+    omega
+  refine Nat.lt_of_le_of_lt (Nat.add_le_add_left hH _) ?_
+  show x / P.SLOTS_PER_EPOCH + k + 65536 < 18446744073709551616
+  omega
+
+/-- The start slot of a near epoch, plus one epoch, fits in a `u64`. -/
+theorem P_ep_start_bound [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] {x : Nat}
+    (h : x + 8192 < 2 ^ 64) (k : Nat) (hk : k ≤ 3) :
+    (x / P.SLOTS_PER_EPOCH + k) * P.SLOTS_PER_EPOCH + P.SLOTS_PER_EPOCH < 2 ^ 64 := by
+  have h1 := P_epoch_mul_le x
+  have hS : P.SLOTS_PER_EPOCH ≤ 32 := P_slots_le
+  have h2 : k * P.SLOTS_PER_EPOCH ≤ 3 * 32 := Nat.mul_le_mul hk hS
+  have h' : x < 18446744073709543424 := by
+    have : (2 : Nat) ^ 64 = 18446744073709551616 := by decide
+    omega
+  rw [Nat.add_mul]
+  show x / P.SLOTS_PER_EPOCH * P.SLOTS_PER_EPOCH + k * P.SLOTS_PER_EPOCH + P.SLOTS_PER_EPOCH <
+    18446744073709551616
+  omega
+
 end EpochProofs.Spec
