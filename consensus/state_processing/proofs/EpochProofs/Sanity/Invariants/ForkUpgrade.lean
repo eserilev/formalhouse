@@ -141,7 +141,7 @@ theorem upgrade_to_fulu_frame (p : Preset) (o : Oracle) (c : UpgradeConfig) (pre
   exact ⟨rfl, rfl, rfl, rfl, rfl, ⟨rfl, rfl, rfl, rfl⟩, rfl⟩
 
 /-- `UpgradeFrame` keeps the eight start facts. -/
-theorem FuluStartOk.of_frame {s s' : BeaconState} (hf : UpgradeFrame s s') (h : FuluStartOk s) :
+theorem FuluStartOk.of_frame [PresetCfg] {s s' : BeaconState} (hf : UpgradeFrame s s') (h : FuluStartOk s) :
     FuluStartOk s' := by
   obtain ⟨hv, hb, hi, hpp, hcp, hcs, hpc⟩ := hf
   refine ⟨h.ffg.of_checkpointsStable hcs, ?_, ExitDelay.of_validators_eq hv h.exitDelay,
@@ -156,13 +156,13 @@ theorem FuluStartOk.of_frame {s s' : BeaconState} (hf : UpgradeFrame s s') (h : 
     exact h.consolidations c hc
 
 /-- `upgrade_to_fulu` keeps the start facts of the Electra state. -/
-theorem upgrade_to_fulu_startOk (p : Preset) (o : Oracle) (c : UpgradeConfig) (pre post : FuluState)
+theorem upgrade_to_fulu_startOk [PresetCfg] (p : Preset) (o : Oracle) (c : UpgradeConfig) (pre post : FuluState)
     (h : upgrade_to_fulu p o c pre = .ok post) (hs : FuluStartOk pre.state) :
     FuluStartOk post.state :=
   FuluStartOk.of_frame (upgrade_to_fulu_frame p o c pre post h) hs
 
 /-- `upgrade_to_gloas` keeps the start facts of the Fulu state. -/
-theorem upgrade_to_gloas_startOk (p : Preset) (o : Oracle) (c : UpgradeConfig) (pre : FuluState)
+theorem upgrade_to_gloas_startOk [PresetCfg] (p : Preset) (o : Oracle) (c : UpgradeConfig) (pre : FuluState)
     (g : BeaconState) (h : upgrade_to_gloas p o c pre = .ok g) (hs : FuluStartOk pre.state) :
     FuluStartOk g :=
   FuluStartOk.of_frame (upgrade_to_gloas_frame p o c pre g h) hs
@@ -358,7 +358,8 @@ theorem fulu_fork_state_startOk [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok
 
 /-- The Gloas state that `upgrade_to_gloas` makes at the fork of a reachable Fulu run has the
 start facts of the Gloas theorems. -/
-theorem fulu_gloas_fork_startOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
+theorem fulu_gloas_fork_startOk [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok]
+    (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
     (uc : UpgradeConfig) (init : FuluState) (hi : FuluStartOk init.state)
     (hsupply : SupplyBoundFulu o fo c init)
     (fs t t1 : FuluState) (s2 g : BeaconState) (slot : Slot) (hr : ReachableFulu o fo c init fs)
@@ -376,7 +377,8 @@ theorem fulu_gloas_fork_startOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (fo : Fu
 Gloas run reaches from the upgraded state `g` has the same `ok` results with any epoch function
 `f` that agrees with `process_epoch` on the inputs that `EpochInputOk''` describes. The Gloas
 supply and economic hypotheses are on the Gloas run, as in `reachable_state_transition_sameOk'''`. -/
-theorem fulu_then_gloas_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
+theorem fulu_then_gloas_sameOk [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok]
+    (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
     (uc : UpgradeConfig) (init : FuluState) (hi : FuluStartOk init.state)
     (hsupply : SupplyBoundFulu o fo c init)
     (fs t t1 : FuluState) (s2 g : BeaconState) (slot : Slot) (hr : ReachableFulu o fo c init fs)
@@ -421,7 +423,7 @@ inductive SlotReachG [PresetCfg] (o : Oracle) (s : BeaconState) (slot : Slot) : 
       SlotReachG o s slot { t2 with slot := t2.slot + 1 }
 
 /-- The Gloas slot loop keeps `LoopInv`. -/
-theorem SlotReachG.loopInv {o : Oracle} {s t : BeaconState} {slot : Slot}
+theorem SlotReachG.loopInv [PresetCfg] [PresetCfg.Ok] {o : Oracle} {s t : BeaconState} {slot : Slot}
     (hslot64 : slot < 2 ^ 64) (hr : SlotReachG o s slot t) (hs : ReachInv s) :
     LoopInv s.slot t := by
   have hst := loopInv_steps o slot s.slot hslot64
@@ -440,7 +442,7 @@ theorem SlotReachG.loopInv {o : Oracle} {s t : BeaconState} {slot : Slot}
     exact hst.2.2.2.1 _ hz hQ
 
 /-- A target-bounded run of the loop is a run of `SlotReach`. -/
-theorem SlotReachG.slotReach {o : Oracle} {s t : BeaconState} {slot : Slot}
+theorem SlotReachG.slotReach [PresetCfg] {o : Oracle} {s t : BeaconState} {slot : Slot}
     (hr : SlotReachG o s slot t) : SlotReach o s t := by
   induction hr with
   | refl => exact .refl
@@ -482,7 +484,8 @@ theorem gloas_reachable_invariants [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_
 
 /-- A Fulu run that crosses the Gloas fork: every input of the Gloas `process_epoch` after the
 fork has the facts of `EpochInputOk''`. -/
-theorem fulu_then_gloas_reachable_invariants [PresetCfg] [PresetCfg.Ok] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
+theorem fulu_then_gloas_reachable_invariants [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok]
+    (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
     (uc : UpgradeConfig) (init : FuluState) (hi : FuluStartOk init.state)
     (hsupply : SupplyBoundFulu o fo c init)
     (fs t t1 : FuluState) (s2 g : BeaconState) (slot : Slot) (hr : ReachableFulu o fo c init fs)
