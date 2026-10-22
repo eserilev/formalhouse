@@ -180,3 +180,6 @@ import EpochProofs.Sanity.Invariants.FuluLengths
 import EpochProofs.Sanity.Invariants.FuluPubkeys
 import EpochProofs.Sanity.Invariants.FuluConsolidations
 import EpochProofs.Sanity.Invariants.FuluExits
+import EpochProofs.Sanity.Invariants.FuluBalance
+import EpochProofs.Sanity.Invariants.FuluReachable
+import EpochProofs.FormalhouseFuluReachable

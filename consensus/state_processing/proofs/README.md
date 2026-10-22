@@ -34,6 +34,7 @@ EpochProofs/Spec/*.lean  <-- written by hand from the consensus specs
 | Fulu: registry update and single pass | Done (shared with Gloas) | Done (shared with Gloas) | Done |
 | Fulu: whole epoch against Etheorem's Fulu `processEpoch` | Done | - | Done, with conditions |
 | Fulu: whole Lighthouse epoch (`formalhouse_fulu_epoch`, `formalhouse_fulu_epoch_total`) | Done | Done (shared with Gloas) | Done, with conditions; total |
+| Fulu: reachable-state invariants (`fulu_reachable_invariants`) | Done | - | Done, from `FuluStartOk` with the supply hypotheses |
 
 ## The final result
 
@@ -87,9 +88,16 @@ same `ok` results. `formalhouse_fulu_epoch_total` adds that Lighthouse's Fulu ep
 Fulu pyspec preconditions (`FuluCommPreconds`): an active validator at the next epoch and at
 `current + 2`, and selections that end within `2^64` passes. Fulu has no PTC, so the Gloas F12
 halt (fewer than 32 active validators) does not apply, and a slashed active validator counts as
-a proposer candidate (no F4). Its state facts are the invariants that reachable Gloas states
-keep (`EpochInputOk''`). The Lean spec has no Fulu block processing, so for Fulu they are
-assumptions.
+a proposer candidate (no F4). Its state facts are the reachable-state invariants
+(`EpochInputOk''`). `Spec/Block/Fulu*.lean` transcribe the Fulu block processing, and
+`fulu_reachable_invariants` (`Sanity/Invariants/FuluReachable.lean`) proves these invariants at
+every input of the Fulu `process_epoch` in a run of `state_transition_fulu` steps.
+`formalhouse_fulu_epoch_reachable` and `formalhouse_fulu_epoch_total_reachable`
+(`EpochProofs/FormalhouseFuluReachable.lean`) state both results on such inputs. The run starts
+from a state with the invariants of a genesis state (`FuluStartOk`). The supply bound before each
+block (`SupplyBoundFulu`) and `EpochSupply` at each epoch input (`EpochEconFulu`) stay hypotheses
+on the run, as for Gloas. No proof shows that a Fulu genesis state or `upgrade_to_fulu` gives
+`FuluStartOk`.
 
 ## Each epoch step and what checks it
 
