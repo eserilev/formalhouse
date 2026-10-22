@@ -564,38 +564,31 @@ def natsOf (w : alloc.vec.Vec Usize) : List Nat := w.val.map (·.val)
 /-- The PTCs of a Lighthouse vector, as lists of validator indices. -/
 def ptcsOf (v : alloc.vec.Vec (alloc.vec.Vec Usize)) : List (List Nat) := v.val.map natsOf
 
-/-- `ptc_for_epoch` returns the PTCs that `process_ptc_window` appends. -/
-theorem ptc_for_epoch_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EBInst B)
+/-- `ptc_for_epoch` returns the PTCs of the slots of `epoch`, for any `epoch`: `ptcs[k]` is
+`compute_ptc(state, start_slot + k)`. -/
+theorem ptc_for_epoch_spec_gen {H B : Type} (inst : ShuffleHashInst H) (ebi : EBInst B)
     (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashLink inst o)
     (state : Spec.BeaconState)
     (hEB : EBLink ebi balances (state.validators.map (·.effective_balance)))
     (committees : Slice (alloc.vec.Vec Usize))
     (hclen : committees.val.length = p.SLOTS_PER_EPOCH) (domain : Array U8 4#usize)
     (hdomain : u8s domain.val = Spec.DOMAIN_PTC_ATTESTER.toList) (epoch : U64)
-    (hepoch : ∀ ce, Spec.get_current_epoch p state = .ok ce →
-      epoch.val = ce + p.MIN_SEED_LOOKAHEAD + 1)
     (mix : Array U8 32#usize) (hmix : SeedMixLink p state epoch.val mix) (start_slot : U64)
     (hstart : Spec.compute_start_slot_at_epoch p epoch.val = .ok start_slot.val)
+    (hfit : start_slot.val + p.SLOTS_PER_EPOCH < 2 ^ 64)
+    (ptcs : List (List Nat)) (hplen : ptcs.length = p.SLOTS_PER_EPOCH)
+    (hk : ∀ k (hk : k < p.SLOTS_PER_EPOCH), ∃ hk' : k < ptcs.length,
+      Spec.compute_ptc p o state (start_slot.val + k) = .ok ptcs[k])
     (hcomm : ∀ k (hk : k < committees.val.length) l,
       Spec.ptcIndices p o state epoch.val (start_slot.val + k) = .ok l →
         (committees.val[k]).val.map (·.val) = l)
     (hn24 : ∀ k (hk : k < committees.val.length), (committees.val[k]).val.length ≤ 2 ^ 24)
     (ptc_size : Usize) (hptc : ptc_size.val = p.PTC_SIZE) (c : LhSelectionConstants)
     (hc : SelectionConstantsMatch p c) (hspe : 0 < p.SLOTS_PER_EPOCH)
-    (hus : Usize.max = U64.max)
-    (state' : Spec.BeaconState) (hspec : Spec.process_ptc_window p o state = .ok state') :
+    (hus : Usize.max = U64.max) :
     per_epoch_processing.epoch_committees.ptc_for_epoch inst ebi balances committees domain epoch
       mix start_slot ptc_size c ⦃ r =>
-        ∃ v : alloc.vec.Vec (alloc.vec.Vec Usize), r = .Ok v ∧
-          state'.ptc_window = state.ptc_window.drop p.SLOTS_PER_EPOCH ++
-            ptcsOf v ⦄ := by
-  obtain ⟨e, start, ptcs, ⟨ce, hce, he⟩, hst, hfit, -, hw, hplen, hk⟩ :=
-    spec_ptc_window_get p o state state' hspec
-  have hev : e = epoch.val := by rw [he, hepoch ce hce]
-  subst hev
-  rw [hstart] at hst
-  have hsv : start = start_slot.val := (Except.ok.inj hst).symm
-  subst hsv
+        ∃ v : alloc.vec.Vec (alloc.vec.Vec Usize), r = .Ok v ∧ ptcsOf v = ptcs ⦄ := by
   obtain ⟨hk0, h0⟩ := hk 0 hspe
   obtain ⟨s, -, hs, -, -⟩ := ptc_slot_facts p o state epoch.val start_slot.val 0 hspe hstart hspe
     _ h0
@@ -677,6 +670,44 @@ theorem ptc_for_epoch_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EBInst
   rcases r with ⟨v, err⟩
   dsimp only at herr hv
   simp only [herr, spec_ok]
-  exact ⟨v, rfl, by rw [hw, hv]⟩
+  exact ⟨v, rfl, hv⟩
+
+/-- `ptc_for_epoch` returns the PTCs that `process_ptc_window` appends. -/
+theorem ptc_for_epoch_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EBInst B)
+    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashLink inst o)
+    (state : Spec.BeaconState)
+    (hEB : EBLink ebi balances (state.validators.map (·.effective_balance)))
+    (committees : Slice (alloc.vec.Vec Usize))
+    (hclen : committees.val.length = p.SLOTS_PER_EPOCH) (domain : Array U8 4#usize)
+    (hdomain : u8s domain.val = Spec.DOMAIN_PTC_ATTESTER.toList) (epoch : U64)
+    (hepoch : ∀ ce, Spec.get_current_epoch p state = .ok ce →
+      epoch.val = ce + p.MIN_SEED_LOOKAHEAD + 1)
+    (mix : Array U8 32#usize) (hmix : SeedMixLink p state epoch.val mix) (start_slot : U64)
+    (hstart : Spec.compute_start_slot_at_epoch p epoch.val = .ok start_slot.val)
+    (hcomm : ∀ k (hk : k < committees.val.length) l,
+      Spec.ptcIndices p o state epoch.val (start_slot.val + k) = .ok l →
+        (committees.val[k]).val.map (·.val) = l)
+    (hn24 : ∀ k (hk : k < committees.val.length), (committees.val[k]).val.length ≤ 2 ^ 24)
+    (ptc_size : Usize) (hptc : ptc_size.val = p.PTC_SIZE) (c : LhSelectionConstants)
+    (hc : SelectionConstantsMatch p c) (hspe : 0 < p.SLOTS_PER_EPOCH)
+    (hus : Usize.max = U64.max)
+    (state' : Spec.BeaconState) (hspec : Spec.process_ptc_window p o state = .ok state') :
+    per_epoch_processing.epoch_committees.ptc_for_epoch inst ebi balances committees domain epoch
+      mix start_slot ptc_size c ⦃ r =>
+        ∃ v : alloc.vec.Vec (alloc.vec.Vec Usize), r = .Ok v ∧
+          state'.ptc_window = state.ptc_window.drop p.SLOTS_PER_EPOCH ++
+            ptcsOf v ⦄ := by
+  obtain ⟨e, start, ptcs, ⟨ce, hce, he⟩, hst, hfit, -, hw, hplen, hk⟩ :=
+    spec_ptc_window_get p o state state' hspec
+  have hev : e = epoch.val := by rw [he, hepoch ce hce]
+  subst hev
+  rw [hstart] at hst
+  have hsv : start = start_slot.val := (Except.ok.inj hst).symm
+  subst hsv
+  apply spec_mono (ptc_for_epoch_spec_gen inst ebi balances p o hH state hEB committees hclen domain
+    hdomain epoch mix hmix start_slot hstart hfit ptcs hplen hk hcomm hn24 ptc_size hptc c hc hspe hus)
+  intro r hr
+  obtain ⟨v, hrv, hv⟩ := hr
+  exact ⟨v, hrv, by rw [hw, hv]⟩
 
 end EpochProofs

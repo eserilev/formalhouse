@@ -1,4 +1,6 @@
 use crate::builder_deposits_cache::{OnboardBuildersCache, is_valid_deposit_signature_cached};
+use crate::per_epoch_processing::epoch_committees;
+use crate::per_epoch_processing::single_pass::selection_constants;
 use bls::PublicKeyBytes;
 use milhouse::{ProgressiveList, Vector};
 use safe_arith::SafeArith;
@@ -7,13 +9,14 @@ use std::{
     collections::{HashMap, HashSet},
     mem,
 };
+use swap_or_not_shuffle::Sha256Hash;
 use tracing::debug;
 use tree_hash::TreeHash;
 use typenum::Unsigned;
 use types::{
     Address, BeaconState, BeaconStateError as Error, BeaconStateGloas, Builder,
-    BuilderPendingPayment, ChainSpec, EthSpec, ExecutionPayloadBid, ExecutionRequestsGloas, Fork,
-    PendingDeposit, ProgressiveKzgCommitments,
+    BuilderPendingPayment, ChainSpec, Domain, EthSpec, ExecutionPayloadBid, ExecutionRequestsGloas,
+    Fork, PendingDeposit, ProgressiveKzgCommitments,
     consts::gloas::{BUILDER_INDEX_SELF_BUILD, PAYLOAD_BUILDER_VERSION},
     is_builder_withdrawal_credential,
 };
@@ -197,18 +200,39 @@ fn initialize_ptc_window<E: EthSpec>(
     let empty_previous_epoch = vec![FixedVector::<u64, E::PTCSize>::from_elem(0); slots_per_epoch];
     let mut ptcs = empty_previous_epoch;
 
+    let domain = spec.get_domain_constant(Domain::PTCAttester).to_le_bytes();
+    let constants = selection_constants(state, spec);
+
     // Compute PTC for current epoch + lookahead epochs
     let current_epoch = state.current_epoch();
     for e in 0..=spec.min_seed_lookahead.as_u64() {
         let epoch = current_epoch.safe_add(e)?;
         let committee_cache = state.initialize_committee_cache_for_lookahead(epoch, spec)?;
         let start_slot = epoch.start_slot(E::slots_per_epoch());
+        let mut committees = Vec::with_capacity(slots_per_epoch);
         for i in 0..slots_per_epoch {
             let slot = start_slot.safe_add(i as u64)?;
-            let ptc = state.compute_ptc_with_cache(slot, &committee_cache, spec)?;
+            let committee_indices: Vec<usize> = committee_cache
+                .get_beacon_committees_at_slot(slot)?
+                .iter()
+                .flat_map(|committee| committee.committee.iter().copied())
+                .collect();
+            committees.push(committee_indices);
+        }
+        let mix = *state.get_seed_mix(epoch, spec)?;
+        let epoch_ptcs = epoch_committees::ptc_for_epoch::<Sha256Hash, _>(
+            &*state,
+            &committees,
+            &domain,
+            epoch.as_u64(),
+            &mix.0,
+            start_slot.as_u64(),
+            E::ptc_size(),
+            &constants,
+        )?;
+        for ptc in epoch_ptcs {
             let ptc_u64: Vec<u64> = ptc.into_iter().map(|v| v as u64).collect();
-            let entry = FixedVector::new(ptc_u64)?;
-            ptcs.push(entry);
+            ptcs.push(FixedVector::new(ptc_u64)?);
         }
     }
 

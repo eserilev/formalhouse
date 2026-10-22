@@ -36,6 +36,7 @@ EpochProofs/Spec/*.lean  <-- written by hand from the consensus specs
 | Fulu: whole Lighthouse epoch (`formalhouse_fulu_epoch`, `formalhouse_fulu_epoch_total`) | Done | Done (shared with Gloas) | Done, with conditions; total |
 | Fulu: reachable-state invariants (`fulu_reachable_invariants`) | Done | - | Done, from `FuluStartOk` with the supply hypotheses |
 | Fork upgrades: `upgrade_to_fulu`, `upgrade_to_gloas` (start facts, Gloas vector lengths) | Done | - | - |
+| Fork upgrades: Lighthouse proposer lookahead and PTC window at the fork | Done | Done | Done, with glue conditions |
 
 ## The final result
 
@@ -115,6 +116,14 @@ upgraded state. `fulu_then_gloas_reachable_invariants` then gives `EpochInputOk'
 input of the Gloas `process_epoch` after the fork (through `gloas_reachable_invariants`, the
 Gloas form of `fulu_reachable_invariants`), and `fulu_then_gloas_sameOk` runs the Gloas state
 transitions from the upgraded state. The supply and economic hypotheses stay on each run.
+
+Lighthouse computes the proposer lookahead at the Fulu fork and the PTC window at the Gloas fork
+through translated functions (`Equiv/Upgrade.lean`): `proposer_indices_for_epoch_spec_fulu`
+(with `ProposerFin`, as in the Fulu epoch) and `initialize_ptc_window_lh`. The loops over the
+epochs and the field copies are glue. The builder onboarding at the Gloas fork is glue, checked
+against the spec by review only (see the file header). Lighthouse runs it before the PTC window
+and the spec after it. The order does not matter, because the onboarding writes only the
+builders and the pending deposits (`onboard_builders_rel`).
 
 ## Each epoch step and what checks it
 
