@@ -5,8 +5,9 @@ import EpochProofs.CachePubkey
 /-!
 # Formalhouse: the Gloas epoch of Lighthouse
 
-`formalhouse_gloas_epoch` joins the epoch results into one statement, on mainnet, at the last
-slot of an epoch of a reachable run:
+`formalhouse_gloas_epoch` joins the epoch results into one statement, for a preset that agrees
+with Etheorem's (`EpochPresetAgrees`, proved for mainnet and minimal), at the last slot of an
+epoch of a reachable run:
 
 1. Lighthouse's epoch (`process_epoch_lh_order`: Lighthouse's step order, its genesis path and
    the checked Rust of each step) returns `ok` (`lighthouse_epoch_total_etheorem`).
@@ -34,11 +35,10 @@ namespace EpochProofs.Formalhouse
 open EthCLLib.Spec EthCLLib.Proofs SizzLean.Proofs EthCLSpecs.Proofs.Gloas
 open EpochProofs.Etheorem EpochProofs.CacheBridge
 
-section Mainnet
+section Generic
 
-attribute [local instance] EthCLSpecs.Gloas.mainnet EthCLSpecs.Gloas.mainnetConfig
-
-variable [HasherTag] [CryptoBackend]
+variable [EthCLSpecs.Gloas.Preset] [EthCLSpecs.Gloas.Config] [HasherTag] [CryptoBackend]
+variable [Spec.PresetCfg] [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds]
 
 /-- The conditions of `formalhouse_gloas_epoch` on the epoch start state `e`, by kind. -/
 structure GloasEpochConds (o : Spec.Oracle) (e : EState) : Prop where
@@ -49,7 +49,7 @@ structure GloasEpochConds (o : Spec.Oracle) (e : EState) : Prop where
   pubkeys : Spec.PubkeysUnique (absEState e)
   /-- Reachable-state invariant: the SSZ vector fields have their lengths. The Lean state holds
   them as lists. -/
-  vectors : (absEState e).VectorLengths Spec.Preset.mainnet
+  vectors : (absEState e).VectorLengths Spec.P
   /-- The epoch boundary: the last slot of an epoch, the next slot fits in `u64`, and fewer than
   `2^24` historical summaries (a time bound: about 1.6M years). -/
   boundary : Spec.TailPre (absEState e)
@@ -64,7 +64,8 @@ structure GloasEpochConds (o : Spec.Oracle) (e : EState) : Prop where
   etheoremRoom : EpochCondsIn e
   /-- At the committee steps: state facts (`CommConds`: registry size, effective balance cap,
   lookahead and PTC window lengths, valid keys) and true pyspec preconditions (`CommPreconds`:
-  a sync candidate, a proposer candidate (F4), at least 32 active validators (F12), and each
+  a sync candidate, a proposer candidate (F4), at least `SLOTS_PER_EPOCH` active validators
+  (F12), and each
   balance weighted selection ends within `2^64` passes, a fact about the hash values). -/
   committees : ∀ s, Spec.CommFrame (absEState e) s → Spec.CommConds o s ∧ Spec.CommPreconds o s
   /-- A fact about Etheorem's output (F3): its selections return all their items. Etheorem
@@ -81,16 +82,18 @@ open CacheProofs.PB (LhCache Coherent lhPreviousEpochFlagAttestingBalance
   lhCurrentEpochFlagAttestingBalance) in
 /-- The Gloas epoch of Lighthouse returns `ok` and equals Etheorem's `processEpoch`, its cache
 reads equal the spec values, and its pubkey cache lookup equals the spec lookup. -/
-theorem formalhouse_gloas_epoch (o : Spec.Oracle) (e : EState) (hc : GloasEpochConds o e)
+theorem formalhouse_gloas_epoch (hpa : EpochPresetAgrees Spec.P)
+    (hhr : Spec.LH_HISTORICAL_ROOTS_LIMIT ≤ EthCLSpecs.Gloas.Const.historicalRootsLimit)
+    (o : Spec.Oracle) (e : EState) (hc : GloasEpochConds o e)
     (c : LhCache)
-    (hcoh : Coherent EpochProofs.Spec.Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT
+    (hcoh : Coherent EpochProofs.Spec.P.EFFECTIVE_BALANCE_INCREMENT
       (pbState (absEState e)
-        ((absEState e).slot / EpochProofs.Spec.Preset.mainnet.SLOTS_PER_EPOCH)) c)
+        ((absEState e).slot / EpochProofs.Spec.P.SLOTS_PER_EPOCH)) c)
     (total : U64)
     (htotal : total.val = CacheProofs.EpochCache.activeSum
       (CacheProofs.EpochCache.activeAt
         ((absEState e).validators.map ecValidator)
-        ((absEState e).slot / EpochProofs.Spec.Preset.mainnet.SLOTS_PER_EPOCH))
+        ((absEState e).slot / EpochProofs.Spec.P.SLOTS_PER_EPOCH))
       ((absEState e).validators.map (·.effective_balance)))
     {M : Type} {inst : types.state.pubkey_index.IndexMap M Spec.BLSPubkey}
     {view : M → Spec.BLSPubkey → Option Usize} (laws : CacheProofs.IndexMapLaws inst view)
@@ -101,47 +104,47 @@ theorem formalhouse_gloas_epoch (o : Spec.Oracle) (e : EState) (hc : GloasEpochC
           (StateTransition := GloasRun)).run (EthCLLib.Proofs.pureState e) =
         .ok ((), EthCLLib.Proofs.pureState e') ∧ EpochProofs.Etheorem.absEState e' = s') ∧
       let s := EpochProofs.Etheorem.absEState e
-      let cur := s.slot / EpochProofs.Spec.Preset.mainnet.SLOTS_PER_EPOCH
+      let cur := s.slot / EpochProofs.Spec.P.SLOTS_PER_EPOCH
       (∀ f : Usize, f.val < 3 → ∃ x : U64, lhCurrentEpochFlagAttestingBalance c f = ok (.Ok x) ∧
-        (EpochProofs.Spec.get_unslashed_participating_indices EpochProofs.Spec.Preset.mainnet s
+        (EpochProofs.Spec.get_unslashed_participating_indices EpochProofs.Spec.P s
             f.val cur >>=
-          EpochProofs.Spec.get_total_balance EpochProofs.Spec.Preset.mainnet s) = .ok x.val) ∧
+          EpochProofs.Spec.get_total_balance EpochProofs.Spec.P s) = .ok x.val) ∧
       (∀ f : Usize, f.val < 3 → 0 < cur →
         ∃ x : U64, lhPreviousEpochFlagAttestingBalance c f = ok (.Ok x) ∧
-        (EpochProofs.Spec.get_unslashed_participating_indices EpochProofs.Spec.Preset.mainnet s
+        (EpochProofs.Spec.get_unslashed_participating_indices EpochProofs.Spec.P s
             f.val (cur - 1) >>=
-          EpochProofs.Spec.get_total_balance EpochProofs.Spec.Preset.mainnet s) = .ok x.val) ∧
-      (∀ inc : U64, inc.val = EpochProofs.Spec.Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT →
+          EpochProofs.Spec.get_total_balance EpochProofs.Spec.P s) = .ok x.val) ∧
+      (∀ inc : U64, inc.val = EpochProofs.Spec.P.EFFECTIVE_BALANCE_INCREMENT →
         ∃ r, types.state.total_active_balance.floor_total_active_balance total inc = ok r ∧
-          EpochProofs.Spec.get_total_active_balance EpochProofs.Spec.Preset.mainnet s =
+          EpochProofs.Spec.get_total_active_balance EpochProofs.Spec.P s =
             .ok r.val)) ∧
       (∀ (st : Spec.BeaconState) (epoch : Nat) (seed : Spec.Bytes32),
-        Spec.get_seed Spec.Preset.mainnet o st epoch Spec.DOMAIN_BEACON_ATTESTER = .ok seed →
+        Spec.get_seed Spec.P o st epoch Spec.DOMAIN_BEACON_ATTESTER = .ok seed →
         ∀ (shuffling : Slice Usize) (cps spe : Usize),
-        CommitteeCacheBuilt CacheProofs.Spec.CommitteeCache.Preset.mainnet o st epoch seed shuffling
+        CommitteeCacheBuilt cachePresetOf o st epoch seed shuffling
           cps →
-        spe.val = Spec.Preset.mainnet.SLOTS_PER_EPOCH →
+        spe.val = Spec.P.SLOTS_PER_EPOCH →
         0 < (Spec.get_active_validator_indices st epoch).length →
         (Spec.get_active_validator_indices st epoch).length ≤ 2 ^ 24 →
         (Spec.get_active_validator_indices st epoch).length * (cps.val * spe.val) ≤ Usize.max →
-        ∀ (start : Nat), Spec.compute_start_slot_at_epoch Spec.Preset.mainnet epoch = .ok start →
+        ∀ (start : Nat), Spec.compute_start_slot_at_epoch Spec.P epoch = .ok start →
         ∀ (committees : Slice (alloc.vec.Vec Usize)),
-        committees.val.length = Spec.Preset.mainnet.SLOTS_PER_EPOCH →
+        committees.val.length = Spec.P.SLOTS_PER_EPOCH →
         CommitteesFromCache shuffling cps spe epoch start committees →
         ∀ k (hk : k < committees.val.length) l,
-          Spec.ptcIndices Spec.Preset.mainnet o st epoch (start + k) = .ok l →
+          Spec.ptcIndices Spec.P o st epoch (start + k) = .ok l →
             (committees.val[k]).val.map (·.val) = l)) ∧
     ∀ pk, ∃ r, inst.get_index m pk = ok r ∧
       (r.map (·.val)).bind (fun i => (absEState e).validators[i]?) =
         (absEState e).validators[((absEState e).validators.map (·.pubkey)).idxOf pk]? ∧
       (r.isSome ↔ pk ∈ (absEState e).validators.map (·.pubkey)) ∧
       ∀ i, r.map (·.val) = some i → i = ((absEState e).validators.map (·.pubkey)).idxOf pk := by
-  obtain ⟨s', hs', -⟩ := lighthouse_epoch_total_etheorem o hc.oracle hc.sha e hc.reachable
+  obtain ⟨s', hs', -⟩ := lighthouse_epoch_total_etheorem hpa hhr o hc.oracle hc.sha e hc.reachable
     hc.boundary hc.etheoremRoom hc.selections hc.slot hc.vectors hc.rows hc.committees
-  exact ⟨s', hs', lighthouse_order_epoch_etheorem_reachable_cached_ptc o hc.oracle hc.sha e
+  exact ⟨s', hs', lighthouse_order_epoch_etheorem_reachable_cached_ptc hpa hhr o hc.oracle hc.sha e
     hc.reachable hc.boundary hc.etheoremRoom hc.selections hs' c hcoh total htotal,
     fun pk => Spec.pubkey_cache_deposit_lookup laws (absEState e) hpk hc.pubkeys pk⟩
 
-end Mainnet
+end Generic
 
 end EpochProofs.Formalhouse
