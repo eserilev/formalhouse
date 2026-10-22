@@ -104,6 +104,9 @@ import EpochProofs.Equiv.SinglePassLoopModel
 import EpochProofs.Equiv.DepositWrites
 import EpochProofs.Equiv.ListWrites
 import EpochProofs.FormalhouseFinal
+import EpochProofs.Trusted.CacheUpkeep
+import EpochProofs.CacheBridge.Upkeep
+import EpochProofs.FormalhouseUpkeep
 import EpochProofs.Equiv.EpochContexts
 import EpochProofs.Equiv.PendingDepositsLen
 import EpochProofs.CacheBridge.EpochCacheBuild
@@ -826,3 +829,7 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.filter_sum_le
 #print axioms EpochProofs.Spec.glue_validator_deposit_sum
 #print axioms EpochProofs.Spec.glue_exit_count
+#print axioms EpochProofs.CacheBridge.PBStep.coherent
+#print axioms EpochProofs.CacheBridge.PBTrace.coherent
+#print axioms EpochProofs.CacheBridge.coherent_of_upkeep
+#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_final_upkeep

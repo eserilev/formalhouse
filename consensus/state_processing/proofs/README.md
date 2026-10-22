@@ -770,7 +770,7 @@ and `formalhouse_gloas_epoch_final` uses them.
 |---|---|---|---|
 | Epoch cache (total, base rewards) | kept if its key (epoch, decision root) matches, else rebuilt | `epoch_cache_total_carry`: the total built at a state `b` of the same epoch is the active sum of the epoch input, because the blocks keep the effective balances and the activity (`ActiveAgree`, kept by `state_transition_epochInv`) | the cache was built from a state of this run in this epoch |
 | Pubkey cache | kept, then completed with the new validators | `pubkey_cache_carry`: a cache that holds the pubkeys of an earlier state holds a prefix of the epoch input's pubkeys (`PkPrefix`, from `Reachable.pkPrefix` and `SlotReachG.pkPrefix`), and the insert run completes it | `IndexMapLaws`; the cache was built from a state of this run (see the note on `rebase_caches_on` below) |
-| Progressive balances cache | kept if built for the current epoch, else rebuilt (this PR: the check was `is_initialized`, which kept a cache of any epoch) | rebuilt: `build_coherent`; kept: the update theorems of #27 | each block operation that changes participation, `slashed` or an effective balance calls its update function (`process_operations.rs` attestations, `slash_validator.rs`, the single pass effective balance updates, `on_epoch_transition` in `altair.rs`), checked by review |
+| Progressive balances cache | kept if built for the current epoch, else rebuilt (this PR: the check was `is_initialized`, which kept a cache of any epoch) | rebuilt: `build_coherent`; kept: `PBTrace.coherent` chains the hook theorems of #27 through a block run (`EpochProofs/CacheBridge/Upkeep.lean`), and `formalhouse_gloas_epoch_final_upkeep` needs a coherent cache only at a state `start` of the epoch | `CacheUpkeep` (U1 to U4 in `Trusted/CacheUpkeep.lean`): between `start` and the epoch input, Lighthouse runs exactly the hooks of a `PBTrace`. An audit of every write to participation, `slashed`, effective balances and activity found no write without its hook |
 | Committee cache for the PTC window | built fresh by `initialize_committee_cache_for_lookahead` | `committeeCacheBuilt_of_rust` | the init glue that feeds the active indices and the seed into `shuffling` |
 
 Note on `rebase_caches_on`: when the store loads a hot state, `rebase_on_finalized` copies the
@@ -779,6 +779,13 @@ the slot (`state.slot() >= finalized.slot()`), not that the state descends from 
 block. `migrate_database` updates the finalized state before `prune_hot_db` deletes abandoned
 forks, so a state of an abandoned fork can get the caches of another chain. These proofs do not
 cover that path (it is in `beacon_node/store`).
+
+Note on the pubkey cache in Gloas blocks: the audit for `CacheUpkeep` found that
+`apply_parent_execution_payload` reads `state.pubkey_cache()` for the parent's withdrawal and
+consolidation requests without `update_pubkey_cache`. The Electra and Fulu path in
+`process_operations` calls it first. A state replayed from disk has only the pubkey cache of the
+finalized state it was rebased on, so a request for a newer validator is skipped. The fix is
+outside this PR.
 
 ## Building
 
@@ -918,7 +925,7 @@ Glue that Aeneas does not translate. Each fact links one Rust expression or call
 The cache proofs (`consensus/types/proofs`) prove the build and update code. The epoch proofs
 trust that the cache came from a state of this run.
 
-- The progressive balances cache is `Coherent`, and each block mutation calls its update function.
+- The progressive balances cache is `Coherent` at a state `start` of the epoch, and `CacheUpkeep` holds from `start` to the epoch input (`Trusted/CacheUpkeep.lean`: U1 attestations, U2 slashings, U3 no other write to the fields the cache reads, U4 new validators only in epoch processing).
 - The epoch cache total and base rewards come from a state of the same epoch.
 - `CommitteeCacheBuilt` for the lookahead epoch.
 - The pubkey cache is `Coherent` and comes from an earlier state of this run.
