@@ -253,6 +253,13 @@ functions that differ from Gloas. `Sanity/Fulu.lean` reduces them to the Gloas f
   `FuluOracle` holds the Fulu roots and the execution engine. The shared functions come from
   the Gloas files. `Sanity/Block/FuluBlock.lean` has the first facts about them.
 
+- State transition: `Spec/Block/FuluTransition.lean` transcribes the Fulu `process_slot` (no
+  payload availability write), `process_slots` and `state_transition` on `FuluState`. The Fulu
+  `process_epoch` runs on the inner `BeaconState`. `Sanity/FuluTransition.lean` proves that each
+  Fulu epoch and block step keeps the slot and the checkpoints, and
+  `state_transition_fulu_ffg` (the Fulu state transition keeps `FfgInvariant`) and
+  `state_transition_fulu_slot`.
+
 Not yet done for Fulu: totality, and the Fulu invariants from genesis (the Fulu block functions
 have no preservation proofs yet).
 

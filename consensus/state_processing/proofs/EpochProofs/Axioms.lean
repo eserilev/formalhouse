@@ -87,6 +87,7 @@ import EpochProofs.Etheorem.Fulu.Epoch
 import EpochProofs.Formalhouse
 import EpochProofs.FormalhouseFulu
 import EpochProofs.Sanity.Block.FuluBlock
+import EpochProofs.Sanity.FuluTransition
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -478,3 +479,35 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.process_execution_payload_fulu_ok
 #print axioms EpochProofs.Spec.process_attestation_fulu_validators
 #print axioms EpochProofs.Spec.process_block_fulu_header
+#print axioms EpochProofs.Spec.process_slot_fulu_frame
+#print axioms EpochProofs.Spec.process_slots_loop_fulu_invariant_mono
+#print axioms EpochProofs.Spec.process_slots_fulu_invariant_mono
+#print axioms EpochProofs.Spec.process_slots_loop_fulu_slot
+#print axioms EpochProofs.Spec.process_slots_fulu_slot
+#print axioms EpochProofs.Spec.process_slots_fulu_ffg
+#print axioms EpochProofs.Spec.compute_exit_epoch_and_update_churn_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.initiate_validator_exit_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.process_registry_updates_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.process_pending_deposits_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.process_sync_committee_updates_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.process_proposer_lookahead_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.process_epoch_fulu_split
+#print axioms EpochProofs.Spec.process_epoch_fulu_slot
+#print axioms EpochProofs.Spec.process_epoch_fulu_ffg
+#print axioms EpochProofs.Spec.process_slots_fulu_process_epoch_slot
+#print axioms EpochProofs.Spec.process_slots_fulu_process_epoch_ffg
+#print axioms EpochProofs.Spec.process_block_header_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.apply_withdrawals_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.process_withdrawals_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.slash_validator_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.process_proposer_slashing_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.process_attester_slashing_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.process_attestation_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.process_voluntary_exit_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.process_withdrawal_request_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.compute_consolidation_epoch_and_update_churn_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.process_consolidation_request_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.process_operations_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.process_block_fulu_checkpointsStable
+#print axioms EpochProofs.Spec.state_transition_fulu_ffg
+#print axioms EpochProofs.Spec.state_transition_fulu_slot
