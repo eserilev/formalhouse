@@ -46,7 +46,7 @@ It is not joined to the main result.
 | Inactivity, rewards, registry, slashings, deposit top-up, effective balance | `single_pass_step.rs`, the step modules (#5 to #12, #22) and the loop `registry_rows.rs` | `RowsContract` (`Trusted/RegistryRows.lean`): `StateRows::apply_step` in `single_pass.rs` reads row `i`, runs the step and writes the row back | base reward and total active balance (#26, #27), exit cache (#24), activation queue (#25) |
 | Pending deposits | `pending_deposits.rs` (#10) and the writes `deposit_writes.rs` | `DepositWritesContract` (`Trusted/EpochTail.lean`): the queue write, the pubkey lookup, one balance read and write, `add_validator_to_registry` and one effective balance update in `StateDeposits` | pubkey cache |
 | Pending consolidations | `pending_consolidations.rs` (#11) | the index table and the balance write back | none |
-| Builder pending payments | `builder_pending_payments.rs` (#4) | the list writes | total active balance |
+| Builder pending payments | `builder_pending_payments.rs` (#4) and the writes `list_writes.rs` | `PaymentWritesContract` (`Trusted/EpochTail.lean`): read the payments, append a withdrawal, write the payments | total active balance |
 | Proposer lookahead, PTC window, next sync committee | `epoch_committees.rs`, `balance_weighted_selection.rs`, `compute_shuffled_index_with.rs` (#54) | `SeedMixLink`, `EBLink`, the index lists, the milhouse PTC shift, the sync committee keys and aggregate key | committee cache (#28), shuffle (#29) |
 | Eth1, slashings and randao resets, historical summaries | `tail_updates.rs` (#56) | the vector writes (`LighthouseResets.lean`); the summary root is `hash_tree_root` in the Oracle | none |
 | Participation flag rotation | none | the whole step | none |
@@ -190,6 +190,23 @@ queue length: `lhDepositPlan_next_le` proves it for every plan.
 
 The only trusted part is `DepositWritesContract`: what `StateDeposits`, the trait implementation
 in `single_pass.rs`, does for each method.
+
+## The list writes of the epoch tail
+
+`list_writes.rs` holds the builder pending payment writes and the PTC window shift. The code is
+generic over two traits, so Aeneas translates the order and the error handling.
+
+- `apply_builder_pending_payments_spec` shows that `apply_builder_pending_payments` returns what
+  `lighthouseBuilderPendingPayments` returns. That function was a hand model of these writes. So
+  `apply_builder_pending_payments_equiv` states `builder_pending_payments_equiv` for the
+  Lighthouse code.
+- `shift_window_spec` shows that `shift_window` drops the first entries, appends the new ones and
+  writes the window back, with no error, when the window has its full length and each item fits.
+  `ptc_window_writes_spec` applies it to the PTC window: when the spec `process_ptc_window`
+  succeeds, the write succeeds and writes the spec window. `compute_ptc_length` shows that each
+  PTC has `PTC_SIZE` entries, so each one fits.
+
+The trusted parts are `PaymentWritesContract` and `WindowContract`.
 
 ## Justification and finalization
 
@@ -451,6 +468,7 @@ charon cargo --preset=aeneas \
   --start-from 'state_processing::per_epoch_processing::tail_updates' \
   --start-from 'state_processing::per_epoch_processing::registry_rows' \
   --start-from 'state_processing::per_epoch_processing::deposit_writes' \
+  --start-from 'state_processing::per_epoch_processing::list_writes' \
   --include safe_arith --include types::state::balance_weighted_selection \
   --include swap_or_not_shuffle::shuffle_hash --include swap_or_not_shuffle::compute_shuffled_index_with \
   --include types::builder --include alloy_primitives::bits \
@@ -511,6 +529,12 @@ copies the rest of the body into each branch, and the generated code grows expon
   reference, in index order, and maps each index to its position in the table. The moves read
   and write only these rows, so the table run equals the full-registry run of
   `process_pending_consolidations_eq`. The glue writes the new balances back.
+- `PaymentWritesContract` and `WindowContract` (`EpochProofs/Trusted/EpochTail.lean`):
+  `StateBuilderPayments` reads the payments, appends a withdrawal (never fails: the list has no
+  limit) and writes the payments when their number is unchanged. `PtcWindowWrites` drops entries
+  from the front, appends an entry of `PTC_SIZE` validators while the list is below its limit,
+  and writes the list back when it has the window length. The generic code (`list_writes.rs`) is
+  translated.
 - `DepositWritesContract` (`EpochProofs/Trusted/EpochTail.lean`): each method of
   `StateDeposits` in `single_pass.rs` does the spec write. The queue write keeps the deposits
   from the next index on and appends the postponed deposits. The pubkey lookup returns the first

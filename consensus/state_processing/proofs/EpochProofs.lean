@@ -128,4 +128,5 @@ import EpochProofs.Equiv.SinglePassLoop
 import EpochProofs.Equiv.SinglePassLoopModel
 import EpochProofs.Trusted.EpochTail
 import EpochProofs.Equiv.DepositWrites
+import EpochProofs.Equiv.ListWrites
 import EpochProofs.Axioms

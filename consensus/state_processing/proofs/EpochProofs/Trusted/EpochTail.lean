@@ -22,6 +22,15 @@ about these writes.
   when the spec fails.
 - `update_effective_balance` is the effective balance update of one validator. It fails when the
   spec fails.
+
+`PaymentWritesContract` says what `StateBuilderPayments` does: `payments` reads the builder
+pending payments, `push_withdrawal` appends a builder pending withdrawal and never fails (the list
+is a `ProgressiveList` with no limit), and `set_payments` writes the payments when their number
+is unchanged (the field is a `Vector`).
+
+`WindowContract` says what `PtcWindowWrites` does: `pop_front` drops entries from the front when
+there are enough, `push` appends an item of the right size while the list is below its limit, and
+`commit` writes the list back when it has the length of the window.
 -/
 
 namespace EpochProofs
@@ -69,5 +78,36 @@ structure DepositWritesContract {S D E : Type} (inst : LhDepositWrites S D E) (o
       ∃ s', inst.update_effective_balance s i = ok (.Ok (), s') ∧ view s' = t') ∧
     (∀ e, Spec.ebUpdateAt (view s) i.val = .error e →
       ∃ (e' : E) (s' : S), inst.update_effective_balance s i = ok (.Err e', s'))
+
+abbrev LhPaymentWrites (S E : Type) := per_epoch_processing.list_writes.BuilderPaymentWrites S E
+
+/-- Trusted: what the `BuilderPaymentWrites` implementation in `single_pass.rs` does. `wview` and
+`pview` give the builder pending withdrawals and payments that an implementation value holds. -/
+structure PaymentWritesContract {S E : Type} (inst : LhPaymentWrites S E)
+    (wview : S → List types.builder.builder_pending_withdrawal.BuilderPendingWithdrawal)
+    (pview : S → List types.builder.builder_pending_payment.BuilderPendingPayment) : Prop where
+  payments : ∀ (s : S), ∃ v : alloc.vec.Vec types.builder.builder_pending_payment.BuilderPendingPayment,
+    inst.payments s = ok (.Ok v) ∧ v.val = pview s
+  push_withdrawal : ∀ (s : S) (w : types.builder.builder_pending_withdrawal.BuilderPendingWithdrawal),
+    ∃ s', inst.push_withdrawal s w = ok (.Ok (), s') ∧ wview s' = wview s ++ [w] ∧
+      pview s' = pview s
+  set_payments : ∀ (s : S)
+    (v : alloc.vec.Vec types.builder.builder_pending_payment.BuilderPendingPayment),
+    v.val.length = (pview s).length →
+    ∃ s', inst.set_payments s v = ok (.Ok (), s') ∧ pview s' = v.val ∧ wview s' = wview s
+
+abbrev LhWindowWrites (W T E : Type) := per_epoch_processing.list_writes.WindowWrites W T E
+
+/-- Trusted: what a `WindowWrites` implementation in `single_pass.rs` does. `view` gives the list
+that a value holds, `committed` the window it wrote back to the state, `absItem` the entry of an
+item, `itemOk` the items that fit an entry, and `N` the window length. -/
+structure WindowContract {W T E α : Type} (inst : LhWindowWrites W T E) (view : W → List α)
+    (committed : W → List α) (absItem : T → α) (itemOk : T → Prop) (N : Nat) : Prop where
+  pop_front : ∀ (w : W) (n : Usize), n.val ≤ (view w).length →
+    ∃ w', inst.pop_front w n = ok (.Ok (), w') ∧ view w' = (view w).drop n.val
+  push : ∀ (w : W) (t : T), itemOk t → (view w).length < N →
+    ∃ w', inst.push w t = ok (.Ok (), w') ∧ view w' = view w ++ [absItem t]
+  commit : ∀ (w : W), (view w).length = N →
+    ∃ w', inst.commit w = ok (.Ok (), w') ∧ committed w' = view w
 
 end EpochProofs
