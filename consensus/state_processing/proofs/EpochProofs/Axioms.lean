@@ -71,6 +71,7 @@ import EpochProofs.Etheorem.LighthouseOrder
 import EpochProofs.Etheorem.Final
 import EpochProofs.Equiv.SinglePassLoopModel
 import EpochProofs.Equiv.DepositWrites
+import EpochProofs.Equiv.ListWrites
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -328,3 +329,14 @@ open EpochProofs.Spec
 #print axioms EpochProofs.apply_new_validator_deposits_loop_spec
 #print axioms EpochProofs.apply_deposit_writes_spec
 #print axioms EpochProofs.apply_deposit_writes_model
+#print axioms EpochProofs.Spec.cbws_loop_length
+#print axioms EpochProofs.Spec.compute_balance_weighted_selection_length
+#print axioms EpochProofs.Spec.compute_ptc_length
+#print axioms EpochProofs.push_withdrawals_loop_spec
+#print axioms EpochProofs.apply_builder_pending_payments_spec
+#print axioms EpochProofs.apply_builder_pending_payments_equiv
+#print axioms EpochProofs.push_items_loop_spec
+#print axioms EpochProofs.shift_window_spec
+#print axioms EpochProofs.ptc_window_writes_spec
+#print axioms EpochProofs.update_effective_balances_at_loop_spec
+#print axioms EpochProofs.update_effective_balances_at_spec
