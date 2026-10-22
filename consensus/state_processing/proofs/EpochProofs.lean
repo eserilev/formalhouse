@@ -203,3 +203,5 @@ import EpochProofs.Equiv.ConsolidationTable
 import EpochProofs.Sanity.Onboarding
 import EpochProofs.Trusted.Onboarding
 import EpochProofs.Equiv.Onboarding
+import EpochProofs.Sanity.GlueBounds
+import EpochProofs.Trusted.EpochGlue
