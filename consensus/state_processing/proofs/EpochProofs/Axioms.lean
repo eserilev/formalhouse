@@ -779,6 +779,8 @@ open EpochProofs.Spec
 #print axioms EpochProofs.CacheBridge.activeAgree_of_epochInv
 #print axioms EpochProofs.CacheBridge.pubkey_cache_carry
 #print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_at_input
+#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_core
+#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_at_input
 #print axioms EpochProofs.Spec.consolidationStep_table
 #print axioms EpochProofs.Spec.consolidationStep_full_ok
 #print axioms EpochProofs.Spec.consolidationStep_count
