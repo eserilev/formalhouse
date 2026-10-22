@@ -299,11 +299,10 @@ end Main
 
 section Lighthouse
 
-attribute [local instance] EthCLSpecs.Gloas.mainnet EthCLSpecs.Gloas.mainnetConfig
+variable [EthCLSpecs.Gloas.Preset] [EthCLSpecs.Gloas.Config] [HasherTag] [CryptoBackend]
 
-variable [HasherTag] [CryptoBackend]
-
-/-- Lighthouse's epoch processing equals Etheorem's Gloas `processEpoch` on mainnet.
+/-- Lighthouse's epoch processing equals Etheorem's Gloas `processEpoch`, for a preset that
+agrees with Etheorem's (`hpa`).
 
 `process_epoch_lh_full` is the model of the whole Lighthouse epoch: the single pass from the
 Aeneas translation, then the Lighthouse order of deposits, consolidations and effective
@@ -311,7 +310,8 @@ balances. If it returns `s'`, Etheorem's run succeeds and `absEState` of its res
 
 `hin` is the condition that `reachable_state_transition_sameOk'''` proves at each epoch
 boundary of a reachable state. `hc` holds the conditions of the Etheorem steps. -/
-theorem lighthouse_epoch_etheorem [EpochProofs.Spec.PresetCfg] [EpochProofs.Spec.PresetCfg.Ok] (o : Spec.Oracle) (ho : OracleAgrees o)
+theorem lighthouse_epoch_etheorem [EpochProofs.Spec.PresetCfg] [EpochProofs.Spec.PresetCfg.Ok]
+    (hpa : EpochPresetAgrees Spec.P) (o : Spec.Oracle) (ho : OracleAgrees o)
     (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState)
     (hin : Spec.EpochInputOk'' Spec.EpochSupply (absEState e)) (hc : EtheoremEpochConds e)
     {s' : Spec.BeaconState} (h : Spec.process_epoch_lh_full o (absEState e) = .ok s') :
@@ -320,7 +320,7 @@ theorem lighthouse_epoch_etheorem [EpochProofs.Spec.PresetCfg] [EpochProofs.Spec
   obtain ⟨⟨⟨hb, hslot, heb, hexit, hsup⟩, _, hcons⟩, _, hvalid⟩ := hin
   have hsame := Spec.process_epoch_lh_full_sameOk' o (absEState e) hb hslot heb hexit hsup hvalid
     hcons
-  exact process_epoch_etheorem epochPresetAgrees_mainnet o ho hsha e hc ((hsame s').mp h)
+  exact process_epoch_etheorem hpa o ho hsha e hc ((hsame s').mp h)
 
 end Lighthouse
 
