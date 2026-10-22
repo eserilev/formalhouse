@@ -93,6 +93,7 @@ import EpochProofs.Sanity.Invariants.FuluSteps
 import EpochProofs.Sanity.Invariants.FuluLengths
 import EpochProofs.Sanity.Invariants.FuluPubkeys
 import EpochProofs.Sanity.Invariants.FuluConsolidations
+import EpochProofs.Sanity.Invariants.FuluExits
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -605,3 +606,35 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.process_epoch_fulu_inRange
 #print axioms EpochProofs.Spec.process_slots_fulu_inRange
 #print axioms EpochProofs.Spec.state_transition_fulu_inRange
+#print axioms EpochProofs.Spec.FuluExitsSanity.exit_le_far
+#print axioms EpochProofs.Spec.FuluExitsSanity.wd_le_far
+#print axioms EpochProofs.Spec.consolidation_exit_fulu_exitEpochsU64
+#print axioms EpochProofs.Spec.consolidation_exit_fulu_withdrawableU64
+#print axioms EpochProofs.Spec.consolidation_exit_fulu_exitShape
+#print axioms EpochProofs.Spec.consolidation_exit_fulu_slashedKeep
+#print axioms EpochProofs.Spec.slash_validator_fulu_exitEpochsU64
+#print axioms EpochProofs.Spec.process_attester_slashing_fulu_keeps
+#print axioms EpochProofs.Spec.process_withdrawal_request_fulu_exitEpochsU64
+#print axioms EpochProofs.Spec.process_consolidation_request_fulu_exitEpochsU64
+#print axioms EpochProofs.Spec.process_operations_fulu_exitEpochsU64
+#print axioms EpochProofs.Spec.process_block_fulu_validators_inv
+#print axioms EpochProofs.Spec.process_epoch_fulu_validators_inv
+#print axioms EpochProofs.Spec.state_transition_fulu_validators_inv
+#print axioms EpochProofs.Spec.state_transition_fulu_exitEpochsU64
+#print axioms EpochProofs.Spec.slash_validator_fulu_withdrawableU64
+#print axioms EpochProofs.Spec.process_withdrawal_request_fulu_withdrawableU64
+#print axioms EpochProofs.Spec.process_consolidation_request_fulu_withdrawableU64
+#print axioms EpochProofs.Spec.process_operations_fulu_withdrawableU64
+#print axioms EpochProofs.Spec.state_transition_fulu_withdrawableU64
+#print axioms EpochProofs.Spec.process_voluntary_exit_fulu_opStep
+#print axioms EpochProofs.Spec.process_attestation_fulu_opStep
+#print axioms EpochProofs.Spec.process_withdrawal_request_fulu_exitShape
+#print axioms EpochProofs.Spec.process_withdrawal_request_fulu_slashedKeep
+#print axioms EpochProofs.Spec.process_withdrawal_request_fulu_opStep
+#print axioms EpochProofs.Spec.process_consolidation_request_fulu_exitShape
+#print axioms EpochProofs.Spec.process_consolidation_request_fulu_slashedKeep
+#print axioms EpochProofs.Spec.process_consolidation_request_fulu_opStep
+#print axioms EpochProofs.Spec.process_proposer_slashing_fulu_exitDelay
+#print axioms EpochProofs.Spec.process_attester_slashing_fulu_exitDelay
+#print axioms EpochProofs.Spec.process_operations_fulu_exitDelay
+#print axioms EpochProofs.Spec.state_transition_fulu_exitDelay
