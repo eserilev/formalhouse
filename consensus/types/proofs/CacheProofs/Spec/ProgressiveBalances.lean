@@ -4,7 +4,7 @@ import CacheProofs.Spec.Types
 # Unslashed participating balances (Altair and later)
 
 Transcribed from `specs/phase0/beacon-chain.md` and `specs/altair/beacon-chain.md`. The local
-checkout is `v1.7.0-beta.0-17-g593604b8f`. These functions are the same in v1.7.0-beta.2.
+checkout is `v1.7.0-beta.0-17-g593604b8f`. These functions are the same in v1.7.0-beta.4.
 
 `BeaconState` and `Validator` keep only the fields that these functions read.
 `current_epoch` is `get_current_epoch(state)`. `EFFECTIVE_BALANCE_INCREMENT` is a parameter.

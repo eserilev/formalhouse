@@ -253,7 +253,10 @@ theorem apply_parent_execution_payload_exitEpochsU64 (p : Preset) (o : Oracle)
        have h1 := request_loop_keeps ExitEpochsU64
          (by assumption : forIn requests.deposits _ _ = Except.ok _)
          (by loop_body_p (fun h hst => ExitEpochsU64.of_validators_eq (by cases h; rfl) hst))
-         hs
+         (by first
+           | exact ExitEpochsU64.of_validators_eq
+               (settle_builder_payment_frame _ _ _ ‹settle_builder_payment _ _ = Except.ok _›).1.1 hs
+           | exact fun v hv => hs v hv)
        have h2 := request_loop_keeps ExitEpochsU64
          (by assumption : forIn requests.withdrawals _ _ = Except.ok _)
          (by loop_body_p process_withdrawal_request_exitEpochsU64 _ _ _ _) h1
@@ -268,11 +271,7 @@ theorem apply_parent_execution_payload_exitEpochsU64 (p : Preset) (o : Oracle)
          (by assumption : forIn requests.builder_exits _ _ = Except.ok _)
          (by loop_body_p (fun h hst => ExitEpochsU64.of_validators_eq
            (process_builder_exit_request_frame _ _ _ _ h).1.1 hst)) h4
-       first
-         | (have h6 := ExitEpochsU64.of_validators_eq
-             (settle_builder_payment_frame _ _ _ ‹settle_builder_payment _ _ = Except.ok _›).1.1 h5
-            exact fun v hv => h6 v hv)
-         | exact fun v hv => h5 v hv)
+       exact fun v hv => h5 v hv)
 
 /-- `process_parent_execution_payload` keeps `ExitEpochsU64`. -/
 theorem process_parent_execution_payload_exitEpochsU64 (p : Preset) (o : Oracle)

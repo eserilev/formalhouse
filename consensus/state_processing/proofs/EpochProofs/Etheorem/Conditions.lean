@@ -288,7 +288,7 @@ fields, so each fact still holds when its step reads it.
 - `builderRoom`: the builder withdrawals have room for `SLOTS_PER_EPOCH` more items under
   Etheorem's alpha.11 limit (F6). Beta.2 has no limit.
 
-The historical summaries room is not here: beta.2 keeps the `HISTORICAL_ROOTS_LIMIT` cap, so it
+The historical summaries room is not here: beta.4 keeps the `HISTORICAL_ROOTS_LIMIT` cap, so it
 is a spec condition. `process_epoch_etheorem_in` takes it as `hhist`. -/
 structure EpochCondsIn (e : EState) : Prop where
   depositRoom : (absEState e).validators.length +
@@ -318,7 +318,7 @@ about the state at the epoch start.
 `hb0` and `hslot` hold at each epoch boundary of a reachable run (`EpochInputOk''`). They give
 the finalized epoch condition and the equal list lengths. `hin` holds the facts that frame
 lemmas carry to the step that reads them. `hhist`: the historical summaries are below
-`HISTORICAL_ROOTS_LIMIT`, a cap that beta.2 keeps. `hsel` holds the facts about Etheorem's
+`HISTORICAL_ROOTS_LIMIT`, a cap that beta.4 keeps. `hsel` holds the facts about Etheorem's
 output. -/
 theorem process_epoch_etheorem_in (o : Spec.Oracle) (ho : OracleAgrees o)
     (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState)

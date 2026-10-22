@@ -60,7 +60,7 @@ structure GloasEpochConds (o : Spec.Oracle) (e : EState) : Prop where
   raises without them too. -/
   rows : Spec.RowBounds (absEState e)
   /-- Etheorem's list limits from alpha.11 (F6, F10): room in the registry for the deposits of
-  one epoch and in the builder pending withdrawals. beta.2 has no limit on these lists. -/
+  one epoch and in the builder pending withdrawals. beta.4 has no limit on these lists. -/
   etheoremRoom : EpochCondsIn e
   /-- At the committee steps: state facts (`CommConds`: registry size, effective balance cap,
   lookahead and PTC window lengths, valid keys) and true pyspec preconditions (`CommPreconds`:

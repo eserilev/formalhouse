@@ -1,7 +1,7 @@
 /-!
 # Gloas types and `Uint64` arithmetic
 
-Transcribed from the consensus specs (v1.7.0-beta.2). Names match the spec.
+Transcribed from the consensus specs (v1.7.0-beta.4). Names match the spec.
 
 pyspec raises on `Uint64` overflow and on division by zero. Here a raise is `Except.error`.
 

@@ -6,7 +6,7 @@ import EpochProofs.Spec.Oracle
 # Reference: accessors, signing domains and `xor`
 
 Transcribed from `specs/phase0/beacon-chain.md` and `specs/fulu/beacon-chain.md`
-(v1.7.0-beta.2). Each definition quotes its pyspec. Hashes come from the `Oracle`.
+(v1.7.0-beta.4). Each definition quotes its pyspec. Hashes come from the `Oracle`.
 -/
 
 namespace EpochProofs.Spec

@@ -282,6 +282,7 @@ theorem get_builders_sweep_withdrawals_loop_safe (p : Preset) (state : BeaconSta
       exact ⟨id, id⟩
     · obtain ⟨_, -, h⟩ := specM_bind_ok h
       obtain ⟨_, -, h⟩ := specM_bind_ok h
+      obtain ⟨_, -, h⟩ := specM_bind_ok h
       split at h
       · repeat (obtain ⟨_, -, h⟩ := specM_bind_ok h)
         refine ⟨fun hs => (ih _ _ _ _ _ _ _ h).1 ?_,

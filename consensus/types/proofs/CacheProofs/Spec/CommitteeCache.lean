@@ -4,7 +4,7 @@ import CacheProofs.Spec.Types
 # Committees and the shuffle (phase0)
 
 Transcribed from `specs/phase0/beacon-chain.md` and `specs/phase0/validator.md`
-(v1.7.0-beta.2). Names and statement order match the spec.
+(v1.7.0-beta.4). Names and statement order match the spec.
 
 The reference does not read the state. The caller gives the values that the spec reads from it:
 

@@ -4,7 +4,7 @@ import EpochProofs.Spec.Block.Withdrawals
 /-!
 # Reference: the Electra `process_withdrawals`, which Fulu keeps
 
-Transcribed from `specs/capella` and `specs/electra/beacon-chain.md` (v1.7.0-beta.2). Gloas
+Transcribed from `specs/capella` and `specs/electra/beacon-chain.md` (v1.7.0-beta.4). Gloas
 did not change `get_pending_partial_withdrawals`, `get_validators_sweep_withdrawals`,
 `update_next_withdrawal_index`, `update_pending_partial_withdrawals` and
 `update_next_withdrawal_validator_index`, so this file reuses them from `Block/Withdrawals`.

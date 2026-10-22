@@ -4,7 +4,7 @@ import CacheProofs.Spec.Types
 # Total active balance and base rewards (phase0, altair)
 
 Transcribed from the consensus specs. The local checkout is v1.7.0-beta.0-17-g593604b8f. These
-functions are the same in v1.7.0-beta.2.
+functions are the same in v1.7.0-beta.4.
 
 The state is reduced to the fields that these functions read: the validators (effective
 balance, activation epoch, exit epoch) and the current epoch. `Config` holds the constants.

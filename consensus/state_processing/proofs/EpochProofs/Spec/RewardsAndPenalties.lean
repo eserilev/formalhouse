@@ -4,7 +4,7 @@ import EpochProofs.Spec.Slashings
 # Reference: `process_rewards_and_penalties`
 
 Transcribed line by line from `specs/phase0/beacon-chain.md`, `specs/altair/beacon-chain.md`
-and `specs/bellatrix/beacon-chain.md` (v1.7.0-beta.2). Later forks do not change these
+and `specs/bellatrix/beacon-chain.md` (v1.7.0-beta.4). Later forks do not change these
 functions. Each definition quotes its pyspec.
 
 `get_total_active_balance(state)` is a parameter. The reference does not model it yet.

@@ -528,7 +528,8 @@ theorem apply_parent_execution_payload_opStep (p : Preset) (o : Oracle) (s s' : 
   peel_ok' h
   all_goals first
     | (cases h
-       refine (request_loop_opStep (by assumption : forIn requests.deposits _ _ = Except.ok _)
+       refine OpStep.trans ?_
+         ((request_loop_opStep (by assumption : forIn requests.deposits _ _ = Except.ok _)
          (by loop_body process_deposit_request_opStep _ _ _ _)).trans
          ((request_loop_opStep (by assumption : forIn requests.withdrawals _ _ = Except.ok _)
          (by loop_body process_withdrawal_request_opStep _ _ _ _)).trans
@@ -540,12 +541,12 @@ theorem apply_parent_execution_payload_opStep (p : Preset) (o : Oracle) (s s' : 
          ((request_loop_opStep (by assumption : forIn requests.builder_exits _ _ = Except.ok _)
          (by loop_body fun h =>
            OpStep.of_builderFrame (process_builder_exit_request_frame _ _ _ _ h))).trans
-         ?_))))
-       first
-         | (have hs := settle_builder_payment_frame _ _ _
-             ‹settle_builder_payment _ _ = Except.ok _›
-            exact (OpStep.of_builderFrame hs).trans (.of_eq rfl rfl rfl))
-         | exact .of_eq rfl rfl rfl)
+         ?_)))))
+       · first
+           | exact OpStep.of_builderFrame (settle_builder_payment_frame _ _ _
+               ‹settle_builder_payment _ _ = Except.ok _›)
+           | exact .of_eq rfl rfl rfl
+       · exact .of_eq rfl rfl rfl)
 
 /-- `process_parent_execution_payload` is an operation step. -/
 theorem process_parent_execution_payload_opStep (p : Preset) (o : Oracle) (s s' : BeaconState)

@@ -8,7 +8,7 @@ The main theorem is `historical_summaries_update_etheorem`. The reference takes
 `hash_tree_root` from the `Oracle`. `OracleAgrees o` says that it equals Etheorem's `htr`.
 
 Etheorem pins alpha.11, where `historical_summaries` has the limit `HISTORICAL_ROOTS_LIMIT`.
-Past the limit Etheorem's `SSZList.push` drops the new summary. In beta.2 the list has no limit.
+Past the limit Etheorem's `SSZList.push` drops the new summary. In beta.4 the list has no limit.
 So the theorem assumes that the list is below the limit (finding F6).
 -/
 

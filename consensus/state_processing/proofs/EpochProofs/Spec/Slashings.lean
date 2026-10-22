@@ -3,7 +3,7 @@ import EpochProofs.Spec.InactivityUpdates
 /-!
 # Reference: `process_slashings`
 
-Transcribed line by line from `specs/electra/beacon-chain.md` (v1.7.0-beta.2). Gloas does not
+Transcribed line by line from `specs/electra/beacon-chain.md` (v1.7.0-beta.4). Gloas does not
 change it. Each definition quotes its pyspec.
 
 `get_total_active_balance(state)` is a parameter. The reference does not model it yet.

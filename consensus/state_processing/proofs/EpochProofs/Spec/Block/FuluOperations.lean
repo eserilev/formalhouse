@@ -7,7 +7,7 @@ import EpochProofs.Spec.Block.Attestations
 # Reference: the Fulu block operations
 
 Transcribed from `specs/phase0`, `specs/deneb`, `specs/electra` and
-`specs/fulu/beacon-chain.md` (v1.7.0-beta.2).
+`specs/fulu/beacon-chain.md` (v1.7.0-beta.4).
 
 Most Fulu operations have the same pyspec text as the Gloas versions in `Block/*`. They differ
 because the functions they call differ in Fulu:

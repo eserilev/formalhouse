@@ -5,7 +5,7 @@ import EpochProofs.Spec.Fulu
 /-!
 # Reference: the Fulu and Gloas fork upgrades
 
-Transcribed from `specs/fulu/fork.md` and `specs/gloas/fork.md` (v1.7.0-beta.2).
+Transcribed from `specs/fulu/fork.md` and `specs/gloas/fork.md` (v1.7.0-beta.4).
 
 The Electra state has the fields of the Fulu state except `proposer_lookahead`, so
 `upgrade_to_fulu` takes a `FuluState` and ignores its `proposer_lookahead`. The Gloas-only fields

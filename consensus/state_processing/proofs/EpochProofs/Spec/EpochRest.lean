@@ -4,7 +4,7 @@ import EpochProofs.Spec.Helpers
 # Reference: the reset and rotation steps of `process_epoch`
 
 Transcribed from `specs/phase0/beacon-chain.md`, `specs/altair/beacon-chain.md` and
-`specs/capella/beacon-chain.md` (v1.7.0-beta.2). Later forks do not change these functions.
+`specs/capella/beacon-chain.md` (v1.7.0-beta.4). Later forks do not change these functions.
 Each definition quotes its pyspec.
 
 Python evaluates the right side of `a[i] = b` before `i`. The reference keeps that order.

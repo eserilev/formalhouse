@@ -4,7 +4,7 @@ import EpochProofs.Spec.RewardsAndPenalties
 # Reference: `process_registry_updates`
 
 Transcribed line by line from `specs/phase0/beacon-chain.md`, `specs/electra/beacon-chain.md`
-and `specs/gloas/beacon-chain.md` (v1.7.0-beta.2). Each definition quotes its pyspec.
+and `specs/gloas/beacon-chain.md` (v1.7.0-beta.4). Each definition quotes its pyspec.
 
 `get_total_active_balance(state)` is a parameter. The reference does not model it yet.
 -/

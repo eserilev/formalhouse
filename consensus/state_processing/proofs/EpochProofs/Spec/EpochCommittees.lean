@@ -5,7 +5,7 @@ import EpochProofs.Spec.Block.SyncAggregate
 # Reference: sync committee, proposer lookahead and PTC window updates
 
 Transcribed from `specs/altair`, `specs/fulu` and `specs/gloas/beacon-chain.md`
-(v1.7.0-beta.2). Each definition quotes the pyspec of its latest fork. `sha256` and BLS come
+(v1.7.0-beta.4). Each definition quotes the pyspec of its latest fork. `sha256` and BLS come
 from the `Oracle`.
 -/
 

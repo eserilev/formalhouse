@@ -13,7 +13,7 @@ import EpochProofs.Spec.Block.SyncAggregate
 /-!
 # Reference: `process_operations`, `process_block` and `state_transition`
 
-Transcribed from `specs/phase0` and `specs/gloas/beacon-chain.md` (v1.7.0-beta.2). Each
+Transcribed from `specs/phase0` and `specs/gloas/beacon-chain.md` (v1.7.0-beta.4). Each
 definition quotes the pyspec of its latest fork. Two values are parameters:
 `max_blobs_per_block epoch` is `get_blob_parameters(epoch).max_blobs_per_block`, and
 `GLOAS_FORK_EPOCH` is the Gloas fork epoch of the config.

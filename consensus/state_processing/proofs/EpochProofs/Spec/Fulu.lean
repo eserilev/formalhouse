@@ -5,7 +5,7 @@ import EpochProofs.Spec.PendingDeposits
 # Reference: the Fulu epoch functions that differ from Gloas
 
 Transcribed from `specs/electra/beacon-chain.md` and `specs/fulu/beacon-chain.md`
-(v1.7.0-beta.2). Fulu reads the same `BeaconState` fields as Gloas in these functions, so they
+(v1.7.0-beta.4). Fulu reads the same `BeaconState` fields as Gloas in these functions, so they
 take the Gloas `BeaconState` and ignore its Gloas-only fields.
 
 `FuluConfig` holds the two config values that Fulu reads and Gloas does not.

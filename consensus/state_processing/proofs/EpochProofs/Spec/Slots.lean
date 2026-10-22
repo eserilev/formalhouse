@@ -4,7 +4,7 @@ import EpochProofs.Spec.Helpers
 # Reference: `process_slot` and `process_slots`
 
 Transcribed from `specs/phase0/beacon-chain.md` and `specs/gloas/beacon-chain.md`
-(v1.7.0-beta.2). Each definition quotes its pyspec.
+(v1.7.0-beta.4). Each definition quotes its pyspec.
 
 `process_epoch` is a parameter `processEpoch`. The real one plugs in later.
 -/

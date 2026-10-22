@@ -4,7 +4,7 @@ import CacheProofs.Spec.Types
 # Activation queue (phase0 to Deneb, Electra)
 
 Transcribed from the consensus specs. The local checkout is v1.7.0-beta.0-17-g593604b8f. These
-functions are the same in v1.7.0-beta.2.
+functions are the same in v1.7.0-beta.4.
 
 `Validator` holds only the fields that these functions read.
 

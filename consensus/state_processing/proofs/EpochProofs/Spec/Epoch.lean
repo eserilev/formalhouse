@@ -15,7 +15,7 @@ import EpochProofs.Spec.Block.ExecutionRequests
 # Reference: `process_epoch` and `apply_pending_deposit`
 
 Transcribed from `specs/phase0`, `specs/altair`, `specs/electra` and `specs/gloas`
-`beacon-chain.md` (v1.7.0-beta.2). Each definition quotes the pyspec of its latest fork.
+`beacon-chain.md` (v1.7.0-beta.4). Each definition quotes the pyspec of its latest fork.
 `process_epoch` runs the epoch steps of the other files in pyspec order.
 -/
 

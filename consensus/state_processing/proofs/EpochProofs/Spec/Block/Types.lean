@@ -3,7 +3,7 @@ import EpochProofs.Spec.Types
 /-!
 # Gloas block, envelope and signing containers
 
-Transcribed from the consensus specs (v1.7.0-beta.2). Names and field order match the spec.
+Transcribed from the consensus specs (v1.7.0-beta.4). Names and field order match the spec.
 Each field has the SSZ default as its default, except that a vector field defaults to the
 empty list. Python `BitList` and `BitVector` are `List Bool`. Byte lists are `List UInt8`.
 -/

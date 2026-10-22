@@ -5,7 +5,7 @@ import EpochProofs.Spec.Block.Slashings
 # Reference: `process_attestation` and `process_payload_attestation`
 
 Transcribed from `specs/altair`, `specs/electra` and `specs/gloas/beacon-chain.md`
-(v1.7.0-beta.2). Each definition quotes the pyspec of its latest fork. Hashes and BLS come from
+(v1.7.0-beta.4). Each definition quotes the pyspec of its latest fork. Hashes and BLS come from
 the `Oracle`.
 -/
 

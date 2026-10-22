@@ -3,7 +3,7 @@ import EpochProofs.Spec.Types
 /-!
 # Reference: `process_effective_balance_updates`
 
-Transcribed line by line from `specs/electra/beacon-chain.md` (v1.7.0-beta.2). Gloas does not
+Transcribed line by line from `specs/electra/beacon-chain.md` (v1.7.0-beta.4). Gloas does not
 change it. Each definition quotes its pyspec.
 -/
 

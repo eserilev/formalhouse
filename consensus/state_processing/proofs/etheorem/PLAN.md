@@ -71,7 +71,7 @@ that `processEpoch` is the 17 steps in sequence.
     have equal length, and the registry has room for `MAX_PENDING_DEPOSITS_PER_EPOCH` new
     validators (deposits), one balance for each validator (consolidations), the builder
     withdrawals fit (F6), the historical summaries fit (`HISTORICAL_ROOTS_LIMIT`, kept in
-    beta.2).
+    beta.4).
   - Facts about Etheorem's own output (F3): its sync committee, proposer and PTC selections
     return `size` items.
 
@@ -117,11 +117,11 @@ the steps before it.
 - F5 (c). `get_inactivity_penalty_deltas` multiplies `effective_balance * inactivity_score`.
   pyspec raises when the product reaches 2^64. That needs a score of 2^23 at 2048 ETH, about
   2.1M epochs of leak. Etheorem computes in `Nat` and does not raise.
-- F6 (version). Etheorem pins alpha.11. In beta.2 the registry, participation, pending-queue
+- F6 (version). Etheorem pins alpha.11. In beta.4 the registry, participation, pending-queue
   and builder lists are `ProgressiveList`s with no limit. `historical_roots`, `eth1_data_votes`
   and `historical_summaries` keep their caps. Etheorem keeps the alpha.11 limits and drops items
   past them. The epoch proofs need one of them: `builder_pending_withdrawals` (2^20), as
-  `builderRoom`. The `historical_summaries` cap (2^24) is a beta.2 cap too, so it is a spec
+  `builderRoom`. The `historical_summaries` cap (2^24) is a beta.4 cap too, so it is a spec
   condition (`HistRoom`). Only the Etheorem fork moving to progressive lists removes
   `builderRoom`. Three block-only values also changed:
   `MIN_BUILDER_WITHDRAWABILITY_DELAY` (8192 to 64), `BUILDER_WITHDRAWAL_PREFIX` (0x03 to 0xB0)

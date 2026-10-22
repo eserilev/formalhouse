@@ -239,7 +239,7 @@ theorem apply_parent_execution_payload_pkSame (p : Preset) (o : Oracle) (s s' : 
   peel_ok' h
   all_goals first
     | (cases h
-       refine (request_loop_pkSame (by assumption : forIn requests.deposits _ _ = Except.ok _)
+       refine PkSame.trans ?_ ((request_loop_pkSame (by assumption : forIn requests.deposits _ _ = Except.ok _)
          (by loop_body (fun h => PkSame.of_eq (by cases h; rfl)))).trans
          ((request_loop_pkSame (by assumption : forIn requests.withdrawals _ _ = Except.ok _)
          (by loop_body process_withdrawal_request_pkSame _ _ _ _)).trans
@@ -251,11 +251,12 @@ theorem apply_parent_execution_payload_pkSame (p : Preset) (o : Oracle) (s s' : 
          ((request_loop_pkSame (by assumption : forIn requests.builder_exits _ _ = Except.ok _)
          (by loop_body (fun h =>
            PkSame.of_eq (process_builder_exit_request_frame _ _ _ _ h).1.1))).trans
-         ?_))))
-       first
-         | exact congrArg (List.map (·.pubkey)) (settle_builder_payment_frame _ _ _
-             ‹settle_builder_payment _ _ = Except.ok _›).1.1
-         | exact rfl)
+         ?_)))))
+       · first
+           | exact congrArg (List.map (·.pubkey)) (settle_builder_payment_frame _ _ _
+               ‹settle_builder_payment _ _ = Except.ok _›).1.1
+           | exact rfl
+       · exact rfl)
 
 /-- `process_parent_execution_payload` keeps the pubkeys. -/
 theorem process_parent_execution_payload_pkSame (p : Preset) (o : Oracle) (s s' : BeaconState)

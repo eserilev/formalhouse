@@ -4,7 +4,7 @@ import EpochProofs.Spec.RegistryUpdates
 # Reference: `process_pending_deposits`
 
 Transcribed line by line from `specs/phase0/beacon-chain.md`, `specs/electra/beacon-chain.md`
-and `specs/gloas/beacon-chain.md` (v1.7.0-beta.2). Each definition quotes its pyspec.
+and `specs/gloas/beacon-chain.md` (v1.7.0-beta.4). Each definition quotes its pyspec.
 
 `get_total_active_balance(state)` is a parameter. `apply_pending_deposit` is also a parameter:
 it verifies a BLS signature and builds a new validator, which this reference does not model.

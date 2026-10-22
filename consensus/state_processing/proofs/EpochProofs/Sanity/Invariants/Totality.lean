@@ -157,7 +157,7 @@ theorem process_randao_mixes_reset_total (s : BeaconState) (hslot : s.slot < 2 ^
   exact OkWith.pure ⟨_, _, rfl⟩
 
 /-- `process_historical_summaries_update` succeeds and only appends to
-`historical_summaries`. The spec list has no limit in beta.2. -/
+`historical_summaries`. The spec list has no limit in beta.4. -/
 theorem process_historical_summaries_update_total (o : Oracle) (s : BeaconState)
     (hslot : s.slot < 2 ^ 64) :
     OkWith (process_historical_summaries_update Preset.mainnet o s)

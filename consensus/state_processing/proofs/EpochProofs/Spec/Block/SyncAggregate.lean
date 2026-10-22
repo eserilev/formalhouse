@@ -4,7 +4,7 @@ import EpochProofs.Spec.Block.ExecutionRequests
 # Reference: `process_sync_aggregate`
 
 Transcribed from `specs/phase0/beacon-chain.md`, `specs/altair/beacon-chain.md` and
-`specs/altair/bls.md` (v1.7.0-beta.2). Later forks do not change these functions. Each
+`specs/altair/bls.md` (v1.7.0-beta.4). Later forks do not change these functions. Each
 definition quotes its pyspec. BLS comes from the `Oracle`.
 -/
 

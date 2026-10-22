@@ -3,7 +3,7 @@ import EpochProofs.Spec.Block.ExecutionRequests
 /-!
 # Reference: voluntary exits and BLS to execution changes
 
-Transcribed from `specs/capella` and `specs/electra/beacon-chain.md` (v1.7.0-beta.2). Gloas
+Transcribed from `specs/capella` and `specs/electra/beacon-chain.md` (v1.7.0-beta.4). Gloas
 does not change these functions. Each definition quotes its pyspec. Hashes and BLS come from
 the `Oracle`. `get_pending_balance_to_withdraw` comes from `Spec/Block/ExecutionRequests.lean`.
 -/

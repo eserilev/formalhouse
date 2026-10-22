@@ -7,7 +7,7 @@ import EpochProofs.Spec.TotalActiveBalance
 # Reference: proposer and attester slashings
 
 Transcribed from `specs/phase0`, `specs/electra` and `specs/gloas/beacon-chain.md`
-(v1.7.0-beta.2). Each definition quotes the pyspec of its latest fork. Hashes and BLS come from
+(v1.7.0-beta.4). Each definition quotes the pyspec of its latest fork. Hashes and BLS come from
 the `Oracle`.
 -/
 
@@ -17,7 +17,7 @@ namespace EpochProofs.Spec
 def slash_validator(
     state: BeaconState,
     slashed_index: ValidatorIndex,
-    whistleblower_index: Optional[ValidatorIndex] = None,
+    whistleblower_index: ValidatorIndex | None = None,
 ) -> None:
     """
     Slash the validator with index ``slashed_index``.
@@ -30,7 +30,6 @@ def slash_validator(
         validator.withdrawable_epoch, epoch + EPOCHS_PER_SLASHINGS_VECTOR
     )
     state.slashings[epoch % EPOCHS_PER_SLASHINGS_VECTOR] += validator.effective_balance
-    # [Modified in Electra:EIP7251]
     slashing_penalty = validator.effective_balance // MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA
     decrease_balance(state, slashed_index, slashing_penalty)
 
@@ -38,12 +37,19 @@ def slash_validator(
     proposer_index = get_beacon_proposer_index(state)
     if whistleblower_index is None:
         whistleblower_index = proposer_index
-    # [Modified in Electra:EIP7251]
     whistleblower_reward = validator.effective_balance // WHISTLEBLOWER_REWARD_QUOTIENT_ELECTRA
     proposer_reward = whistleblower_reward * PROPOSER_WEIGHT // WEIGHT_DENOMINATOR
     increase_balance(state, proposer_index, proposer_reward)
     increase_balance(state, whistleblower_index, whistleblower_reward - proposer_reward)
+
+    # [New in Gloas:EIP7732]
+    # Remove pending builder payments for blocks proposed by the slashed validator
+    for payment_index, payment in enumerate(state.builder_pending_payments):
+        if payment.proposer_index == slashed_index:
+            state.builder_pending_payments[payment_index] = BuilderPendingPayment.empty()
 ```
+
+The loop writes each in-range index once, so the reference states it as one `map`.
 
 `initiate_validator_exit` reads `get_total_active_balance(state)` only for a validator with no
 exit. The reference makes the same early-return check first, and computes the total only on
@@ -84,7 +90,9 @@ def slash_validator (p : Preset) (state : BeaconState) (slashed_index : Validato
   let state := { state with
     balances := ← increase_balance state.balances whistleblower_index
       (← uint64Sub whistleblower_reward proposer_reward) }
-  pure state
+  pure { state with
+    builder_pending_payments := state.builder_pending_payments.map fun payment =>
+      if payment.proposer_index = slashed_index then .empty else payment }
 
 /-- ```python
 def is_slashable_validator(validator: Validator, epoch: Epoch) -> bool:
@@ -176,24 +184,6 @@ def process_proposer_slashing(state: BeaconState, proposer_slashing: ProposerSla
         signing_root = compute_signing_root(signed_header.message, domain)
         assert bls.Verify(proposer.pubkey, signing_root, signed_header.signature)
 
-    # [New in Gloas:EIP7732]
-    # Remove the BuilderPendingPayment corresponding to this proposal if it is
-    # still in the 2-epoch window. Only clear it when the slashed validator is
-    # the proposer associated with the payment; otherwise an unrelated same-slot
-    # equivocation could grief an honest proposer's payment.
-    slot = header_1.slot
-    proposal_epoch = compute_epoch_at_slot(slot)
-    if proposal_epoch == get_current_epoch(state):
-        payment_index = SLOTS_PER_EPOCH + slot % SLOTS_PER_EPOCH
-        payment = state.builder_pending_payments[payment_index]
-        if payment.proposer_index == header_1.proposer_index:
-            state.builder_pending_payments[payment_index] = BuilderPendingPayment.empty()
-    elif proposal_epoch == get_previous_epoch(state):
-        payment_index = slot % SLOTS_PER_EPOCH
-        payment = state.builder_pending_payments[payment_index]
-        if payment.proposer_index == header_1.proposer_index:
-            state.builder_pending_payments[payment_index] = BuilderPendingPayment.empty()
-
     slash_validator(state, header_1.proposer_index)
 ``` -/
 def process_proposer_slashing (p : Preset) (o : Oracle) (state : BeaconState)
@@ -213,25 +203,6 @@ def process_proposer_slashing (p : Preset) (o : Oracle) (state : BeaconState)
       compute_signing_root o (o.hash_tree_root_BeaconBlockHeader signed_header.message) domain
     if ¬ o.bls_Verify proposer.pubkey signing_root signed_header.signature then
       throw .assertionFailed
-
-  let slot := header_1.slot
-  let proposal_epoch ← compute_epoch_at_slot p slot
-  let mut state := state
-  if proposal_epoch = (← get_current_epoch p state) then
-    let payment_index ← uint64Add p.SLOTS_PER_EPOCH (← uint64Mod slot p.SLOTS_PER_EPOCH)
-    let payment ← listGet state.builder_pending_payments payment_index
-    if payment.proposer_index = header_1.proposer_index then
-      state := { state with
-        builder_pending_payments :=
-          ← listSet state.builder_pending_payments payment_index .empty }
-  else
-    if proposal_epoch = (← get_previous_epoch p state) then
-      let payment_index ← uint64Mod slot p.SLOTS_PER_EPOCH
-      let payment ← listGet state.builder_pending_payments payment_index
-      if payment.proposer_index = header_1.proposer_index then
-        state := { state with
-          builder_pending_payments :=
-            ← listSet state.builder_pending_payments payment_index .empty }
 
   slash_validator p state header_1.proposer_index
 

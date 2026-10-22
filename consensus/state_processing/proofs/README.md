@@ -568,16 +568,28 @@ The steps commute for these reasons:
 
 Conditions beyond `lighthouse_full_epoch_state_transition_sameOk`:
 - `historical_summaries` holds fewer than 2^24 items at each epoch boundary (`HistRoom`).
-  Lighthouse pushes to a list with that limit. The beta.2 list has no limit.
+  Lighthouse pushes to a list with that limit. The beta.4 list has no limit.
 - The eth1 reset of Lighthouse tests `(slot + 1) % 2048 == 0`. The spec tests
   `next_epoch % 64 == 0`. They agree at the last slot of an epoch when `slot + 1` fits in a
   `u64`. `reachable_state_transition_sameOk_last` gives both facts.
 
 ## The reference
 
-`EpochProofs/Spec/` transcribes the consensus specs (v1.7.0-beta.2) line by line. Each
+`EpochProofs/Spec/` transcribes the consensus specs (v1.7.0-beta.4) line by line. Each
 definition quotes its pyspec. Effective balance updates come from Electra, because Gloas does
 not change them.
+
+The move from beta.2 to beta.4 changed three block functions and no epoch function:
+
+- `slash_validator` clears every builder pending payment of the slashed proposer, and Gloas no
+  longer overrides `process_proposer_slashing`.
+- `apply_parent_execution_payload` settles the builder payment before the parent's execution
+  requests.
+- The builders sweep withdraws the balance left after the withdrawals already chosen in the same
+  payload (`get_builder_balance_after_withdrawals`).
+
+The proofs needed only frame repairs: the parent payload proofs now take the settlement step
+first.
 
 Rules:
 
@@ -643,7 +655,7 @@ finalized epoch is below `FAR_FUTURE_EPOCH`, and the registry lists have equal l
 the deposits and the consolidations. Frame lemmas move two conditions to the epoch start: room
 in the registry for the `MAX_PENDING_DEPOSITS_PER_EPOCH` new validators of one epoch (F10), and
 room in the builder withdrawals under Etheorem's alpha.11 limit (F6). The historical summaries
-room is `HistRoom` in `TailPre`: beta.2 keeps the `HISTORICAL_ROOTS_LIMIT` cap, so it is a spec
+room is `HistRoom` in `TailPre`: beta.4 keeps the `HISTORICAL_ROOTS_LIMIT` cap, so it is a spec
 condition, not an Etheorem one. The F3 conditions are facts about Etheorem's own output and
 stay.
 
@@ -657,12 +669,12 @@ fields. The conditions:
 
 - `SLOTS_PER_EPOCH ≥ 6` (both presets), so the quorum does not overflow.
 - The new withdrawals fit under the alpha.11 list limit, 2^20. Etheorem's `SSZList.push` drops
-  an item past the limit. In beta.2 the list has no limit.
+  an item past the limit. In beta.4 the list has no limit.
 - Lighthouse's total active balance equals Etheorem's `get_total_active_balance`.
 
 Etheorem pins spec v1.7.0-alpha.11. Every Gloas epoch function in alpha.11 has the same meaning
-as in beta.2. Only type casts and syntax differ. The `BeaconState` lists have limits in
-alpha.11 and none in beta.2.
+as in beta.4. Only type casts and syntax differ. The `BeaconState` lists have limits in
+alpha.11 and none in beta.4.
 
 ### Fulu
 

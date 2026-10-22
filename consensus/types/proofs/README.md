@@ -51,7 +51,7 @@ If Charon fails with `found crate core compiled by an incompatible version of ru
 
 ## The reference
 
-`CacheProofs/Spec/` transcribes the consensus specs (v1.7.0-beta.2). Each definition quotes
+`CacheProofs/Spec/` transcribes the consensus specs (v1.7.0-beta.4). Each definition quotes
 its pyspec. Write it from the spec only. Do not read Lighthouse. Each pyspec raise is
 `Except.error`.
 
@@ -198,7 +198,7 @@ The functions have no error path. `get_validators_eligible_for_activation` retur
 `is_eligible_for_activation_queue` (phase0, Electra), `is_eligible_for_activation`,
 `process_registry_updates` (phase0 to Deneb, Electra), and the finalization rules of
 `weigh_justification_and_finalization`. The local spec checkout is v1.7.0-beta.0-17-g593604b8f.
-These functions are the same in v1.7.0-beta.2.
+These functions are the same in v1.7.0-beta.4.
 
 The reference omits `initiate_validator_exit`. It writes only `exit_epoch` and
 `withdrawable_epoch`, and the activation functions do not read them.
@@ -310,7 +310,7 @@ theorem get_base_reward_equiv (cfg : Config) (vs : List Validator) (epoch : Nat)
 `get_active_validator_indices`, `get_total_balance`, `get_total_active_balance`, the phase0
 `get_base_reward`, and the altair `get_base_reward_per_increment` and `get_base_reward`. The
 local spec checkout is v1.7.0-beta.0-17-g593604b8f. These functions are the same in
-v1.7.0-beta.2. The state has only the fields that these functions read.
+v1.7.0-beta.4. The state has only the fields that these functions read.
 
 ### Trusted base
 
@@ -447,7 +447,7 @@ justification read it before, and `process_epoch` clones the cache for the summa
 `get_unslashed_participating_indices` and `process_participation_flag_updates`. It also has
 the lines of `process_attestation`, `slash_validator` and `process_effective_balance_updates`
 that change the cache inputs. The local spec checkout is `v1.7.0-beta.0-17-g593604b8f`. These
-functions are the same in v1.7.0-beta.2.
+functions are the same in v1.7.0-beta.4.
 
 ### Trusted base
 

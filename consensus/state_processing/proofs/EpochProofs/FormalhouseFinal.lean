@@ -103,7 +103,7 @@ structure GloasAssumptions (o : Spec.Oracle) (init : Spec.FuluState) (e : EState
   /-- Probability fact about Etheorem (F3): its selections return all their items. -/
   selections : SelectionsFull e
   /-- Etheorem list limits from alpha.11: registry room for one epoch of deposits (F10) and
-  builder pending withdrawals room (F6). beta.2 has no limit on these lists. -/
+  builder pending withdrawals room (F6). beta.4 has no limit on these lists. -/
   etheoremRoom : EpochCondsIn e
   /-- Oracle: the spec Oracle agrees with Etheorem's SHA-256, roots and BLS checks, and SHA-256
   returns 32 bytes. -/

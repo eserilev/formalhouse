@@ -3,7 +3,7 @@ import EpochProofs.Spec.RewardsAndPenalties
 /-!
 # Reference: `get_total_active_balance`
 
-Transcribed from `specs/phase0/beacon-chain.md` (v1.7.0-beta.2). The epoch references take the
+Transcribed from `specs/phase0/beacon-chain.md` (v1.7.0-beta.4). The epoch references take the
 total active balance as a parameter. Block operations compute it with this function.
 -/
 

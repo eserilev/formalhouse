@@ -4,7 +4,7 @@ import EpochProofs.Spec.Types
 # Reference: `process_inactivity_updates`
 
 Transcribed line by line from `specs/phase0/beacon-chain.md` and `specs/altair/beacon-chain.md`
-(v1.7.0-beta.2). Later forks do not change these functions. Each definition quotes its pyspec.
+(v1.7.0-beta.4). Later forks do not change these functions. Each definition quotes its pyspec.
 
 A Python `set` is a `List` here. The reference only tests membership.
 -/

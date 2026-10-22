@@ -5,7 +5,7 @@ import EpochProofs.Spec.Slots
 /-!
 # Reference: the Fulu `process_slot`, `process_slots` and `state_transition`
 
-Transcribed from `specs/phase0/beacon-chain.md` (v1.7.0-beta.2). Fulu keeps the phase0 text of
+Transcribed from `specs/phase0/beacon-chain.md` (v1.7.0-beta.4). Fulu keeps the phase0 text of
 these functions. Only the types differ: the state is `FuluState`, so its root comes from
 `FuluOracle`, and the block is a `FuluSignedBeaconBlock`.
 
