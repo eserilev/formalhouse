@@ -178,3 +178,4 @@ import EpochProofs.Sanity.Invariants.FuluSteps
 import EpochProofs.Sanity.Invariants.FuluLengths
 import EpochProofs.Sanity.Invariants.FuluPubkeys
 import EpochProofs.Sanity.Invariants.FuluConsolidations
+import EpochProofs.Sanity.Invariants.FuluExits
