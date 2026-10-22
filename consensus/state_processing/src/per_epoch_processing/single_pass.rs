@@ -22,10 +22,7 @@ use types::{
     BuilderPendingWithdrawal, ChainSpec, CommitteeCache, DepositData, Domain, Epoch, EpochCache,
     EthSpec, ExitCache, ForkName, ParticipationFlags, PendingDeposit, ProgressiveBalancesCache,
     RelativeEpoch, Validator,
-    consts::altair::{
-        NUM_FLAG_INDICES, TIMELY_HEAD_FLAG_INDEX, TIMELY_SOURCE_FLAG_INDEX,
-        TIMELY_TARGET_FLAG_INDEX,
-    },
+    consts::altair::{TIMELY_HEAD_FLAG_INDEX, TIMELY_SOURCE_FLAG_INDEX, TIMELY_TARGET_FLAG_INDEX},
 };
 
 pub struct SinglePassConfig {
@@ -90,7 +87,9 @@ struct StateContext {
 }
 
 struct RewardsAndPenaltiesContext {
-    unslashed_participating_increments_array: [u64; NUM_FLAG_INDICES],
+    source_increments: u64,
+    target_increments: u64,
+    head_increments: u64,
     active_increments: u64,
 }
 
@@ -250,12 +249,9 @@ pub fn process_epoch_single_pass<E: EthSpec>(
             inactivity_score_bias: spec.inactivity_score_bias,
             inactivity_score_recovery_rate: spec.inactivity_score_recovery_rate,
             inactivity_penalty_quotient: spec.inactivity_penalty_quotient_for_fork(fork_name),
-            source_increments: rewards_ctxt
-                .get_unslashed_participating_increments(TIMELY_SOURCE_FLAG_INDEX)?,
-            target_increments: rewards_ctxt
-                .get_unslashed_participating_increments(TIMELY_TARGET_FLAG_INDEX)?,
-            head_increments: rewards_ctxt
-                .get_unslashed_participating_increments(TIMELY_HEAD_FLAG_INDEX)?,
+            source_increments: rewards_ctxt.source_increments,
+            target_increments: rewards_ctxt.target_increments,
+            head_increments: rewards_ctxt.head_increments,
             active_increments: rewards_ctxt.active_increments,
             total_active_balance,
             target_withdrawable_epoch: slashings_ctxt.target_withdrawable_epoch.as_u64(),
@@ -777,32 +773,33 @@ impl RewardsAndPenaltiesContext {
         state_ctxt: &StateContext,
         spec: &ChainSpec,
     ) -> Result<Self, Error> {
-        let mut unslashed_participating_increments_array = [0; NUM_FLAG_INDICES];
-        for flag_index in 0..NUM_FLAG_INDICES {
-            let unslashed_participating_balance =
-                progressive_balances.previous_epoch_flag_attesting_balance(flag_index)?;
-            let unslashed_participating_increments =
-                unslashed_participating_balance.safe_div(spec.effective_balance_increment)?;
-
-            *unslashed_participating_increments_array
-                .get_mut(flag_index)
-                .ok_or(Error::InvalidFlagIndex(flag_index))? = unslashed_participating_increments;
-        }
-        let active_increments = state_ctxt
-            .total_active_balance
-            .safe_div(spec.effective_balance_increment)?;
+        let (source_increments, target_increments, head_increments, active_increments) =
+            rewards_penalties::participation_increments(
+                progressive_balances
+                    .previous_epoch_flag_attesting_balance(TIMELY_SOURCE_FLAG_INDEX)?,
+                progressive_balances
+                    .previous_epoch_flag_attesting_balance(TIMELY_TARGET_FLAG_INDEX)?,
+                progressive_balances
+                    .previous_epoch_flag_attesting_balance(TIMELY_HEAD_FLAG_INDEX)?,
+                state_ctxt.total_active_balance,
+                spec.effective_balance_increment,
+            )?;
 
         Ok(Self {
-            unslashed_participating_increments_array,
+            source_increments,
+            target_increments,
+            head_increments,
             active_increments,
         })
     }
 
     fn get_unslashed_participating_increments(&self, flag_index: usize) -> Result<u64, Error> {
-        self.unslashed_participating_increments_array
-            .get(flag_index)
-            .copied()
-            .ok_or(Error::InvalidFlagIndex(flag_index))
+        match flag_index {
+            TIMELY_SOURCE_FLAG_INDEX => Ok(self.source_increments),
+            TIMELY_TARGET_FLAG_INDEX => Ok(self.target_increments),
+            TIMELY_HEAD_FLAG_INDEX => Ok(self.head_increments),
+            _ => Err(Error::InvalidFlagIndex(flag_index)),
+        }
     }
 }
 
@@ -1508,69 +1505,19 @@ fn process_pending_consolidations<E: EthSpec>(
     state_ctxt: &StateContext,
     spec: &ChainSpec,
 ) -> Result<(), Error> {
-    let next_epoch = state.next_epoch()?;
-    let pending_consolidations = state.pending_consolidations()?.to_owned_list();
-
     // The moves only touch validators that consolidations reference, so they work on a local
     // table of those validators.
     let local_indices: Vec<usize> = validators_in_consolidations.iter().copied().collect();
-    let mut validators = Vec::with_capacity(local_indices.len());
-    let mut balances = Vec::with_capacity(local_indices.len());
-    for &index in &local_indices {
-        let validator = state.validators().get(index);
-        validators.push(pending_consolidations::LocalValidator {
-            exists: validator.is_some(),
-            slashed: validator.is_some_and(|validator| validator.slashed),
-            withdrawable_epoch: validator
-                .map_or(0, |validator| validator.withdrawable_epoch.as_u64()),
-            effective_balance: validator.map_or(0, |validator| validator.effective_balance),
-        });
-        balances.push(state.balances().get(index).copied().unwrap_or(0));
-    }
-    let position = |index: u64| {
-        local_indices
-            .binary_search(&(index as usize))
-            .map_err(|_| Error::from(BeaconStateError::UnknownValidator(index as usize)))
-    };
-    let views = pending_consolidations
-        .iter()
-        .map(|consolidation| {
-            Ok(pending_consolidations::ConsolidationView {
-                source: position(consolidation.source_index)?,
-                target: position(consolidation.target_index)?,
-            })
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
-
-    let (next_pending_consolidation, new_balances) =
-        pending_consolidations::process_pending_consolidations(
-            &views,
-            &validators,
-            balances,
-            next_epoch.as_u64(),
-        )
+    pending_consolidations::process_on_table(&mut StateConsolidations { state }, &local_indices)
         .map_err(|error| match error {
-            pending_consolidations::ConsolidationError::UnknownValidator(position) => {
-                Error::from(BeaconStateError::UnknownValidator(
-                    local_indices.get(position).copied().unwrap_or(position),
-                ))
+            pending_consolidations::TableError::State(e) => e,
+            pending_consolidations::TableError::UnknownValidator(index) => {
+                Error::from(BeaconStateError::UnknownValidator(index))
             }
-            pending_consolidations::ConsolidationError::Overflow => {
+            pending_consolidations::TableError::Overflow => {
                 Error::from(safe_arith::ArithError::Overflow)
             }
         })?;
-
-    for (&index, &new_balance) in local_indices.iter().zip(new_balances.iter()) {
-        if state.balances().get(index) != Some(&new_balance)
-            && let Ok(balance) = state.get_balance_mut(index)
-        {
-            *balance = new_balance;
-        }
-    }
-
-    state
-        .pending_consolidations_mut()?
-        .pop_front(next_pending_consolidation)?;
 
     // the spec tests require we don't perform effective balance updates when testing pending_consolidations
     if !perform_effective_balance_updates {
@@ -1590,6 +1537,57 @@ fn process_pending_consolidations<E: EthSpec>(
         &indices,
     )?;
     Ok(())
+}
+
+/// The state that `pending_consolidations::process_on_table` reads and writes.
+struct StateConsolidations<'a, E: EthSpec> {
+    state: &'a mut BeaconState<E>,
+}
+
+impl<E: EthSpec> pending_consolidations::ConsolidationState<Error> for StateConsolidations<'_, E> {
+    fn next_epoch(&self) -> Result<u64, Error> {
+        Ok(self.state.next_epoch()?.as_u64())
+    }
+
+    fn pending(&self) -> Result<Vec<pending_consolidations::PendingPair>, Error> {
+        Ok(self
+            .state
+            .pending_consolidations()?
+            .iter()
+            .map(|consolidation| pending_consolidations::PendingPair {
+                source: consolidation.source_index,
+                target: consolidation.target_index,
+            })
+            .collect())
+    }
+
+    fn local_validator(&self, index: usize) -> pending_consolidations::LocalValidator {
+        let validator = self.state.validators().get(index);
+        pending_consolidations::LocalValidator {
+            exists: validator.is_some(),
+            slashed: validator.is_some_and(|validator| validator.slashed),
+            withdrawable_epoch: validator
+                .map_or(0, |validator| validator.withdrawable_epoch.as_u64()),
+            effective_balance: validator.map_or(0, |validator| validator.effective_balance),
+        }
+    }
+
+    fn balance(&self, index: usize) -> u64 {
+        self.state.balances().get(index).copied().unwrap_or(0)
+    }
+
+    fn set_balance(&mut self, index: usize, value: u64) {
+        if self.state.balances().get(index) != Some(&value)
+            && let Ok(balance) = self.state.get_balance_mut(index)
+        {
+            *balance = value;
+        }
+    }
+
+    fn pop_pending(&mut self, n: usize) -> Result<(), Error> {
+        self.state.pending_consolidations_mut()?.pop_front(n)?;
+        Ok(())
+    }
 }
 
 /// The effective balances that `list_writes::update_effective_balances_at` updates.

@@ -193,3 +193,13 @@ import EpochProofs.Spec.Block.Upgrade
 import EpochProofs.Sanity.Invariants.ForkUpgrade
 import EpochProofs.Equiv.Upgrade
 import EpochProofs.FormalhouseFinal
+import EpochProofs.Equiv.EpochContexts
+import EpochProofs.Equiv.PendingDepositsLen
+import EpochProofs.CacheBridge.EpochCacheBuild
+import EpochProofs.CacheBridge.BuildPath
+import EpochProofs.Sanity.ConsolidationTable
+import EpochProofs.Trusted.Consolidations
+import EpochProofs.Equiv.ConsolidationTable
+import EpochProofs.Sanity.Onboarding
+import EpochProofs.Trusted.Onboarding
+import EpochProofs.Equiv.Onboarding

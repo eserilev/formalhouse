@@ -7,6 +7,22 @@ use types::consts::altair::{
     TIMELY_HEAD_WEIGHT, TIMELY_SOURCE_WEIGHT, TIMELY_TARGET_WEIGHT, WEIGHT_DENOMINATOR,
 };
 
+/// Returns the source, target and head participating increments and the active increments.
+pub fn participation_increments(
+    source_balance: u64,
+    target_balance: u64,
+    head_balance: u64,
+    total_active_balance: u64,
+    effective_balance_increment: u64,
+) -> Result<(u64, u64, u64, u64), ArithError> {
+    Ok((
+        source_balance.safe_div(effective_balance_increment)?,
+        target_balance.safe_div(effective_balance_increment)?,
+        head_balance.safe_div(effective_balance_increment)?,
+        total_active_balance.safe_div(effective_balance_increment)?,
+    ))
+}
+
 /// Returns the reward and the penalty for one participation flag.
 pub fn flag_delta(
     base_reward: u64,

@@ -2919,14 +2919,14 @@ def per_epoch_processing.list_writes.update_effective_balances_at
     EffectiveBalanceWritesInst state indices 0#usize
 
 /-- [state_processing::per_epoch_processing::pending_consolidations::ConsolidationView]
-    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 10:0-13:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 11:0-14:1
     Visibility: public -/
 structure per_epoch_processing.pending_consolidations.ConsolidationView where
   source : Std.Usize
   target : Std.Usize
 
 /-- [state_processing::per_epoch_processing::pending_consolidations::LocalValidator]
-    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 16:0-21:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 17:0-22:1
     Visibility: public -/
 structure per_epoch_processing.pending_consolidations.LocalValidator where
   «exists» : Bool
@@ -2935,7 +2935,7 @@ structure per_epoch_processing.pending_consolidations.LocalValidator where
   effective_balance : Std.U64
 
 /-- [state_processing::per_epoch_processing::pending_consolidations::ConsolidationError]
-    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 23:0-27:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 24:0-28:1
     Visibility: public -/
 @[discriminant isize]
 inductive per_epoch_processing.pending_consolidations.ConsolidationError where
@@ -2945,7 +2945,7 @@ inductive per_epoch_processing.pending_consolidations.ConsolidationError where
 | Overflow : per_epoch_processing.pending_consolidations.ConsolidationError
 
 /-- [state_processing::per_epoch_processing::pending_consolidations::get_balance]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 31:0-36:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 32:0-37:1
     Visibility: public -/
 def per_epoch_processing.pending_consolidations.get_balance
   (balances : Slice Std.U64) (i : Std.Usize) : Result (Option Std.U64) := do
@@ -2957,7 +2957,7 @@ def per_epoch_processing.pending_consolidations.get_balance
   | some _ => ok o
 
 /-- [state_processing::per_epoch_processing::pending_consolidations::set_balance]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 38:0-44:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 39:0-45:1
     Visibility: public -/
 def per_epoch_processing.pending_consolidations.set_balance
   (balances : alloc.vec.Vec Std.U64) (i : Std.Usize) (value : Std.U64) :
@@ -2974,7 +2974,7 @@ def per_epoch_processing.pending_consolidations.set_balance
               ok (deref_mut_back s1)
 
 /-- [state_processing::per_epoch_processing::pending_consolidations::validator_exists]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 46:0-51:1 -/
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 47:0-52:1 -/
 def per_epoch_processing.pending_consolidations.validator_exists
   (validators : Slice
   per_epoch_processing.pending_consolidations.LocalValidator) (i : Std.Usize) :
@@ -2988,7 +2988,7 @@ def per_epoch_processing.pending_consolidations.validator_exists
   | some validator => ok validator.exists
 
 /-- [state_processing::per_epoch_processing::pending_consolidations::process_pending_consolidations]: loop body 0:
-    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 65:4-106:5
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 66:4-107:5
     Visibility: public -/
 @[rust_loop_body]
 def
@@ -3102,7 +3102,7 @@ def
   else ok (done (balances, next_pending_consolidation, none))
 
 /-- [state_processing::per_epoch_processing::pending_consolidations::process_pending_consolidations]: loop 0:
-    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 65:4-106:5
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 66:4-107:5
     Visibility: public -/
 @[rust_loop]
 def
@@ -3124,7 +3124,7 @@ def
     (balances, next_pending_consolidation, i)
 
 /-- [state_processing::per_epoch_processing::pending_consolidations::process_pending_consolidations]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 55:0-111:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 56:0-112:1
     Visibility: public -/
 def per_epoch_processing.pending_consolidations.process_pending_consolidations
   (consolidations : Slice
@@ -3141,6 +3141,394 @@ def per_epoch_processing.pending_consolidations.process_pending_consolidations
   match error with
   | none => ok (core.result.Result.Ok (next_pending_consolidation, balances1))
   | some error1 => ok (core.result.Result.Err error1)
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::PendingPair]
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 115:0-118:1
+    Visibility: public -/
+structure per_epoch_processing.pending_consolidations.PendingPair where
+  source : Std.U64
+  target : Std.U64
+
+/-- Trait declaration: [state_processing::per_epoch_processing::pending_consolidations::ConsolidationState]
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 121:0-139:1
+    Visibility: public -/
+structure per_epoch_processing.pending_consolidations.ConsolidationState (Self
+  : Type) (E : Type) where
+  next_epoch : Self → Result (core.result.Result Std.U64 E)
+  pending : Self → Result (core.result.Result (alloc.vec.Vec
+    per_epoch_processing.pending_consolidations.PendingPair) E)
+  local_validator : Self → Std.Usize → Result
+    per_epoch_processing.pending_consolidations.LocalValidator
+  balance : Self → Std.Usize → Result Std.U64
+  set_balance : Self → Std.Usize → Std.U64 → Result Self
+  pop_pending : Self → Std.Usize → Result ((core.result.Result Unit E) ×
+    Self)
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::TableError]
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 142:0-149:1
+    Visibility: public -/
+@[discriminant isize]
+inductive per_epoch_processing.pending_consolidations.TableError (E : Type)
+  where
+| State : E → per_epoch_processing.pending_consolidations.TableError E
+| UnknownValidator :
+  Std.Usize →
+  per_epoch_processing.pending_consolidations.TableError E
+| Overflow : per_epoch_processing.pending_consolidations.TableError E
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::position]: loop body 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 156:4-172:5
+    Visibility: public -/
+@[rust_loop_body]
+def per_epoch_processing.pending_consolidations.position_loop.body
+  (sorted : Slice Std.Usize) (index : Std.Usize) (low : Std.Usize)
+  (high : Std.Usize) :
+  Result (ControlFlow (Std.Usize × Std.Usize) (Option Std.Usize))
+  := do
+  if low < high
+  then
+    let i ← lift (core.num.Usize.saturating_sub high low)
+    let i1 ← i / 2#usize
+    let mid ← lift (core.num.Usize.saturating_add low i1)
+    let o ←
+      core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice Std.Usize)
+        sorted mid
+    match o with
+    | none => ok (done none)
+    | some value =>
+      if value = index
+      then ok (done (some mid))
+      else
+        if value < index
+        then
+          let low1 ← lift (core.num.Usize.saturating_add mid 1#usize)
+          ok (cont (low1, high))
+        else ok (cont (low, mid))
+  else ok (done none)
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::position]: loop 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 156:4-172:5
+    Visibility: public -/
+@[rust_loop]
+def per_epoch_processing.pending_consolidations.position_loop
+  (sorted : Slice Std.Usize) (index : Std.Usize) (low : Std.Usize)
+  (high : Std.Usize) :
+  Result (Option Std.Usize)
+  := do
+  loop
+    (fun (low1, high1) =>
+      per_epoch_processing.pending_consolidations.position_loop.body sorted
+      index low1 high1)
+    (low, high)
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::position]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 152:0-174:1
+    Visibility: public -/
+def per_epoch_processing.pending_consolidations.position
+  (sorted : Slice Std.Usize) (index : Std.Usize) :
+  Result (Option Std.Usize)
+  := do
+  let high := Slice.len sorted
+  per_epoch_processing.pending_consolidations.position_loop sorted index
+    0#usize high
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::build_table]: loop body 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 183:4-189:5 -/
+@[rust_loop_body]
+def per_epoch_processing.pending_consolidations.build_table_loop.body
+  {E : Type} {S : Type} (ConsolidationStateInst :
+  per_epoch_processing.pending_consolidations.ConsolidationState S E)
+  (state : S) (local_indices : Slice Std.Usize)
+  (validators : alloc.vec.Vec
+  per_epoch_processing.pending_consolidations.LocalValidator)
+  (balances : alloc.vec.Vec Std.U64) (k : Std.Usize) :
+  Result (ControlFlow ((alloc.vec.Vec
+    per_epoch_processing.pending_consolidations.LocalValidator) ×
+    (alloc.vec.Vec Std.U64) × Std.Usize) ((alloc.vec.Vec
+    per_epoch_processing.pending_consolidations.LocalValidator) ×
+    (alloc.vec.Vec Std.U64)))
+  := do
+  let i := Slice.len local_indices
+  if k < i
+  then
+    let o ←
+      core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice Std.Usize)
+        local_indices k
+    let (validators1, balances1) ←
+      match o with
+      | none => ok (validators, balances)
+      | some index =>
+        do
+        let lv ← ConsolidationStateInst.local_validator state index
+        let validators2 ← alloc.vec.Vec.push validators lv
+        let i1 ← ConsolidationStateInst.balance state index
+        let balances2 ← alloc.vec.Vec.push balances i1
+        ok (validators2, balances2)
+    let k1 ← lift (core.num.Usize.saturating_add k 1#usize)
+    ok (cont (validators1, balances1, k1))
+  else ok (done (validators, balances))
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::build_table]: loop 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 183:4-189:5 -/
+@[rust_loop]
+def per_epoch_processing.pending_consolidations.build_table_loop
+  {E : Type} {S : Type} (ConsolidationStateInst :
+  per_epoch_processing.pending_consolidations.ConsolidationState S E)
+  (state : S) (local_indices : Slice Std.Usize)
+  (validators : alloc.vec.Vec
+  per_epoch_processing.pending_consolidations.LocalValidator)
+  (balances : alloc.vec.Vec Std.U64) (k : Std.Usize) :
+  Result ((alloc.vec.Vec
+    per_epoch_processing.pending_consolidations.LocalValidator) ×
+    (alloc.vec.Vec Std.U64))
+  := do
+  loop
+    (fun (validators1, balances1, k1) =>
+      per_epoch_processing.pending_consolidations.build_table_loop.body
+      ConsolidationStateInst state local_indices validators1 balances1 k1)
+    (validators, balances, k)
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::build_table]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 176:0-191:1 -/
+def per_epoch_processing.pending_consolidations.build_table
+  {E : Type} {S : Type} (ConsolidationStateInst :
+  per_epoch_processing.pending_consolidations.ConsolidationState S E)
+  (state : S) (local_indices : Slice Std.Usize) :
+  Result ((alloc.vec.Vec
+    per_epoch_processing.pending_consolidations.LocalValidator) ×
+    (alloc.vec.Vec Std.U64))
+  := do
+  let i := Slice.len local_indices
+  let validators :=
+    alloc.vec.Vec.with_capacity
+      per_epoch_processing.pending_consolidations.LocalValidator i
+  let i1 := Slice.len local_indices
+  let balances := alloc.vec.Vec.with_capacity Std.U64 i1
+  per_epoch_processing.pending_consolidations.build_table_loop
+    ConsolidationStateInst state local_indices validators balances 0#usize
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::build_views]: loop body 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 200:4-219:5 -/
+@[rust_loop_body]
+def per_epoch_processing.pending_consolidations.build_views_loop.body
+  (pairs : Slice per_epoch_processing.pending_consolidations.PendingPair)
+  (local_indices : Slice Std.Usize)
+  (views : alloc.vec.Vec
+  per_epoch_processing.pending_consolidations.ConsolidationView)
+  (i : Std.Usize) :
+  Result (ControlFlow ((alloc.vec.Vec
+    per_epoch_processing.pending_consolidations.ConsolidationView) ×
+    Std.Usize) ((alloc.vec.Vec
+    per_epoch_processing.pending_consolidations.ConsolidationView) × (Option
+    Std.Usize)))
+  := do
+  let i1 := Slice.len pairs
+  if i < i1
+  then
+    let o ←
+      core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice
+        per_epoch_processing.pending_consolidations.PendingPair) pairs i
+    match o with
+    | none =>
+      let i2 ← lift (core.num.Usize.saturating_add i 1#usize)
+      ok (cont (views, i2))
+    | some pair =>
+      let source_index ← lift (UScalar.cast .Usize pair.source)
+      let target_index ← lift (UScalar.cast .Usize pair.target)
+      let o1 ←
+        per_epoch_processing.pending_consolidations.position local_indices
+          source_index
+      match o1 with
+      | none => ok (done (views, some source_index))
+      | some source =>
+        let o2 ←
+          per_epoch_processing.pending_consolidations.position local_indices
+            target_index
+        match o2 with
+        | none => ok (done (views, some target_index))
+        | some target =>
+          let views1 ←
+            alloc.vec.Vec.push views ({ source, target } :
+              per_epoch_processing.pending_consolidations.ConsolidationView)
+          let i2 ← lift (core.num.Usize.saturating_add i 1#usize)
+          ok (cont (views1, i2))
+  else ok (done (views, none))
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::build_views]: loop 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 200:4-219:5 -/
+@[rust_loop]
+def per_epoch_processing.pending_consolidations.build_views_loop
+  (pairs : Slice per_epoch_processing.pending_consolidations.PendingPair)
+  (local_indices : Slice Std.Usize)
+  (views : alloc.vec.Vec
+  per_epoch_processing.pending_consolidations.ConsolidationView)
+  (i : Std.Usize) :
+  Result ((alloc.vec.Vec
+    per_epoch_processing.pending_consolidations.ConsolidationView) × (Option
+    Std.Usize))
+  := do
+  loop
+    (fun (views1, i1) =>
+      per_epoch_processing.pending_consolidations.build_views_loop.body pairs
+      local_indices views1 i1)
+    (views, i)
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::build_views]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 193:0-224:1 -/
+def per_epoch_processing.pending_consolidations.build_views
+  (pairs : Slice per_epoch_processing.pending_consolidations.PendingPair)
+  (local_indices : Slice Std.Usize) :
+  Result (core.result.Result (alloc.vec.Vec
+    per_epoch_processing.pending_consolidations.ConsolidationView) Std.Usize)
+  := do
+  let i := Slice.len pairs
+  let views :=
+    alloc.vec.Vec.with_capacity
+      per_epoch_processing.pending_consolidations.ConsolidationView i
+  let (views1, missing) ←
+    per_epoch_processing.pending_consolidations.build_views_loop pairs
+      local_indices views 0#usize
+  match missing with
+  | none => ok (core.result.Result.Ok views1)
+  | some index => ok (core.result.Result.Err index)
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::write_back]: loop body 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 232:4-239:5 -/
+@[rust_loop_body]
+def per_epoch_processing.pending_consolidations.write_back_loop.body
+  {E : Type} {S : Type} (ConsolidationStateInst :
+  per_epoch_processing.pending_consolidations.ConsolidationState S E)
+  (local_indices : Slice Std.Usize) (balances : Slice Std.U64) (state : S)
+  (k : Std.Usize) :
+  Result (ControlFlow (S × Std.Usize) S)
+  := do
+  let i := Slice.len local_indices
+  if k < i
+  then
+    let o ←
+      core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice Std.Usize)
+        local_indices k
+    let state1 ←
+      match o with
+      | none => ok state
+      | some index =>
+        do
+        let o1 ←
+          core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice Std.U64)
+            balances k
+        match o1 with
+        | none => ok state
+        | some balance =>
+          ConsolidationStateInst.set_balance state index balance
+    let k1 ← lift (core.num.Usize.saturating_add k 1#usize)
+    ok (cont (state1, k1))
+  else ok (done state)
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::write_back]: loop 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 232:4-239:5 -/
+@[rust_loop]
+def per_epoch_processing.pending_consolidations.write_back_loop
+  {E : Type} {S : Type} (ConsolidationStateInst :
+  per_epoch_processing.pending_consolidations.ConsolidationState S E)
+  (state : S) (local_indices : Slice Std.Usize) (balances : Slice Std.U64)
+  (k : Std.Usize) :
+  Result S
+  := do
+  loop
+    (fun (state1, k1) =>
+      per_epoch_processing.pending_consolidations.write_back_loop.body
+      ConsolidationStateInst local_indices balances state1 k1)
+    (state, k)
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::write_back]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 226:0-240:1 -/
+@[reducible]
+def per_epoch_processing.pending_consolidations.write_back
+  {E : Type} {S : Type} (ConsolidationStateInst :
+  per_epoch_processing.pending_consolidations.ConsolidationState S E)
+  (state : S) (local_indices : Slice Std.Usize) (balances : Slice Std.U64) :
+  Result S
+  := do
+  per_epoch_processing.pending_consolidations.write_back_loop
+    ConsolidationStateInst state local_indices balances 0#usize
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::process_on_table]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 245:0-279:1
+    Visibility: public -/
+def per_epoch_processing.pending_consolidations.process_on_table
+  {E : Type} {S : Type} (ConsolidationStateInst :
+  per_epoch_processing.pending_consolidations.ConsolidationState S E)
+  (state : S) (local_indices : Slice Std.Usize) :
+  Result ((core.result.Result Unit
+    (per_epoch_processing.pending_consolidations.TableError E)) × S)
+  := do
+  let r ← ConsolidationStateInst.next_epoch state
+  match r with
+  | core.result.Result.Ok next_epoch =>
+    let r1 ← ConsolidationStateInst.pending state
+    match r1 with
+    | core.result.Result.Ok pairs =>
+      let (validators, balances) ←
+        per_epoch_processing.pending_consolidations.build_table
+          ConsolidationStateInst state local_indices
+      let s := alloc.vec.Vec.deref pairs
+      let r2 ←
+        per_epoch_processing.pending_consolidations.build_views s local_indices
+      match r2 with
+      | core.result.Result.Ok views =>
+        let s1 := alloc.vec.Vec.deref views
+        let s2 := alloc.vec.Vec.deref validators
+        let r3 ←
+          per_epoch_processing.pending_consolidations.process_pending_consolidations
+            s1 s2 balances next_epoch
+        match r3 with
+        | core.result.Result.Ok result =>
+          let (next, new_balances) := result
+          let s3 := alloc.vec.Vec.deref new_balances
+          let state1 ←
+            per_epoch_processing.pending_consolidations.write_back
+              ConsolidationStateInst state local_indices s3
+          let (r4, state2) ← ConsolidationStateInst.pop_pending state1 next
+          match r4 with
+          | core.result.Result.Ok _ => ok (core.result.Result.Ok (), state2)
+          | core.result.Result.Err e =>
+            ok (core.result.Result.Err
+              (per_epoch_processing.pending_consolidations.TableError.State e),
+              state2)
+        | core.result.Result.Err ce =>
+          match ce with
+          |
+            per_epoch_processing.pending_consolidations.ConsolidationError.UnknownValidator
+            position =>
+            let o ←
+              core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice
+                Std.Usize) local_indices position
+            match o with
+            | none =>
+              ok (core.result.Result.Err
+                (per_epoch_processing.pending_consolidations.TableError.UnknownValidator
+                position), state)
+            | some index =>
+              ok (core.result.Result.Err
+                (per_epoch_processing.pending_consolidations.TableError.UnknownValidator
+                index), state)
+          |
+            per_epoch_processing.pending_consolidations.ConsolidationError.Overflow
+            =>
+            ok (core.result.Result.Err
+              per_epoch_processing.pending_consolidations.TableError.Overflow,
+              state)
+      | core.result.Result.Err index =>
+        ok (core.result.Result.Err
+          (per_epoch_processing.pending_consolidations.TableError.UnknownValidator
+          index), state)
+    | core.result.Result.Err e =>
+      ok (core.result.Result.Err
+        (per_epoch_processing.pending_consolidations.TableError.State e),
+        state)
+  | core.result.Result.Err e =>
+    ok (core.result.Result.Err
+      (per_epoch_processing.pending_consolidations.TableError.State e), state)
 
 /-- [state_processing::per_epoch_processing::pending_deposits::DepositView]
     Source: 'consensus/state_processing/src/per_epoch_processing/pending_deposits.rs', lines 9:0-19:1
@@ -3854,8 +4242,60 @@ def per_epoch_processing.registry_update.registry_update
       per_epoch_processing.registry_update.RegistryFields
       (core.convert.FromSame safe_arith.ArithError) residual
 
+/-- [state_processing::per_epoch_processing::rewards_penalties::participation_increments]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/rewards_penalties.rs', lines 11:0-24:1
+    Visibility: public -/
+def per_epoch_processing.rewards_penalties.participation_increments
+  (source_balance : Std.U64) (target_balance : Std.U64)
+  (head_balance : Std.U64) (total_active_balance : Std.U64)
+  (effective_balance_increment : Std.U64) :
+  Result (core.result.Result (Std.U64 × Std.U64 × Std.U64 × Std.U64)
+    safe_arith.ArithError)
+  := do
+  let r ←
+    U64.Insts.Safe_arithSafeArithU64.safe_div source_balance
+      effective_balance_increment
+  let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
+    let r1 ←
+      U64.Insts.Safe_arithSafeArithU64.safe_div target_balance
+        effective_balance_increment
+    let cf1 ← core.result.Result.Insts.CoreOpsTry.branch r1
+    match cf1 with
+    | core.ops.control_flow.ControlFlow.Continue val1 =>
+      let r2 ←
+        U64.Insts.Safe_arithSafeArithU64.safe_div head_balance
+          effective_balance_increment
+      let cf2 ← core.result.Result.Insts.CoreOpsTry.branch r2
+      match cf2 with
+      | core.ops.control_flow.ControlFlow.Continue val2 =>
+        let r3 ←
+          U64.Insts.Safe_arithSafeArithU64.safe_div total_active_balance
+            effective_balance_increment
+        let cf3 ← core.result.Result.Insts.CoreOpsTry.branch r3
+        match cf3 with
+        | core.ops.control_flow.ControlFlow.Continue val3 =>
+          ok (core.result.Result.Ok (val, val1, val2, val3))
+        | core.ops.control_flow.ControlFlow.Break residual =>
+          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+            (Std.U64 × Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
+            safe_arith.ArithError) residual
+      | core.ops.control_flow.ControlFlow.Break residual =>
+        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+          (Std.U64 × Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
+          safe_arith.ArithError) residual
+    | core.ops.control_flow.ControlFlow.Break residual =>
+      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+        (Std.U64 × Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
+        safe_arith.ArithError) residual
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+      (Std.U64 × Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
+      safe_arith.ArithError) residual
+
 /-- [state_processing::per_epoch_processing::rewards_penalties::flag_delta]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/rewards_penalties.rs', lines 11:0-37:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/rewards_penalties.rs', lines 27:0-53:1
     Visibility: public -/
 def per_epoch_processing.rewards_penalties.flag_delta
   (base_reward : Std.U64) (weight : Std.U64) (is_participating : Bool)
@@ -3931,7 +4371,7 @@ def per_epoch_processing.rewards_penalties.flag_delta
           residual
 
 /-- [state_processing::per_epoch_processing::rewards_penalties::inactivity_penalty]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/rewards_penalties.rs', lines 40:0-53:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/rewards_penalties.rs', lines 56:0-69:1
     Visibility: public -/
 def per_epoch_processing.rewards_penalties.inactivity_penalty
   (effective_balance : Std.U64) (inactivity_score : Std.U64)
@@ -3963,7 +4403,7 @@ def per_epoch_processing.rewards_penalties.inactivity_penalty
         Std.U64 (core.convert.FromSame safe_arith.ArithError) residual
 
 /-- [state_processing::per_epoch_processing::rewards_penalties::new_balance_after_rewards]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/rewards_penalties.rs', lines 59:0-121:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/rewards_penalties.rs', lines 75:0-137:1
     Visibility: public -/
 def per_epoch_processing.rewards_penalties.new_balance_after_rewards
   (balance : Std.U64) (is_eligible : Bool) (base_reward : Std.U64)
@@ -4865,5 +5305,171 @@ def per_epoch_processing.tail_updates.historical_summary_due
   | core.ops.control_flow.ControlFlow.Break residual =>
     core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
       Bool (core.convert.FromSame safe_arith.ArithError) residual
+
+/-- Trait declaration: [state_processing::upgrade::builder_onboarding::Onboarding]
+    Source: 'consensus/state_processing/src/upgrade/builder_onboarding.rs', lines 8:0-35:1
+    Visibility: public -/
+structure upgrade.builder_onboarding.Onboarding (Self : Type) (D : Type) (B :
+  Type) (E : Type) where
+  is_validator : Self → D → Result ((core.result.Result Bool E) × Self)
+  is_builder_credential : Self → D → Result Bool
+  is_valid_signature : Self → D → Result Bool
+  new_builder : Self → D → Result (core.result.Result B E)
+  top_up : Self → B → D → Result ((core.result.Result Unit E) × B)
+  builder_index : Self → D → Result (Option Std.U64)
+  add_builder_index : Self → D → Std.U64 → Result Self
+  is_pending_validator : Self → D → Result Bool
+  add_pending_validator : Self → D → Result Self
+
+/-- [state_processing::upgrade::builder_onboarding::OnboardingError]
+    Source: 'consensus/state_processing/src/upgrade/builder_onboarding.rs', lines 38:0-43:1
+    Visibility: public -/
+@[discriminant isize]
+inductive upgrade.builder_onboarding.OnboardingError (E : Type) where
+| State : E → upgrade.builder_onboarding.OnboardingError E
+| UnknownBuilder : Std.U64 → upgrade.builder_onboarding.OnboardingError E
+
+/-- [state_processing::upgrade::builder_onboarding::onboard]: loop body 0:
+    Source: 'consensus/state_processing/src/upgrade/builder_onboarding.rs', lines 55:4-101:5
+    Visibility: public -/
+@[rust_loop_body]
+def upgrade.builder_onboarding.onboard_loop.body
+  {D : Type} {B : Type} {E : Type} {S : Type} (corecloneCloneInst :
+  core.clone.Clone D) (OnboardingInst : upgrade.builder_onboarding.Onboarding S
+  D B E) (deposits : Slice D) (state : S) (pending : alloc.vec.Vec D)
+  (builders : alloc.vec.Vec B) (i : Std.Usize) :
+  Result (ControlFlow (S × (alloc.vec.Vec D) × (alloc.vec.Vec B) ×
+    Std.Usize) (S × (alloc.vec.Vec D) × (alloc.vec.Vec B) × (Option
+    (upgrade.builder_onboarding.OnboardingError E))))
+  := do
+  let i1 := Slice.len deposits
+  if i < i1
+  then
+    let o ←
+      core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice D) deposits i
+    match o with
+    | none =>
+      let i2 ← lift (core.num.Usize.saturating_add i 1#usize)
+      ok (cont (state, pending, builders, i2))
+    | some deposit =>
+      let (r, state1) ← OnboardingInst.is_validator state deposit
+      match r with
+      | core.result.Result.Ok b =>
+        if b
+        then
+          let t ← corecloneCloneInst.clone deposit
+          let pending1 ← alloc.vec.Vec.push pending t
+          let i2 ← lift (core.num.Usize.saturating_add i 1#usize)
+          ok (cont (state1, pending1, builders, i2))
+        else
+          let o1 ← OnboardingInst.builder_index state1 deposit
+          match o1 with
+          | none =>
+            let b1 ← OnboardingInst.is_builder_credential state1 deposit
+            if b1
+            then
+              let b2 ← OnboardingInst.is_pending_validator state1 deposit
+              if b2
+              then
+                let t ← corecloneCloneInst.clone deposit
+                let pending1 ← alloc.vec.Vec.push pending t
+                let i2 ← lift (core.num.Usize.saturating_add i 1#usize)
+                ok (cont (state1, pending1, builders, i2))
+              else
+                let b3 ← OnboardingInst.is_valid_signature state1 deposit
+                if b3
+                then
+                  let r1 ← OnboardingInst.new_builder state1 deposit
+                  match r1 with
+                  | core.result.Result.Ok builder =>
+                    let i2 := alloc.vec.Vec.len builders
+                    let i3 ← lift (UScalar.cast .U64 i2)
+                    let state2 ←
+                      OnboardingInst.add_builder_index state1 deposit i3
+                    let builders1 ← alloc.vec.Vec.push builders builder
+                    let i4 ← lift (core.num.Usize.saturating_add i 1#usize)
+                    ok (cont (state2, pending, builders1, i4))
+                  | core.result.Result.Err e =>
+                    ok (done (state1, pending, builders, some
+                      (upgrade.builder_onboarding.OnboardingError.State e)))
+                else
+                  let i2 ← lift (core.num.Usize.saturating_add i 1#usize)
+                  ok (cont (state1, pending, builders, i2))
+            else
+              let t ← corecloneCloneInst.clone deposit
+              let pending1 ← alloc.vec.Vec.push pending t
+              let b2 ← OnboardingInst.is_valid_signature state1 deposit
+              let state2 ←
+                if b2
+                then OnboardingInst.add_pending_validator state1 deposit
+                else ok state1
+              let i2 ← lift (core.num.Usize.saturating_add i 1#usize)
+              ok (cont (state2, pending1, builders, i2))
+          | some index =>
+            let (s, deref_mut_back) ← lift (alloc.vec.Vec.deref_mut builders)
+            let i2 ← lift (UScalar.cast .Usize index)
+            let (o2, get_mut_back) ←
+              core.slice.Slice.get_mut (core.slice.index.SliceIndexUsizeSlice
+                B) s i2
+            match o2 with
+            | none =>
+              let s1 := get_mut_back none
+              let builders1 := deref_mut_back s1
+              ok (done (state1, pending, builders1, some
+                (upgrade.builder_onboarding.OnboardingError.UnknownBuilder
+                index)))
+            | some builder =>
+              let (r1, builder1) ←
+                OnboardingInst.top_up state1 builder deposit
+              match r1 with
+              | core.result.Result.Ok _ =>
+                let i3 ← lift (core.num.Usize.saturating_add i 1#usize)
+                let s1 := get_mut_back (some builder1)
+                let builders1 := deref_mut_back s1
+                ok (cont (state1, pending, builders1, i3))
+              | core.result.Result.Err e =>
+                let s1 := get_mut_back (some builder1)
+                let builders1 := deref_mut_back s1
+                ok (done (state1, pending, builders1, some
+                  (upgrade.builder_onboarding.OnboardingError.State e)))
+      | core.result.Result.Err e =>
+        ok (done (state1, pending, builders, some
+          (upgrade.builder_onboarding.OnboardingError.State e)))
+  else ok (done (state, pending, builders, none))
+
+/-- [state_processing::upgrade::builder_onboarding::onboard]: loop 0:
+    Source: 'consensus/state_processing/src/upgrade/builder_onboarding.rs', lines 55:4-101:5
+    Visibility: public -/
+@[rust_loop]
+def upgrade.builder_onboarding.onboard_loop
+  {D : Type} {B : Type} {E : Type} {S : Type} (corecloneCloneInst :
+  core.clone.Clone D) (OnboardingInst : upgrade.builder_onboarding.Onboarding S
+  D B E) (state : S) (deposits : Slice D) (pending : alloc.vec.Vec D)
+  (builders : alloc.vec.Vec B) (i : Std.Usize) :
+  Result (S × (alloc.vec.Vec D) × (alloc.vec.Vec B) × (Option
+    (upgrade.builder_onboarding.OnboardingError E)))
+  := do
+  loop
+    (fun (state1, pending1, builders1, i1) =>
+      upgrade.builder_onboarding.onboard_loop.body corecloneCloneInst
+      OnboardingInst deposits state1 pending1 builders1 i1)
+    (state, pending, builders, i)
+
+/-- [state_processing::upgrade::builder_onboarding::onboard]:
+    Source: 'consensus/state_processing/src/upgrade/builder_onboarding.rs', lines 47:0-106:1
+    Visibility: public -/
+def upgrade.builder_onboarding.onboard
+  {D : Type} {B : Type} {E : Type} {S : Type} (corecloneCloneInst :
+  core.clone.Clone D) (OnboardingInst : upgrade.builder_onboarding.Onboarding S
+  D B E) (state : S) (deposits : Slice D) :
+  Result ((core.result.Result ((alloc.vec.Vec D) × (alloc.vec.Vec B))
+    (upgrade.builder_onboarding.OnboardingError E)) × S)
+  := do
+  let (state1, pending, builders, error) ←
+    upgrade.builder_onboarding.onboard_loop corecloneCloneInst OnboardingInst
+      state deposits (alloc.vec.Vec.new D) (alloc.vec.Vec.new B) 0#usize
+  match error with
+  | none => ok (core.result.Result.Ok (pending, builders), state1)
+  | some error1 => ok (core.result.Result.Err error1, state1)
 
 end state_processing

@@ -104,6 +104,12 @@ import EpochProofs.Equiv.SinglePassLoopModel
 import EpochProofs.Equiv.DepositWrites
 import EpochProofs.Equiv.ListWrites
 import EpochProofs.FormalhouseFinal
+import EpochProofs.Equiv.EpochContexts
+import EpochProofs.Equiv.PendingDepositsLen
+import EpochProofs.CacheBridge.EpochCacheBuild
+import EpochProofs.CacheBridge.BuildPath
+import EpochProofs.Equiv.ConsolidationTable
+import EpochProofs.Equiv.Onboarding
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -753,3 +759,47 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Formalhouse.gloasEpochConds_of_run
 #print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_final
 #print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_final
+#print axioms EpochProofs.participation_increments_ok
+#print axioms EpochProofs.participation_increments_ok_preset
+#print axioms EpochProofs.hysteresis_thresholds_ok_mainnet
+#print axioms EpochProofs.Spec.depositDecisions_postponed_len
+#print axioms EpochProofs.process_pending_deposits_postponed_len
+#print axioms EpochProofs.CacheBridge.base_rewards_ok_mainnet
+#print axioms EpochProofs.Spec.ActiveAgree.symm
+#print axioms EpochProofs.Spec.apply_pending_deposit_pkPrefix
+#print axioms EpochProofs.Spec.process_pending_deposits_pkPrefix
+#print axioms EpochProofs.Spec.process_epoch_pkPrefix
+#print axioms EpochProofs.Spec.process_slots_pkPrefix
+#print axioms EpochProofs.Spec.state_transition_pkPrefix
+#print axioms EpochProofs.Spec.Reachable.pkPrefix
+#print axioms EpochProofs.Spec.SlotReachG.pkPrefix
+#print axioms EpochProofs.CacheBridge.activeSum_congr
+#print axioms EpochProofs.CacheBridge.epoch_cache_total_carry
+#print axioms EpochProofs.CacheBridge.activeAgree_of_epochInv
+#print axioms EpochProofs.CacheBridge.pubkey_cache_carry
+#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_at_input
+#print axioms EpochProofs.Spec.consolidationStep_table
+#print axioms EpochProofs.Spec.consolidationStep_full_ok
+#print axioms EpochProofs.Spec.consolidationStep_count
+#print axioms EpochProofs.Spec.stepLoop_count
+#print axioms EpochProofs.Spec.stepLoop_table
+#print axioms EpochProofs.Spec.stepLoop_agreeOut
+#print axioms EpochProofs.Spec.writeBack_table
+#print axioms EpochProofs.Spec.consolidationIndices_eq_of_sorted
+#print axioms EpochProofs.Spec.pairsIn_consolidationIndices
+#print axioms EpochProofs.position_spec
+#print axioms EpochProofs.build_table_spec
+#print axioms EpochProofs.build_views_spec
+#print axioms EpochProofs.write_back_spec
+#print axioms EpochProofs.btreeSetIter_consolidationIndices
+#print axioms EpochProofs.process_on_table_spec
+#print axioms EpochProofs.Spec.get_index_for_new_builder_far
+#print axioms EpochProofs.Spec.add_builder_to_registry_far
+#print axioms EpochProofs.is_pending_validator_append
+#print axioms EpochProofs.tableOk_add
+#print axioms EpochProofs.tableOk_set
+#print axioms EpochProofs.specFold_snoc
+#print axioms EpochProofs.onboard_step_new
+#print axioms EpochProofs.onboard_step_builder
+#print axioms EpochProofs.onboard_loop_spec
+#print axioms EpochProofs.onboard_spec
