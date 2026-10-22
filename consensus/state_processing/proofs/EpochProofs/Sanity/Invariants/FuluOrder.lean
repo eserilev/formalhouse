@@ -84,7 +84,7 @@ theorem plFuluNew_congr [PresetCfg] (o : Oracle) (s1 s2 : BeaconState)
       · simp only [uint64Add_of_ge _ _ h2, error_bind']
     · simp only [uint64Add_of_ge _ _ h1, error_bind']
 
-theorem plFuluNew_set (o : Oracle) (s t : BeaconState)
+theorem plFuluNew_set [PresetCfg] (o : Oracle) (s t : BeaconState)
     (hpl : t.proposer_lookahead = s.proposer_lookahead) (hs : t.slot = s.slot)
     (hv : t.validators = s.validators) (hr : t.randao_mixes = s.randao_mixes) :
     plFuluNew o t = plFuluNew o s :=

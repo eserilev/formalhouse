@@ -83,7 +83,7 @@ theorem lhNewValidators_slotKeep [PresetCfg] (o : Oracle) (plan : LhDepositPlan)
   obtain ⟨b1, b2⟩ := slotKeep_foldlM (fun t i => ebUpdateAt t i) ebUpdateAt_slotKeep _ s3 t' h
   exact ⟨b1.trans a1, b2.trans a2⟩
 
-theorem lhMid_votesBlind (o : Oracle) (s : BeaconState) (tab : Gwei) (plan : LhDepositPlan) :
+theorem lhMid_votesBlind [PresetCfg] (o : Oracle) (s : BeaconState) (tab : Gwei) (plan : LhDepositPlan) :
     VotesBlind (lhMid o s tab plan) := by
   intro t
   have hq : lhQueueWrite s plan (clearVotes t) = clearVotes (lhQueueWrite s plan t) := rfl
@@ -95,7 +95,7 @@ theorem lhMid_votesBlind (o : Oracle) (s : BeaconState) (tab : Gwei) (plan : LhD
   simp only [lhMid, hq, bind_assoc]
   exact h
 
-theorem lhMid_slotKeep (o : Oracle) (s : BeaconState) (tab : Gwei) (plan : LhDepositPlan) :
+theorem lhMid_slotKeep [PresetCfg] (o : Oracle) (s : BeaconState) (tab : Gwei) (plan : LhDepositPlan) :
     SlotKeep (lhMid o s tab plan) := by
   intro t t' h
   have k := slotKeep_bind (lhNewValidators_slotKeep o plan)
@@ -153,16 +153,12 @@ theorem runSteps_lhOrder_eq [PresetCfg] [PresetCfg.Ok] (o : Oracle) (T : BeaconS
       P.EPOCHS_PER_HISTORICAL_VECTOR < 2 ^ 64 := by
     intro t ht
     rw [ht.1]
-    show @LT.lt Nat _ (T.slot / 32 + 1 + 65536) (2 ^ 64)
-    have : @LT.lt Nat _ (T.slot + 1) (2 ^ 64) := hslot
-    omega
+    exact P_slot_hist_fit hslot
   have hfit' : ∀ t, SameSH T t → t.slot / P.SLOTS_PER_EPOCH + 1 +
       P.EPOCHS_PER_SLASHINGS_VECTOR < 2 ^ 64 := by
     intro t ht
     rw [ht.1]
-    show @LT.lt Nat _ (T.slot / 32 + 1 + 8192) (2 ^ 64)
-    have : @LT.lt Nat _ (T.slot + 1) (2 ^ 64) := hslot
-    omega
+    exact P_slot_slash_fit hslot
   simp only [runSteps, lhOrder, lhRestOrder, pfStep, bind_pure]
   refine bind_congr_of (SameSH T) (fun v h => kpl T v ⟨rfl, rfl⟩ h) (fun t1 h1 => ?_)
   refine bind_congr_of (SameSH T) (fun v h => kptc t1 v h1 h) (fun t2 h2 => ?_)
@@ -184,15 +180,12 @@ theorem runSteps_specOrder_eq [PresetCfg] (o : Oracle) (T : BeaconState) :
 the same `ok` results as the eth1 reset followed by the spec order. -/
 theorem lhRestOrder_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (T : BeaconState) (hT : TailPre T) :
     SameOk (lhRestOrder o T) (process_eth1_data_reset P T >>= epochRest2 o) := by
-  have hroom : SlotRoom T := by
-    show @LT.lt Nat _ (T.slot / 32 + 65538) (2 ^ 64)
-    have : @LT.lt Nat _ (T.slot + 1) (2 ^ 64) := hT.2.1
-    omega
+  have hroom : SlotRoom T := P_slot_room hT.2.1
   rw [← runSteps_lhOrder_eq o T hT, ← runSteps_specOrder_eq o T]
   exact SameOk.flip (specOrder_lhOrder o T hroom)
 
 /-- `lhAfterPass` in the Lighthouse order. -/
-def lhAfterPassOrder (o : Oracle) (s : BeaconState) (total_active_balance : Gwei)
+def lhAfterPassOrder [PresetCfg] (o : Oracle) (s : BeaconState) (total_active_balance : Gwei)
     (plan : LhDepositPlan) (x : (Epoch × Gwei) × List Row) : SpecM BeaconState :=
   lhMid o s total_active_balance plan (s.withRowsChurn x.1 x.2) >>= lhRestOrder o
 
@@ -239,12 +232,12 @@ def lhFullTailWith [PresetCfg]
     (s.earliest_exit_epoch, s.exit_balance_to_consume) (rowsOf s)
   after s total_active_balance plan x
 
-theorem lhFullTail_eq_with (o : Oracle) (s : BeaconState) :
+theorem lhFullTail_eq_with [PresetCfg] (o : Oracle) (s : BeaconState) :
     lhFullTail o s = lhFullTailWith (lhAfterPass o) s := by
   unfold lhFullTail lhFullTailG lhFullTailWith lhAfterPass lhAfterPassG gloasFin
   rfl
 
-theorem lhFullTailWith_sameOk
+theorem lhFullTailWith_sameOk [PresetCfg]
     (a1 a2 : BeaconState → Gwei → LhDepositPlan → (Epoch × Gwei) × List Row →
       SpecM BeaconState) (s : BeaconState)
     (h : ∀ tab plan x, SameOk (a1 s tab plan x) (a2 s tab plan x)) :
@@ -270,7 +263,7 @@ def process_epoch_lh_order [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM Be
 /-- At the last slot of an epoch, when the next slot fits in a `u64` and `historical_summaries`
 is below the Lighthouse limit, the Lighthouse order gives the same `ok` results as
 `process_epoch_lh_full`. -/
-theorem process_epoch_lh_order_sameOk (o : Oracle) (s : BeaconState) (hs : TailPre s) :
+theorem process_epoch_lh_order_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (hs : TailPre s) :
     SameOk (process_epoch_lh_order o s) (process_epoch_lh_full o s) := by
   unfold process_epoch_lh_order process_epoch_lh_full
   refine SameOk.bind (SameOk.refl _) fun s1 h1 => ?_

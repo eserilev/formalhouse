@@ -126,7 +126,7 @@ theorem apply_slotKeep [PresetCfg] (o : Oracle) (d : PendingDeposit) :
       subst h
       exact ⟨rfl, rfl⟩
 
-theorem ebUpdateAt_votesBlind (i : Nat) : VotesBlind (fun t => ebUpdateAt t i) := by
+theorem ebUpdateAt_votesBlind [PresetCfg] (i : Nat) : VotesBlind (fun t => ebUpdateAt t i) := by
   intro t
   simp only
   cases hv : t.validators[i]? with
@@ -147,7 +147,7 @@ theorem ebUpdateAt_votesBlind (i : Nat) : VotesBlind (fun t => ebUpdateAt t i) :
         rw [setEB_some (s := clearVotes t) e hv, setEB_some e hv]
         rfl
 
-theorem ebUpdateAt_slotKeep (i : Nat) : SlotKeep (fun t => ebUpdateAt t i) := by
+theorem ebUpdateAt_slotKeep [PresetCfg] (i : Nat) : SlotKeep (fun t => ebUpdateAt t i) := by
   intro t t' h
   obtain ⟨_, _, _, _, _, _, rfl⟩ := (ebUpdateAt_ok t t' i).mp h
   unfold setEB

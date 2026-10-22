@@ -91,16 +91,12 @@ theorem runSteps_lhOrderFulu_eq [PresetCfg] [PresetCfg.Ok] (o : Oracle) (T : Bea
       P.EPOCHS_PER_HISTORICAL_VECTOR < 2 ^ 64 := by
     intro t ht
     rw [ht.1]
-    show @LT.lt Nat _ (T.slot / 32 + 1 + 65536) (2 ^ 64)
-    have : @LT.lt Nat _ (T.slot + 1) (2 ^ 64) := hslot
-    omega
+    exact P_slot_hist_fit hslot
   have hfit' : ∀ t, SameSH T t → t.slot / P.SLOTS_PER_EPOCH + 1 +
       P.EPOCHS_PER_SLASHINGS_VECTOR < 2 ^ 64 := by
     intro t ht
     rw [ht.1]
-    show @LT.lt Nat _ (T.slot / 32 + 1 + 8192) (2 ^ 64)
-    have : @LT.lt Nat _ (T.slot + 1) (2 ^ 64) := hslot
-    omega
+    exact P_slot_slash_fit hslot
   simp only [runSteps, lhOrderFulu, lhRestOrderFulu, pfStep, bind_pure]
   refine bind_congr_of (SameSH T) (fun v h => kpl T v ⟨rfl, rfl⟩ h) (fun t2 h2 => ?_)
   rw [lhEth1DataReset_eq t2 (by rw [h2.1]; exact hslot) (by rw [h2.1]; exact halign)]
@@ -122,10 +118,7 @@ theorem runSteps_specOrderFulu_eq [PresetCfg] (o : Oracle) (T : BeaconState) :
 gives the same `ok` results as the eth1 reset followed by the spec order. -/
 theorem lhRestOrderFulu_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (T : BeaconState) (hT : TailPre T) :
     SameOk (lhRestOrderFulu o T) (process_eth1_data_reset P T >>= epochRest2Fulu o) := by
-  have hroom : SlotRoom T := by
-    show @LT.lt Nat _ (T.slot / 32 + 65538) (2 ^ 64)
-    have : @LT.lt Nat _ (T.slot + 1) (2 ^ 64) := hT.2.1
-    omega
+  have hroom : SlotRoom T := P_slot_room hT.2.1
   rw [← runSteps_lhOrderFulu_eq o T hT, ← runSteps_specOrderFulu_eq o T]
   exact SameOk.flip (specOrderFulu_lhOrderFulu o T hroom)
 

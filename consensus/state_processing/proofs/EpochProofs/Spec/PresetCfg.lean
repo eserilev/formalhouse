@@ -161,6 +161,28 @@ theorem P_historical_vector_pos [PresetCfg] [h : PresetCfg.Ok] :
 theorem P_historical_vector_nat [PresetCfg] [h : PresetCfg.Ok] :
     ∃ H : Nat, P.EPOCHS_PER_HISTORICAL_VECTOR = H ∧ 2 ≤ H ∧ H ≤ 65536 :=
   ⟨_, rfl, h.historical_vector_ge, h.historical_vector_le⟩
+/-- The epoch of a slot below `2 ^ 64` is below `2 ^ 63`. -/
+theorem P_slot_epoch_lt [PresetCfg] [PresetCfg.Ok] {x : Nat} (hx : x < 2 ^ 64) :
+    x / P.SLOTS_PER_EPOCH < 2 ^ 63 := by
+  have h2 : x / P.SLOTS_PER_EPOCH ≤ x / 2 :=
+    Nat.div_le_div_left (Nat.lt_iff_add_one_le.mp P_slots_gt_one) (by decide)
+  omega
+
+theorem P_slot_room [PresetCfg] [PresetCfg.Ok] {x : Nat} (hx : x + 1 < 2 ^ 64) :
+    x / P.SLOTS_PER_EPOCH + 65538 < 2 ^ 64 := by
+  have := P_slot_epoch_lt (x := x) (by omega); omega
+
+theorem P_slot_hist_fit [PresetCfg] [PresetCfg.Ok] {x : Nat} (hx : x + 1 < 2 ^ 64) :
+    x / P.SLOTS_PER_EPOCH + 1 + P.EPOCHS_PER_HISTORICAL_VECTOR < 2 ^ 64 := by
+  obtain ⟨H, hH, -, hH2⟩ := P_historical_vector_nat
+  have := P_slot_epoch_lt (x := x) (by omega)
+  rw [hH]; omega
+
+theorem P_slot_slash_fit [PresetCfg] [PresetCfg.Ok] {x : Nat} (hx : x + 1 < 2 ^ 64) :
+    x / P.SLOTS_PER_EPOCH + 1 + P.EPOCHS_PER_SLASHINGS_VECTOR < 2 ^ 64 := by
+  obtain ⟨V, hV, -, hV2⟩ := P_slashings_vector_nat
+  have := P_slot_epoch_lt (x := x) (by omega)
+  rw [hV]; omega
 theorem P_eth1_period_pos [PresetCfg] [h : PresetCfg.Ok] : 0 < P.EPOCHS_PER_ETH1_VOTING_PERIOD :=
   h.eth1_period_pos
 
