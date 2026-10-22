@@ -1,5 +1,6 @@
 import EpochProofs.Caches
 import EpochProofs.Spec.PresetCfg
+import EpochProofs.Spec.PresetBounds
 import EpochProofs.Sanity.PtcIndices
 import EpochProofs.Sanity.ShuffleClosedForm
 import EpochProofs.Equiv.EpochCommittees
@@ -204,16 +205,28 @@ structure CommitteePresetLink (p : Spec.Preset) (cp : CacheProofs.Spec.Committee
   rounds_le : p.SHUFFLE_ROUND_COUNT ≤ 256
   rounds_pos : 0 < p.SHUFFLE_ROUND_COUNT
 
-theorem committeePresetLink_mainnet [EpochProofs.Spec.PresetCfg] :
-    CommitteePresetLink Spec.P CacheProofs.Spec.CommitteeCache.P where
+/-- The committee preset of the cache reference with the values of the epoch preset. -/
+def cachePresetOf [EpochProofs.Spec.PresetCfg] : CacheProofs.Spec.CommitteeCache.Preset :=
+  { SLOTS_PER_EPOCH := Spec.P.SLOTS_PER_EPOCH
+    MAX_COMMITTEES_PER_SLOT := Spec.P.MAX_COMMITTEES_PER_SLOT
+    TARGET_COMMITTEE_SIZE := Spec.P.TARGET_COMMITTEE_SIZE
+    SHUFFLE_ROUND_COUNT := Spec.P.SHUFFLE_ROUND_COUNT }
+
+theorem cachePresetOf_mainnet :
+    @cachePresetOf Spec.mainnetCfg = CacheProofs.Spec.CommitteeCache.Preset.mainnet := rfl
+theorem cachePresetOf_minimal :
+    @cachePresetOf Spec.minimalCfg = CacheProofs.Spec.CommitteeCache.Preset.minimal := rfl
+
+theorem committeePresetLink_P [EpochProofs.Spec.PresetCfg] [EpochProofs.Spec.PresetCfg.Ok]
+    [EpochProofs.Spec.PresetCfg.Bounds] : CommitteePresetLink Spec.P cachePresetOf where
   slots_per_epoch := rfl
   max_committees_per_slot := rfl
   target_committee_size := rfl
   shuffle_round_count := rfl
-  slots_pos := by decide
-  target_pos := by decide
-  rounds_le := by decide
-  rounds_pos := by decide
+  slots_pos := Spec.P_slots_pos
+  target_pos := Spec.P_target_pos
+  rounds_le := Spec.P_shuffle_le
+  rounds_pos := Spec.P_shuffle_pos
 
 theorem usize_max_lt' : Usize.max < 2 ^ 64 := CacheProofs.CommitteeCache.usize_max_lt
 

@@ -26,6 +26,7 @@ class PresetCfg.Bounds [c : PresetCfg] : Prop where
   max_committees_pos : 0 < c.v.MAX_COMMITTEES_PER_SLOT
   max_committees_le : c.v.MAX_COMMITTEES_PER_SLOT ≤ 64
   shuffle_rounds_le : c.v.SHUFFLE_ROUND_COUNT ≤ 256
+  shuffle_rounds_pos : 0 < c.v.SHUFFLE_ROUND_COUNT
   ptc_pos : 0 < c.v.PTC_SIZE
   ptc_le : c.v.PTC_SIZE ≤ 512
   sync_le : c.v.SYNC_COMMITTEE_SIZE ≤ 512
@@ -39,7 +40,7 @@ theorem mainnetCfg_bounds : @PresetCfg.Bounds mainnetCfg :=
     max_act_churn_le := by decide, consolidation_quot_pos := by decide,
     target_committee_pos := by decide, target_committee_le := by decide,
     max_committees_pos := by decide, max_committees_le := by decide,
-    shuffle_rounds_le := by decide, ptc_pos := by decide, ptc_le := by decide,
+    shuffle_rounds_le := by decide, shuffle_rounds_pos := by decide, ptc_pos := by decide, ptc_le := by decide,
     sync_le := by decide, sync_period_pos := by decide, sync_period_le := by decide }
 
 theorem minimalCfg_bounds : @PresetCfg.Bounds minimalCfg :=
@@ -49,7 +50,7 @@ theorem minimalCfg_bounds : @PresetCfg.Bounds minimalCfg :=
     max_act_churn_le := by decide, consolidation_quot_pos := by decide,
     target_committee_pos := by decide, target_committee_le := by decide,
     max_committees_pos := by decide, max_committees_le := by decide,
-    shuffle_rounds_le := by decide, ptc_pos := by decide, ptc_le := by decide,
+    shuffle_rounds_le := by decide, shuffle_rounds_pos := by decide, ptc_pos := by decide, ptc_le := by decide,
     sync_le := by decide, sync_period_pos := by decide, sync_period_le := by decide }
 
 /-- The slots per epoch as a `Nat` with its bounds. -/
@@ -74,6 +75,8 @@ theorem P_target_ne [PresetCfg] [b : PresetCfg.Bounds] : P.TARGET_COMMITTEE_SIZE
 theorem P_max_committees_le [PresetCfg] [b : PresetCfg.Bounds] :
     @LE.le Nat _ P.MAX_COMMITTEES_PER_SLOT 64 :=
   b.max_committees_le
+theorem P_shuffle_pos [PresetCfg] [b : PresetCfg.Bounds] :
+    @LT.lt Nat _ 0 P.SHUFFLE_ROUND_COUNT := b.shuffle_rounds_pos
 theorem P_shuffle_le [PresetCfg] [b : PresetCfg.Bounds] :
     @LE.le Nat _ P.SHUFFLE_ROUND_COUNT 256 :=
   b.shuffle_rounds_le

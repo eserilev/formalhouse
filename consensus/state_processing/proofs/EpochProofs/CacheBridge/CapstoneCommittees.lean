@@ -19,13 +19,12 @@ This replaces the committee hypothesis of `ptc_for_epoch_spec` (`lh_ptc_window_f
 
 namespace EpochProofs.CacheBridge
 
-section Mainnet
+section Generic
 
 open EthCLLib.Spec EthCLLib.Proofs SizzLean.Proofs EthCLSpecs.Proofs.Gloas
 
-attribute [local instance] EthCLSpecs.Gloas.mainnet EthCLSpecs.Gloas.mainnetConfig
-
-variable [EthCLLib.Spec.HasherTag] [EthCLLib.Spec.CryptoBackend]
+variable [EthCLSpecs.Gloas.Preset] [EthCLSpecs.Gloas.Config] [EthCLLib.Spec.HasherTag]
+  [EthCLLib.Spec.CryptoBackend]
 
 open Aeneas Aeneas.Std Result in
 open CacheProofs.PB (LhCache Coherent lhPreviousEpochFlagAttestingBalance
@@ -34,7 +33,11 @@ open CacheProofs.PB (LhCache Coherent lhPreviousEpochFlagAttestingBalance
 reads from a committee cache equal the spec `ptcIndices`: for any state `st` at which Lighthouse
 builds the committee cache of `epoch`, a cache that satisfies its build facts and the way
 Lighthouse joins its committees give the committees of `compute_ptc`. -/
-theorem lighthouse_order_epoch_etheorem_reachable_cached_ptc [EpochProofs.Spec.PresetCfg] (o : Spec.Oracle)
+theorem lighthouse_order_epoch_etheorem_reachable_cached_ptc [EpochProofs.Spec.PresetCfg]
+    [EpochProofs.Spec.PresetCfg.Ok] [EpochProofs.Spec.PresetCfg.Bounds]
+    (hpa : EpochProofs.Etheorem.EpochPresetAgrees Spec.P)
+    (hhr : Spec.LH_HISTORICAL_ROOTS_LIMIT ≤ EthCLSpecs.Gloas.Const.historicalRootsLimit)
+    (o : Spec.Oracle)
     (ho : EpochProofs.Etheorem.OracleAgrees o)
     (hsha : ∀ b : ByteArray, (EthCLLib.Spec.sha b).size = 32) (e : EpochProofs.Etheorem.EState)
     (hin : Spec.EpochInputOk'' Spec.EpochSupply (EpochProofs.Etheorem.absEState e))
@@ -75,7 +78,7 @@ theorem lighthouse_order_epoch_etheorem_reachable_cached_ptc [EpochProofs.Spec.P
     (∀ (st : Spec.BeaconState) (epoch : Nat) (seed : Spec.Bytes32),
       Spec.get_seed Spec.P o st epoch Spec.DOMAIN_BEACON_ATTESTER = .ok seed →
       ∀ (shuffling : Slice Usize) (cps spe : Usize),
-      CommitteeCacheBuilt CacheProofs.Spec.CommitteeCache.P o st epoch seed shuffling
+      CommitteeCacheBuilt cachePresetOf o st epoch seed shuffling
         cps →
       spe.val = Spec.P.SLOTS_PER_EPOCH →
       0 < (Spec.get_active_validator_indices st epoch).length →
@@ -88,13 +91,13 @@ theorem lighthouse_order_epoch_etheorem_reachable_cached_ptc [EpochProofs.Spec.P
       ∀ k (hk : k < committees.val.length) l,
         Spec.ptcIndices Spec.P o st epoch (start + k) = .ok l →
           (committees.val[k]).val.map (·.val) = l) :=
-  ⟨lighthouse_order_epoch_etheorem_reachable_cached o ho hsha e hin hpre hcond hsel h c hc total
+  ⟨lighthouse_order_epoch_etheorem_reachable_cached hpa hhr o ho hsha e hin hpre hcond hsel h c hc total
     htotal,
    fun st epoch seed hseed shuffling cps spe hbuilt hspe hn hn24 hfit start hstart committees
       hclen hglue =>
-    hcomm_of_cache Spec.P _ committeePresetLink_mainnet o st epoch seed hseed
+    hcomm_of_cache Spec.P _ committeePresetLink_P o st epoch seed hseed
       shuffling cps spe hbuilt hspe hn hn24 hfit start hstart committees hclen hglue⟩
 
-end Mainnet
+end Generic
 
 end EpochProofs.CacheBridge

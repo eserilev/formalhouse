@@ -1,5 +1,6 @@
 import EpochProofs.Caches
 import EpochProofs.Spec.PresetCfg
+import EpochProofs.Spec.PresetBounds
 import EpochProofs.CacheBridge.EpochCache
 
 /-!
@@ -42,18 +43,21 @@ theorem flagSum_lt [EpochProofs.Spec.PresetCfg] (s : EpochProofs.Spec.BeaconStat
       EpochProofs.Spec.totalEffectiveBalance s := by
     simp [EpochProofs.Spec.totalEffectiveBalance, List.map_map, Function.comp_def, pbValidator]
   have hinc : EpochProofs.Spec.P.EFFECTIVE_BALANCE_INCREMENT < 2 ^ 64 := by
-    simp [EpochProofs.Spec.P]
+    show (1000000000 : Nat) < 2 ^ 64
+    decide
   rw [h2] at h1
   have h6064 : (2 : Nat) ^ 60 < 2 ^ 64 := by norm_num
   exact Nat.max_lt.mpr ⟨hinc, Nat.lt_of_le_of_lt h1 (Nat.lt_trans h h6064)⟩
 
-theorem current_epoch_mainnet [EpochProofs.Spec.PresetCfg] (s : EpochProofs.Spec.BeaconState) :
+theorem current_epoch_mainnet [EpochProofs.Spec.PresetCfg] [EpochProofs.Spec.PresetCfg.Ok]
+    (s : EpochProofs.Spec.BeaconState) :
     EpochProofs.Spec.get_current_epoch EpochProofs.Spec.P s =
       .ok (s.slot / EpochProofs.Spec.P.SLOTS_PER_EPOCH) := by
+  have h : EpochProofs.Spec.P.SLOTS_PER_EPOCH ≠ 0 := EpochProofs.Spec.P_slots_ne
   simp [EpochProofs.Spec.get_current_epoch, EpochProofs.Spec.compute_epoch_at_slot,
-    EpochProofs.Spec.uint64Div, EpochProofs.Spec.P, pure, Except.pure]
+    EpochProofs.Spec.uint64Div, h, pure, Except.pure]
 
-theorem previous_epoch_mainnet [EpochProofs.Spec.PresetCfg] (s : EpochProofs.Spec.BeaconState) :
+theorem previous_epoch_mainnet [EpochProofs.Spec.PresetCfg] [EpochProofs.Spec.PresetCfg.Ok] (s : EpochProofs.Spec.BeaconState) :
     EpochProofs.Spec.get_previous_epoch EpochProofs.Spec.P s =
       .ok (EpochProofs.Spec.saturating_sub
         (s.slot / EpochProofs.Spec.P.SLOTS_PER_EPOCH) 1) := by
@@ -73,7 +77,7 @@ mainnet, equal the spec values that the epoch model computes:
 The caches satisfy their build invariants: the progressive balances cache is `Coherent` with
 the state, and the epoch cache total is the sum of the effective balances of the validators
 active in the current epoch. -/
-theorem lh_cache_reads_mainnet [EpochProofs.Spec.PresetCfg] (s : EpochProofs.Spec.BeaconState)
+theorem lh_cache_reads_mainnet [EpochProofs.Spec.PresetCfg] [EpochProofs.Spec.PresetCfg.Ok] (s : EpochProofs.Spec.BeaconState)
     (hrows : EpochProofs.Spec.RowsOk s) (hsupply : EpochProofs.Spec.EpochSupply s)
     (c : LhCache)
     (hc : Coherent EpochProofs.Spec.P.EFFECTIVE_BALANCE_INCREMENT
@@ -120,13 +124,12 @@ theorem lh_cache_reads_mainnet [EpochProofs.Spec.PresetCfg] (s : EpochProofs.Spe
   · intro inc hinc
     exact lh_total_active_balance_eq _ s cur hcur _ total inc hinc rfl htotal
 
-section Mainnet
+section Generic
 
 open EthCLLib.Spec EthCLLib.Proofs SizzLean.Proofs EthCLSpecs.Proofs.Gloas
 
-attribute [local instance] EthCLSpecs.Gloas.mainnet EthCLSpecs.Gloas.mainnetConfig
-
-variable [EthCLLib.Spec.HasherTag] [EthCLLib.Spec.CryptoBackend]
+variable [EthCLSpecs.Gloas.Preset] [EthCLSpecs.Gloas.Config] [EthCLLib.Spec.HasherTag]
+  [EthCLLib.Spec.CryptoBackend]
 
 open Aeneas Aeneas.Std Result in
 open CacheProofs.PB (LhCache Coherent lhPreviousEpochFlagAttestingBalance
@@ -135,7 +138,10 @@ open CacheProofs.PB (LhCache Coherent lhPreviousEpochFlagAttestingBalance
 a reachable run, on mainnet (`lighthouse_order_epoch_etheorem_reachable`), and the cache reads
 that it makes equal the spec values of the model (`lh_cache_reads_mainnet`). The caches satisfy
 their build invariants at the epoch start state. -/
-theorem lighthouse_order_epoch_etheorem_reachable_cached [EpochProofs.Spec.PresetCfg] (o : Spec.Oracle)
+theorem lighthouse_order_epoch_etheorem_reachable_cached [EpochProofs.Spec.PresetCfg]
+    [EpochProofs.Spec.PresetCfg.Ok] (hpa : EpochProofs.Etheorem.EpochPresetAgrees Spec.P)
+    (hhr : Spec.LH_HISTORICAL_ROOTS_LIMIT ≤ EthCLSpecs.Gloas.Const.historicalRootsLimit)
+    (o : Spec.Oracle)
     (ho : EpochProofs.Etheorem.OracleAgrees o)
     (hsha : ∀ b : ByteArray, (EthCLLib.Spec.sha b).size = 32) (e : EpochProofs.Etheorem.EState)
     (hin : Spec.EpochInputOk'' Spec.EpochSupply (EpochProofs.Etheorem.absEState e))
@@ -173,10 +179,11 @@ theorem lighthouse_order_epoch_etheorem_reachable_cached [EpochProofs.Spec.Prese
       ∃ r, types.state.total_active_balance.floor_total_active_balance total inc = ok r ∧
         EpochProofs.Spec.get_total_active_balance EpochProofs.Spec.P s =
           .ok r.val) :=
-  ⟨EpochProofs.Etheorem.lighthouse_order_epoch_etheorem_reachable o ho hsha e hin hpre hcond hsel
+  ⟨EpochProofs.Etheorem.lighthouse_order_epoch_etheorem_reachable hpa hhr o ho hsha e hin hpre
+    hcond hsel
     h,
    lh_cache_reads_mainnet _ hin.1.1.1.2.1 hin.1.1.2.2.2.2 c hc total htotal⟩
 
-end Mainnet
+end Generic
 
 end EpochProofs.CacheBridge
