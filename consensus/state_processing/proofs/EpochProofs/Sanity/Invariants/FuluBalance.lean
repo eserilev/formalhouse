@@ -479,11 +479,11 @@ theorem process_block_fulu_budget_mainnet [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o 
     (h : process_block_fulu P o fo FC c fs block = .ok fs')
     (hE : fs.state.slot / P.SLOTS_PER_EPOCH = E) (hfar : E < FAR_FUTURE_EPOCH)
     (hd : ExitDelay P fs.state)
-    (hb : Budget P s0 E (fun _ => 23307800) n fs.state)
-    (hbits : block.body.sync_aggregate.sync_committee_bits.length ≤ 512)
+    (hb : Budget P s0 E (fun _ => syncLoss) n fs.state)
+    (hbits : block.body.sync_aggregate.sync_committee_bits.length ≤ P.SYNC_COMMITTEE_SIZE)
     (htab : ∀ tab, get_total_active_balance P fs.state = .ok tab →
       tab ≤ 139000000000000000) :
-    Budget P s0 E (fun _ => 23307800) (n + 1) fs'.state ∧
+    Budget P s0 E (fun _ => syncLoss) (n + 1) fs'.state ∧
       ExitDelay P fs'.state ∧ fs'.state.slot = fs.state.slot ∧
       ActiveAgree E fs.state fs'.state := by
   have hc := fuluCompat
@@ -498,7 +498,7 @@ theorem process_block_fulu_budget_mainnet [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o 
   cases h
   have hs3 := process_execution_payload_fulu_state P o fo c _ _ _ h3
   simp only at hs3
-  let K := Keeps P s0 E (fun _ => 23307800) n
+  let K := Keeps P s0 E (fun _ => syncLoss) n
   have k1 : K fs.state s1 := .of_opStep hE hfar
     (process_block_header_fulu_opStep _ o fo _ _ block h1)
   have hE1 : s1.slot / P.SLOTS_PER_EPOCH = E := by rw [k1.1]; exact hE

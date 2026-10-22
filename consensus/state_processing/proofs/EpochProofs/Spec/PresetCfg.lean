@@ -90,6 +90,7 @@ class PresetCfg where
 /-- The facts about the varying values that the generic proofs use. Both presets satisfy them. -/
 class PresetCfg.Ok [c : PresetCfg] : Prop where
   slots_pos : 0 < c.v.SLOTS_PER_EPOCH
+  slots_gt_one : 1 < c.v.SLOTS_PER_EPOCH
   slashings_vector_pos : 0 < c.v.EPOCHS_PER_SLASHINGS_VECTOR
   historical_vector_pos : 0 < c.v.EPOCHS_PER_HISTORICAL_VECTOR
   eth1_period_pos : 0 < c.v.EPOCHS_PER_ETH1_VOTING_PERIOD
@@ -97,6 +98,7 @@ class PresetCfg.Ok [c : PresetCfg] : Prop where
   sync_seats_even : (c.v.SLOTS_PER_EPOCH * c.v.SYNC_COMMITTEE_SIZE) % 2 = 0
 
 theorem P_slots_pos [PresetCfg] [h : PresetCfg.Ok] : 0 < P.SLOTS_PER_EPOCH := h.slots_pos
+theorem P_slots_gt_one [PresetCfg] [h : PresetCfg.Ok] : 1 < P.SLOTS_PER_EPOCH := h.slots_gt_one
 theorem P_slashings_vector_pos [PresetCfg] [h : PresetCfg.Ok] : 0 < P.EPOCHS_PER_SLASHINGS_VECTOR :=
   h.slashings_vector_pos
 theorem P_historical_vector_pos [PresetCfg] [h : PresetCfg.Ok] :
@@ -114,13 +116,13 @@ theorem P_sync_seats_even [PresetCfg] [h : PresetCfg.Ok] :
 
 theorem mainnetCfg_ok : @PresetCfg.Ok mainnetCfg :=
   letI := mainnetCfg
-  { slots_pos := by decide, slashings_vector_pos := by decide,
+  { slots_pos := by decide, slots_gt_one := by decide, slashings_vector_pos := by decide,
     historical_vector_pos := by decide, eth1_period_pos := by decide,
     sync_size_pos := by decide, sync_seats_even := by decide }
 
 theorem minimalCfg_ok : @PresetCfg.Ok minimalCfg :=
   letI := minimalCfg
-  { slots_pos := by decide, slashings_vector_pos := by decide,
+  { slots_pos := by decide, slots_gt_one := by decide, slashings_vector_pos := by decide,
     historical_vector_pos := by decide, eth1_period_pos := by decide,
     sync_size_pos := by decide, sync_seats_even := by decide }
 

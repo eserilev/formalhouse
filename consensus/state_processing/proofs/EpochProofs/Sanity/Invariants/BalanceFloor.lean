@@ -32,6 +32,20 @@ theorem slot_div_bounds {x S E : Nat} (hS : 0 < S) (h : x / S = E) :
   rw [Nat.mul_comm] at this ⊢
   omega
 
+/-- Away from an epoch boundary the next slot is in the same epoch. -/
+theorem succ_div_of_mod_ne {x S : Nat} (h : (x + 1) % S ≠ 0) : (x + 1) / S = x / S :=
+  Nat.succ_div_of_not_dvd (fun hd => h (Nat.mod_eq_zero_of_dvd hd))
+
+/-- At an epoch boundary the next slot starts the next epoch. -/
+theorem succ_div_of_mod_eq {x S : Nat} (h : (x + 1) % S = 0) : (x + 1) / S = x / S + 1 := by
+  rw [Nat.succ_div]; simp [Nat.dvd_of_mod_eq_zero h]
+
+/-- With at least two slots per epoch, the epoch of a `u64` slot is below `FAR_FUTURE_EPOCH`. -/
+theorem slot_div_lt_far {x S : Nat} (hS : 1 < S) (h : x < 2 ^ 64) : x / S < FAR_FUTURE_EPOCH := by
+  have : x / S ≤ x / 2 := Nat.div_le_div_left (show 2 ≤ S by omega) (by decide)
+  simp only [FAR_FUTURE_EPOCH]
+  omega
+
 /-- The last slot `x` of epoch `E` is at least every slot `y` of epoch `E`. -/
 theorem slot_last_ge {S x y E : Nat} (hS : 0 < S) (hx : x / S = E) (hz : (x + 1) % S = 0)
     (hy : y / S = E) : y ≤ x := by

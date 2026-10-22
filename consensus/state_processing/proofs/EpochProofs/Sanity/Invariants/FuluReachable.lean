@@ -165,7 +165,7 @@ million ETH. -/
 theorem state_transition_fulu_reach [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
     (fs fs' : FuluState) (signed_block : FuluSignedBeaconBlock) (validate_result : Bool)
     (hslot64 : signed_block.message.slot < 2 ^ 64)
-    (hbits : signed_block.message.body.sync_aggregate.sync_committee_bits.length ≤ 512)
+    (hbits : signed_block.message.body.sync_aggregate.sync_committee_bits.length ≤ P.SYNC_COMMITTEE_SIZE)
     (htab : ∀ fs1, process_slots_fulu P o fo (process_epoch_fulu_m o) fs
       signed_block.message.slot = .ok fs1 → ∀ tab,
         get_total_active_balance P fs1.state = .ok tab → tab ≤ 139000000000000000)
@@ -214,7 +214,7 @@ inductive ReachableFulu [PresetCfg] [FuluCfg] (o : Oracle) (fo : FuluOracle) (c 
   | step {fs fs' : FuluState} (signed_block : FuluSignedBeaconBlock) (validate_result : Bool) :
       ReachableFulu o fo c init fs →
       signed_block.message.slot < 2 ^ 64 →
-      signed_block.message.body.sync_aggregate.sync_committee_bits.length ≤ 512 →
+      signed_block.message.body.sync_aggregate.sync_committee_bits.length ≤ P.SYNC_COMMITTEE_SIZE →
       state_transition_fulu P o fo FC c fs signed_block
         validate_result = .ok fs' →
       ReachableFulu o fo c init fs'

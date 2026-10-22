@@ -462,7 +462,7 @@ theorem process_effective_balance_updates_withdrawableU64 (p : Preset) (s s' : B
     exact hs _ (List.getElem_mem hv)
 
 /-- `process_epoch` keeps `WithdrawableU64`. -/
-theorem process_epoch_withdrawableU64 (p : Preset) (o : Oracle) (s s' : BeaconState)
+theorem process_epoch_withdrawableU64 [PresetCfg] (p : Preset) (o : Oracle) (s s' : BeaconState)
     (h : process_epoch p o s = .ok s') (hs : WithdrawableU64 s) : WithdrawableU64 s' := by
   unfold process_epoch at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
@@ -511,7 +511,7 @@ theorem process_epoch_withdrawableU64 (p : Preset) (o : Oracle) (s s' : BeaconSt
 
 
 /-- `process_slots` with the real `process_epoch` keeps `WithdrawableU64`. -/
-theorem process_slots_withdrawableU64 (p : Preset) (o : Oracle) (s s' : BeaconState)
+theorem process_slots_withdrawableU64 [PresetCfg] (p : Preset) (o : Oracle) (s s' : BeaconState)
     (slot : Slot) (h : process_slots p o (process_epoch p o) s slot = .ok s')
     (hs : WithdrawableU64 s) : WithdrawableU64 s' :=
   process_slots_invariant p o (process_epoch p o) WithdrawableU64
@@ -520,7 +520,7 @@ theorem process_slots_withdrawableU64 (p : Preset) (o : Oracle) (s s' : BeaconSt
     (fun _ _ hP => hP) s s' slot hs h
 
 /-- `state_transition` keeps `WithdrawableU64`. -/
-theorem state_transition_withdrawableU64 (p : Preset) (o : Oracle)
+theorem state_transition_withdrawableU64 [PresetCfg] (p : Preset) (o : Oracle)
     (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch) (s s' : BeaconState)
     (signed_block : SignedBeaconBlock) (validate_result : Bool) (hs : WithdrawableU64 s)
     (h : state_transition p o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block

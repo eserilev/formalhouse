@@ -30,7 +30,7 @@ def EBPresetOk (p : Preset) : Prop :=
 
 /-- Mainnet holds `EBPresetOk`. -/
 theorem ebPresetOk_mainnet [PresetCfg] : EBPresetOk P :=
-  ⟨presetIncrementOk_mainnet, by decide⟩
+  ⟨presetIncrementOk_mainnet, by pdecide⟩
 
 /-- `EBOk` reads only `validators`. -/
 theorem EBOk.of_validators {p : Preset} {s s' : BeaconState} (h : EBOk p s)
@@ -129,7 +129,7 @@ theorem process_builder_pending_payments_validators (p : Preset) (total_active_b
   vs_tac h
 
 /-- `process_pending_consolidations` keeps `validators`. -/
-theorem process_pending_consolidations_validators (p : Preset) (s s' : BeaconState)
+theorem process_pending_consolidations_validators [PresetCfg] (p : Preset) (s s' : BeaconState)
     (h : process_pending_consolidations p s = .ok s') : s'.validators = s.validators := by
   unfold process_pending_consolidations at h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
@@ -181,7 +181,7 @@ theorem initiate_validator_exit_ebOk (p : Preset) (total_active_balance : Gwei)
          exact ⟨hw.1, hw.2⟩)
 
 /-- `process_registry_updates` keeps `EBOk`. It writes only epochs of validators. -/
-theorem process_registry_updates_ebOk (p : Preset) (total_active_balance : Gwei)
+theorem process_registry_updates_ebOk [PresetCfg] (p : Preset) (total_active_balance : Gwei)
     (s s' : BeaconState) (h : process_registry_updates p total_active_balance s = .ok s')
     (hs : EBOk p s) : EBOk p s' := by
   unfold process_registry_updates at h
@@ -267,7 +267,7 @@ theorem apply_pending_deposit_ebOk (p : Preset) (o : Oracle) (hp : EBPresetOk p)
     | exact add_validator_to_registry_ebOk p hp s s' _ _ _ h hs
 
 /-- `process_pending_deposits` with `apply_pending_deposit` keeps `EBOk`. -/
-theorem process_pending_deposits_ebOk (p : Preset) (o : Oracle) (hp : EBPresetOk p)
+theorem process_pending_deposits_ebOk [PresetCfg] (p : Preset) (o : Oracle) (hp : EBPresetOk p)
     (total_active_balance : Gwei) (s s' : BeaconState)
     (h : process_pending_deposits p total_active_balance (apply_pending_deposit p o) s = .ok s')
     (hs : EBOk p s) : EBOk p s' := by
