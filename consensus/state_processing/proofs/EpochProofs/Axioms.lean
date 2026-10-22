@@ -104,6 +104,9 @@ import EpochProofs.Equiv.SinglePassLoopModel
 import EpochProofs.Equiv.DepositWrites
 import EpochProofs.Equiv.ListWrites
 import EpochProofs.FormalhouseFinal
+import EpochProofs.Equiv.EpochContexts
+import EpochProofs.Equiv.PendingDepositsLen
+import EpochProofs.CacheBridge.EpochCacheBuild
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -753,3 +756,9 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Formalhouse.gloasEpochConds_of_run
 #print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_final
 #print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_final
+#print axioms EpochProofs.participation_increments_ok
+#print axioms EpochProofs.participation_increments_ok_preset
+#print axioms EpochProofs.hysteresis_thresholds_ok_mainnet
+#print axioms EpochProofs.Spec.depositDecisions_postponed_len
+#print axioms EpochProofs.process_pending_deposits_postponed_len
+#print axioms EpochProofs.CacheBridge.base_rewards_ok_mainnet
