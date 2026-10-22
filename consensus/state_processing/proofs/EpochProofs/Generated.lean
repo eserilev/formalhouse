@@ -1832,8 +1832,32 @@ def per_epoch_processing.epoch_committees.next_proposer_lookahead
       (alloc.vec.Vec Std.U64) (core.convert.FromSame
       types.state.balance_weighted_selection.SelectionError) residual
 
+/-- [state_processing::per_epoch_processing::epoch_committees::proposer_indices_for_epoch]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 85:0-104:1
+    Visibility: public -/
+def per_epoch_processing.epoch_committees.proposer_indices_for_epoch
+  {H : Type} {B : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
+  swap_or_not_shuffle.shuffle_hash.ShuffleHash H)
+  (typesstatebalance_weighted_selectionEffectiveBalancesInst :
+  types.state.balance_weighted_selection.EffectiveBalances B) (balances : B)
+  (indices : Slice Std.Usize) (domain_beacon_proposer : Array Std.U8 4#usize)
+  (epoch : Std.U64) (mix : Array Std.U8 32#usize) (start_slot : Std.U64)
+  (constants : per_epoch_processing.epoch_committees.SelectionConstants) :
+  Result (core.result.Result (alloc.vec.Vec Std.Usize)
+    types.state.balance_weighted_selection.SelectionError)
+  := do
+  let seed ←
+    types.state.balance_weighted_selection.compute_seed
+      swap_or_not_shuffleshuffle_hashShuffleHashInst domain_beacon_proposer
+      epoch mix
+  types.state.balance_weighted_selection.compute_proposer_indices
+    swap_or_not_shuffleshuffle_hashShuffleHashInst
+    typesstatebalance_weighted_selectionEffectiveBalancesInst balances indices
+    seed start_slot constants.slots_per_epoch constants.shuffle_round_count
+    constants.max_effective_balance
+
 /-- [state_processing::per_epoch_processing::epoch_committees::ptc_for_epoch]: loop body 0:
-    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 99:4-122:5
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 125:4-148:5
     Visibility: public -/
 @[rust_loop_body]
 def per_epoch_processing.epoch_committees.ptc_for_epoch_loop.body
@@ -1888,7 +1912,7 @@ def per_epoch_processing.epoch_committees.ptc_for_epoch_loop.body
   else ok (done (ptcs, none))
 
 /-- [state_processing::per_epoch_processing::epoch_committees::ptc_for_epoch]: loop 0:
-    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 99:4-122:5
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 125:4-148:5
     Visibility: public -/
 @[rust_loop]
 def per_epoch_processing.epoch_committees.ptc_for_epoch_loop
@@ -1913,7 +1937,7 @@ def per_epoch_processing.epoch_committees.ptc_for_epoch_loop
     (constants, ptcs, i)
 
 /-- [state_processing::per_epoch_processing::epoch_committees::ptc_for_epoch]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 85:0-127:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 111:0-153:1
     Visibility: public -/
 def per_epoch_processing.epoch_committees.ptc_for_epoch
   {H : Type} {B : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :
@@ -1942,7 +1966,7 @@ def per_epoch_processing.epoch_committees.ptc_for_epoch
   | some e => ok (core.result.Result.Err e)
 
 /-- [state_processing::per_epoch_processing::epoch_committees::next_sync_committee_indices]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 134:0-153:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/epoch_committees.rs', lines 160:0-179:1
     Visibility: public -/
 def per_epoch_processing.epoch_committees.next_sync_committee_indices
   {H : Type} {B : Type} (swap_or_not_shuffleshuffle_hashShuffleHashInst :

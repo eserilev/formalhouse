@@ -99,6 +99,7 @@ import EpochProofs.Sanity.Invariants.FuluBalance
 import EpochProofs.Sanity.Invariants.FuluReachable
 import EpochProofs.FormalhouseFuluReachable
 import EpochProofs.Sanity.Invariants.ForkUpgrade
+import EpochProofs.Equiv.Upgrade
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -709,3 +710,8 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.SlotReachG.loopInv
 #print axioms EpochProofs.Spec.gloas_reachable_invariants
 #print axioms EpochProofs.Spec.fulu_then_gloas_reachable_invariants
+#print axioms EpochProofs.ptc_for_epoch_spec_gen
+#print axioms EpochProofs.proposer_indices_for_epoch_spec_fulu
+#print axioms EpochProofs.initialize_proposer_lookahead_get
+#print axioms EpochProofs.initialize_ptc_window_get
+#print axioms EpochProofs.initialize_ptc_window_lh
