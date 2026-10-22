@@ -1,4 +1,5 @@
 import EpochProofs.Sanity.SinglePass
+import EpochProofs.Spec.PresetCfg
 
 /-!
 # Pass congruence
@@ -21,8 +22,9 @@ theorem passM_congr {A R : Type} (f g : A → R → SpecM (A × R)) (rows : List
     funext x
     rw [ih (fun a r hr => h a r (List.mem_cons_of_mem _ hr))]
 
-theorem ejection_lt_activation_mainnet :
-    Preset.mainnet.EJECTION_BALANCE < Preset.mainnet.MIN_ACTIVATION_BALANCE := by decide
+theorem ejection_lt_activation_mainnet [PresetCfg] :
+    P.EJECTION_BALANCE < P.MIN_ACTIVATION_BALANCE := by
+  simp [P, Preset.ofVar]
 
 theorem ejection_lt_activation_minimal :
     Preset.minimal.EJECTION_BALANCE < Preset.minimal.MIN_ACTIVATION_BALANCE := by decide

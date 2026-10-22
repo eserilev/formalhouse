@@ -1,4 +1,5 @@
 import EpochProofs.Spec.EffectiveBalanceUpdates
+import EpochProofs.Spec.PresetCfg
 
 /-!
 # Sanity theorems for the `process_effective_balance_updates` reference
@@ -107,9 +108,9 @@ theorem process_effective_balance_updates_eq (p : Preset) (state : BeaconState) 
                   · rfl
 
 /-- Mainnet thresholds: 0.25 ETH down, 1.25 ETH up. -/
-theorem hysteresisThresholds_mainnet :
-    hysteresisThresholds Preset.mainnet = .ok (250000000, 1250000000) := by
-  rfl
+theorem hysteresisThresholds_mainnet [PresetCfg] :
+    hysteresisThresholds P = .ok (250000000, 1250000000) := by
+  rw [show hysteresisThresholds P = hysteresisThresholds Preset.mainnet from rfl]; rfl
 
 /-- A changed effective balance never exceeds `get_max_effective_balance`. -/
 theorem newEffectiveBalance_le_max (p : Preset) (downward upward : Uint64)

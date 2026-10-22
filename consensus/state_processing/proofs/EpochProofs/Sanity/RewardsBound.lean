@@ -1,4 +1,5 @@
 import EpochProofs.Sanity.LighthouseRowOrder
+import EpochProofs.Spec.PresetCfg
 
 /-!
 # A weaker rewards condition for the Lighthouse row step
@@ -265,10 +266,10 @@ theorem rewardsBaseReward_bound (p : Preset) (total_active_balance : Nat) (v : V
   omega
 
 /-- `rewardsBaseReward_bound` for the mainnet preset. -/
-theorem rewardsBaseReward_bound_mainnet (total_active_balance : Nat) (v : Validator)
+theorem rewardsBaseReward_bound_mainnet [PresetCfg] (total_active_balance : Nat) (v : Validator)
     (base_reward : Nat)
-    (htotal : Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT ≤ total_active_balance)
-    (h : rewardsBaseReward Preset.mainnet total_active_balance v = .ok base_reward) :
+    (htotal : P.EFFECTIVE_BALANCE_INCREMENT ≤ total_active_balance)
+    (h : rewardsBaseReward P total_active_balance v = .ok base_reward) :
     256 * base_reward ≤ v.effective_balance :=
   rewardsBaseReward_bound _ _ _ _ rfl rfl htotal h
 
@@ -388,7 +389,7 @@ Hypotheses that replace `hrewards`, and why they hold on real states:
 
 The other hypotheses are the same as in `lhRowStep_eq_singlePassStep`. `hbalances` is true on
 mainnet, so it is not a hypothesis. -/
-theorem lhRowStep_eq_singlePassStep_of_bounds (ctx : LhStepContext)
+theorem lhRowStep_eq_singlePassStep_of_bounds [PresetCfg] (ctx : LhStepContext)
     (hgen : ctx.after_genesis = true) (rctx : RewardsContext)
     (r : Row) (churn : Epoch × Gwei) (base_reward : Gwei) (activation_epoch : Epoch)
     (hprev : rctx.previous_epoch = ctx.previous_epoch)
@@ -398,8 +399,8 @@ theorem lhRowStep_eq_singlePassStep_of_bounds (ctx : LhStepContext)
     (hhead : rctx.head_increments = ctx.head_increments)
     (hactive : rctx.active_increments = ctx.active_increments)
     (hbase : rewardsEligible ctx.previous_epoch r.validator = .ok true →
-      rewardsBaseReward Preset.mainnet rctx.total_active_balance r.validator = .ok base_reward)
-    (htotal : Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT ≤ rctx.total_active_balance)
+      rewardsBaseReward P rctx.total_active_balance r.validator = .ok base_reward)
+    (htotal : P.EFFECTIVE_BALANCE_INCREMENT ≤ rctx.total_active_balance)
     (hincrements : ctx.source_increments ≤ 256 * ctx.active_increments ∧
       ctx.target_increments ≤ 256 * ctx.active_increments ∧
       ctx.head_increments ≤ 256 * ctx.active_increments)
@@ -408,16 +409,16 @@ theorem lhRowStep_eq_singlePassStep_of_bounds (ctx : LhStepContext)
     (hsupply : r.balance + r.validator.effective_balance < 2 ^ 64)
     (hfinalized : ctx.finalized_epoch ≤ ctx.current_epoch)
     (hcurrent : ctx.current_epoch + 1 < UINT64_SIZE)
-    (hactivation : compute_activation_exit_epoch Preset.mainnet ctx.current_epoch =
+    (hactivation : compute_activation_exit_epoch P ctx.current_epoch =
       .ok activation_epoch)
     (hexit : r.validator.exit_epoch ≤ FAR_FUTURE_EPOCH) :
-    lhRowStep Preset.mainnet ctx base_reward churn r =
-      (fun x => (x.1.1.2, x.2)) <$> singlePassStep Preset.mainnet ctx.total_active_balance
+    lhRowStep P ctx base_reward churn r =
+      (fun x => (x.1.1.2, x.2)) <$> singlePassStep P ctx.total_active_balance
         ctx.previous_epoch ctx.in_leak rctx ctx.current_epoch ctx.finalized_epoch
         activation_epoch ctx.slashings_target ctx.penalty_per_increment ((((), ()), churn), ())
         r := by
-  refine lhRowStep_eq_singlePassStep_flags Preset.mainnet ctx hgen rctx r churn base_reward
-    activation_epoch hprev hleak hsource htarget hhead hactive hbase ?_ (by decide)
+  refine lhRowStep_eq_singlePassStep_flags P ctx hgen rctx r churn base_reward
+    activation_epoch hprev hleak hsource htarget hhead hactive hbase ?_ (by pdecide)
     hfinalized hcurrent hactivation hexit
   intro r' deltas hi hd
   obtain ⟨hv, -⟩ := inactivityRowStep_keeps _ _ _ _ _ hi
@@ -442,8 +443,8 @@ theorem lhRowStep_eq_singlePassStep_of_bounds (ctx : LhStepContext)
     · exact rewardsBaseReward_bound_mainnet _ _ _ htotal hb
   have hr := hrew 256 (hsource ▸ hactive ▸ hincrements.1) (htarget ▸ hactive ▸ hincrements.2.1)
     (hhead ▸ hactive ▸ hincrements.2.2)
-  have hq : Preset.mainnet.INACTIVITY_SCORE_BIAS *
-      Preset.mainnet.INACTIVITY_PENALTY_QUOTIENT_BELLATRIX = 67108864 := rfl
+  have hq : P.INACTIVITY_SCORE_BIAS *
+      P.INACTIVITY_PENALTY_QUOTIENT_BELLATRIX = 67108864 := (by prfl)
   rw [hq] at hinact
   subst hds
   obtain ⟨(b : Nat), hbal⟩ : ∃ b : Nat, r.balance = b := ⟨_, rfl⟩
