@@ -2919,14 +2919,14 @@ def per_epoch_processing.list_writes.update_effective_balances_at
     EffectiveBalanceWritesInst state indices 0#usize
 
 /-- [state_processing::per_epoch_processing::pending_consolidations::ConsolidationView]
-    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 10:0-13:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 11:0-14:1
     Visibility: public -/
 structure per_epoch_processing.pending_consolidations.ConsolidationView where
   source : Std.Usize
   target : Std.Usize
 
 /-- [state_processing::per_epoch_processing::pending_consolidations::LocalValidator]
-    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 16:0-21:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 17:0-22:1
     Visibility: public -/
 structure per_epoch_processing.pending_consolidations.LocalValidator where
   «exists» : Bool
@@ -2935,7 +2935,7 @@ structure per_epoch_processing.pending_consolidations.LocalValidator where
   effective_balance : Std.U64
 
 /-- [state_processing::per_epoch_processing::pending_consolidations::ConsolidationError]
-    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 23:0-27:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 24:0-28:1
     Visibility: public -/
 @[discriminant isize]
 inductive per_epoch_processing.pending_consolidations.ConsolidationError where
@@ -2945,7 +2945,7 @@ inductive per_epoch_processing.pending_consolidations.ConsolidationError where
 | Overflow : per_epoch_processing.pending_consolidations.ConsolidationError
 
 /-- [state_processing::per_epoch_processing::pending_consolidations::get_balance]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 31:0-36:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 32:0-37:1
     Visibility: public -/
 def per_epoch_processing.pending_consolidations.get_balance
   (balances : Slice Std.U64) (i : Std.Usize) : Result (Option Std.U64) := do
@@ -2957,7 +2957,7 @@ def per_epoch_processing.pending_consolidations.get_balance
   | some _ => ok o
 
 /-- [state_processing::per_epoch_processing::pending_consolidations::set_balance]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 38:0-44:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 39:0-45:1
     Visibility: public -/
 def per_epoch_processing.pending_consolidations.set_balance
   (balances : alloc.vec.Vec Std.U64) (i : Std.Usize) (value : Std.U64) :
@@ -2974,7 +2974,7 @@ def per_epoch_processing.pending_consolidations.set_balance
               ok (deref_mut_back s1)
 
 /-- [state_processing::per_epoch_processing::pending_consolidations::validator_exists]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 46:0-51:1 -/
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 47:0-52:1 -/
 def per_epoch_processing.pending_consolidations.validator_exists
   (validators : Slice
   per_epoch_processing.pending_consolidations.LocalValidator) (i : Std.Usize) :
@@ -2988,7 +2988,7 @@ def per_epoch_processing.pending_consolidations.validator_exists
   | some validator => ok validator.exists
 
 /-- [state_processing::per_epoch_processing::pending_consolidations::process_pending_consolidations]: loop body 0:
-    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 65:4-106:5
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 66:4-107:5
     Visibility: public -/
 @[rust_loop_body]
 def
@@ -3102,7 +3102,7 @@ def
   else ok (done (balances, next_pending_consolidation, none))
 
 /-- [state_processing::per_epoch_processing::pending_consolidations::process_pending_consolidations]: loop 0:
-    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 65:4-106:5
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 66:4-107:5
     Visibility: public -/
 @[rust_loop]
 def
@@ -3124,7 +3124,7 @@ def
     (balances, next_pending_consolidation, i)
 
 /-- [state_processing::per_epoch_processing::pending_consolidations::process_pending_consolidations]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 55:0-111:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 56:0-112:1
     Visibility: public -/
 def per_epoch_processing.pending_consolidations.process_pending_consolidations
   (consolidations : Slice
@@ -3141,6 +3141,394 @@ def per_epoch_processing.pending_consolidations.process_pending_consolidations
   match error with
   | none => ok (core.result.Result.Ok (next_pending_consolidation, balances1))
   | some error1 => ok (core.result.Result.Err error1)
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::PendingPair]
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 115:0-118:1
+    Visibility: public -/
+structure per_epoch_processing.pending_consolidations.PendingPair where
+  source : Std.U64
+  target : Std.U64
+
+/-- Trait declaration: [state_processing::per_epoch_processing::pending_consolidations::ConsolidationState]
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 121:0-139:1
+    Visibility: public -/
+structure per_epoch_processing.pending_consolidations.ConsolidationState (Self
+  : Type) (E : Type) where
+  next_epoch : Self → Result (core.result.Result Std.U64 E)
+  pending : Self → Result (core.result.Result (alloc.vec.Vec
+    per_epoch_processing.pending_consolidations.PendingPair) E)
+  local_validator : Self → Std.Usize → Result
+    per_epoch_processing.pending_consolidations.LocalValidator
+  balance : Self → Std.Usize → Result Std.U64
+  set_balance : Self → Std.Usize → Std.U64 → Result Self
+  pop_pending : Self → Std.Usize → Result ((core.result.Result Unit E) ×
+    Self)
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::TableError]
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 142:0-149:1
+    Visibility: public -/
+@[discriminant isize]
+inductive per_epoch_processing.pending_consolidations.TableError (E : Type)
+  where
+| State : E → per_epoch_processing.pending_consolidations.TableError E
+| UnknownValidator :
+  Std.Usize →
+  per_epoch_processing.pending_consolidations.TableError E
+| Overflow : per_epoch_processing.pending_consolidations.TableError E
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::position]: loop body 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 156:4-172:5
+    Visibility: public -/
+@[rust_loop_body]
+def per_epoch_processing.pending_consolidations.position_loop.body
+  (sorted : Slice Std.Usize) (index : Std.Usize) (low : Std.Usize)
+  (high : Std.Usize) :
+  Result (ControlFlow (Std.Usize × Std.Usize) (Option Std.Usize))
+  := do
+  if low < high
+  then
+    let i ← lift (core.num.Usize.saturating_sub high low)
+    let i1 ← i / 2#usize
+    let mid ← lift (core.num.Usize.saturating_add low i1)
+    let o ←
+      core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice Std.Usize)
+        sorted mid
+    match o with
+    | none => ok (done none)
+    | some value =>
+      if value = index
+      then ok (done (some mid))
+      else
+        if value < index
+        then
+          let low1 ← lift (core.num.Usize.saturating_add mid 1#usize)
+          ok (cont (low1, high))
+        else ok (cont (low, mid))
+  else ok (done none)
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::position]: loop 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 156:4-172:5
+    Visibility: public -/
+@[rust_loop]
+def per_epoch_processing.pending_consolidations.position_loop
+  (sorted : Slice Std.Usize) (index : Std.Usize) (low : Std.Usize)
+  (high : Std.Usize) :
+  Result (Option Std.Usize)
+  := do
+  loop
+    (fun (low1, high1) =>
+      per_epoch_processing.pending_consolidations.position_loop.body sorted
+      index low1 high1)
+    (low, high)
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::position]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 152:0-174:1
+    Visibility: public -/
+def per_epoch_processing.pending_consolidations.position
+  (sorted : Slice Std.Usize) (index : Std.Usize) :
+  Result (Option Std.Usize)
+  := do
+  let high := Slice.len sorted
+  per_epoch_processing.pending_consolidations.position_loop sorted index
+    0#usize high
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::build_table]: loop body 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 183:4-189:5 -/
+@[rust_loop_body]
+def per_epoch_processing.pending_consolidations.build_table_loop.body
+  {E : Type} {S : Type} (ConsolidationStateInst :
+  per_epoch_processing.pending_consolidations.ConsolidationState S E)
+  (state : S) (local_indices : Slice Std.Usize)
+  (validators : alloc.vec.Vec
+  per_epoch_processing.pending_consolidations.LocalValidator)
+  (balances : alloc.vec.Vec Std.U64) (k : Std.Usize) :
+  Result (ControlFlow ((alloc.vec.Vec
+    per_epoch_processing.pending_consolidations.LocalValidator) ×
+    (alloc.vec.Vec Std.U64) × Std.Usize) ((alloc.vec.Vec
+    per_epoch_processing.pending_consolidations.LocalValidator) ×
+    (alloc.vec.Vec Std.U64)))
+  := do
+  let i := Slice.len local_indices
+  if k < i
+  then
+    let o ←
+      core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice Std.Usize)
+        local_indices k
+    let (validators1, balances1) ←
+      match o with
+      | none => ok (validators, balances)
+      | some index =>
+        do
+        let lv ← ConsolidationStateInst.local_validator state index
+        let validators2 ← alloc.vec.Vec.push validators lv
+        let i1 ← ConsolidationStateInst.balance state index
+        let balances2 ← alloc.vec.Vec.push balances i1
+        ok (validators2, balances2)
+    let k1 ← lift (core.num.Usize.saturating_add k 1#usize)
+    ok (cont (validators1, balances1, k1))
+  else ok (done (validators, balances))
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::build_table]: loop 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 183:4-189:5 -/
+@[rust_loop]
+def per_epoch_processing.pending_consolidations.build_table_loop
+  {E : Type} {S : Type} (ConsolidationStateInst :
+  per_epoch_processing.pending_consolidations.ConsolidationState S E)
+  (state : S) (local_indices : Slice Std.Usize)
+  (validators : alloc.vec.Vec
+  per_epoch_processing.pending_consolidations.LocalValidator)
+  (balances : alloc.vec.Vec Std.U64) (k : Std.Usize) :
+  Result ((alloc.vec.Vec
+    per_epoch_processing.pending_consolidations.LocalValidator) ×
+    (alloc.vec.Vec Std.U64))
+  := do
+  loop
+    (fun (validators1, balances1, k1) =>
+      per_epoch_processing.pending_consolidations.build_table_loop.body
+      ConsolidationStateInst state local_indices validators1 balances1 k1)
+    (validators, balances, k)
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::build_table]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 176:0-191:1 -/
+def per_epoch_processing.pending_consolidations.build_table
+  {E : Type} {S : Type} (ConsolidationStateInst :
+  per_epoch_processing.pending_consolidations.ConsolidationState S E)
+  (state : S) (local_indices : Slice Std.Usize) :
+  Result ((alloc.vec.Vec
+    per_epoch_processing.pending_consolidations.LocalValidator) ×
+    (alloc.vec.Vec Std.U64))
+  := do
+  let i := Slice.len local_indices
+  let validators :=
+    alloc.vec.Vec.with_capacity
+      per_epoch_processing.pending_consolidations.LocalValidator i
+  let i1 := Slice.len local_indices
+  let balances := alloc.vec.Vec.with_capacity Std.U64 i1
+  per_epoch_processing.pending_consolidations.build_table_loop
+    ConsolidationStateInst state local_indices validators balances 0#usize
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::build_views]: loop body 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 200:4-219:5 -/
+@[rust_loop_body]
+def per_epoch_processing.pending_consolidations.build_views_loop.body
+  (pairs : Slice per_epoch_processing.pending_consolidations.PendingPair)
+  (local_indices : Slice Std.Usize)
+  (views : alloc.vec.Vec
+  per_epoch_processing.pending_consolidations.ConsolidationView)
+  (i : Std.Usize) :
+  Result (ControlFlow ((alloc.vec.Vec
+    per_epoch_processing.pending_consolidations.ConsolidationView) ×
+    Std.Usize) ((alloc.vec.Vec
+    per_epoch_processing.pending_consolidations.ConsolidationView) × (Option
+    Std.Usize)))
+  := do
+  let i1 := Slice.len pairs
+  if i < i1
+  then
+    let o ←
+      core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice
+        per_epoch_processing.pending_consolidations.PendingPair) pairs i
+    match o with
+    | none =>
+      let i2 ← lift (core.num.Usize.saturating_add i 1#usize)
+      ok (cont (views, i2))
+    | some pair =>
+      let source_index ← lift (UScalar.cast .Usize pair.source)
+      let target_index ← lift (UScalar.cast .Usize pair.target)
+      let o1 ←
+        per_epoch_processing.pending_consolidations.position local_indices
+          source_index
+      match o1 with
+      | none => ok (done (views, some source_index))
+      | some source =>
+        let o2 ←
+          per_epoch_processing.pending_consolidations.position local_indices
+            target_index
+        match o2 with
+        | none => ok (done (views, some target_index))
+        | some target =>
+          let views1 ←
+            alloc.vec.Vec.push views ({ source, target } :
+              per_epoch_processing.pending_consolidations.ConsolidationView)
+          let i2 ← lift (core.num.Usize.saturating_add i 1#usize)
+          ok (cont (views1, i2))
+  else ok (done (views, none))
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::build_views]: loop 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 200:4-219:5 -/
+@[rust_loop]
+def per_epoch_processing.pending_consolidations.build_views_loop
+  (pairs : Slice per_epoch_processing.pending_consolidations.PendingPair)
+  (local_indices : Slice Std.Usize)
+  (views : alloc.vec.Vec
+  per_epoch_processing.pending_consolidations.ConsolidationView)
+  (i : Std.Usize) :
+  Result ((alloc.vec.Vec
+    per_epoch_processing.pending_consolidations.ConsolidationView) × (Option
+    Std.Usize))
+  := do
+  loop
+    (fun (views1, i1) =>
+      per_epoch_processing.pending_consolidations.build_views_loop.body pairs
+      local_indices views1 i1)
+    (views, i)
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::build_views]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 193:0-224:1 -/
+def per_epoch_processing.pending_consolidations.build_views
+  (pairs : Slice per_epoch_processing.pending_consolidations.PendingPair)
+  (local_indices : Slice Std.Usize) :
+  Result (core.result.Result (alloc.vec.Vec
+    per_epoch_processing.pending_consolidations.ConsolidationView) Std.Usize)
+  := do
+  let i := Slice.len pairs
+  let views :=
+    alloc.vec.Vec.with_capacity
+      per_epoch_processing.pending_consolidations.ConsolidationView i
+  let (views1, missing) ←
+    per_epoch_processing.pending_consolidations.build_views_loop pairs
+      local_indices views 0#usize
+  match missing with
+  | none => ok (core.result.Result.Ok views1)
+  | some index => ok (core.result.Result.Err index)
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::write_back]: loop body 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 232:4-239:5 -/
+@[rust_loop_body]
+def per_epoch_processing.pending_consolidations.write_back_loop.body
+  {E : Type} {S : Type} (ConsolidationStateInst :
+  per_epoch_processing.pending_consolidations.ConsolidationState S E)
+  (local_indices : Slice Std.Usize) (balances : Slice Std.U64) (state : S)
+  (k : Std.Usize) :
+  Result (ControlFlow (S × Std.Usize) S)
+  := do
+  let i := Slice.len local_indices
+  if k < i
+  then
+    let o ←
+      core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice Std.Usize)
+        local_indices k
+    let state1 ←
+      match o with
+      | none => ok state
+      | some index =>
+        do
+        let o1 ←
+          core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice Std.U64)
+            balances k
+        match o1 with
+        | none => ok state
+        | some balance =>
+          ConsolidationStateInst.set_balance state index balance
+    let k1 ← lift (core.num.Usize.saturating_add k 1#usize)
+    ok (cont (state1, k1))
+  else ok (done state)
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::write_back]: loop 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 232:4-239:5 -/
+@[rust_loop]
+def per_epoch_processing.pending_consolidations.write_back_loop
+  {E : Type} {S : Type} (ConsolidationStateInst :
+  per_epoch_processing.pending_consolidations.ConsolidationState S E)
+  (state : S) (local_indices : Slice Std.Usize) (balances : Slice Std.U64)
+  (k : Std.Usize) :
+  Result S
+  := do
+  loop
+    (fun (state1, k1) =>
+      per_epoch_processing.pending_consolidations.write_back_loop.body
+      ConsolidationStateInst local_indices balances state1 k1)
+    (state, k)
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::write_back]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 226:0-240:1 -/
+@[reducible]
+def per_epoch_processing.pending_consolidations.write_back
+  {E : Type} {S : Type} (ConsolidationStateInst :
+  per_epoch_processing.pending_consolidations.ConsolidationState S E)
+  (state : S) (local_indices : Slice Std.Usize) (balances : Slice Std.U64) :
+  Result S
+  := do
+  per_epoch_processing.pending_consolidations.write_back_loop
+    ConsolidationStateInst state local_indices balances 0#usize
+
+/-- [state_processing::per_epoch_processing::pending_consolidations::process_on_table]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 245:0-279:1
+    Visibility: public -/
+def per_epoch_processing.pending_consolidations.process_on_table
+  {E : Type} {S : Type} (ConsolidationStateInst :
+  per_epoch_processing.pending_consolidations.ConsolidationState S E)
+  (state : S) (local_indices : Slice Std.Usize) :
+  Result ((core.result.Result Unit
+    (per_epoch_processing.pending_consolidations.TableError E)) × S)
+  := do
+  let r ← ConsolidationStateInst.next_epoch state
+  match r with
+  | core.result.Result.Ok next_epoch =>
+    let r1 ← ConsolidationStateInst.pending state
+    match r1 with
+    | core.result.Result.Ok pairs =>
+      let (validators, balances) ←
+        per_epoch_processing.pending_consolidations.build_table
+          ConsolidationStateInst state local_indices
+      let s := alloc.vec.Vec.deref pairs
+      let r2 ←
+        per_epoch_processing.pending_consolidations.build_views s local_indices
+      match r2 with
+      | core.result.Result.Ok views =>
+        let s1 := alloc.vec.Vec.deref views
+        let s2 := alloc.vec.Vec.deref validators
+        let r3 ←
+          per_epoch_processing.pending_consolidations.process_pending_consolidations
+            s1 s2 balances next_epoch
+        match r3 with
+        | core.result.Result.Ok result =>
+          let (next, new_balances) := result
+          let s3 := alloc.vec.Vec.deref new_balances
+          let state1 ←
+            per_epoch_processing.pending_consolidations.write_back
+              ConsolidationStateInst state local_indices s3
+          let (r4, state2) ← ConsolidationStateInst.pop_pending state1 next
+          match r4 with
+          | core.result.Result.Ok _ => ok (core.result.Result.Ok (), state2)
+          | core.result.Result.Err e =>
+            ok (core.result.Result.Err
+              (per_epoch_processing.pending_consolidations.TableError.State e),
+              state2)
+        | core.result.Result.Err ce =>
+          match ce with
+          |
+            per_epoch_processing.pending_consolidations.ConsolidationError.UnknownValidator
+            position =>
+            let o ←
+              core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice
+                Std.Usize) local_indices position
+            match o with
+            | none =>
+              ok (core.result.Result.Err
+                (per_epoch_processing.pending_consolidations.TableError.UnknownValidator
+                position), state)
+            | some index =>
+              ok (core.result.Result.Err
+                (per_epoch_processing.pending_consolidations.TableError.UnknownValidator
+                index), state)
+          |
+            per_epoch_processing.pending_consolidations.ConsolidationError.Overflow
+            =>
+            ok (core.result.Result.Err
+              per_epoch_processing.pending_consolidations.TableError.Overflow,
+              state)
+      | core.result.Result.Err index =>
+        ok (core.result.Result.Err
+          (per_epoch_processing.pending_consolidations.TableError.UnknownValidator
+          index), state)
+    | core.result.Result.Err e =>
+      ok (core.result.Result.Err
+        (per_epoch_processing.pending_consolidations.TableError.State e),
+        state)
+  | core.result.Result.Err e =>
+    ok (core.result.Result.Err
+      (per_epoch_processing.pending_consolidations.TableError.State e), state)
 
 /-- [state_processing::per_epoch_processing::pending_deposits::DepositView]
     Source: 'consensus/state_processing/src/per_epoch_processing/pending_deposits.rs', lines 9:0-19:1

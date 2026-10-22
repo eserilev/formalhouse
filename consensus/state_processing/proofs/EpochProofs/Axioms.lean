@@ -104,6 +104,7 @@ import EpochProofs.Equiv.SinglePassLoopModel
 import EpochProofs.Equiv.DepositWrites
 import EpochProofs.Equiv.ListWrites
 import EpochProofs.FormalhouseFinal
+import EpochProofs.Equiv.ConsolidationTable
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -753,3 +754,18 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Formalhouse.gloasEpochConds_of_run
 #print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_final
 #print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_final
+#print axioms EpochProofs.Spec.consolidationStep_table
+#print axioms EpochProofs.Spec.consolidationStep_full_ok
+#print axioms EpochProofs.Spec.consolidationStep_count
+#print axioms EpochProofs.Spec.stepLoop_count
+#print axioms EpochProofs.Spec.stepLoop_table
+#print axioms EpochProofs.Spec.stepLoop_agreeOut
+#print axioms EpochProofs.Spec.writeBack_table
+#print axioms EpochProofs.Spec.consolidationIndices_eq_of_sorted
+#print axioms EpochProofs.Spec.pairsIn_consolidationIndices
+#print axioms EpochProofs.position_spec
+#print axioms EpochProofs.build_table_spec
+#print axioms EpochProofs.build_views_spec
+#print axioms EpochProofs.write_back_spec
+#print axioms EpochProofs.btreeSetIter_consolidationIndices
+#print axioms EpochProofs.process_on_table_spec
