@@ -260,6 +260,12 @@ functions that differ from Gloas. `Sanity/Fulu.lean` reduces them to the Gloas f
   `state_transition_fulu_ffg` (the Fulu state transition keeps `FfgInvariant`) and
   `state_transition_fulu_slot`.
 
+- Block effects: `Sanity/Block/FuluEffects.lean` gives each Fulu block function the effect
+  facts of its Gloas counterpart (`EBStable`, `BalancesUp`, `ExitOrder`, `SlashEffect`,
+  `SlashFields`, `RequestEffect`). Under `FuluCompat`, the Fulu exit churn functions are the
+  Gloas ones at `fuluTab`, so the Gloas facts about them carry over. The Electra consolidation
+  churn gets its own bound.
+
 Not yet done for Fulu: totality, and the Fulu invariants from genesis (the Fulu block functions
 have no preservation proofs yet).
 

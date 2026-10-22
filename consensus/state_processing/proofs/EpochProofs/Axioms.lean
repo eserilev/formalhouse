@@ -88,6 +88,7 @@ import EpochProofs.Formalhouse
 import EpochProofs.FormalhouseFulu
 import EpochProofs.Sanity.Block.FuluBlock
 import EpochProofs.Sanity.FuluTransition
+import EpochProofs.Sanity.Block.FuluEffects
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -511,3 +512,23 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.process_block_fulu_checkpointsStable
 #print axioms EpochProofs.Spec.state_transition_fulu_ffg
 #print axioms EpochProofs.Spec.state_transition_fulu_slot
+#print axioms EpochProofs.Spec.initiate_validator_exit_fulu_effects
+#print axioms EpochProofs.Spec.process_voluntary_exit_fulu_initiate
+#print axioms EpochProofs.Spec.process_voluntary_exit_fulu_effects
+#print axioms EpochProofs.Spec.slash_validator_fulu_initiate_ok
+#print axioms EpochProofs.Spec.slash_validator_fulu_ok
+#print axioms EpochProofs.Spec.slash_validator_fulu_slashEffect
+#print axioms EpochProofs.Spec.slash_validator_fulu_slashFields
+#print axioms EpochProofs.Spec.process_proposer_slashing_fulu_ok
+#print axioms EpochProofs.Spec.process_proposer_slashing_fulu_effects
+#print axioms EpochProofs.Spec.process_attester_slashing_fulu_ok
+#print axioms EpochProofs.Spec.process_attester_slashing_fulu_effects
+#print axioms EpochProofs.Spec.process_attestation_fulu_shape
+#print axioms EpochProofs.Spec.process_attestation_fulu_effects
+#print axioms EpochProofs.Spec.process_withdrawal_request_fulu_effect
+#print axioms EpochProofs.Spec.compute_consolidation_epoch_and_update_churn_fulu_bound
+#print axioms EpochProofs.Spec.process_consolidation_request_fulu_effect
+#print axioms EpochProofs.Spec.process_withdrawals_fulu_frame
+#print axioms EpochProofs.Spec.process_withdrawals_fulu_effects
+#print axioms EpochProofs.Spec.process_block_header_fulu_frame
+#print axioms EpochProofs.Spec.process_block_header_fulu_effects
