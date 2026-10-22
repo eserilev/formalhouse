@@ -881,3 +881,200 @@ copies the rest of the body into each branch, and the generated code grows expon
 - The Electra state before `upgrade_to_fulu`: no Electra spec exists, so `FuluStartOk` of the
   Fulu start state is an assumption.
 - The reference matches pyspec.
+
+## Error sites in `single_pass.rs`
+
+`single_pass.rs` has 174 `?` sites. The table gives the status of each one on the Gloas path.
+A capstone holds only if no `?` returns an error where the spec succeeds.
+
+| Status | Meaning | Sites |
+|---|---|---|
+| P | Proved: an Aeneas-checked function, its errors equal spec errors, and the spec step is proved total | 15 |
+| C | Inside a trusted contract implementation (`RowsContract`, `Trusted/EpochTail.lean`) | 48 |
+| B | Fails only if a cache is not built; the capstones assume the cache build facts | 13 |
+| I | Unreachable by a proved invariant or bound (`TailPre`, `RowBounds`, validator count), linked to the Rust by argument | 11 |
+| S | The same operation as a spec step that is proved total, linked to the Rust by argument | 2 |
+| T | A superstruct field or variant that exists from the fork on | 10 |
+| G | Named glue (`SeedMixLink`) | 2 |
+| A | Argued only | 3 |
+| E | Pre-Electra path only, never reached after Electra | 60 |
+| W18 | The consolidation table, handled separately | 10 |
+
+New proofs for this table: `participation_increments_ok` (the rewards context), `hysteresis_thresholds_ok_mainnet`
+(the effective balance context), `base_rewards_ok_mainnet` (`into_epoch_cache`) and
+`process_pending_deposits_postponed_len` (the `ok_or` on the postponed flags). `RewardsAndPenaltiesContext`
+now holds the three increments as fields, so the Electra path has no flag-index lookups.
+
+No site was found that fails on a reachable state where the spec succeeds. The B sites use only
+cache facts that the final capstones already assume, so the capstones need no new assumption.
+
+| Line | Function | `?` | Status | Reason |
+|---|---|---|---|---|
+| 143 | `is_unslashed_participating_index` | 1 | E | pre-Electra path only |
+| 161 | `process_epoch_single_pass` | 1 | B | epoch cache build fact (`lh_total_active_balance_eq`, `lh_base_reward_eq`); the base reward table cannot fail (`base_rewards_ok_mainnet`) |
+| 162 | `process_epoch_single_pass` | 1 | B | progressive balances `Coherent` |
+| 163 | `process_epoch_single_pass` | 1 | I | exit cache build fails only on a per-epoch exit count overflow; fewer than 2^40 validators |
+| 164 | `process_epoch_single_pass` | 1 | I | shuffle fails only above 2^24 active validators; active validators stay below supply / 32 |
+| 165 | `process_epoch_single_pass` | 1 | I | as line 164 |
+| 166 | `process_epoch_single_pass` | 1 | B | pubkey cache `Coherent` (#70) |
+| 170 | `process_epoch_single_pass` | 1 | I | next epoch fits u64 (`TailPre`) |
+| 171 | `process_epoch_single_pass` | 1 | S | finality delay `previous - finalized`; the spec subtraction is proved total (`process_epoch_total`) |
+| 172 | `process_epoch_single_pass` | 1 | B | total active balance read from the epoch cache built at line 161 |
+| 173 | `process_epoch_single_pass` | 1 | B | value for the pre-Electra path; reads the cached total, divides by constants |
+| 174 | `process_epoch_single_pass` | 1 | B | as line 173 |
+| 188 | `process_epoch_single_pass` | 1 | P | see lines 1302 and 1314 |
+| 189 | `process_epoch_single_pass` | 1 | A | tree hash of the latest header and `next_epoch` |
+| 192 | `process_epoch_single_pass` | 1 | P | see lines 1356 to 1440 |
+| 211 | `process_epoch_single_pass` | 1 | T | Altair+ state variant |
+| 226 | `process_epoch_single_pass` | 1 | P | see lines 779 to 786 |
+| 230 | `process_epoch_single_pass` | 1 | E | activation queue, pre-Electra only |
+| 240 | `process_epoch_single_pass` | 1 | P | see line 1654 |
+| 280 | `process_epoch_single_pass` | 1 | T | Electra+ field, always present |
+| 283 | `process_epoch_single_pass` | 1 | T | Electra+ field, always present |
+| 310 | `process_epoch_single_pass` | 1 | C | `single_pass_rows_eq_passM` (#89), `RowsContract` |
+| 326 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 329 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 332 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 338 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 341 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 366 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 378 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 386 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 395 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 406 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 415 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 426 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 438 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 447 | `process_epoch_single_pass` | 1 | T | set from the Electra+ field or by the loop |
+| 451 | `process_epoch_single_pass` | 1 | T | as line 447 |
+| 475 | `process_epoch_single_pass` | 1 | C | `apply_deposit_writes_model` (#90), `DepositWritesContract` |
+| 489 | `process_epoch_single_pass` | 1 | W18 | consolidation table |
+| 495 | `process_epoch_single_pass` | 1 | C | see line 645 |
+| 506 | `process_epoch_single_pass` | 1 | P | `into_epoch_cache` fails only in `base_rewards`; `base_rewards_ok_mainnet` |
+| 510 | `process_epoch_single_pass` | 1 | P | see lines 530 to 564 |
+| 514 | `process_epoch_single_pass` | 1 | P | see lines 594 to 627 |
+| 530 | `process_proposer_lookahead` | 1 | T | Fulu+ field |
+| 534 | `process_proposer_lookahead` | 1 | I | epoch fits u64 (`TailPre`) |
+| 535 | `process_proposer_lookahead` | 1 | I | as line 534 |
+| 549 | `process_proposer_lookahead` | 1 | G | `SeedMixLink` glue: randao mix index in range |
+| 562 | `process_proposer_lookahead` | 1 | P | `next_proposer_lookahead_spec`; F4 is a spec precondition |
+| 564 | `process_proposer_lookahead` | 2 | A | field is Fulu+ (T); `Vector::new` length 64 by argument |
+| 594 | `process_ptc_window` | 1 | I | epoch fits u64 (`TailPre`) |
+| 595 | `process_ptc_window` | 1 | I | as line 594 |
+| 599 | `process_ptc_window` | 1 | B | `CommitteeCacheBuilt` (#74) |
+| 603 | `process_ptc_window` | 1 | I | slot fits u64 (`TailPre`) |
+| 605 | `process_ptc_window` | 1 | B | `CommitteeCacheBuilt` (#74) |
+| 611 | `process_ptc_window` | 1 | G | `SeedMixLink` glue |
+| 622 | `process_ptc_window` | 1 | P | `ptc_for_epoch_spec`; F12 is a spec precondition |
+| 625 | `process_ptc_window` | 1 | T | Gloas field |
+| 627 | `process_ptc_window` | 1 | C | `ptc_window_writes_spec` (#91), `WindowContract` |
+| 645 | `process_builder_pending_payments` | 1 | C | `apply_builder_pending_payments_equiv` (#91), `PaymentWritesContract` |
+| 667 | `payments` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 675 | `push_withdrawal` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 676 | `push_withdrawal` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 681 | `set_payments` | 2 | C | inside a trusted contract implementation (#89-#91) |
+| 702 | `push` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 709 | `commit` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 710 | `commit` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 724 | `process_single_inactivity_update` | 1 | E | pre-Electra path only |
+| 728 | `process_single_inactivity_update` | 1 | E | pre-Electra path only |
+| 732 | `process_single_inactivity_update` | 1 | E | pre-Electra path only |
+| 752 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
+| 753 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
+| 754 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
+| 756 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
+| 757 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
+| 758 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
+| 762 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
+| 764 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
+| 779 | `new` | 1 | B | progressive balances `Coherent`, previous epoch flag total |
+| 781 | `new` | 1 | B | as line 779 |
+| 783 | `new` | 1 | B | as line 779 |
+| 786 | `new` | 1 | P | `participation_increments_ok` (new) |
+| 818 | `process_single_registry_update_pre_electra` | 2 | E | pre-Electra path only |
+| 823 | `process_single_registry_update_pre_electra` | 1 | E | pre-Electra path only |
+| 827 | `process_single_registry_update_pre_electra` | 1 | E | pre-Electra path only |
+| 828 | `process_single_registry_update_pre_electra` | 1 | E | pre-Electra path only |
+| 892 | `write_back_row` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 895 | `write_back_row` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 902 | `write_back_row` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 909 | `write_back_row` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 912 | `write_back_row` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 985 | `write_queue` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 986 | `write_queue` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 991 | `write_queue` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 992 | `write_queue` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 997 | `validator_index` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1005 | `balance` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1009 | `set_balance` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1029 | `add_validator` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1066 | `apply_step` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1071 | `apply_step` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1076 | `apply_step` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1081 | `apply_step` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1086 | `apply_step` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1100 | `apply_step` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1102 | `apply_step` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1119 | `apply_step` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1127 | `apply_step` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1136 | `apply_step` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1146 | `apply_step` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1170 | `record_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1176 | `record_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1197 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
+| 1198 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
+| 1200 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
+| 1203 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
+| 1205 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
+| 1207 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
+| 1210 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
+| 1215 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
+| 1218 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
+| 1220 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
+| 1234 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
+| 1238 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
+| 1240 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
+| 1251 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
+| 1253 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
+| 1254 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
+| 1255 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
+| 1256 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
+| 1257 | `compute_exit_epoch_and_update_churn` | 2 | E | pre-Electra path only |
+| 1260 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
+| 1277 | `get_activation_exit_churn_limit` | 1 | E | pre-Electra path only |
+| 1290 | `get_balance_churn_limit` | 1 | E | pre-Electra path only |
+| 1293 | `get_balance_churn_limit` | 2 | E | pre-Electra path only |
+| 1302 | `new` | 1 | S | same sum as the spec `uint64Sum`, proved total (`slashingsPreamble_ok`) |
+| 1314 | `new` | 1 | P | `slashings_context_equiv` with the spec preamble total |
+| 1342 | `process_single_slashing` | 1 | E | pre-Electra path only |
+| 1344 | `process_single_slashing` | 1 | E | pre-Electra path only |
+| 1356 | `new` | 1 | I | next epoch fits u64 (`TailPre`) |
+| 1370 | `new` | 1 | T | Electra+ field |
+| 1381 | `new` | 1 | T | not evaluated from Fulu on (`!fulu_enabled` short-circuits) |
+| 1384 | `new` | 1 | B | index from the pubkey cache, `Coherent` (#70) |
+| 1416 | `new` | 1 | T | Electra+ field |
+| 1418 | `new` | 1 | B | epoch cache built at line 161 |
+| 1420 | `new` | 1 | P | `exit_churn_limit` equivalence, total by the spec |
+| 1422 | `new` | 1 | P | `process_pending_deposits_equiv` with `depOk_of_rowBounds` |
+| 1433 | `new` | 1 | P | `process_pending_deposits_postponed_len` (new) |
+| 1440 | `new` | 1 | I | per-validator deposit sum below the pending deposits supply bound (`RowBounds`) |
+| 1465 | `process_pending_deposits_for_validator` | 2 | E | pre-Electra path only |
+| 1508 | `process_pending_consolidations` | 1 | W18 | consolidation table |
+| 1509 | `process_pending_consolidations` | 1 | W18 | consolidation table |
+| 1536 | `process_pending_consolidations` | 1 | W18 | consolidation table |
+| 1537 | `process_pending_consolidations` | 1 | W18 | consolidation table |
+| 1540 | `process_pending_consolidations` | 1 | W18 | consolidation table |
+| 1558 | `process_pending_consolidations` | 1 | W18 | consolidation table |
+| 1569 | `process_pending_consolidations` | 1 | W18 | consolidation table |
+| 1570 | `process_pending_consolidations` | 1 | W18 | consolidation table |
+| 1588 | `process_pending_consolidations` | 1 | W18 | consolidation table |
+| 1624 | `update_effective_balance_at` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1627 | `update_effective_balance_at` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1630 | `update_effective_balance_at` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1633 | `update_effective_balance_at` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1654 | `new` | 1 | P | `hysteresis_thresholds_ok_mainnet` (new) |
+| 1681 | `process_single_dummy_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1710 | `process_single_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1715 | `process_single_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1724 | `process_single_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89-#91) |
+| 1732 | `process_single_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89-#91) |

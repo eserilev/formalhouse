@@ -193,3 +193,6 @@ import EpochProofs.Spec.Block.Upgrade
 import EpochProofs.Sanity.Invariants.ForkUpgrade
 import EpochProofs.Equiv.Upgrade
 import EpochProofs.FormalhouseFinal
+import EpochProofs.Equiv.EpochContexts
+import EpochProofs.Equiv.PendingDepositsLen
+import EpochProofs.CacheBridge.EpochCacheBuild

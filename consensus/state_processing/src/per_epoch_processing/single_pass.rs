@@ -22,10 +22,7 @@ use types::{
     BuilderPendingWithdrawal, ChainSpec, CommitteeCache, DepositData, Domain, Epoch, EpochCache,
     EthSpec, ExitCache, ForkName, ParticipationFlags, PendingDeposit, ProgressiveBalancesCache,
     RelativeEpoch, Validator,
-    consts::altair::{
-        NUM_FLAG_INDICES, TIMELY_HEAD_FLAG_INDEX, TIMELY_SOURCE_FLAG_INDEX,
-        TIMELY_TARGET_FLAG_INDEX,
-    },
+    consts::altair::{TIMELY_HEAD_FLAG_INDEX, TIMELY_SOURCE_FLAG_INDEX, TIMELY_TARGET_FLAG_INDEX},
 };
 
 pub struct SinglePassConfig {
@@ -90,7 +87,9 @@ struct StateContext {
 }
 
 struct RewardsAndPenaltiesContext {
-    unslashed_participating_increments_array: [u64; NUM_FLAG_INDICES],
+    source_increments: u64,
+    target_increments: u64,
+    head_increments: u64,
     active_increments: u64,
 }
 
@@ -250,12 +249,9 @@ pub fn process_epoch_single_pass<E: EthSpec>(
             inactivity_score_bias: spec.inactivity_score_bias,
             inactivity_score_recovery_rate: spec.inactivity_score_recovery_rate,
             inactivity_penalty_quotient: spec.inactivity_penalty_quotient_for_fork(fork_name),
-            source_increments: rewards_ctxt
-                .get_unslashed_participating_increments(TIMELY_SOURCE_FLAG_INDEX)?,
-            target_increments: rewards_ctxt
-                .get_unslashed_participating_increments(TIMELY_TARGET_FLAG_INDEX)?,
-            head_increments: rewards_ctxt
-                .get_unslashed_participating_increments(TIMELY_HEAD_FLAG_INDEX)?,
+            source_increments: rewards_ctxt.source_increments,
+            target_increments: rewards_ctxt.target_increments,
+            head_increments: rewards_ctxt.head_increments,
             active_increments: rewards_ctxt.active_increments,
             total_active_balance,
             target_withdrawable_epoch: slashings_ctxt.target_withdrawable_epoch.as_u64(),
@@ -777,32 +773,33 @@ impl RewardsAndPenaltiesContext {
         state_ctxt: &StateContext,
         spec: &ChainSpec,
     ) -> Result<Self, Error> {
-        let mut unslashed_participating_increments_array = [0; NUM_FLAG_INDICES];
-        for flag_index in 0..NUM_FLAG_INDICES {
-            let unslashed_participating_balance =
-                progressive_balances.previous_epoch_flag_attesting_balance(flag_index)?;
-            let unslashed_participating_increments =
-                unslashed_participating_balance.safe_div(spec.effective_balance_increment)?;
-
-            *unslashed_participating_increments_array
-                .get_mut(flag_index)
-                .ok_or(Error::InvalidFlagIndex(flag_index))? = unslashed_participating_increments;
-        }
-        let active_increments = state_ctxt
-            .total_active_balance
-            .safe_div(spec.effective_balance_increment)?;
+        let (source_increments, target_increments, head_increments, active_increments) =
+            rewards_penalties::participation_increments(
+                progressive_balances
+                    .previous_epoch_flag_attesting_balance(TIMELY_SOURCE_FLAG_INDEX)?,
+                progressive_balances
+                    .previous_epoch_flag_attesting_balance(TIMELY_TARGET_FLAG_INDEX)?,
+                progressive_balances
+                    .previous_epoch_flag_attesting_balance(TIMELY_HEAD_FLAG_INDEX)?,
+                state_ctxt.total_active_balance,
+                spec.effective_balance_increment,
+            )?;
 
         Ok(Self {
-            unslashed_participating_increments_array,
+            source_increments,
+            target_increments,
+            head_increments,
             active_increments,
         })
     }
 
     fn get_unslashed_participating_increments(&self, flag_index: usize) -> Result<u64, Error> {
-        self.unslashed_participating_increments_array
-            .get(flag_index)
-            .copied()
-            .ok_or(Error::InvalidFlagIndex(flag_index))
+        match flag_index {
+            TIMELY_SOURCE_FLAG_INDEX => Ok(self.source_increments),
+            TIMELY_TARGET_FLAG_INDEX => Ok(self.target_increments),
+            TIMELY_HEAD_FLAG_INDEX => Ok(self.head_increments),
+            _ => Err(Error::InvalidFlagIndex(flag_index)),
+        }
     }
 }
 

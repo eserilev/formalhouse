@@ -3854,8 +3854,60 @@ def per_epoch_processing.registry_update.registry_update
       per_epoch_processing.registry_update.RegistryFields
       (core.convert.FromSame safe_arith.ArithError) residual
 
+/-- [state_processing::per_epoch_processing::rewards_penalties::participation_increments]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/rewards_penalties.rs', lines 11:0-24:1
+    Visibility: public -/
+def per_epoch_processing.rewards_penalties.participation_increments
+  (source_balance : Std.U64) (target_balance : Std.U64)
+  (head_balance : Std.U64) (total_active_balance : Std.U64)
+  (effective_balance_increment : Std.U64) :
+  Result (core.result.Result (Std.U64 × Std.U64 × Std.U64 × Std.U64)
+    safe_arith.ArithError)
+  := do
+  let r ←
+    U64.Insts.Safe_arithSafeArithU64.safe_div source_balance
+      effective_balance_increment
+  let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
+    let r1 ←
+      U64.Insts.Safe_arithSafeArithU64.safe_div target_balance
+        effective_balance_increment
+    let cf1 ← core.result.Result.Insts.CoreOpsTry.branch r1
+    match cf1 with
+    | core.ops.control_flow.ControlFlow.Continue val1 =>
+      let r2 ←
+        U64.Insts.Safe_arithSafeArithU64.safe_div head_balance
+          effective_balance_increment
+      let cf2 ← core.result.Result.Insts.CoreOpsTry.branch r2
+      match cf2 with
+      | core.ops.control_flow.ControlFlow.Continue val2 =>
+        let r3 ←
+          U64.Insts.Safe_arithSafeArithU64.safe_div total_active_balance
+            effective_balance_increment
+        let cf3 ← core.result.Result.Insts.CoreOpsTry.branch r3
+        match cf3 with
+        | core.ops.control_flow.ControlFlow.Continue val3 =>
+          ok (core.result.Result.Ok (val, val1, val2, val3))
+        | core.ops.control_flow.ControlFlow.Break residual =>
+          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+            (Std.U64 × Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
+            safe_arith.ArithError) residual
+      | core.ops.control_flow.ControlFlow.Break residual =>
+        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+          (Std.U64 × Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
+          safe_arith.ArithError) residual
+    | core.ops.control_flow.ControlFlow.Break residual =>
+      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+        (Std.U64 × Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
+        safe_arith.ArithError) residual
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+      (Std.U64 × Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
+      safe_arith.ArithError) residual
+
 /-- [state_processing::per_epoch_processing::rewards_penalties::flag_delta]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/rewards_penalties.rs', lines 11:0-37:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/rewards_penalties.rs', lines 27:0-53:1
     Visibility: public -/
 def per_epoch_processing.rewards_penalties.flag_delta
   (base_reward : Std.U64) (weight : Std.U64) (is_participating : Bool)
@@ -3931,7 +3983,7 @@ def per_epoch_processing.rewards_penalties.flag_delta
           residual
 
 /-- [state_processing::per_epoch_processing::rewards_penalties::inactivity_penalty]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/rewards_penalties.rs', lines 40:0-53:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/rewards_penalties.rs', lines 56:0-69:1
     Visibility: public -/
 def per_epoch_processing.rewards_penalties.inactivity_penalty
   (effective_balance : Std.U64) (inactivity_score : Std.U64)
@@ -3963,7 +4015,7 @@ def per_epoch_processing.rewards_penalties.inactivity_penalty
         Std.U64 (core.convert.FromSame safe_arith.ArithError) residual
 
 /-- [state_processing::per_epoch_processing::rewards_penalties::new_balance_after_rewards]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/rewards_penalties.rs', lines 59:0-121:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/rewards_penalties.rs', lines 75:0-137:1
     Visibility: public -/
 def per_epoch_processing.rewards_penalties.new_balance_after_rewards
   (balance : Std.U64) (is_eligible : Bool) (base_reward : Std.U64)
