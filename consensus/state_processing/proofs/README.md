@@ -93,7 +93,7 @@ reads or writes milhouse lists:
 | Participation flag rotation | none | one `types` call (by review) | none |
 | Step order | not Rust | `LighthouseOrder*.lean` proves Lighthouse's order safe | none |
 | Genesis epoch | `single_pass_step.rs` with `after_genesis` false | as the other epochs | none |
-| Fork upgrades | `epoch_committees.rs` (`proposer_indices_for_epoch_spec_fulu`, `initialize_ptc_window_lh`) | the field copies; the builder onboarding (by review) | none |
+| Fork upgrades | `epoch_committees.rs` (`proposer_indices_for_epoch_spec_fulu`, `initialize_ptc_window_lh`), `upgrade/builder_onboarding.rs` (`onboard_spec`) | the field copies; `OnboardingContract` | none |
 
 ### Error sites argued by review only
 
@@ -129,10 +129,28 @@ transitions from the upgraded state. The supply and economic hypotheses stay on 
 Lighthouse computes the proposer lookahead at the Fulu fork and the PTC window at the Gloas fork
 through translated functions (`Equiv/Upgrade.lean`): `proposer_indices_for_epoch_spec_fulu`
 (with `ProposerFin`, as in the Fulu epoch) and `initialize_ptc_window_lh`. The loops over the
-epochs and the field copies are glue. The builder onboarding at the Gloas fork is glue, checked
-against the spec by review only (see the file header). Lighthouse runs it before the PTC window
-and the spec after it. The order does not matter, because the onboarding writes only the
-builders and the pending deposits (`onboard_builders_rel`).
+epochs and the field copies are glue.
+
+The builder onboarding at the Gloas fork runs through the generic `onboard` in
+`upgrade/builder_onboarding.rs`. `onboard_spec` (`EpochProofs/Equiv/Onboarding.lean`) proves it
+equal to the spec `onboard_builders_from_pending_deposits` on a state with an empty builder
+registry: if the spec succeeds, Lighthouse returns the kept deposits and the builders of the spec
+result, and if the spec fails, Lighthouse fails. Lighthouse differs from the spec in three ways,
+and the proof covers each one:
+
+- It keeps the set of pubkeys with a valid kept deposit, where the spec scans the kept deposits
+  (`is_pending_validator`). The set equals the scan for every pubkey that is not a validator
+  pubkey, and the walk asks only about such pubkeys.
+- It keeps a pubkey table of the builders, where the spec scans the registry.
+- It appends every new builder, where the spec asks `get_index_for_new_builder`. Every builder
+  has `withdrawable_epoch = FAR_FUTURE_EPOCH` at the fork, so the spec appends too
+  (`add_builder_to_registry_far`).
+
+`OnboardingContract` (`EpochProofs/Trusted/Onboarding.lean`) is the trusted part: the pubkey
+cache, the signature cache, `Builder::from_deposit`, the balance top-up and the two hash
+tables. Lighthouse runs the onboarding before the PTC window and the spec after it. The order
+does not matter, because the onboarding writes only the builders and the pending deposits
+(`onboard_builders_rel`).
 
 ## The theorems
 
@@ -758,6 +776,7 @@ charon cargo --preset=aeneas \
   --start-from 'state_processing::per_epoch_processing::registry_rows' \
   --start-from 'state_processing::per_epoch_processing::deposit_writes' \
   --start-from 'state_processing::per_epoch_processing::list_writes' \
+  --start-from 'state_processing::upgrade::builder_onboarding' \
   --include safe_arith \
   --include types::validator::deposit_balance \
   --include types::state::balance_weighted_selection \
@@ -888,8 +907,8 @@ copies the rest of the body into each branch, and the generated code grows expon
   new pubkeys in order (`insertAll` models it).
 - `ConsolidationStateContract` and `BTreeSetIter`: the milhouse reads and writes of the
   consolidation step, and the iteration order of a Rust `BTreeSet`.
-- The builder onboarding at the Gloas fork (`upgrade/gloas.rs`), checked against the spec by
-  review only.
+- `OnboardingContract`: the reads, caches and hash tables of the builder onboarding at the Gloas
+  fork (`upgrade/gloas.rs`). The write of the result to the state is glue.
 - The Electra state before `upgrade_to_fulu`: no Electra spec exists, so `FuluStartOk` of the
   Fulu start state is an assumption.
 - The reference matches pyspec.

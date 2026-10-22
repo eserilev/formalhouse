@@ -1,6 +1,7 @@
 use crate::builder_deposits_cache::{OnboardBuildersCache, is_valid_deposit_signature_cached};
 use crate::per_epoch_processing::epoch_committees;
 use crate::per_epoch_processing::single_pass::selection_constants;
+use crate::upgrade::builder_onboarding;
 use bls::PublicKeyBytes;
 use milhouse::{ProgressiveList, Vector};
 use safe_arith::SafeArith;
@@ -241,6 +242,66 @@ fn initialize_ptc_window<E: EthSpec>(
     Ok(())
 }
 
+/// The state, caches and lookup tables that `builder_onboarding::onboard` reads.
+struct StateOnboarding<'a, E: EthSpec> {
+    state: &'a mut BeaconState<E>,
+    builder_onboarding_cache: Option<&'a OnboardBuildersCache>,
+    spec: &'a ChainSpec,
+    /// A valid deposit for a new validator permanently prevents the same pubkey from being
+    /// onboarded as a builder later in the walk.
+    valid_pending_validator_pubkeys: HashSet<PublicKeyBytes>,
+    builder_pubkey_to_index: HashMap<PublicKeyBytes, u64>,
+}
+
+impl<E: EthSpec> builder_onboarding::Onboarding<PendingDeposit, Builder, Error>
+    for StateOnboarding<'_, E>
+{
+    fn is_validator(&mut self, deposit: &PendingDeposit) -> Result<bool, Error> {
+        Ok(self.state.get_validator_index(&deposit.pubkey)?.is_some())
+    }
+
+    fn is_builder_credential(&self, deposit: &PendingDeposit) -> bool {
+        is_builder_withdrawal_credential(deposit.withdrawal_credentials, self.spec)
+    }
+
+    fn is_valid_signature(&self, deposit: &PendingDeposit) -> bool {
+        is_valid_deposit_signature_cached(self.builder_onboarding_cache, deposit, self.spec)
+    }
+
+    fn new_builder(&self, deposit: &PendingDeposit) -> Result<Builder, Error> {
+        Builder::from_deposit(
+            deposit.pubkey,
+            PAYLOAD_BUILDER_VERSION,
+            deposit.withdrawal_credentials,
+            deposit.amount,
+            deposit.slot.epoch(E::slots_per_epoch()),
+            self.spec,
+        )
+    }
+
+    fn top_up(&self, builder: &mut Builder, deposit: &PendingDeposit) -> Result<(), Error> {
+        builder.balance.safe_add_assign(deposit.amount)?;
+        Ok(())
+    }
+
+    fn builder_index(&self, deposit: &PendingDeposit) -> Option<u64> {
+        self.builder_pubkey_to_index.get(&deposit.pubkey).copied()
+    }
+
+    fn add_builder_index(&mut self, deposit: &PendingDeposit, index: u64) {
+        self.builder_pubkey_to_index.insert(deposit.pubkey, index);
+    }
+
+    fn is_pending_validator(&self, deposit: &PendingDeposit) -> bool {
+        self.valid_pending_validator_pubkeys
+            .contains(&deposit.pubkey)
+    }
+
+    fn add_pending_validator(&mut self, deposit: &PendingDeposit) {
+        self.valid_pending_validator_pubkeys.insert(deposit.pubkey);
+    }
+}
+
 /// Applies any pending deposit for builders, effectively onboarding builders at the fork.
 ///
 /// The `pending_deposits` queue is unbounded, so this function avoids doing expensive work
@@ -271,62 +332,20 @@ fn onboard_builders_from_pending_deposits<E: EthSpec>(
     // Clone pending deposits to avoid borrow conflicts when mutating state.
     let current_pending_deposits = state.pending_deposits()?.to_vec();
 
-    let mut pending_deposits: Vec<PendingDeposit> = Vec::new();
-    // A valid deposit for a new validator permanently prevents the same pubkey from being
-    // onboarded as a builder later in this loop.
-    let mut valid_pending_validator_pubkeys: HashSet<PublicKeyBytes> = HashSet::new();
-
-    let mut builders: Vec<Builder> = Vec::new();
-    let mut builder_pubkey_to_index: HashMap<PublicKeyBytes, u64> = HashMap::new();
-
-    for deposit in &current_pending_deposits {
-        // Deposits for existing validators stay in the pending queue.
-        if state.get_validator_index(&deposit.pubkey)?.is_some() {
-            pending_deposits.push(deposit.clone());
-            continue;
-        }
-
-        match builder_pubkey_to_index.get(&deposit.pubkey).copied() {
-            None => {
-                // Deposits without builder withdrawal credentials are for new validators.
-                if !is_builder_withdrawal_credential(deposit.withdrawal_credentials, spec) {
-                    pending_deposits.push(deposit.clone());
-                    if is_valid_deposit_signature_cached(builder_onboarding_cache, deposit, spec) {
-                        valid_pending_validator_pubkeys.insert(deposit.pubkey);
-                    }
-                    continue;
-                }
-
-                // If there is a valid pending deposit for a new validator with this pubkey,
-                // keep this deposit in the pending queue to be applied to that validator later.
-                if valid_pending_validator_pubkeys.contains(&deposit.pubkey) {
-                    pending_deposits.push(deposit.clone());
-                    continue;
-                }
-
-                if !is_valid_deposit_signature_cached(builder_onboarding_cache, deposit, spec) {
-                    continue;
-                }
-
-                builder_pubkey_to_index.insert(deposit.pubkey, builders.len() as u64);
-                builders.push(Builder::from_deposit(
-                    deposit.pubkey,
-                    PAYLOAD_BUILDER_VERSION,
-                    deposit.withdrawal_credentials,
-                    deposit.amount,
-                    deposit.slot.epoch(E::slots_per_epoch()),
-                    spec,
-                )?);
-            }
-            Some(builder_index) => {
-                let builder = builders
-                    .get_mut(builder_index as usize)
-                    .ok_or(Error::UnknownBuilder(builder_index))?;
-
-                builder.balance.safe_add_assign(deposit.amount)?;
-            }
-        }
-    }
+    let (pending_deposits, builders) = builder_onboarding::onboard(
+        &mut StateOnboarding {
+            state,
+            builder_onboarding_cache,
+            spec,
+            valid_pending_validator_pubkeys: HashSet::new(),
+            builder_pubkey_to_index: HashMap::new(),
+        },
+        &current_pending_deposits,
+    )
+    .map_err(|error| match error {
+        builder_onboarding::OnboardingError::State(e) => e,
+        builder_onboarding::OnboardingError::UnknownBuilder(index) => Error::UnknownBuilder(index),
+    })?;
 
     debug!(
         deposits_processed = current_pending_deposits.len(),

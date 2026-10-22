@@ -105,6 +105,7 @@ import EpochProofs.Equiv.DepositWrites
 import EpochProofs.Equiv.ListWrites
 import EpochProofs.FormalhouseFinal
 import EpochProofs.Equiv.ConsolidationTable
+import EpochProofs.Equiv.Onboarding
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -769,3 +770,13 @@ open EpochProofs.Spec
 #print axioms EpochProofs.write_back_spec
 #print axioms EpochProofs.btreeSetIter_consolidationIndices
 #print axioms EpochProofs.process_on_table_spec
+#print axioms EpochProofs.Spec.get_index_for_new_builder_far
+#print axioms EpochProofs.Spec.add_builder_to_registry_far
+#print axioms EpochProofs.is_pending_validator_append
+#print axioms EpochProofs.tableOk_add
+#print axioms EpochProofs.tableOk_set
+#print axioms EpochProofs.specFold_snoc
+#print axioms EpochProofs.onboard_step_new
+#print axioms EpochProofs.onboard_step_builder
+#print axioms EpochProofs.onboard_loop_spec
+#print axioms EpochProofs.onboard_spec
