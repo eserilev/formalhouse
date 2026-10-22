@@ -5306,4 +5306,170 @@ def per_epoch_processing.tail_updates.historical_summary_due
     core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
       Bool (core.convert.FromSame safe_arith.ArithError) residual
 
+/-- Trait declaration: [state_processing::upgrade::builder_onboarding::Onboarding]
+    Source: 'consensus/state_processing/src/upgrade/builder_onboarding.rs', lines 8:0-35:1
+    Visibility: public -/
+structure upgrade.builder_onboarding.Onboarding (Self : Type) (D : Type) (B :
+  Type) (E : Type) where
+  is_validator : Self → D → Result ((core.result.Result Bool E) × Self)
+  is_builder_credential : Self → D → Result Bool
+  is_valid_signature : Self → D → Result Bool
+  new_builder : Self → D → Result (core.result.Result B E)
+  top_up : Self → B → D → Result ((core.result.Result Unit E) × B)
+  builder_index : Self → D → Result (Option Std.U64)
+  add_builder_index : Self → D → Std.U64 → Result Self
+  is_pending_validator : Self → D → Result Bool
+  add_pending_validator : Self → D → Result Self
+
+/-- [state_processing::upgrade::builder_onboarding::OnboardingError]
+    Source: 'consensus/state_processing/src/upgrade/builder_onboarding.rs', lines 38:0-43:1
+    Visibility: public -/
+@[discriminant isize]
+inductive upgrade.builder_onboarding.OnboardingError (E : Type) where
+| State : E → upgrade.builder_onboarding.OnboardingError E
+| UnknownBuilder : Std.U64 → upgrade.builder_onboarding.OnboardingError E
+
+/-- [state_processing::upgrade::builder_onboarding::onboard]: loop body 0:
+    Source: 'consensus/state_processing/src/upgrade/builder_onboarding.rs', lines 55:4-101:5
+    Visibility: public -/
+@[rust_loop_body]
+def upgrade.builder_onboarding.onboard_loop.body
+  {D : Type} {B : Type} {E : Type} {S : Type} (corecloneCloneInst :
+  core.clone.Clone D) (OnboardingInst : upgrade.builder_onboarding.Onboarding S
+  D B E) (deposits : Slice D) (state : S) (pending : alloc.vec.Vec D)
+  (builders : alloc.vec.Vec B) (i : Std.Usize) :
+  Result (ControlFlow (S × (alloc.vec.Vec D) × (alloc.vec.Vec B) ×
+    Std.Usize) (S × (alloc.vec.Vec D) × (alloc.vec.Vec B) × (Option
+    (upgrade.builder_onboarding.OnboardingError E))))
+  := do
+  let i1 := Slice.len deposits
+  if i < i1
+  then
+    let o ←
+      core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice D) deposits i
+    match o with
+    | none =>
+      let i2 ← lift (core.num.Usize.saturating_add i 1#usize)
+      ok (cont (state, pending, builders, i2))
+    | some deposit =>
+      let (r, state1) ← OnboardingInst.is_validator state deposit
+      match r with
+      | core.result.Result.Ok b =>
+        if b
+        then
+          let t ← corecloneCloneInst.clone deposit
+          let pending1 ← alloc.vec.Vec.push pending t
+          let i2 ← lift (core.num.Usize.saturating_add i 1#usize)
+          ok (cont (state1, pending1, builders, i2))
+        else
+          let o1 ← OnboardingInst.builder_index state1 deposit
+          match o1 with
+          | none =>
+            let b1 ← OnboardingInst.is_builder_credential state1 deposit
+            if b1
+            then
+              let b2 ← OnboardingInst.is_pending_validator state1 deposit
+              if b2
+              then
+                let t ← corecloneCloneInst.clone deposit
+                let pending1 ← alloc.vec.Vec.push pending t
+                let i2 ← lift (core.num.Usize.saturating_add i 1#usize)
+                ok (cont (state1, pending1, builders, i2))
+              else
+                let b3 ← OnboardingInst.is_valid_signature state1 deposit
+                if b3
+                then
+                  let r1 ← OnboardingInst.new_builder state1 deposit
+                  match r1 with
+                  | core.result.Result.Ok builder =>
+                    let i2 := alloc.vec.Vec.len builders
+                    let i3 ← lift (UScalar.cast .U64 i2)
+                    let state2 ←
+                      OnboardingInst.add_builder_index state1 deposit i3
+                    let builders1 ← alloc.vec.Vec.push builders builder
+                    let i4 ← lift (core.num.Usize.saturating_add i 1#usize)
+                    ok (cont (state2, pending, builders1, i4))
+                  | core.result.Result.Err e =>
+                    ok (done (state1, pending, builders, some
+                      (upgrade.builder_onboarding.OnboardingError.State e)))
+                else
+                  let i2 ← lift (core.num.Usize.saturating_add i 1#usize)
+                  ok (cont (state1, pending, builders, i2))
+            else
+              let t ← corecloneCloneInst.clone deposit
+              let pending1 ← alloc.vec.Vec.push pending t
+              let b2 ← OnboardingInst.is_valid_signature state1 deposit
+              let state2 ←
+                if b2
+                then OnboardingInst.add_pending_validator state1 deposit
+                else ok state1
+              let i2 ← lift (core.num.Usize.saturating_add i 1#usize)
+              ok (cont (state2, pending1, builders, i2))
+          | some index =>
+            let (s, deref_mut_back) ← lift (alloc.vec.Vec.deref_mut builders)
+            let i2 ← lift (UScalar.cast .Usize index)
+            let (o2, get_mut_back) ←
+              core.slice.Slice.get_mut (core.slice.index.SliceIndexUsizeSlice
+                B) s i2
+            match o2 with
+            | none =>
+              let s1 := get_mut_back none
+              let builders1 := deref_mut_back s1
+              ok (done (state1, pending, builders1, some
+                (upgrade.builder_onboarding.OnboardingError.UnknownBuilder
+                index)))
+            | some builder =>
+              let (r1, builder1) ←
+                OnboardingInst.top_up state1 builder deposit
+              match r1 with
+              | core.result.Result.Ok _ =>
+                let i3 ← lift (core.num.Usize.saturating_add i 1#usize)
+                let s1 := get_mut_back (some builder1)
+                let builders1 := deref_mut_back s1
+                ok (cont (state1, pending, builders1, i3))
+              | core.result.Result.Err e =>
+                let s1 := get_mut_back (some builder1)
+                let builders1 := deref_mut_back s1
+                ok (done (state1, pending, builders1, some
+                  (upgrade.builder_onboarding.OnboardingError.State e)))
+      | core.result.Result.Err e =>
+        ok (done (state1, pending, builders, some
+          (upgrade.builder_onboarding.OnboardingError.State e)))
+  else ok (done (state, pending, builders, none))
+
+/-- [state_processing::upgrade::builder_onboarding::onboard]: loop 0:
+    Source: 'consensus/state_processing/src/upgrade/builder_onboarding.rs', lines 55:4-101:5
+    Visibility: public -/
+@[rust_loop]
+def upgrade.builder_onboarding.onboard_loop
+  {D : Type} {B : Type} {E : Type} {S : Type} (corecloneCloneInst :
+  core.clone.Clone D) (OnboardingInst : upgrade.builder_onboarding.Onboarding S
+  D B E) (state : S) (deposits : Slice D) (pending : alloc.vec.Vec D)
+  (builders : alloc.vec.Vec B) (i : Std.Usize) :
+  Result (S × (alloc.vec.Vec D) × (alloc.vec.Vec B) × (Option
+    (upgrade.builder_onboarding.OnboardingError E)))
+  := do
+  loop
+    (fun (state1, pending1, builders1, i1) =>
+      upgrade.builder_onboarding.onboard_loop.body corecloneCloneInst
+      OnboardingInst deposits state1 pending1 builders1 i1)
+    (state, pending, builders, i)
+
+/-- [state_processing::upgrade::builder_onboarding::onboard]:
+    Source: 'consensus/state_processing/src/upgrade/builder_onboarding.rs', lines 47:0-106:1
+    Visibility: public -/
+def upgrade.builder_onboarding.onboard
+  {D : Type} {B : Type} {E : Type} {S : Type} (corecloneCloneInst :
+  core.clone.Clone D) (OnboardingInst : upgrade.builder_onboarding.Onboarding S
+  D B E) (state : S) (deposits : Slice D) :
+  Result ((core.result.Result ((alloc.vec.Vec D) × (alloc.vec.Vec B))
+    (upgrade.builder_onboarding.OnboardingError E)) × S)
+  := do
+  let (state1, pending, builders, error) ←
+    upgrade.builder_onboarding.onboard_loop corecloneCloneInst OnboardingInst
+      state deposits (alloc.vec.Vec.new D) (alloc.vec.Vec.new B) 0#usize
+  match error with
+  | none => ok (core.result.Result.Ok (pending, builders), state1)
+  | some error1 => ok (core.result.Result.Err error1, state1)
+
 end state_processing
