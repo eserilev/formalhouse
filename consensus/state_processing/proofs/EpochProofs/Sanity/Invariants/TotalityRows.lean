@@ -111,7 +111,7 @@ theorem inactivityDelta_total [PresetCfg] (eb score : Nat) (target : Bool) (h : 
     ∃ x, inactivityDelta P eb score target = .ok x := by
   unfold inactivityDelta
   split
-  · rw [tot_mul h, trw_bind_ok, tot_mul (by decide), trw_bind_ok, tot_div (by decide)]
+  · rw [tot_mul h, trw_bind_ok, tot_mul (by pdecide), trw_bind_ok, tot_div (by pdecide)]
     exact ⟨_, rfl⟩
   · exact ⟨_, rfl⟩
 
@@ -266,11 +266,11 @@ theorem rewardsRowStep_total [PresetCfg] (ctx : RewardsContext) (hc : RewardsCtx
 theorem exit_churn_total [PresetCfg] (tab : Gwei) (htab : tab < 2 ^ 60) :
     ∃ c : Nat, get_exit_churn_limit P tab = .ok c ∧ 128000000000 ≤ c ∧ c < 2 ^ 60 := by
   unfold get_exit_churn_limit
-  rw [tot_div (by decide), trw_bind_ok]
+  rw [tot_div (by pdecide), trw_bind_ok]
   dsimp only
-  rw [tot_mod (by decide), trw_bind_ok]
-  have hm : P.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA = 128000000000 := rfl
-  have hq : P.CHURN_LIMIT_QUOTIENT_GLOAS = 32768 := rfl
+  rw [tot_mod (by pdecide), trw_bind_ok]
+  have hm : P.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA = 128000000000 := (by prfl)
+  have hq : P.CHURN_LIMIT_QUOTIENT_GLOAS = 32768 := (by prfl)
   have hi : P.EFFECTIVE_BALANCE_INCREMENT = 1000000000 := rfl
   rw [hm, hq, hi]
   obtain ⟨(x : Nat), hx⟩ : ∃ x : Nat, max 128000000000 (tab / 32768) = x := ⟨_, rfl⟩
@@ -402,9 +402,9 @@ theorem slashingsRowStep_total [PresetCfg] (target per : Nat) (hper : per ≤ 20
       x = { r with balance := x.balance } ∧ @LE.le Nat _ x.balance r.balance := by
   unfold slashingsRowStep slashingBalanceStep
   split
-  · rw [tot_div (by decide), trw_bind_ok]
+  · rw [tot_div (by pdecide), trw_bind_ok]
     have he : r.validator.effective_balance / P.EFFECTIVE_BALANCE_INCREMENT ≤ 2048 :=
-      Nat.le_trans (Nat.div_le_div_right hmax) (by decide)
+      Nat.le_trans (Nat.div_le_div_right hmax) (by pdecide)
     have hm : per * (r.validator.effective_balance / P.EFFECTIVE_BALANCE_INCREMENT) <
         2 ^ 64 := Nat.lt_of_le_of_lt (Nat.mul_le_mul hper he) (by decide)
     rw [tot_mul hm, trw_bind_ok, pure_bind]
@@ -949,7 +949,7 @@ theorem midCore_of_rowBounds [PresetCfg] [PresetCfg.Ok] (g : Gwei → Gwei) (hg 
     -- the rewards context
     obtain ⟨ctx, hctx, hsrc, htgt, hhd⟩ := rewardsContextOf_bounds P tab s1 hrows1
       (t.slot / 32) (t.slot / 32 - 1) hcur hprev
-      (by show @Ne Nat (t.slot / 32 - 1) (t.slot / 32); omega) (by decide)
+      (by show @Ne Nat (t.slot / 32 - 1) (t.slot / 32); omega) (by pdecide)
       (by rw [hteb1]; exact Nat.lt_trans hsup (by decide)) hfinp
     obtain ⟨hcp, hcs, hct, hch, hca, -, hctot⟩ := rewardsContextOf_ok P tab s1 ctx hctx
     have hpe : ctx.previous_epoch = t.slot / 32 - 1 := by
@@ -1073,9 +1073,9 @@ theorem forIn_total_rest {α β : Type} (I : List α → β → Prop) (F : β �
 theorem act_churn_total [PresetCfg] (tab : Gwei) :
     ∃ c : Nat, get_activation_churn_limit P tab = .ok c ∧ c ≤ 256000000000 := by
   unfold get_activation_churn_limit
-  rw [tot_div (by decide), trw_bind_ok]
+  rw [tot_div (by pdecide), trw_bind_ok]
   dsimp only
-  rw [tot_mod (by decide), trw_bind_ok, tot_sub (Nat.mod_le _ _), trw_bind_ok]
+  rw [tot_mod (by pdecide), trw_bind_ok, tot_sub (Nat.mod_le _ _), trw_bind_ok]
   exact ⟨_, rfl, Nat.min_le_left _ _⟩
 
 /-- The loop state of `process_pending_deposits` while `rest` is still to come. -/
@@ -1174,7 +1174,7 @@ theorem depCore_of_rowBounds [PresetCfg] [PresetCfg.Ok] (g : Gwei → Gwei) (o :
   have hfs : compute_start_slot_at_epoch P s.finalized_checkpoint.epoch =
       .ok (s.finalized_checkpoint.epoch * 32) := by
     unfold compute_start_slot_at_epoch
-    have h32 : P.SLOTS_PER_EPOCH = 32 := rfl
+    have h32 : P.SLOTS_PER_EPOCH = 32 := (by prfl)
     rw [h32]
     exact tot_mul (show @LT.lt Nat _ (s.finalized_checkpoint.epoch * 32) (2 ^ 64) by omega)
   rw [hfs, trw_bind_ok]
@@ -1285,7 +1285,7 @@ theorem depCore_of_rowBounds [PresetCfg] [PresetCfg.Ok] (g : Gwei → Gwei) (o :
       exact OkWith.pure (hframe _ rfl rfl rfl rfl rfl rfl rfl rfl rfl)
     · exact OkWith.pure (hframe _ rfl rfl rfl rfl rfl rfl rfl rfl rfl)
 
-theorem depOk_of_rowBounds (o : Oracle) (t : BeaconState) (hslot0 : t.slot + 8192 < 2 ^ 64)
+theorem depOk_of_rowBounds [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState) (hslot0 : t.slot + 8192 < 2 ^ 64)
     (hrb : RowBounds t) : DepOk o t :=
   depCore_of_rowBounds id o t hslot0 hrb
 

@@ -285,7 +285,7 @@ theorem get_seed_total [PresetCfg] (o : Oracle) (s : BeaconState) (epoch : Nat) 
     (he : epoch + 65536 < 2 ^ 64) (hr : s.randao_mixes.length = 65536) :
     ∃ r, get_seed P o s epoch dt = .ok r := by
   unfold get_seed get_randao_mix
-  have h1 : (P).EPOCHS_PER_HISTORICAL_VECTOR = 65536 := rfl
+  have h1 : (P).EPOCHS_PER_HISTORICAL_VECTOR = 65536 := (by prfl)
   have h2 : (P).MIN_SEED_LOOKAHEAD = 1 := rfl
   have hlt : (epoch + 65536 - 1 - 1) % 65536 < s.randao_mixes.length := by
     rw [hr]; exact Nat.mod_lt _ (by decide)
@@ -298,8 +298,8 @@ theorem get_committee_count_per_slot_total [PresetCfg] (s : BeaconState) (epoch 
     get_committee_count_per_slot P s epoch =
       .ok (max 1 (min 64 ((get_active_validator_indices s epoch).length / 32 / 128))) := by
   unfold get_committee_count_per_slot
-  simp only [tot_div (show (P).SLOTS_PER_EPOCH ≠ 0 by decide), tot_bind_ok,
-    tot_div (show (P).TARGET_COMMITTEE_SIZE ≠ 0 by decide)]
+  simp only [tot_div (show (P).SLOTS_PER_EPOCH ≠ 0 by pdecide), tot_bind_ok,
+    tot_div (show (P).TARGET_COMMITTEE_SIZE ≠ 0 by pdecide)]
   rfl
 
 theorem compute_committee_total [PresetCfg] (o : Oracle) (indices : List ValidatorIndex) (seed : Bytes32)
@@ -308,7 +308,7 @@ theorem compute_committee_total [PresetCfg] (o : Oracle) (indices : List Validat
     ∃ r, compute_committee P o indices seed index count = .ok r ∧
       r.length = indices.length * (index + 1) / count - indices.length * index / count ∧
       ∀ x ∈ r, x ∈ indices := by
-  have hR : (P).SHUFFLE_ROUND_COUNT ≤ 256 := by decide
+  have hR : (P).SHUFFLE_ROUND_COUNT ≤ 256 := by pdecide
   have hc0 : count ≠ 0 := by omega
   have hm1 : indices.length * index < 2 ^ 64 :=
     calc indices.length * index ≤ 2 ^ 40 * 2048 := Nat.mul_le_mul hn40 (by omega)
@@ -417,8 +417,8 @@ theorem get_beacon_committee_total [PresetCfg] (o : Oracle) (s : BeaconState) (s
   unfold get_beacon_committee compute_epoch_at_slot
   have hcps : get_committee_count_per_slot P s (slot / 32) = .ok (cpsOf s (slot / 32)) :=
     get_committee_count_per_slot_total s _
-  simp only [tot_div (show (P).SLOTS_PER_EPOCH ≠ 0 by decide), tot_bind_ok,
-    tot_mod (show (P).SLOTS_PER_EPOCH ≠ 0 by decide)]
+  simp only [tot_div (show (P).SLOTS_PER_EPOCH ≠ 0 by pdecide), tot_bind_ok,
+    tot_mod (show (P).SLOTS_PER_EPOCH ≠ 0 by pdecide)]
   have h32 : (P).SLOTS_PER_EPOCH = 32 := rfl
   rw [h32, hcps, tot_bind_ok, hseed, tot_bind_ok]
   rw [tot_mul (show slot % 32 * cpsOf s (slot / 32) < 2 ^ 64 by omega), tot_bind_ok,
@@ -504,13 +504,13 @@ theorem compute_ptc_total [PresetCfg] (o : Oracle) (s : BeaconState) (slot : Nat
   have hll : l.length ≤ 2 ^ 40 := by rw [hl2]; exact (ptc_len_le _ _).trans hn
   obtain ⟨r, hr1, -, -⟩ := compute_balance_weighted_selection_total P o s l
     (o.hash (seed.toList ++ uint_to_bytes 8 slot)) 512 false hne
-    (fun j hj => active_lt s _ j (hl3 j hj)) heb hll (by decide) (by decide)
+    (fun j hj => active_lt s _ j (hl3 j hj)) heb hll (by pdecide) (by pdecide)
     (hfin l hl1 _)
   refine ⟨r, ?_⟩
   rw [compute_ptc_eq]
   unfold compute_epoch_at_slot
-  rw [tot_div (show (P).SLOTS_PER_EPOCH ≠ 0 by decide), tot_bind_ok]
-  have h32' : (P).SLOTS_PER_EPOCH = 32 := rfl
+  rw [tot_div (show (P).SLOTS_PER_EPOCH ≠ 0 by pdecide), tot_bind_ok]
+  have h32' : (P).SLOTS_PER_EPOCH = 32 := (by prfl)
   rw [h32', hseed, tot_bind_ok, hl1, tot_bind_ok]
   exact hr1
 
@@ -595,7 +595,7 @@ theorem get_next_sync_committee_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s
   have hn := (active_len_le s (s.slot / 32 + 1)).trans hreg
   obtain ⟨r, hr1, hr2, hr3⟩ := compute_balance_weighted_selection_total P o s
     (get_active_validator_indices s (s.slot / 32 + 1)) seed 512 true hsa
-    (fun j hj => active_lt s _ j hj) heb hn (by decide) (by decide) (hsel seed)
+    (fun j hj => active_lt s _ j hj) heb hn (by pdecide) (by pdecide) (hsel seed)
   have hrl : ∀ j ∈ r, j < s.validators.length := fun j hj => active_lt s _ j (hr3 j hj)
   have hpk : r.mapM (fun index => do pure (← listGet s.validators index).pubkey :
       ValidatorIndex → SpecM BLSPubkey) =
@@ -670,7 +670,7 @@ theorem get_beacon_proposer_indices_total [PresetCfg] (o : Oracle) (s : BeaconSt
     ((List.length_filter_le _ _).trans (active_len_le s e)).trans hreg
   unfold get_beacon_proposer_indices compute_proposer_indices compute_start_slot_at_epoch
   rw [hfil, tot_bind_ok, hseed, tot_bind_ok]
-  have h32 : (P).SLOTS_PER_EPOCH = 32 := rfl
+  have h32 : (P).SLOTS_PER_EPOCH = 32 := (by prfl)
   rw [h32, tot_mul (show e * 32 < 2 ^ 64 by omega), tot_bind_ok]
   obtain ⟨seeds, hseeds⟩ := tot_mapM_ex (fun i => do
       pure (o.hash (seed.toList ++ uint_to_bytes 8 (← uint64Add (e * 32) i))) : Nat → SpecM Bytes32)
@@ -683,7 +683,7 @@ theorem get_beacon_proposer_indices_total [PresetCfg] (o : Oracle) (s : BeaconSt
   apply tot_mapM_ex
   intro sd _
   obtain ⟨r, hr1, hr2, -⟩ := compute_balance_weighted_selection_total P o s
-    (unslashedActive s e) sd 1 true hne hul heb hulen (by decide) (by decide) (hsel sd)
+    (unslashedActive s e) sd 1 true hne hul heb hulen (by pdecide) (by pdecide) (hsel sd)
   rw [hr1, tot_bind_ok, tot_get (show 0 < r.length by omega)]
   exact ⟨_, rfl⟩
 
@@ -702,7 +702,7 @@ theorem process_proposer_lookahead_total [PresetCfg] [PresetCfg.Ok] (o : Oracle)
     { s with proposer_lookahead := s.proposer_lookahead.drop 32 ++ s.proposer_lookahead.drop 32 }
     (s.slot / 32 + 2) he (ep_start_bound hslot 2 (by decide)) hr hreg heb hne hsel
   unfold process_proposer_lookahead
-  have h32 : (P).SLOTS_PER_EPOCH = 32 := rfl
+  have h32 : (P).SLOTS_PER_EPOCH = 32 := (by prfl)
   have h1 : (P).MIN_SEED_LOOKAHEAD = 1 := rfl
   rw [h32, h1, tot_sub (show 32 ≤ s.proposer_lookahead.length by omega), tot_bind_ok]
   rw [hlen]
@@ -741,7 +741,7 @@ theorem process_ptc_window_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : Be
     Nat.lt_of_le_of_lt (Nat.le_add_right _ _) (ep_bound hslot 2 (by decide))
   have hst := ep_start_bound hslot 2 (by decide)
   unfold process_ptc_window compute_start_slot_at_epoch
-  have h32' : (P).SLOTS_PER_EPOCH = 32 := rfl
+  have h32' : (P).SLOTS_PER_EPOCH = 32 := (by prfl)
   have h1 : (P).MIN_SEED_LOOKAHEAD = 1 := rfl
   rw [h32', h1, tot_sub (show 32 ≤ s.ptc_window.length by omega), tot_bind_ok, hlen]
   dsimp only
@@ -778,7 +778,7 @@ theorem ebsOf_congr {s1 s2 : BeaconState} (hv : s1.validators = s2.validators) :
   funext l
   simp only [ebsOf, hv]
 
-theorem CommPreconds.congr {o : Oracle} {s1 s2 : BeaconState} (hs : s1.slot = s2.slot)
+theorem CommPreconds.congr [PresetCfg] {o : Oracle} {s1 s2 : BeaconState} (hs : s1.slot = s2.slot)
     (hv : s1.validators = s2.validators) (hr : s1.randao_mixes = s2.randao_mixes)
     (h : CommPreconds o s2) : CommPreconds o s1 := by
   obtain ⟨h1, h2, h3, h4, h5, h6⟩ := h
@@ -874,8 +874,8 @@ theorem compute_ptc_first_slot_error [PresetCfg] (o : Oracle) (s : BeaconState) 
   subst hl0
   rw [compute_ptc_eq]
   unfold compute_epoch_at_slot
-  rw [tot_div (show (P).SLOTS_PER_EPOCH ≠ 0 by decide), tot_bind_ok]
-  have h32' : (P).SLOTS_PER_EPOCH = 32 := rfl
+  rw [tot_div (show (P).SLOTS_PER_EPOCH ≠ 0 by pdecide), tot_bind_ok]
+  have h32' : (P).SLOTS_PER_EPOCH = 32 := (by prfl)
   rw [h32', hdiv, hseed, tot_bind_ok, hl1, tot_bind_ok]
   unfold compute_balance_weighted_selection
   rfl
@@ -893,7 +893,7 @@ theorem process_ptc_window_few_active_error [PresetCfg] [PresetCfg.Ok] (o : Orac
     Nat.lt_of_le_of_lt (Nat.le_add_right _ _) (ep_bound hslot 2 (by decide))
   have hst := ep_start_bound hslot 2 (by decide)
   unfold process_ptc_window compute_start_slot_at_epoch
-  have h32' : (P).SLOTS_PER_EPOCH = 32 := rfl
+  have h32' : (P).SLOTS_PER_EPOCH = 32 := (by prfl)
   have h1 : (P).MIN_SEED_LOOKAHEAD = 1 := rfl
   rw [h32', h1, tot_sub (show 32 ≤ s.ptc_window.length by omega), tot_bind_ok, hlen]
   dsimp only
@@ -922,7 +922,7 @@ structure CommConds (o : Oracle) (s : BeaconState) : Prop where
 
 /-- The committee steps succeed on every state that `process_epoch_total` reaches before them,
 from the state conditions and the pyspec preconditions there. -/
-theorem committeesOk_of (o : Oracle) (t : BeaconState) (hslot : t.slot + 8192 < 2 ^ 64)
+theorem committeesOk_of [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState) (hslot : t.slot + 8192 < 2 ^ 64)
     (h : ∀ s, CommFrame t s → CommConds o s ∧ CommPreconds o s) : CommitteesOk o t := by
   intro s hf
   obtain ⟨hc, hp⟩ := h s hf
