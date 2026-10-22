@@ -66,6 +66,7 @@ import EpochProofs.Spec.Block.FuluBlock
 import EpochProofs.Sanity.Block.FuluBlock
 import EpochProofs.Spec.Block.FuluTransition
 import EpochProofs.Sanity.FuluTransition
+import EpochProofs.Sanity.Block.FuluEffects
 import EpochProofs.Sanity.Driver
 import EpochProofs.Sanity.Invariants.ExitDelay
 import EpochProofs.Sanity.Invariants.BalanceFloor
