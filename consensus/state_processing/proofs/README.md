@@ -45,7 +45,7 @@ It is not joined to the main result.
 | Justification and finalization | `justification.rs` (#53) | read the bits and roots, write the checkpoints | progressive balances totals (#27) |
 | Inactivity, rewards, registry, slashings, deposit top-up, effective balance | `single_pass_step.rs`, the step modules (#5 to #12, #22) and the loop `registry_rows.rs` | `RowsContract` (`Trusted/RegistryRows.lean`): `StateRows::apply_step` in `single_pass.rs` reads row `i`, runs the step and writes the row back | base reward and total active balance (#26, #27), exit cache (#24), activation queue (#25) |
 | Pending deposits | `pending_deposits.rs` (#10) and the writes `deposit_writes.rs` | `DepositWritesContract` (`Trusted/EpochTail.lean`): the queue write, the pubkey lookup, one balance read and write, `add_validator_to_registry` and one effective balance update in `StateDeposits` | pubkey cache |
-| Pending consolidations | `pending_consolidations.rs` (#11) | the index table and the balance write back | none |
+| Pending consolidations | `pending_consolidations.rs` (#11) and the effective balance updates `list_writes.rs` | the index table and the balance write back; `EffectiveBalanceContract` (`Trusted/EpochTail.lean`) for one effective balance update | none |
 | Builder pending payments | `builder_pending_payments.rs` (#4) and the writes `list_writes.rs` | `PaymentWritesContract` (`Trusted/EpochTail.lean`): read the payments, append a withdrawal, write the payments | total active balance |
 | Proposer lookahead, PTC window, next sync committee | `epoch_committees.rs`, `balance_weighted_selection.rs`, `compute_shuffled_index_with.rs` (#54) | `SeedMixLink`, `EBLink`, the index lists, the milhouse PTC shift, the sync committee keys and aggregate key | committee cache (#28), shuffle (#29) |
 | Eth1, slashings and randao resets, historical summaries | `tail_updates.rs` (#56) | the vector writes (`LighthouseResets.lean`); the summary root is `hash_tree_root` in the Oracle | none |
@@ -206,7 +206,12 @@ generic over two traits, so Aeneas translates the order and the error handling.
   succeeds, the write succeeds and writes the spec window. `compute_ptc_length` shows that each
   PTC has `PTC_SIZE` entries, so each one fits.
 
-The trusted parts are `PaymentWritesContract` and `WindowContract`.
+- `update_effective_balances_at_spec` shows that the effective balance updates after the
+  consolidations are `(consolidationIndices s).foldlM ebUpdateAt`, when the Rust indices are the
+  model indices. Lighthouse collects them from a `BTreeSet`, in ascending order without
+  duplicates.
+
+The trusted parts are `PaymentWritesContract`, `WindowContract` and `EffectiveBalanceContract`.
 
 ## Justification and finalization
 

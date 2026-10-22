@@ -1027,32 +1027,10 @@ impl<E: EthSpec> deposit_writes::DepositWrites<PendingDeposit, Error> for StateD
     }
 
     fn update_effective_balance(&mut self, index: usize) -> Result<(), Error> {
-        let (
-            mut validators,
-            balances,
-            _,
-            current_epoch_participation,
-            _,
-            progressive_balances,
-            _,
-            _,
-        ) = self.state.mutable_validator_fields()?;
-        let balance = *balances
-            .get(index)
-            .ok_or(BeaconStateError::UnknownValidator(index))?;
-        let mut validator = validators
-            .get_cow(index)
-            .ok_or(BeaconStateError::UnknownValidator(index))?;
-        let validator_current_epoch_participation = *current_epoch_participation
-            .get(index)
-            .ok_or(BeaconStateError::UnknownValidator(index))?;
-        process_single_effective_balance_update(
+        update_effective_balance_at(
+            self.state,
             index,
-            balance,
-            &mut validator,
-            validator_current_epoch_participation,
             self.next_epoch_cache,
-            progressive_balances,
             self.effective_balances_ctxt,
             self.state_ctxt,
             self.spec,
@@ -1591,32 +1569,73 @@ fn process_pending_consolidations<E: EthSpec>(
     }
 
     // Re-process effective balance updates for validators affected by consolidations.
-    let (mut validators, balances, _, current_epoch_participation, _, progressive_balances, _, _) =
-        state.mutable_validator_fields()?;
-    for &validator_index in validators_in_consolidations {
-        let balance = *balances
-            .get(validator_index)
-            .ok_or(BeaconStateError::UnknownValidator(validator_index))?;
-        let mut validator = validators
-            .get_cow(validator_index)
-            .ok_or(BeaconStateError::UnknownValidator(validator_index))?;
-        let validator_current_epoch_participation = *current_epoch_participation
-            .get(validator_index)
-            .ok_or(BeaconStateError::UnknownValidator(validator_index))?;
-
-        process_single_effective_balance_update(
-            validator_index,
-            balance,
-            &mut validator,
-            validator_current_epoch_participation,
+    let indices: Vec<usize> = validators_in_consolidations.iter().copied().collect();
+    list_writes::update_effective_balances_at(
+        &mut StateEffectiveBalances {
+            state,
             next_epoch_cache,
-            progressive_balances,
             effective_balances_ctxt,
             state_ctxt,
             spec,
-        )?;
-    }
+        },
+        &indices,
+    )?;
     Ok(())
+}
+
+/// The effective balances that `list_writes::update_effective_balances_at` updates.
+struct StateEffectiveBalances<'a, E: EthSpec> {
+    state: &'a mut BeaconState<E>,
+    next_epoch_cache: &'a mut PreEpochCache,
+    effective_balances_ctxt: &'a EffectiveBalancesContext,
+    state_ctxt: &'a StateContext,
+    spec: &'a ChainSpec,
+}
+
+impl<E: EthSpec> list_writes::EffectiveBalanceWrites<Error> for StateEffectiveBalances<'_, E> {
+    fn update_effective_balance(&mut self, index: usize) -> Result<(), Error> {
+        update_effective_balance_at(
+            self.state,
+            index,
+            self.next_epoch_cache,
+            self.effective_balances_ctxt,
+            self.state_ctxt,
+            self.spec,
+        )
+    }
+}
+
+/// Runs the effective balance update of validator `index` and records it in the caches.
+fn update_effective_balance_at<E: EthSpec>(
+    state: &mut BeaconState<E>,
+    index: usize,
+    next_epoch_cache: &mut PreEpochCache,
+    effective_balances_ctxt: &EffectiveBalancesContext,
+    state_ctxt: &StateContext,
+    spec: &ChainSpec,
+) -> Result<(), Error> {
+    let (mut validators, balances, _, current_epoch_participation, _, progressive_balances, _, _) =
+        state.mutable_validator_fields()?;
+    let balance = *balances
+        .get(index)
+        .ok_or(BeaconStateError::UnknownValidator(index))?;
+    let mut validator = validators
+        .get_cow(index)
+        .ok_or(BeaconStateError::UnknownValidator(index))?;
+    let validator_current_epoch_participation = *current_epoch_participation
+        .get(index)
+        .ok_or(BeaconStateError::UnknownValidator(index))?;
+    process_single_effective_balance_update(
+        index,
+        balance,
+        &mut validator,
+        validator_current_epoch_participation,
+        next_epoch_cache,
+        progressive_balances,
+        effective_balances_ctxt,
+        state_ctxt,
+        spec,
+    )
 }
 
 impl EffectiveBalancesContext {

@@ -2787,6 +2787,81 @@ def per_epoch_processing.list_writes.shift_window
     ok (core.result.Result.Err
       (per_epoch_processing.list_writes.ListWritesError.State e), window1)
 
+/-- Trait declaration: [state_processing::per_epoch_processing::list_writes::EffectiveBalanceWrites]
+    Source: 'consensus/state_processing/src/per_epoch_processing/list_writes.rs', lines 136:0-139:1
+    Visibility: public -/
+structure per_epoch_processing.list_writes.EffectiveBalanceWrites (Self : Type)
+  (E : Type) where
+  update_effective_balance : Self → Std.Usize → Result ((core.result.Result
+    Unit E) × Self)
+
+/-- [state_processing::per_epoch_processing::list_writes::update_effective_balances_at]: loop body 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/list_writes.rs', lines 147:4-160:1
+    Visibility: public -/
+@[rust_loop_body]
+def per_epoch_processing.list_writes.update_effective_balances_at_loop.body
+  {E : Type} {S : Type} (EffectiveBalanceWritesInst :
+  per_epoch_processing.list_writes.EffectiveBalanceWrites S E)
+  (indices : Slice Std.Usize) (state : S) (j : Std.Usize) :
+  Result (ControlFlow (S × Std.Usize) ((core.result.Result Unit
+    (per_epoch_processing.list_writes.ListWritesError E)) × S))
+  := do
+  let i := Slice.len indices
+  if j < i
+  then
+    let o ←
+      core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice Std.Usize)
+        indices j
+    match o with
+    | none => ok (done (core.result.Result.Ok (), state))
+    | some index =>
+      let (r, state1) ←
+        EffectiveBalanceWritesInst.update_effective_balance state index
+      match r with
+      | core.result.Result.Ok _ =>
+        let r1 ← Usize.Insts.Safe_arithSafeArithUsize.safe_add j 1#usize
+        match r1 with
+        | core.result.Result.Ok next => ok (cont (state1, next))
+        | core.result.Result.Err e =>
+          ok (done (core.result.Result.Err
+            (per_epoch_processing.list_writes.ListWritesError.Arith e),
+            state1))
+      | core.result.Result.Err e =>
+        ok (done (core.result.Result.Err
+          (per_epoch_processing.list_writes.ListWritesError.State e), state1))
+  else ok (done (core.result.Result.Ok (), state))
+
+/-- [state_processing::per_epoch_processing::list_writes::update_effective_balances_at]: loop 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/list_writes.rs', lines 147:4-160:1
+    Visibility: public -/
+@[rust_loop]
+def per_epoch_processing.list_writes.update_effective_balances_at_loop
+  {E : Type} {S : Type} (EffectiveBalanceWritesInst :
+  per_epoch_processing.list_writes.EffectiveBalanceWrites S E) (state : S)
+  (indices : Slice Std.Usize) (j : Std.Usize) :
+  Result ((core.result.Result Unit
+    (per_epoch_processing.list_writes.ListWritesError E)) × S)
+  := do
+  loop
+    (fun (state1, j1) =>
+      per_epoch_processing.list_writes.update_effective_balances_at_loop.body
+      EffectiveBalanceWritesInst indices state1 j1)
+    (state, j)
+
+/-- [state_processing::per_epoch_processing::list_writes::update_effective_balances_at]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/list_writes.rs', lines 142:0-160:1
+    Visibility: public -/
+@[reducible]
+def per_epoch_processing.list_writes.update_effective_balances_at
+  {E : Type} {S : Type} (EffectiveBalanceWritesInst :
+  per_epoch_processing.list_writes.EffectiveBalanceWrites S E) (state : S)
+  (indices : Slice Std.Usize) :
+  Result ((core.result.Result Unit
+    (per_epoch_processing.list_writes.ListWritesError E)) × S)
+  := do
+  per_epoch_processing.list_writes.update_effective_balances_at_loop
+    EffectiveBalanceWritesInst state indices 0#usize
+
 /-- [state_processing::per_epoch_processing::pending_consolidations::ConsolidationView]
     Source: 'consensus/state_processing/src/per_epoch_processing/pending_consolidations.rs', lines 10:0-13:1
     Visibility: public -/

@@ -131,3 +131,30 @@ pub fn shift_window<T, E, W: WindowWrites<T, E>>(
     }
     Ok(())
 }
+
+/// The effective balances of the state.
+pub trait EffectiveBalanceWrites<E> {
+    /// Runs the effective balance update of validator `index`.
+    fn update_effective_balance(&mut self, index: usize) -> Result<(), E>;
+}
+
+/// Runs the effective balance update of each validator in `indices`, in order.
+pub fn update_effective_balances_at<E, S: EffectiveBalanceWrites<E>>(
+    state: &mut S,
+    indices: &[usize],
+) -> Result<(), ListWritesError<E>> {
+    let mut j = 0;
+    while j < indices.len() {
+        let Some(&index) = indices.get(j) else {
+            return Ok(());
+        };
+        if let Err(e) = state.update_effective_balance(index) {
+            return Err(ListWritesError::State(e));
+        }
+        j = match j.safe_add(1) {
+            Ok(next) => next,
+            Err(e) => return Err(ListWritesError::Arith(e)),
+        };
+    }
+    Ok(())
+}

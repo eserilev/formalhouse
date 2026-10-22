@@ -338,3 +338,5 @@ open EpochProofs.Spec
 #print axioms EpochProofs.push_items_loop_spec
 #print axioms EpochProofs.shift_window_spec
 #print axioms EpochProofs.ptc_window_writes_spec
+#print axioms EpochProofs.update_effective_balances_at_loop_spec
+#print axioms EpochProofs.update_effective_balances_at_spec

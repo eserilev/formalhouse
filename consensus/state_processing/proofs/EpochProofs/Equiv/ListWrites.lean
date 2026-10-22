@@ -61,6 +61,8 @@ end Spec
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
+abbrev LhLWError (E : Type) := per_epoch_processing.list_writes.ListWritesError E
+
 /-! ## Builder pending payments -/
 
 theorem push_withdrawals_loop_spec {S E : Type} (inst : LhPaymentWrites S E)
@@ -193,6 +195,83 @@ theorem apply_builder_pending_payments_equiv {S E : Type} (p : Spec.Preset)
       cases h
       exact ⟨absArithError e, by rw [← habs]; rfl⟩
     | State e => exact h.elim
+
+
+/-! ## The effective balance updates after the consolidations -/
+
+/-- What an effective balance loop returns, in spec terms. -/
+def EbPost {S E : Type} (view : S → Spec.BeaconState) (spec : Spec.SpecM Spec.BeaconState) :
+    core.result.Result Unit (LhLWError E) × S → Prop
+  | (.Ok _, s') => spec = .ok (view s')
+  | (.Err _, _) => ∃ e, spec = .error e
+
+theorem update_effective_balances_at_loop_spec {S E : Type} (inst : LhEffectiveBalanceWrites S E)
+    (view : S → Spec.BeaconState) (hc : EffectiveBalanceContract inst view)
+    (idx : Slice Usize) (t0 : Spec.BeaconState) (s : S) (j : Usize) (hj : j.val ≤ idx.length)
+    (hp : ((idx.val.map (·.val)).take j.val).foldlM Spec.ebUpdateAt t0 = .ok (view s)) :
+    per_epoch_processing.list_writes.update_effective_balances_at_loop inst s idx j
+      ⦃ res => EbPost view ((idx.val.map (·.val)).foldlM Spec.ebUpdateAt t0) res ⦄ := by
+  unfold per_epoch_processing.list_writes.update_effective_balances_at_loop
+  apply loop.spec_decr_nat
+    (measure := fun (x : S × Usize) => idx.length - x.2.val)
+    (inv := fun (x : S × Usize) => x.2.val ≤ idx.length ∧
+      ((idx.val.map (·.val)).take x.2.val).foldlM Spec.ebUpdateAt t0 = .ok (view x.1))
+  · rintro ⟨s1, j1⟩ ⟨hj1, hp1⟩
+    dsimp only at hj1 hp1 ⊢
+    unfold per_epoch_processing.list_writes.update_effective_balances_at_loop.body
+    dsimp only
+    split
+    · rename_i hlt
+      have hjl : j1.val < idx.length := by scalar_tac
+      have hjv : j1.val < idx.val.length := hjl
+      rw [slice_get_some idx j1 hjv, bind_tc_ok]
+      dsimp only
+      set x := idx.val[j1.val] with hxv
+      have hml : j1.val < (idx.val.map (·.val)).length := by simpa using hjv
+      have hget : (idx.val.map (·.val))[j1.val] = x.val := by simp [hxv]
+      cases heb : Spec.ebUpdateAt (view s1) x.val with
+      | ok t' =>
+        obtain ⟨s', hu, hv⟩ := (hc.update_effective_balance s1 x).1 t' heb
+        rw [hu]
+        simp only [bind_tc_ok, uncurry_apply_pair]
+        have hmax : j1.val < Usize.max := by scalar_tac
+        obtain ⟨j', hadd, hj'⟩ := usize_safe_add_one j1 hmax
+        rw [hadd]
+        simp only [bind_tc_ok, spec_ok]
+        refine ⟨⟨by omega, ?_⟩, by omega⟩
+        rw [hj', foldlM_take_succ _ _ _ _ hml, hp1, hget]
+        show Spec.ebUpdateAt (view s1) x.val = _
+        rw [heb, hv]
+      | error e =>
+        obtain ⟨e', s', hu⟩ := (hc.update_effective_balance s1 x).2 e heb
+        rw [hu]
+        simp only [bind_tc_ok, uncurry_apply_pair, spec_ok]
+        refine ⟨e, ?_⟩
+        apply foldlM_error_of_take _ _ _ _ _ hml hp1
+        rw [hget]
+        exact heb
+    · rename_i hge
+      have hjv : j1.val = idx.length := by scalar_tac
+      simp only [spec_ok]
+      show _ = _
+      have h1 : (idx.val.map (·.val)).take j1.val = idx.val.map (·.val) := by
+        rw [hjv]; simp
+      rw [← h1, hp1]
+  · exact ⟨hj, hp⟩
+
+/-- The effective balance updates after the consolidations are the model step
+`(consolidationIndices s).foldlM ebUpdateAt`, under the trusted `EffectiveBalanceContract`, when
+the Rust indices are the model indices. Lighthouse collects them from a `BTreeSet`, which iterates
+in ascending order without duplicates, as `consolidationIndices` sorts and removes duplicates. -/
+theorem update_effective_balances_at_spec {S E : Type} (inst : LhEffectiveBalanceWrites S E)
+    (view : S → Spec.BeaconState) (hc : EffectiveBalanceContract inst view) (s : S)
+    (idx : Slice Usize) (named : List Nat) (hidx : idx.val.map (·.val) = named) :
+    per_epoch_processing.list_writes.update_effective_balances_at inst s idx
+      ⦃ res => EbPost view (named.foldlM Spec.ebUpdateAt (view s)) res ⦄ := by
+  unfold per_epoch_processing.list_writes.update_effective_balances_at
+  rw [← hidx]
+  exact update_effective_balances_at_loop_spec inst view hc idx (view s) s 0#usize (by simp)
+    (by simp [pure, Except.pure])
 
 
 /-! ## The PTC window shift -/

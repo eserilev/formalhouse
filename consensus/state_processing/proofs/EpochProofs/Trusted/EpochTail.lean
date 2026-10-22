@@ -28,6 +28,9 @@ pending payments, `push_withdrawal` appends a builder pending withdrawal and nev
 is a `ProgressiveList` with no limit), and `set_payments` writes the payments when their number
 is unchanged (the field is a `Vector`).
 
+`EffectiveBalanceContract` says what `StateEffectiveBalances` does: the effective balance update
+of one validator, which fails when the spec fails.
+
 `WindowContract` says what `PtcWindowWrites` does: `pop_front` drops entries from the front when
 there are enough, `push` appends an item of the right size while the list is below its limit, and
 `commit` writes the list back when it has the length of the window.
@@ -109,5 +112,17 @@ structure WindowContract {W T E α : Type} (inst : LhWindowWrites W T E) (view :
     ∃ w', inst.push w t = ok (.Ok (), w') ∧ view w' = view w ++ [absItem t]
   commit : ∀ (w : W), (view w).length = N →
     ∃ w', inst.commit w = ok (.Ok (), w') ∧ committed w' = view w
+
+abbrev LhEffectiveBalanceWrites (S E : Type) :=
+  per_epoch_processing.list_writes.EffectiveBalanceWrites S E
+
+/-- Trusted: what the `EffectiveBalanceWrites` implementation in `single_pass.rs` does. -/
+structure EffectiveBalanceContract {S E : Type} (inst : LhEffectiveBalanceWrites S E)
+    (view : S → Spec.BeaconState) : Prop where
+  update_effective_balance : ∀ (s : S) (i : Usize),
+    (∀ t', Spec.ebUpdateAt (view s) i.val = .ok t' →
+      ∃ s', inst.update_effective_balance s i = ok (.Ok (), s') ∧ view s' = t') ∧
+    (∀ e, Spec.ebUpdateAt (view s) i.val = .error e →
+      ∃ (e' : E) (s' : S), inst.update_effective_balance s i = ok (.Err e', s'))
 
 end EpochProofs
