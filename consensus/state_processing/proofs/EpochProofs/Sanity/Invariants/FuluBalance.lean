@@ -474,7 +474,7 @@ theorem process_operations_fulu_keeps (p : Preset) (o : Oracle) (f : FuluConfig)
 /-- On mainnet, one Fulu `process_block` at epoch `E` keeps `ExitDelay`, the slot and the
 activity at `E`, and keeps the budget with one more sync aggregate. The sync aggregate has at
 most 512 bits, and the total active balance is at most 139 million ETH. -/
-theorem process_block_fulu_budget_mainnet [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
+theorem process_block_fulu_budget_mainnet [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
     (s0 : BeaconState) (E : Epoch) (n : Nat) (fs fs' : FuluState) (block : FuluBeaconBlock)
     (h : process_block_fulu P o fo FC c fs block = .ok fs')
     (hE : fs.state.slot / P.SLOTS_PER_EPOCH = E) (hfar : E < FAR_FUTURE_EPOCH)
@@ -502,7 +502,7 @@ theorem process_block_fulu_budget_mainnet [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o 
   have k1 : K fs.state s1 := .of_opStep hE hfar
     (process_block_header_fulu_opStep _ o fo _ _ block h1)
   have hE1 : s1.slot / P.SLOTS_PER_EPOCH = E := by rw [k1.1]; exact hE
-  have k2 : K s1 s2 := .of_withdrawals_fulu hE1 hfar (by decide) h2
+  have k2 : K s1 s2 := .of_withdrawals_fulu hE1 hfar (by pdecide) h2
   have hE2 : s2.slot / P.SLOTS_PER_EPOCH = E := by rw [k2.1]; exact hE1
   rw [hs3] at h4
   have k4 : K s2 s4 := .of_opStep hE2 hfar (process_randao_opStep _ o s2 s4 _ h4)

@@ -64,7 +64,7 @@ theorem process_epoch_fulu_withdrawableU64 [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o
 /-- The five step facts of `LoopInv` in the Fulu `process_slots` loop with target `slot`: the
 slot step, the Fulu `process_epoch` (to `PostEpoch`), the check `BoundaryOk`, and the two slot
 increments. The last three do not depend on the fork. -/
-theorem loopInv_steps_fulu [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (fo : FuluOracle) (slot : Slot) (start : Slot)
+theorem loopInv_steps_fulu [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (fo : FuluOracle) (slot : Slot) (start : Slot)
     (hslot64 : slot < 2 ^ 64) :
     (∀ fs fs', process_slot_fulu P o fo fs = .ok fs' → fs.state.slot < slot →
       LoopInv start fs.state → LoopInv start fs'.state) ∧
@@ -96,7 +96,7 @@ theorem loopInv_steps_fulu [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (fo :
       AfterEB.of_floor he' hf, hsl ▸ hst⟩
 
 /-- The Fulu `process_slots` loop keeps `LoopInv` from slot `start`. -/
-theorem process_slots_loop_fulu_reach [PresetCfg] (o : Oracle) (fo : FuluOracle) (slot : Slot)
+theorem process_slots_loop_fulu_reach [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (fo : FuluOracle) (slot : Slot)
     (start : Slot) (hslot64 : slot < 2 ^ 64) :
     ∀ fuel (fs fs' : FuluState), LoopInv start fs.state →
       process_slots_loop_fulu P o fo (process_epoch_fulu_m o) slot fuel fs =
@@ -144,7 +144,7 @@ theorem process_slots_loop_fulu_reach [PresetCfg] (o : Oracle) (fo : FuluOracle)
 
 /-- The Fulu `process_slots` from a state with the invariant: the result has `LoopInv` from the
 old slot, at a later slot. -/
-theorem process_slots_fulu_reach [PresetCfg] (o : Oracle) (fo : FuluOracle) (fs : FuluState) (slot : Slot)
+theorem process_slots_fulu_reach [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (fo : FuluOracle) (fs : FuluState) (slot : Slot)
     (hslot64 : slot < 2 ^ 64) (hs : ReachInv fs.state) :
     ∀ fs1, process_slots_fulu P o fo (process_epoch_fulu_m o) fs slot = .ok fs1 →
       LoopInv fs.state.slot fs1.state ∧ fs.state.slot < fs1.state.slot := by
@@ -162,7 +162,7 @@ theorem process_slots_fulu_reach [PresetCfg] (o : Oracle) (fo : FuluOracle) (fs 
 /-- One Fulu `state_transition` keeps the invariant. The block's slot is a `u64`, its sync
 aggregate has at most 512 bits, and the total active balance before the block is at most 139
 million ETH. -/
-theorem state_transition_fulu_reach [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
+theorem state_transition_fulu_reach [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
     (fs fs' : FuluState) (signed_block : FuluSignedBeaconBlock) (validate_result : Bool)
     (hslot64 : signed_block.message.slot < 2 ^ 64)
     (hbits : signed_block.message.body.sync_aggregate.sync_committee_bits.length ≤ P.SYNC_COMMITTEE_SIZE)
@@ -172,7 +172,7 @@ theorem state_transition_fulu_reach [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Orac
     (hs : ReachInv fs.state)
     (h : state_transition_fulu P o fo FC c fs signed_block
       validate_result = .ok fs') : ReachInv fs'.state := by
-  have hS : P.SLOTS_PER_EPOCH = 32 := rfl
+  have hS : P.SLOTS_PER_EPOCH = 32 := (by prfl)
   unfold state_transition_fulu at h
   obtain ⟨fs1, h1, h⟩ := specM_bind_ok h
   obtain ⟨hinv1, hlt1⟩ := process_slots_fulu_reach o fo fs _ hslot64 hs fs1 h1
@@ -221,7 +221,7 @@ inductive ReachableFulu [PresetCfg] [FuluCfg] (o : Oracle) (fo : FuluOracle) (c 
 
 /-- The supply hypothesis on a Fulu run: before each block, the total active balance is at most
 139 million ETH. -/
-def SupplyBoundFulu [PresetCfg] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig) (init : FuluState) :
+def SupplyBoundFulu [PresetCfg] [FuluCfg] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig) (init : FuluState) :
     Prop :=
   ∀ (fs fs1 : FuluState) (signed_block : FuluSignedBeaconBlock),
     ReachableFulu o fo c init fs →
@@ -241,7 +241,7 @@ structure FuluStartOk [PresetCfg] (s : BeaconState) : Prop where
   withdrawable : WithdrawableU64 s
 
 /-- Every reachable Fulu state has the invariant. -/
-theorem reachable_fulu_inv (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
+theorem reachable_fulu_inv [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
     (init : FuluState) (hi : FuluStartOk init.state)
     (hsupply : SupplyBoundFulu o fo c init) :
     ∀ fs, ReachableFulu o fo c init fs → ReachInv fs.state := by
@@ -271,7 +271,7 @@ theorem reachable_fulu_tail [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (fo 
 /-- The states that the Fulu `process_slots` loop with target `slot` reaches from `fs` on
 mainnet, one slot at a time. Each step runs `process_slot_fulu` below the target, then the Fulu
 `process_epoch` at the last slot of an epoch, then moves to the next slot. -/
-inductive SlotReachFulu [PresetCfg] (o : Oracle) (fo : FuluOracle) (fs : FuluState) (slot : Slot) :
+inductive SlotReachFulu [PresetCfg] [FuluCfg] (o : Oracle) (fo : FuluOracle) (fs : FuluState) (slot : Slot) :
     FuluState → Prop
   | refl : SlotReachFulu o fo fs slot fs
   | skip {t t1 : FuluState} : SlotReachFulu o fo fs slot t → t.state.slot < slot →
@@ -285,7 +285,7 @@ inductive SlotReachFulu [PresetCfg] (o : Oracle) (fo : FuluOracle) (fs : FuluSta
       SlotReachFulu o fo fs slot { t1 with state := { s2 with slot := s2.slot + 1 } }
 
 /-- The slot loop keeps `LoopInv`. -/
-theorem SlotReachFulu.loopInv {o : Oracle} {fo : FuluOracle} {fs t : FuluState} {slot : Slot}
+theorem SlotReachFulu.loopInv [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] {o : Oracle} {fo : FuluOracle} {fs t : FuluState} {slot : Slot}
     (hslot64 : slot < 2 ^ 64) (hr : SlotReachFulu o fo fs slot t) (hs : ReachInv fs.state) :
     LoopInv fs.state.slot t.state := by
   have hst := loopInv_steps_fulu o fo slot fs.state.slot hslot64
@@ -333,7 +333,7 @@ theorem SlotReachFulu.tail [PresetCfg] [FuluCfg] [FuluCfg.Ok] {o : Oracle} {fo :
 /-- The economic hypothesis on a Fulu run: every Fulu `process_epoch` input `t1` of a reachable
 run satisfies `Econ`. An input comes from a state `t` that the slot loop reaches below its
 target, by `process_slot_fulu`, at the last slot of an epoch. -/
-def EpochEconFulu [PresetCfg] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig) (init : FuluState)
+def EpochEconFulu [PresetCfg] [FuluCfg] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig) (init : FuluState)
     (Econ : BeaconState → Prop) : Prop :=
   ∀ (fs t t1 : FuluState) (slot : Slot), ReachableFulu o fo c init fs → slot < 2 ^ 64 →
     SlotReachFulu o fo fs slot t → t.state.slot < slot →
@@ -344,7 +344,7 @@ def EpochEconFulu [PresetCfg] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfi
 facts of `EpochInputOk''`. The start state has the invariants of a genesis state
 (`FuluStartOk`). The total active balance before each block is at most 139 million ETH
 (`SupplyBoundFulu`), and `Econ` holds at each epoch input (`EpochEconFulu`). -/
-theorem fulu_reachable_invariants [PresetCfg] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
+theorem fulu_reachable_invariants [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
     (init : FuluState) (hi : FuluStartOk init.state) (hsupply : SupplyBoundFulu o fo c init)
     (Econ : BeaconState → Prop) (hecon : EpochEconFulu o fo c init Econ)
     (fs t t1 : FuluState) (slot : Slot) (hr : ReachableFulu o fo c init fs)

@@ -92,6 +92,8 @@ class PresetCfg.Ok [c : PresetCfg] : Prop where
   slots_pos : 0 < c.v.SLOTS_PER_EPOCH
   slots_gt_one : 1 < c.v.SLOTS_PER_EPOCH
   slashings_vector_pos : 0 < c.v.EPOCHS_PER_SLASHINGS_VECTOR
+  slashings_vector_ge : 64 ≤ c.v.EPOCHS_PER_SLASHINGS_VECTOR
+  slashings_vector_le : c.v.EPOCHS_PER_SLASHINGS_VECTOR ≤ 8192
   historical_vector_pos : 0 < c.v.EPOCHS_PER_HISTORICAL_VECTOR
   eth1_period_pos : 0 < c.v.EPOCHS_PER_ETH1_VOTING_PERIOD
   sync_size_pos : 0 < c.v.SYNC_COMMITTEE_SIZE
@@ -101,6 +103,14 @@ theorem P_slots_pos [PresetCfg] [h : PresetCfg.Ok] : 0 < P.SLOTS_PER_EPOCH := h.
 theorem P_slots_gt_one [PresetCfg] [h : PresetCfg.Ok] : 1 < P.SLOTS_PER_EPOCH := h.slots_gt_one
 theorem P_slashings_vector_pos [PresetCfg] [h : PresetCfg.Ok] : 0 < P.EPOCHS_PER_SLASHINGS_VECTOR :=
   h.slashings_vector_pos
+theorem P_slashings_vector_ge [PresetCfg] [h : PresetCfg.Ok] : 64 ≤ P.EPOCHS_PER_SLASHINGS_VECTOR :=
+  h.slashings_vector_ge
+theorem P_slashings_vector_le [PresetCfg] [h : PresetCfg.Ok] : P.EPOCHS_PER_SLASHINGS_VECTOR ≤ 8192 :=
+  h.slashings_vector_le
+/-- The slashings vector length as a `Nat` with its bounds. -/
+theorem P_slashings_vector_nat [PresetCfg] [PresetCfg.Ok] :
+    ∃ V : Nat, P.EPOCHS_PER_SLASHINGS_VECTOR = V ∧ 64 ≤ V ∧ V ≤ 8192 :=
+  ⟨_, rfl, P_slashings_vector_ge, P_slashings_vector_le⟩
 theorem P_historical_vector_pos [PresetCfg] [h : PresetCfg.Ok] :
     0 < P.EPOCHS_PER_HISTORICAL_VECTOR := h.historical_vector_pos
 theorem P_eth1_period_pos [PresetCfg] [h : PresetCfg.Ok] : 0 < P.EPOCHS_PER_ETH1_VOTING_PERIOD :=
@@ -116,13 +126,15 @@ theorem P_sync_seats_even [PresetCfg] [h : PresetCfg.Ok] :
 
 theorem mainnetCfg_ok : @PresetCfg.Ok mainnetCfg :=
   letI := mainnetCfg
-  { slots_pos := by decide, slots_gt_one := by decide, slashings_vector_pos := by decide,
+  { slots_pos := by decide, slots_gt_one := by decide, slashings_vector_pos := by decide, slashings_vector_ge := by decide,
+    slashings_vector_le := by decide,
     historical_vector_pos := by decide, eth1_period_pos := by decide,
     sync_size_pos := by decide, sync_seats_even := by decide }
 
 theorem minimalCfg_ok : @PresetCfg.Ok minimalCfg :=
   letI := minimalCfg
-  { slots_pos := by decide, slots_gt_one := by decide, slashings_vector_pos := by decide,
+  { slots_pos := by decide, slots_gt_one := by decide, slashings_vector_pos := by decide, slashings_vector_ge := by decide,
+    slashings_vector_le := by decide,
     historical_vector_pos := by decide, eth1_period_pos := by decide,
     sync_size_pos := by decide, sync_seats_even := by decide }
 
