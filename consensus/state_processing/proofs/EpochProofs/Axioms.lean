@@ -110,6 +110,7 @@ import EpochProofs.CacheBridge.EpochCacheBuild
 import EpochProofs.CacheBridge.BuildPath
 import EpochProofs.Equiv.ConsolidationTable
 import EpochProofs.Equiv.Onboarding
+import EpochProofs.Sanity.GlueBounds
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -815,3 +816,13 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_final_minimal
 #print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_final_mainnet
 #print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_final_minimal
+#print axioms EpochProofs.Spec.glue_epoch_add_fits
+#print axioms EpochProofs.Spec.glue_lookahead_slot_fits
+#print axioms EpochProofs.Spec.glue_seed_mix_index
+#print axioms EpochProofs.Spec.mapM_length_ok
+#print axioms EpochProofs.Spec.compute_proposer_indices_length
+#print axioms EpochProofs.Spec.get_beacon_proposer_indices_length
+#print axioms EpochProofs.Spec.process_proposer_lookahead_length
+#print axioms EpochProofs.Spec.filter_sum_le
+#print axioms EpochProofs.Spec.glue_validator_deposit_sum
+#print axioms EpochProofs.Spec.glue_exit_count
