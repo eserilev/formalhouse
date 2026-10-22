@@ -1508,69 +1508,19 @@ fn process_pending_consolidations<E: EthSpec>(
     state_ctxt: &StateContext,
     spec: &ChainSpec,
 ) -> Result<(), Error> {
-    let next_epoch = state.next_epoch()?;
-    let pending_consolidations = state.pending_consolidations()?.to_owned_list();
-
     // The moves only touch validators that consolidations reference, so they work on a local
     // table of those validators.
     let local_indices: Vec<usize> = validators_in_consolidations.iter().copied().collect();
-    let mut validators = Vec::with_capacity(local_indices.len());
-    let mut balances = Vec::with_capacity(local_indices.len());
-    for &index in &local_indices {
-        let validator = state.validators().get(index);
-        validators.push(pending_consolidations::LocalValidator {
-            exists: validator.is_some(),
-            slashed: validator.is_some_and(|validator| validator.slashed),
-            withdrawable_epoch: validator
-                .map_or(0, |validator| validator.withdrawable_epoch.as_u64()),
-            effective_balance: validator.map_or(0, |validator| validator.effective_balance),
-        });
-        balances.push(state.balances().get(index).copied().unwrap_or(0));
-    }
-    let position = |index: u64| {
-        local_indices
-            .binary_search(&(index as usize))
-            .map_err(|_| Error::from(BeaconStateError::UnknownValidator(index as usize)))
-    };
-    let views = pending_consolidations
-        .iter()
-        .map(|consolidation| {
-            Ok(pending_consolidations::ConsolidationView {
-                source: position(consolidation.source_index)?,
-                target: position(consolidation.target_index)?,
-            })
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
-
-    let (next_pending_consolidation, new_balances) =
-        pending_consolidations::process_pending_consolidations(
-            &views,
-            &validators,
-            balances,
-            next_epoch.as_u64(),
-        )
+    pending_consolidations::process_on_table(&mut StateConsolidations { state }, &local_indices)
         .map_err(|error| match error {
-            pending_consolidations::ConsolidationError::UnknownValidator(position) => {
-                Error::from(BeaconStateError::UnknownValidator(
-                    local_indices.get(position).copied().unwrap_or(position),
-                ))
+            pending_consolidations::TableError::State(e) => e,
+            pending_consolidations::TableError::UnknownValidator(index) => {
+                Error::from(BeaconStateError::UnknownValidator(index))
             }
-            pending_consolidations::ConsolidationError::Overflow => {
+            pending_consolidations::TableError::Overflow => {
                 Error::from(safe_arith::ArithError::Overflow)
             }
         })?;
-
-    for (&index, &new_balance) in local_indices.iter().zip(new_balances.iter()) {
-        if state.balances().get(index) != Some(&new_balance)
-            && let Ok(balance) = state.get_balance_mut(index)
-        {
-            *balance = new_balance;
-        }
-    }
-
-    state
-        .pending_consolidations_mut()?
-        .pop_front(next_pending_consolidation)?;
 
     // the spec tests require we don't perform effective balance updates when testing pending_consolidations
     if !perform_effective_balance_updates {
@@ -1590,6 +1540,57 @@ fn process_pending_consolidations<E: EthSpec>(
         &indices,
     )?;
     Ok(())
+}
+
+/// The state that `pending_consolidations::process_on_table` reads and writes.
+struct StateConsolidations<'a, E: EthSpec> {
+    state: &'a mut BeaconState<E>,
+}
+
+impl<E: EthSpec> pending_consolidations::ConsolidationState<Error> for StateConsolidations<'_, E> {
+    fn next_epoch(&self) -> Result<u64, Error> {
+        Ok(self.state.next_epoch()?.as_u64())
+    }
+
+    fn pending(&self) -> Result<Vec<pending_consolidations::PendingPair>, Error> {
+        Ok(self
+            .state
+            .pending_consolidations()?
+            .iter()
+            .map(|consolidation| pending_consolidations::PendingPair {
+                source: consolidation.source_index,
+                target: consolidation.target_index,
+            })
+            .collect())
+    }
+
+    fn local_validator(&self, index: usize) -> pending_consolidations::LocalValidator {
+        let validator = self.state.validators().get(index);
+        pending_consolidations::LocalValidator {
+            exists: validator.is_some(),
+            slashed: validator.is_some_and(|validator| validator.slashed),
+            withdrawable_epoch: validator
+                .map_or(0, |validator| validator.withdrawable_epoch.as_u64()),
+            effective_balance: validator.map_or(0, |validator| validator.effective_balance),
+        }
+    }
+
+    fn balance(&self, index: usize) -> u64 {
+        self.state.balances().get(index).copied().unwrap_or(0)
+    }
+
+    fn set_balance(&mut self, index: usize, value: u64) {
+        if self.state.balances().get(index) != Some(&value)
+            && let Ok(balance) = self.state.get_balance_mut(index)
+        {
+            *balance = value;
+        }
+    }
+
+    fn pop_pending(&mut self, n: usize) -> Result<(), Error> {
+        self.state.pending_consolidations_mut()?.pop_front(n)?;
+        Ok(())
+    }
 }
 
 /// The effective balances that `list_writes::update_effective_balances_at` updates.
