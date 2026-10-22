@@ -41,7 +41,7 @@ def tailNFG [PresetCfg] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1
   K t8
 
 /-- `tailNFG` for Gloas: the builder payments, then the steps after them. -/
-def tailNF (o : Oracle) (s1 S4 : BeaconState) (total_active_balance : Gwei)
+def tailNF [PresetCfg] (o : Oracle) (s1 S4 : BeaconState) (total_active_balance : Gwei)
     (current_epoch : Epoch) : SpecM BeaconState :=
   tailNFG o (gloasFin o total_active_balance) s1 S4 total_active_balance current_epoch
 

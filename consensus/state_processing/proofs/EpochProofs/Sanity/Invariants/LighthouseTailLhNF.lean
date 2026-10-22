@@ -27,7 +27,7 @@ def lhAfterPassG [PresetCfg] (o : Oracle) (K : BeaconState → SpecM BeaconState
   K s6
 
 /-- The steps of `lhFullTail` after the pass. -/
-def lhAfterPass (o : Oracle) (s : BeaconState) (total_active_balance : Gwei)
+def lhAfterPass [PresetCfg] (o : Oracle) (s : BeaconState) (total_active_balance : Gwei)
     (plan : LhDepositPlan) (x : (Epoch × Gwei) × List Row) : SpecM BeaconState :=
   lhAfterPassG o (gloasFin o total_active_balance) s plan x
 
@@ -227,7 +227,7 @@ theorem increaseFold_validators (td : Nat → Gwei) :
     rw [increaseFold_validators td l T1 T' h, increaseAt_validators h1]
 
 /-- A fold of effective balance updates keeps the number of validators. -/
-theorem ebFold_length :
+theorem ebFold_length [PresetCfg] :
     ∀ (l : List Nat) (T T' : BeaconState),
       l.foldlM ebUpdateAt T = .ok T' → T'.validators.length = T.validators.length
   | [], T, T', h => by cases h; rfl

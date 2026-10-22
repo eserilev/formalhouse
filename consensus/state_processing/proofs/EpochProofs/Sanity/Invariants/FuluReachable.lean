@@ -172,7 +172,6 @@ theorem state_transition_fulu_reach [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCf
     (hs : ReachInv fs.state)
     (h : state_transition_fulu P o fo FC c fs signed_block
       validate_result = .ok fs') : ReachInv fs'.state := by
-  have hS : P.SLOTS_PER_EPOCH = 32 := (by prfl)
   unfold state_transition_fulu at h
   obtain ⟨fs1, h1, h⟩ := specM_bind_ok h
   obtain ⟨hinv1, hlt1⟩ := process_slots_fulu_reach o fo fs _ hslot64 hs fs1 h1
@@ -184,8 +183,7 @@ theorem state_transition_fulu_reach [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCf
     intro fs2 h2
     have hfar : fs1.state.slot / P.SLOTS_PER_EPOCH < FAR_FUTURE_EPOCH := by
       rw [hs1]
-      simp only [FAR_FUTURE_EPOCH, hS, Slot] at *
-      omega
+      exact slot_div_lt_far P_slots_gt_one hslot64
     obtain ⟨hb2, hd2, hsl2, -⟩ := process_block_fulu_budget_mainnet o fo c s0 _ n fs1 fs2 _ h2
       rfl hfar hd1 hb1 hbits (htab fs1 h1)
     refine ⟨hffg1.of_checkpointsStable (process_block_fulu_checkpointsStable _ o fo _ c _ _ _ h2),

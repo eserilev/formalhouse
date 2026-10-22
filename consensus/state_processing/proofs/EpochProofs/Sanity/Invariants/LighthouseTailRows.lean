@@ -96,7 +96,7 @@ theorem lhRowStepFull_split [PresetCfg] (ctx : LhStepContext) (downward upward :
 /-! ## The second pass as a fold over indices -/
 
 /-- One fold step: the top-up of validator `i`, then its update unless it is named. -/
-def rowsStep (td : Nat → Gwei) (nm : Nat → Bool) (t : BeaconState) (i : Nat) :
+def rowsStep [PresetCfg] (td : Nat → Gwei) (nm : Nat → Bool) (t : BeaconState) (i : Nat) :
     SpecM BeaconState := do
   let t ← increaseAt i (td i) t
   if nm i then pure t else ebUpdateAt t i
@@ -265,7 +265,7 @@ theorem increaseFold_hF2 (td : Nat → Gwei) (i : Nat) :
 
 /-- Over a list of distinct indices, the interleaved fold equals all top-ups first, then the
 updates of the validators that are not named. -/
-theorem fold_interleave_gen (td : Nat → Gwei) (nm : Nat → Bool) :
+theorem fold_interleave_gen [PresetCfg] (td : Nat → Gwei) (nm : Nat → Bool) :
     ∀ (l : List Nat), l.Nodup → ∀ S : BeaconState,
       SameOk (l.foldlM (rowsStep td nm) S)
         (do
@@ -307,7 +307,7 @@ theorem fold_interleave_gen (td : Nat → Gwei) (nm : Nat → Bool) :
 
 /-- The interleaved fold over `0, …, n - 1` equals all top-ups first, then the updates of the
 validators that are not named. -/
-theorem fold_interleave (td : Nat → Gwei) (nm : Nat → Bool) (n : Nat) (S : BeaconState) :
+theorem fold_interleave [PresetCfg] (td : Nat → Gwei) (nm : Nat → Bool) (n : Nat) (S : BeaconState) :
     SameOk ((List.range n).foldlM (fun t i => do
         let t ← increaseAt i (td i) t
         if nm i then pure t else ebUpdateAt t i) S)

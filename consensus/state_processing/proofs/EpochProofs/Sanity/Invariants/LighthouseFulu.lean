@@ -431,7 +431,7 @@ theorem process_epoch_lh_full_fulu_genesis [PresetCfg] [FuluCfg] (o : Oracle) (t
   obtain ⟨hbalance, hsupply, hslashings⟩ := hsupply_t
   have hcurrent : get_current_epoch P t = .ok GENESIS_EPOCH := by
     rw [← hgen]
-    simp [get_current_epoch, compute_epoch_at_slot, uint64Div, P, Preset.ofVar, pure,
+    simp [get_current_epoch, compute_epoch_at_slot, uint64Div, Nat.ne_of_gt P_slots_pos, pure,
       Except.pure]
   unfold process_epoch_lh_full_fulu
   rw [process_epoch_fulu_parts]
@@ -501,15 +501,14 @@ theorem process_epoch_lh_full_fulu_sameOk' [PresetCfg] [FuluCfg] (o : Oracle) (t
   unfold process_epoch_lh_full_fulu
   have hcurrent : get_current_epoch P t =
       .ok (t.slot / P.SLOTS_PER_EPOCH) := by
-    simp [get_current_epoch, compute_epoch_at_slot, uint64Div, P, Preset.ofVar, pure,
+    simp [get_current_epoch, compute_epoch_at_slot, uint64Div, Nat.ne_of_gt P_slots_pos, pure,
       Except.pure]
-  have hepoch : t.slot / P.SLOTS_PER_EPOCH + 4096 < UINT64_SIZE := by
-    have h64 : @LT.lt Nat _ t.slot (2 ^ 64) := hslot
-    show @LT.lt Nat _ (t.slot / 32 + 4096) (2 ^ 64)
-    omega
+  have hepoch : t.slot / P.SLOTS_PER_EPOCH + P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE :=
+    P_slot_target_lt hslot
   unfold EntryEB at heffective
   generalize hce : t.slot / P.SLOTS_PER_EPOCH = current_epoch
   rw [hce] at hcurrent hepoch hgen heffective
+  have h32 : @LT.lt Nat _ (current_epoch + 32) (2 ^ 64) := P_target_bound hepoch
   rw [process_epoch_fulu_parts]
   refine SameOk.bind (lhJustificationAndFinalization_sameOk _ _) (fun s1 h1 => ?_)
   replace h1 := (lhJustificationAndFinalization_sameOk _ _ s1).mp h1
@@ -573,7 +572,7 @@ theorem process_epoch_lh_full_fulu_sameOk' [PresetCfg] [FuluCfg] (o : Oracle) (t
     · cases hactive
     · exact (Except.ok.inj hactive).symm
   have hactivation := compute_activation_exit_epoch_of_lt P current_epoch
-    (by simp only [P, Preset.ofVar]; epoch_omega)
+    (P_target_activation hepoch)
   obtain ⟨adj, per, hpre⟩ := slashingsPreamble_ok tab s1.slashings hslashings htab_lo
   have hk : max P.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) /
       P.EFFECTIVE_BALANCE_INCREMENT ≤ 1152921504 := by
@@ -596,28 +595,21 @@ theorem process_epoch_lh_full_fulu_sameOk' [PresetCfg] [FuluCfg] (o : Oracle) (t
       x ≤ max P.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) /
         P.EFFECTIVE_BALANCE_INCREMENT * rctx.active_increments :=
     fun x hx => Nat.le_trans hx (Nat.le_mul_of_pos_right _ hact1)
-  have hcfar : current_epoch < FAR_FUTURE_EPOCH := by
-    have h64 : @LT.lt Nat _ (current_epoch + 4096) (2 ^ 64) := hepoch
-    show @LT.lt Nat _ current_epoch (2 ^ 64 - 1)
-    omega
-  have hnext : current_epoch + 1 < FAR_FUTURE_EPOCH := by
-    have h64 : @LT.lt Nat _ (current_epoch + 4096) (2 ^ 64) := hepoch
-    show @LT.lt Nat _ (current_epoch + 1) (2 ^ 64 - 1)
-    omega
-  have h4096 : P.EPOCHS_PER_SLASHINGS_VECTOR / 2 = 4096 := rfl
+  have hcfar : current_epoch < FAR_FUTURE_EPOCH := (P_target_far hepoch).1
+  have hnext : current_epoch + 1 < FAR_FUTURE_EPOCH := (P_target_far hepoch).2
   -- The four spec steps equal the first Lighthouse pass.
   have hfour := SameOk.trans (specFourStepsFulu_sameOk s1 tab htab hrows1
     current_epoch _ hcur1 hactivation hcfar)
     (lighthouse_single_pass_eq_spec_supply_fulu tab s1 hrows1 current_epoch hcur1
     (by simpa [GENESIS_EPOCH] using hgen) rctx hctx (hpe ▸ heff1) hexit1 hmax1 hbal1 _
-    hactivation (by rw [h4096]; exact hepoch) adj per hpre
-    (Nat.le_of_succ_le hfin) (Nat.lt_of_le_of_lt (Nat.add_le_add_left (by decide) _) hepoch)
+    hactivation hepoch adj per hpre
+    (Nat.le_of_succ_le hfin) (P_target_succ hepoch)
     htab_lo
     _ hk ⟨hle _ hsrc, hle _ htgt, hle _ hhd⟩ (lhBaseReward tab) (by
       intro r hr _
       obtain ⟨b, hb⟩ := rewardsBaseReward_ok_mainnet tab r.validator htab_lo
         (hmax1 _ (by rw [← rowsOf_map_validator]; exact List.mem_map_of_mem hr))
-      simp only [lhBaseReward, hb]))
+      unfold lhBaseReward; rw [hb]))
   -- The Lighthouse tail reaches `tailNF`.
   refine SameOk.trans (lhFullTailG_nf o fuluTabM (fun _ => epochRest2Fulu o) s1 current_epoch tab rctx adj per _ _ hcur1 htab hctx
     hpre hysteresisThresholds_mainnet hrows1) ?_

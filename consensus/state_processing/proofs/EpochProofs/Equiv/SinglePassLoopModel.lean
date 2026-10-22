@@ -19,7 +19,7 @@ open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 open state_processing.per_epoch_processing.single_pass_step (ExitChurn StepContext)
 
 /-- The row inputs of the model loop in `lhFullTail`. -/
-def modelRowInputs (total_active_balance : Spec.Gwei) (topups : List Spec.Gwei)
+def modelRowInputs [EpochProofs.Spec.PresetCfg] (total_active_balance : Spec.Gwei) (topups : List Spec.Gwei)
     (named : List Spec.ValidatorIndex) (r : Spec.Row) : Spec.LhRowInputs :=
   ⟨Spec.lhBaseReward total_active_balance r, topups.getD r.index 0, decide (r.index ∈ named)⟩
 

@@ -111,6 +111,48 @@ theorem P_slashings_vector_le [PresetCfg] [h : PresetCfg.Ok] : P.EPOCHS_PER_SLAS
 theorem P_slashings_vector_nat [PresetCfg] [PresetCfg.Ok] :
     ∃ V : Nat, P.EPOCHS_PER_SLASHINGS_VECTOR = V ∧ 64 ≤ V ∧ V ≤ 8192 :=
   ⟨_, rfl, P_slashings_vector_ge, P_slashings_vector_le⟩
+/-- The slashings target epoch fits in a `u64` for epochs below `2 ^ 63`. -/
+theorem P_slashings_target_lt [PresetCfg] [PresetCfg.Ok] {e : Nat} (he : e < 2 ^ 63) :
+    e + P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE := by
+  obtain ⟨V, hV, -, hV2⟩ := P_slashings_vector_nat
+  rw [hV]
+  simp only [UINT64_SIZE]
+  omega
+/-- The slashings target of the epoch of a `u64` slot fits in a `u64`. -/
+theorem P_slot_target_lt [PresetCfg] [PresetCfg.Ok] {x : Nat} (hx : x < 2 ^ 64) :
+    x / P.SLOTS_PER_EPOCH + P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE := by
+  obtain ⟨q, hq⟩ : ∃ q : Nat, x / P.SLOTS_PER_EPOCH = q := ⟨_, rfl⟩
+  have h2 : q ≤ x / 2 := by
+    rw [← hq]; exact Nat.div_le_div_left (Nat.lt_iff_add_one_le.mp P_slots_gt_one) (by decide)
+  rw [hq]
+  exact P_slashings_target_lt (by omega)
+
+/-- From a fitting slashings target: the epoch is at least 32 below `2 ^ 64`. -/
+theorem P_target_bound [PresetCfg] [PresetCfg.Ok] {e : Nat}
+    (h : e + P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE) : e + 32 < 2 ^ 64 := by
+  obtain ⟨V, hV, hV1, -⟩ := P_slashings_vector_nat
+  rw [hV] at h
+  simp only [UINT64_SIZE] at h
+  omega
+theorem P_target_activation [PresetCfg] [PresetCfg.Ok] {e : Nat}
+    (h : e + P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE) :
+    e + 1 + P.MAX_SEED_LOOKAHEAD < UINT64_SIZE := by
+  have := P_target_bound h
+  simp only [P, Preset.ofVar, UINT64_SIZE]
+  omega
+
+theorem P_target_succ [PresetCfg] [PresetCfg.Ok] {e : Nat}
+    (h : e + P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE) : e + 1 < UINT64_SIZE := by
+  have := P_target_bound h
+  simp only [UINT64_SIZE]
+  omega
+
+theorem P_target_far [PresetCfg] [PresetCfg.Ok] {e : Nat}
+    (h : e + P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE) :
+    e < FAR_FUTURE_EPOCH ∧ e + 1 < FAR_FUTURE_EPOCH := by
+  have := P_target_bound h
+  simp only [FAR_FUTURE_EPOCH]
+  omega
 theorem P_historical_vector_pos [PresetCfg] [h : PresetCfg.Ok] :
     0 < P.EPOCHS_PER_HISTORICAL_VECTOR := h.historical_vector_pos
 theorem P_eth1_period_pos [PresetCfg] [h : PresetCfg.Ok] : 0 < P.EPOCHS_PER_ETH1_VOTING_PERIOD :=

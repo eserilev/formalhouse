@@ -83,14 +83,14 @@ theorem ebUpdateAt_some [PresetCfg] {s : BeaconState} {i : Nat} {v : Validator} 
       rfl
 
 /-- `ebUpdateAt` fails without the validator. -/
-theorem ebUpdateAt_of_none_v {s : BeaconState} {i : Nat} (hv : s.validators[i]? = none) :
+theorem ebUpdateAt_of_none_v [PresetCfg] {s : BeaconState} {i : Nat} (hv : s.validators[i]? = none) :
     ebUpdateAt s i = .error .indexOutOfRange := by
   unfold ebUpdateAt
   rw [listGet_of_none hv]
   rfl
 
 /-- `ebUpdateAt` fails without the balance. -/
-theorem ebUpdateAt_of_none_b {s : BeaconState} {i : Nat} {v : Validator}
+theorem ebUpdateAt_of_none_b [PresetCfg] {s : BeaconState} {i : Nat} {v : Validator}
     (hv : s.validators[i]? = some v) (hb : s.balances[i]? = none) :
     ebUpdateAt s i = .error .indexOutOfRange := by
   unfold ebUpdateAt
@@ -99,7 +99,7 @@ theorem ebUpdateAt_of_none_b {s : BeaconState} {i : Nat} {v : Validator}
 
 /-- `ebUpdateAt` succeeds exactly when the validator and the balance exist and the new effective
 balance computes. Then it is `setEB`. -/
-theorem ebUpdateAt_ok (s s' : BeaconState) (i : Nat) :
+theorem ebUpdateAt_ok [PresetCfg] (s s' : BeaconState) (i : Nat) :
     ebUpdateAt s i = .ok s' ↔ ∃ v b e, s.validators[i]? = some v ∧ s.balances[i]? = some b ∧
       ebNew v b = .ok e ∧ s' = setEB s i e := by
   cases hv : s.validators[i]? with
@@ -378,7 +378,7 @@ theorem setEB_comm (t : BeaconState) {i j : Nat} (e e' : Gwei) (hij : i ≠ j) :
       simp only [List.set_comm _ _ hij]
 
 /-- Instance g: an update at `j` commutes with `setEB` at `i ≠ j`. -/
-theorem ebUpdateAt_hF1 (j i : Nat) (hij : i ≠ j) (t : BeaconState) (e : Gwei) :
+theorem ebUpdateAt_hF1 [PresetCfg] (j i : Nat) (hij : i ≠ j) (t : BeaconState) (e : Gwei) :
     ebUpdateAt (setEB t i e) j = (fun t' => setEB t' i e) <$> ebUpdateAt t j := by
   have hv' := setEB_get_ne t e (Ne.symm hij)
   have hb' := setEB_balances t i e
@@ -401,14 +401,14 @@ theorem ebUpdateAt_hF1 (j i : Nat) (hij : i ≠ j) (t : BeaconState) (e : Gwei) 
         rw [setEB_comm t e e' hij]
 
 /-- Instance g: an update at `j` keeps validator `i ≠ j` and its balance. -/
-theorem ebUpdateAt_hF2 (j i : Nat) (hij : i ≠ j) (t t' : BeaconState)
+theorem ebUpdateAt_hF2 [PresetCfg] (j i : Nat) (hij : i ≠ j) (t t' : BeaconState)
     (h : ebUpdateAt t j = .ok t') :
     t'.validators[i]? = t.validators[i]? ∧ t'.balances[i]? = t.balances[i]? := by
   obtain ⟨_, _, e, -, -, -, rfl⟩ := (ebUpdateAt_ok t t' j).mp h
   exact ⟨setEB_get_ne t e hij, by rw [setEB_balances]⟩
 
 /-- Two updates at different indices commute. -/
-theorem ebUpdateAt_swap (s : BeaconState) (i j : Nat) :
+theorem ebUpdateAt_swap [PresetCfg] (s : BeaconState) (i j : Nat) :
     SameOk (ebUpdateAt s i >>= fun t => ebUpdateAt t j)
       (ebUpdateAt s j >>= fun t => ebUpdateAt t i) := by
   by_cases hij : i = j
@@ -419,7 +419,7 @@ theorem ebUpdateAt_swap (s : BeaconState) (i j : Nat) :
       s trivial
 
 /-- Updates over two permuted lists give the same `ok` results. -/
-theorem ebFold_perm {l l' : List Nat} (h : l.Perm l') (s : BeaconState) :
+theorem ebFold_perm [PresetCfg] {l l' : List Nat} (h : l.Perm l') (s : BeaconState) :
     SameOk (l.foldlM ebUpdateAt s) (l'.foldlM ebUpdateAt s) := by
   induction h generalizing s with
   | nil => exact SameOk.refl _

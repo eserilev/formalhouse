@@ -309,7 +309,7 @@ theorem depositLoop_growth [PresetCfg] (fs avail : Nat) :
       refine ⟨(!v.is_withdrawn && v.is_exited) :: flags, by simp [hp], by simp [hn]; omega⟩
 
 /-- Applying handled deposits keeps `ValExt`. -/
-theorem applyHandled_valExt (o : Oracle) (s : BeaconState) :
+theorem applyHandled_valExt [PresetCfg] (o : Oracle) (s : BeaconState) :
     ∀ (hd : List (PendingDeposit × Bool)) (T T' : BeaconState), ValExt s T →
       applyHandled o T hd = .ok T' → ValExt s T'
   | [], T, T', hT, h => by

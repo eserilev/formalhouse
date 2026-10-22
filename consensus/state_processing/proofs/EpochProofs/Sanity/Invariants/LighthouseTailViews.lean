@@ -112,7 +112,7 @@ theorem lhRowStep_registry_exclusive [PresetCfg] (ctx : LhStepContext) (base : G
       x.2.validator = r.validator.withRegistryFields g := by
   obtain ⟨g, hg, hx⟩ := lhRowStep_registry ctx base churn r x h
   refine ⟨g, ?_, hx⟩
-  rw [← registryStepIndependent_eq_exclusive P _ _ _ _ _ _ (by decide) hfinalized
+  rw [← registryStepIndependent_eq_exclusive P _ _ _ _ _ _ (by pdecide) hfinalized
     hexit hcurrent hactivation]
   exact hg
 
@@ -206,7 +206,7 @@ theorem registryStepExclusive_ejected [PresetCfg] (total_active_balance current_
     (hej : effective_balance ≤ P.EJECTION_BALANCE)
     (hfar : f.exit_epoch = FAR_FUTURE_EPOCH) : g.exit_epoch < FAR_FUTURE_EPOCH := by
   have hlow : ¬ P.MIN_ACTIVATION_BALANCE ≤ effective_balance := by
-    have : P.EJECTION_BALANCE < P.MIN_ACTIVATION_BALANCE := by decide
+    have : P.EJECTION_BALANCE < P.MIN_ACTIVATION_BALANCE := by pdecide
     exact fun hle => Nat.lt_irrefl _ (Nat.lt_of_lt_of_le (Nat.lt_of_lt_of_le this hle) hej)
   unfold registryStepExclusive at hreg
   split at hreg
@@ -289,7 +289,7 @@ theorem views_eq [PresetCfg] (ctx : LhStepContext) (bf : Row → Gwei) (s : Beac
     have hex : v.exit_epoch ≤ FAR_FUTURE_EPOCH := by
       obtain ⟨hk, rfl⟩ := List.getElem?_eq_some_iff.mp hs
       exact hexit _ hk
-    have hpred := predictedStatus_eq_post_registry P _ _ _ _ _ _ g hreg (by decide)
+    have hpred := predictedStatus_eq_post_registry P _ _ _ _ _ _ g hreg (by pdecide)
       hex (hvalid v hmem) hnext
       (fun ha hx he hf => registryStepExclusive_ejected _ _ _ _ _ _ g hreg ha hx he hf)
     dsimp only

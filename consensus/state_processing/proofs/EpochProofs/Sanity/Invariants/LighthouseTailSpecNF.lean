@@ -59,7 +59,7 @@ theorem eth1_eq [PresetCfg] (S : BeaconState) :
         split <;> simp_all
 
 /-- The test reads only the slot. -/
-theorem eth1Cond_slot {S S' : BeaconState} (h : S'.slot = S.slot) : eth1Cond S' = eth1Cond S := by
+theorem eth1Cond_slot [PresetCfg] {S S' : BeaconState} (h : S'.slot = S.slot) : eth1Cond S' = eth1Cond S := by
   simp only [eth1Cond, get_current_epoch, h]
 
 /-- A successful eth1 reset changes only the votes. -/
@@ -467,7 +467,7 @@ def specNfAfterG [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM BeaconSta
   K t9
 
 /-- `tailNFG` in pieces. -/
-theorem tailNF_eq_spec (o : Oracle) (B K : BeaconState → SpecM BeaconState) (s1 S4 : BeaconState)
+theorem tailNF_eq_spec [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM BeaconState) (s1 S4 : BeaconState)
     (total_active_balance : Gwei) (current_epoch : Epoch) :
     tailNFG o (fun t => B t >>= K) s1 S4 total_active_balance current_epoch =
       (decOf s1 total_active_balance current_epoch >>= fun x => sumsOf s1 x >>= fun sums =>
@@ -654,7 +654,7 @@ theorem fold_past [PresetCfg] (F : BeaconState → SpecM BeaconState) (P : Beaco
     (ebFold_commute F P l hP hF1 hF2 s hs) k).flip
 
 /-- A fold of updates keeps the number of validators. -/
-theorem ebFold_len : ∀ (l : List Nat) (t t' : BeaconState),
+theorem ebFold_len [PresetCfg] : ∀ (l : List Nat) (t t' : BeaconState),
     l.foldlM ebUpdateAt t = .ok t' → t'.validators.length = t.validators.length
   | [], t, t', h => by cases h; rfl
   | i :: l, t, t', h => by
@@ -664,7 +664,7 @@ theorem ebFold_len : ∀ (l : List Nat) (t t' : BeaconState),
     rw [ebFold_len l _ t' h, setEB_length]
 
 /-- A fold of updates keeps `consolidationIndices`. -/
-theorem ebFold_ci : ∀ (l : List Nat) (t t' : BeaconState),
+theorem ebFold_ci [PresetCfg] : ∀ (l : List Nat) (t t' : BeaconState),
     l.foldlM ebUpdateAt t = .ok t' → consolidationIndices t' = consolidationIndices t
   | [], t, t', h => by cases h; rfl
   | i :: l, t, t', h => by

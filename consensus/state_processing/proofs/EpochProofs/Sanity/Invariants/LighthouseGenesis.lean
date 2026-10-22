@@ -101,7 +101,7 @@ theorem genesis_passes_eq_single_pass (p : Preset) (total_active_balance : Gwei)
 
 /-- On mainnet, at the genesis epoch, one pass of `lhRowStep` with `after_genesis = false`
 gives the same `ok` results as the spec's inactivity, rewards, registry and slashings steps. -/
-theorem lighthouse_single_pass_eq_spec_genesis [PresetCfg] (total_active_balance : Gwei)
+theorem lighthouse_single_pass_eq_spec_genesis [PresetCfg] [PresetCfg.Ok] (total_active_balance : Gwei)
     (state : BeaconState) (hrows : RowsOk state)
     (hcurrent : get_current_epoch P state = .ok GENESIS_EPOCH)
     (rctx : RewardsContext) (hprev : rctx.previous_epoch = GENESIS_EPOCH)
@@ -125,7 +125,7 @@ theorem lighthouse_single_pass_eq_spec_genesis [PresetCfg] (total_active_balance
           (lhContextOf state total_active_balance GENESIS_EPOCH rctx per) (base_reward r) churn r)
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
   refine SameOk.trans (genesis_passes_eq_single_pass P total_active_balance state
-    hrows hcurrent activation_epoch hactivation (by decide) adjusted per hpre) (SameOk.of_eq ?_)
+    hrows hcurrent activation_epoch hactivation (P_slashings_target_lt (by decide)) adjusted per hpre) (SameOk.of_eq ?_)
   have hstep : ∀ churn r, r ∈ rowsOf state →
       lhRowStep P (lhContextOf state total_active_balance GENESIS_EPOCH rctx per)
         (base_reward r) churn r =
@@ -140,7 +140,7 @@ theorem lighthouse_single_pass_eq_spec_genesis [PresetCfg] (total_active_balance
     rw [hri] at hrow
     subst hrow
     exact lhRowStep_genesis P _ rfl _ churn _ activation_epoch
-      (by simp only [lhContextOf, hprev, GENESIS_EPOCH, UINT64_SIZE]; decide) (by decide)
+      (by simp only [lhContextOf, hprev, GENESIS_EPOCH, UINT64_SIZE]; decide) (by pdecide)
       (by simpa only [lhContextOf] using hfinalized)
       (by simp only [lhContextOf, GENESIS_EPOCH, UINT64_SIZE]; decide) hactivation (hexit i hiv)
   rw [passM_congr _ _ (rowsOf state) (fun churn r hr => hstep churn r hr)]

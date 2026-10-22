@@ -125,7 +125,7 @@ def gloasFin [PresetCfg] (o : Oracle) (total_active_balance : Gwei) (t : BeaconS
   process_builder_pending_payments P total_active_balance t >>= epochRest2 o
 
 /-- The Lighthouse steps after justification and finalization. -/
-def lhFullTail (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
+def lhFullTail [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
   lhFullTailG o id (gloasFin o) s
 
 /-- The Gloas `process_epoch` on mainnet as Lighthouse runs it, with the pending deposits and the
