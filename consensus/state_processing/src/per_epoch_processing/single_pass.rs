@@ -3,9 +3,10 @@ use crate::{
     epoch_cache::{PreEpochCache, initialize_epoch_cache},
     per_block_processing::is_valid_deposit_signature,
     per_epoch_processing::{
-        Error, ParticipationEpochSummary, builder_pending_payments, effective_balance,
-        epoch_committees, inactivity_updates, pending_consolidations, pending_deposits,
-        registry_rows, registry_update, rewards_penalties, single_pass_step, slashings_penalty,
+        Error, ParticipationEpochSummary, builder_pending_payments, deposit_writes,
+        effective_balance, epoch_committees, inactivity_updates, pending_consolidations,
+        pending_deposits, registry_rows, registry_update, rewards_penalties, single_pass_step,
+        slashings_penalty,
     },
 };
 use itertools::izip;
@@ -461,80 +462,21 @@ pub fn process_epoch_single_pass<E: EthSpec>(
     // of the `pending_deposits` list. But we may as well preserve the write ordering used
     // by the spec and do this first.
     if let Some(ctxt) = pending_deposits_ctxt {
-        let mut new_balance_deposits: Vec<PendingDeposit> = state
-            .pending_deposits()?
-            .iter_from(ctxt.next_deposit_index)?
-            .cloned()
-            .collect();
-        for deposit in ctxt.deposits_to_postpone {
-            new_balance_deposits.push(deposit);
-        }
-        state.set_pending_deposits_from_iter(new_balance_deposits)?;
-        *state.deposit_balance_to_consume_mut()? = ctxt.deposit_balance_to_consume;
-
-        // `new_validator_deposits` may contain multiple deposits with the same pubkey where
-        // the first deposit creates the new validator and the others are topups.
-        // Each item in the vec is a (pubkey, validator_index)
-        let mut added_validators = Vec::new();
-        for deposit in ctxt.new_validator_deposits {
-            let deposit_data = DepositData {
-                pubkey: deposit.pubkey,
-                withdrawal_credentials: deposit.withdrawal_credentials,
-                amount: deposit.amount,
-                signature: deposit.signature,
-            };
-            // Only check the signature if this is the first deposit for the validator,
-            // following the logic from `apply_pending_deposit` in the spec.
-            if let Some(validator_index) = state.get_validator_index(&deposit_data.pubkey)? {
-                state
-                    .get_balance_mut(validator_index)?
-                    .safe_add_assign(deposit_data.amount)?;
-            } else if is_valid_deposit_signature(&deposit_data, spec).is_ok() {
-                // Apply the new deposit to the state
-                let validator_index = state.add_validator_to_registry(
-                    deposit_data.pubkey,
-                    deposit_data.withdrawal_credentials,
-                    deposit_data.amount,
-                    spec,
-                )?;
-                added_validators.push((deposit_data.pubkey, validator_index));
-            }
-        }
-        if conf.effective_balance_updates {
-            // Re-process effective balance updates for validators affected by top-up of new validators.
-            let (
-                mut validators,
-                balances,
-                _,
-                current_epoch_participation,
-                _,
-                progressive_balances,
-                _,
-                _,
-            ) = state.mutable_validator_fields()?;
-            for (_, validator_index) in added_validators.iter() {
-                let balance = *balances
-                    .get(*validator_index)
-                    .ok_or(BeaconStateError::UnknownValidator(*validator_index))?;
-                let mut validator = validators
-                    .get_cow(*validator_index)
-                    .ok_or(BeaconStateError::UnknownValidator(*validator_index))?;
-                let validator_current_epoch_participation = *current_epoch_participation
-                    .get(*validator_index)
-                    .ok_or(BeaconStateError::UnknownValidator(*validator_index))?;
-                process_single_effective_balance_update(
-                    *validator_index,
-                    balance,
-                    &mut validator,
-                    validator_current_epoch_participation,
-                    &mut next_epoch_cache,
-                    progressive_balances,
-                    effective_balances_ctxt,
-                    state_ctxt,
-                    spec,
-                )?;
-            }
-        }
+        let mut deposits = StateDeposits {
+            state,
+            postponed: ctxt.deposits_to_postpone,
+            next_epoch_cache: &mut next_epoch_cache,
+            effective_balances_ctxt,
+            state_ctxt,
+            spec,
+        };
+        deposit_writes::apply_deposit_writes(
+            &mut deposits,
+            ctxt.next_deposit_index,
+            ctxt.deposit_balance_to_consume,
+            &ctxt.new_validator_deposits,
+            conf.effective_balance_updates,
+        )?;
     }
 
     // Process consolidations outside the single-pass loop, as they depend on balances for multiple
@@ -976,6 +918,114 @@ impl From<registry_rows::RowsError<Error>> for Error {
             registry_rows::RowsError::Step(e) => e.into(),
             registry_rows::RowsError::Rows(e) => e,
         }
+    }
+}
+
+impl From<deposit_writes::DepositWritesError<Error>> for Error {
+    fn from(e: deposit_writes::DepositWritesError<Error>) -> Error {
+        match e {
+            deposit_writes::DepositWritesError::Arith(e) => e.into(),
+            deposit_writes::DepositWritesError::State(e) => e,
+        }
+    }
+}
+
+/// The state that `deposit_writes::apply_deposit_writes` writes after the single pass.
+struct StateDeposits<'a, E: EthSpec> {
+    state: &'a mut BeaconState<E>,
+    postponed: Vec<PendingDeposit>,
+    next_epoch_cache: &'a mut PreEpochCache,
+    effective_balances_ctxt: &'a EffectiveBalancesContext,
+    state_ctxt: &'a StateContext,
+    spec: &'a ChainSpec,
+}
+
+impl<E: EthSpec> deposit_writes::DepositWrites<PendingDeposit, Error> for StateDeposits<'_, E> {
+    fn write_queue(
+        &mut self,
+        next_deposit_index: usize,
+        deposit_balance_to_consume: u64,
+    ) -> Result<(), Error> {
+        let mut new_balance_deposits: Vec<PendingDeposit> = self
+            .state
+            .pending_deposits()?
+            .iter_from(next_deposit_index)?
+            .cloned()
+            .collect();
+        new_balance_deposits.append(&mut self.postponed);
+        self.state
+            .set_pending_deposits_from_iter(new_balance_deposits)?;
+        *self.state.deposit_balance_to_consume_mut()? = deposit_balance_to_consume;
+        Ok(())
+    }
+
+    fn validator_index(&mut self, deposit: &PendingDeposit) -> Result<Option<usize>, Error> {
+        Ok(self.state.get_validator_index(&deposit.pubkey)?)
+    }
+
+    fn amount(&self, deposit: &PendingDeposit) -> u64 {
+        deposit.amount
+    }
+
+    fn balance(&self, index: usize) -> Result<u64, Error> {
+        Ok(self.state.get_balance(index)?)
+    }
+
+    fn set_balance(&mut self, index: usize, balance: u64) -> Result<(), Error> {
+        *self.state.get_balance_mut(index)? = balance;
+        Ok(())
+    }
+
+    fn is_valid_signature(&self, deposit: &PendingDeposit) -> bool {
+        let deposit_data = DepositData {
+            pubkey: deposit.pubkey,
+            withdrawal_credentials: deposit.withdrawal_credentials,
+            amount: deposit.amount,
+            signature: deposit.signature.clone(),
+        };
+        is_valid_deposit_signature(&deposit_data, self.spec).is_ok()
+    }
+
+    fn add_validator(&mut self, deposit: &PendingDeposit) -> Result<usize, Error> {
+        Ok(self.state.add_validator_to_registry(
+            deposit.pubkey,
+            deposit.withdrawal_credentials,
+            deposit.amount,
+            self.spec,
+        )?)
+    }
+
+    fn update_effective_balance(&mut self, index: usize) -> Result<(), Error> {
+        let (
+            mut validators,
+            balances,
+            _,
+            current_epoch_participation,
+            _,
+            progressive_balances,
+            _,
+            _,
+        ) = self.state.mutable_validator_fields()?;
+        let balance = *balances
+            .get(index)
+            .ok_or(BeaconStateError::UnknownValidator(index))?;
+        let mut validator = validators
+            .get_cow(index)
+            .ok_or(BeaconStateError::UnknownValidator(index))?;
+        let validator_current_epoch_participation = *current_epoch_participation
+            .get(index)
+            .ok_or(BeaconStateError::UnknownValidator(index))?;
+        process_single_effective_balance_update(
+            index,
+            balance,
+            &mut validator,
+            validator_current_epoch_participation,
+            self.next_epoch_cache,
+            progressive_balances,
+            self.effective_balances_ctxt,
+            self.state_ctxt,
+            self.spec,
+        )
     }
 }
 

@@ -1519,6 +1519,279 @@ def
       slots_per_epoch updated_payments 0#usize
   ok (new_withdrawals, updated_payments1)
 
+/-- [state_processing::per_epoch_processing::deposit_writes::DepositWritesError]
+    Source: 'consensus/state_processing/src/per_epoch_processing/deposit_writes.rs', lines 11:0-16:1
+    Visibility: public -/
+@[discriminant isize]
+inductive per_epoch_processing.deposit_writes.DepositWritesError (E : Type)
+  where
+| Arith :
+  safe_arith.ArithError →
+  per_epoch_processing.deposit_writes.DepositWritesError E
+| State : E → per_epoch_processing.deposit_writes.DepositWritesError E
+
+/-- Trait declaration: [state_processing::per_epoch_processing::deposit_writes::DepositWrites]
+    Source: 'consensus/state_processing/src/per_epoch_processing/deposit_writes.rs', lines 19:0-48:1
+    Visibility: public -/
+structure per_epoch_processing.deposit_writes.DepositWrites (Self : Type) (D :
+  Type) (E : Type) where
+  write_queue : Self → Std.Usize → Std.U64 → Result ((core.result.Result
+    Unit E) × Self)
+  validator_index : Self → D → Result ((core.result.Result (Option
+    Std.Usize) E) × Self)
+  amount : Self → D → Result Std.U64
+  balance : Self → Std.Usize → Result (core.result.Result Std.U64 E)
+  set_balance : Self → Std.Usize → Std.U64 → Result ((core.result.Result
+    Unit E) × Self)
+  is_valid_signature : Self → D → Result Bool
+  add_validator : Self → D → Result ((core.result.Result Std.Usize E) ×
+    Self)
+  update_effective_balance : Self → Std.Usize → Result ((core.result.Result
+    Unit E) × Self)
+
+/-- [state_processing::per_epoch_processing::deposit_writes::apply_new_validator_deposits]: loop body 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/deposit_writes.rs', lines 57:4-94:1
+    Visibility: public -/
+@[rust_loop_body]
+def per_epoch_processing.deposit_writes.apply_new_validator_deposits_loop.body
+  {D : Type} {E : Type} {S : Type} (DepositWritesInst :
+  per_epoch_processing.deposit_writes.DepositWrites S D E)
+  (new_validator_deposits : Slice D) (state : S)
+  (added : alloc.vec.Vec Std.Usize) (i : Std.Usize) :
+  Result (ControlFlow (S × (alloc.vec.Vec Std.Usize) × Std.Usize)
+    ((core.result.Result (alloc.vec.Vec Std.Usize)
+    (per_epoch_processing.deposit_writes.DepositWritesError E)) × S))
+  := do
+  let i1 := Slice.len new_validator_deposits
+  if i < i1
+  then
+    let o ←
+      core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice D)
+        new_validator_deposits i
+    match o with
+    | none => ok (done (core.result.Result.Ok added, state))
+    | some deposit =>
+      let (r, state1) ← DepositWritesInst.validator_index state deposit
+      match r with
+      | core.result.Result.Ok known =>
+        match known with
+        | none =>
+          let b ← DepositWritesInst.is_valid_signature state1 deposit
+          if b
+          then
+            let (r1, state2) ← DepositWritesInst.add_validator state1 deposit
+            match r1 with
+            | core.result.Result.Ok index =>
+              let added1 ← alloc.vec.Vec.push added index
+              let r2 ←
+                Usize.Insts.Safe_arithSafeArithUsize.safe_add i 1#usize
+              match r2 with
+              | core.result.Result.Ok next => ok (cont (state2, added1, next))
+              | core.result.Result.Err e =>
+                ok (done (core.result.Result.Err
+                  (per_epoch_processing.deposit_writes.DepositWritesError.Arith
+                  e), state2))
+            | core.result.Result.Err e =>
+              ok (done (core.result.Result.Err
+                (per_epoch_processing.deposit_writes.DepositWritesError.State
+                e), state2))
+          else
+            let r1 ← Usize.Insts.Safe_arithSafeArithUsize.safe_add i 1#usize
+            match r1 with
+            | core.result.Result.Ok next => ok (cont (state1, added, next))
+            | core.result.Result.Err e =>
+              ok (done (core.result.Result.Err
+                (per_epoch_processing.deposit_writes.DepositWritesError.Arith
+                e), state1))
+        | some index =>
+          let r1 ← DepositWritesInst.balance state1 index
+          match r1 with
+          | core.result.Result.Ok balance =>
+            let i2 ← DepositWritesInst.amount state1 deposit
+            let r2 ← U64.Insts.Safe_arithSafeArithU64.safe_add balance i2
+            match r2 with
+            | core.result.Result.Ok new_balance =>
+              let (r3, state2) ←
+                DepositWritesInst.set_balance state1 index new_balance
+              match r3 with
+              | core.result.Result.Ok _ =>
+                let r4 ←
+                  Usize.Insts.Safe_arithSafeArithUsize.safe_add i 1#usize
+                match r4 with
+                | core.result.Result.Ok next => ok (cont (state2, added, next))
+                | core.result.Result.Err e =>
+                  ok (done (core.result.Result.Err
+                    (per_epoch_processing.deposit_writes.DepositWritesError.Arith
+                    e), state2))
+              | core.result.Result.Err e =>
+                ok (done (core.result.Result.Err
+                  (per_epoch_processing.deposit_writes.DepositWritesError.State
+                  e), state2))
+            | core.result.Result.Err e =>
+              ok (done (core.result.Result.Err
+                (per_epoch_processing.deposit_writes.DepositWritesError.Arith
+                e), state1))
+          | core.result.Result.Err e =>
+            ok (done (core.result.Result.Err
+              (per_epoch_processing.deposit_writes.DepositWritesError.State e),
+              state1))
+      | core.result.Result.Err e =>
+        ok (done (core.result.Result.Err
+          (per_epoch_processing.deposit_writes.DepositWritesError.State e),
+          state1))
+  else ok (done (core.result.Result.Ok added, state))
+
+/-- [state_processing::per_epoch_processing::deposit_writes::apply_new_validator_deposits]: loop 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/deposit_writes.rs', lines 57:4-94:1
+    Visibility: public -/
+@[rust_loop]
+def per_epoch_processing.deposit_writes.apply_new_validator_deposits_loop
+  {D : Type} {E : Type} {S : Type} (DepositWritesInst :
+  per_epoch_processing.deposit_writes.DepositWrites S D E) (state : S)
+  (new_validator_deposits : Slice D) (added : alloc.vec.Vec Std.Usize)
+  (i : Std.Usize) :
+  Result ((core.result.Result (alloc.vec.Vec Std.Usize)
+    (per_epoch_processing.deposit_writes.DepositWritesError E)) × S)
+  := do
+  loop
+    (fun (state1, added1, i1) =>
+      per_epoch_processing.deposit_writes.apply_new_validator_deposits_loop.body
+      DepositWritesInst new_validator_deposits state1 added1 i1)
+    (state, added, i)
+
+/-- [state_processing::per_epoch_processing::deposit_writes::apply_new_validator_deposits]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/deposit_writes.rs', lines 51:0-94:1
+    Visibility: public -/
+@[reducible]
+def per_epoch_processing.deposit_writes.apply_new_validator_deposits
+  {D : Type} {E : Type} {S : Type} (DepositWritesInst :
+  per_epoch_processing.deposit_writes.DepositWrites S D E) (state : S)
+  (new_validator_deposits : Slice D) :
+  Result ((core.result.Result (alloc.vec.Vec Std.Usize)
+    (per_epoch_processing.deposit_writes.DepositWritesError E)) × S)
+  := do
+  per_epoch_processing.deposit_writes.apply_new_validator_deposits_loop
+    DepositWritesInst state new_validator_deposits (alloc.vec.Vec.new
+    Std.Usize) 0#usize
+
+/-- [state_processing::per_epoch_processing::deposit_writes::update_effective_balances]: loop body 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/deposit_writes.rs', lines 102:4-115:1
+    Visibility: public -/
+@[rust_loop_body]
+def per_epoch_processing.deposit_writes.update_effective_balances_loop.body
+  {D : Type} {E : Type} {S : Type} (DepositWritesInst :
+  per_epoch_processing.deposit_writes.DepositWrites S D E)
+  (indices : Slice Std.Usize) (state : S) (j : Std.Usize) :
+  Result (ControlFlow (S × Std.Usize) ((core.result.Result Unit
+    (per_epoch_processing.deposit_writes.DepositWritesError E)) × S))
+  := do
+  let i := Slice.len indices
+  if j < i
+  then
+    let o ←
+      core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice Std.Usize)
+        indices j
+    match o with
+    | none => ok (done (core.result.Result.Ok (), state))
+    | some index =>
+      let (r, state1) ←
+        DepositWritesInst.update_effective_balance state index
+      match r with
+      | core.result.Result.Ok _ =>
+        let r1 ← Usize.Insts.Safe_arithSafeArithUsize.safe_add j 1#usize
+        match r1 with
+        | core.result.Result.Ok next => ok (cont (state1, next))
+        | core.result.Result.Err e =>
+          ok (done (core.result.Result.Err
+            (per_epoch_processing.deposit_writes.DepositWritesError.Arith e),
+            state1))
+      | core.result.Result.Err e =>
+        ok (done (core.result.Result.Err
+          (per_epoch_processing.deposit_writes.DepositWritesError.State e),
+          state1))
+  else ok (done (core.result.Result.Ok (), state))
+
+/-- [state_processing::per_epoch_processing::deposit_writes::update_effective_balances]: loop 0:
+    Source: 'consensus/state_processing/src/per_epoch_processing/deposit_writes.rs', lines 102:4-115:1
+    Visibility: public -/
+@[rust_loop]
+def per_epoch_processing.deposit_writes.update_effective_balances_loop
+  {D : Type} {E : Type} {S : Type} (DepositWritesInst :
+  per_epoch_processing.deposit_writes.DepositWrites S D E) (state : S)
+  (indices : Slice Std.Usize) (j : Std.Usize) :
+  Result ((core.result.Result Unit
+    (per_epoch_processing.deposit_writes.DepositWritesError E)) × S)
+  := do
+  loop
+    (fun (state1, j1) =>
+      per_epoch_processing.deposit_writes.update_effective_balances_loop.body
+      DepositWritesInst indices state1 j1)
+    (state, j)
+
+/-- [state_processing::per_epoch_processing::deposit_writes::update_effective_balances]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/deposit_writes.rs', lines 97:0-115:1
+    Visibility: public -/
+@[reducible]
+def per_epoch_processing.deposit_writes.update_effective_balances
+  {D : Type} {E : Type} {S : Type} (DepositWritesInst :
+  per_epoch_processing.deposit_writes.DepositWrites S D E) (state : S)
+  (indices : Slice Std.Usize) :
+  Result ((core.result.Result Unit
+    (per_epoch_processing.deposit_writes.DepositWritesError E)) × S)
+  := do
+  per_epoch_processing.deposit_writes.update_effective_balances_loop
+    DepositWritesInst state indices 0#usize
+
+/-- [state_processing::per_epoch_processing::deposit_writes::apply_deposit_writes]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/deposit_writes.rs', lines 119:0-134:1
+    Visibility: public -/
+def per_epoch_processing.deposit_writes.apply_deposit_writes
+  {D : Type} {E : Type} {S : Type} (DepositWritesInst :
+  per_epoch_processing.deposit_writes.DepositWrites S D E) (state : S)
+  (next_deposit_index : Std.Usize) (deposit_balance_to_consume : Std.U64)
+  (new_validator_deposits : Slice D) (effective_balance_updates : Bool) :
+  Result ((core.result.Result Unit
+    (per_epoch_processing.deposit_writes.DepositWritesError E)) × S)
+  := do
+  let (r, state1) ←
+    DepositWritesInst.write_queue state next_deposit_index
+      deposit_balance_to_consume
+  match r with
+  | core.result.Result.Ok _ =>
+    let (r1, state2) ←
+      per_epoch_processing.deposit_writes.apply_new_validator_deposits
+        DepositWritesInst state1 new_validator_deposits
+    let cf ← core.result.Result.Insts.CoreOpsTry.branch r1
+    match cf with
+    | core.ops.control_flow.ControlFlow.Continue val =>
+      if effective_balance_updates
+      then
+        let s := alloc.vec.Vec.deref val
+        let (r2, state3) ←
+          per_epoch_processing.deposit_writes.update_effective_balances
+            DepositWritesInst state2 s
+        let cf1 ← core.result.Result.Insts.CoreOpsTry.branch r2
+        match cf1 with
+        | core.ops.control_flow.ControlFlow.Continue _ =>
+          ok (core.result.Result.Ok (), state3)
+        | core.ops.control_flow.ControlFlow.Break residual =>
+          let r3 ←
+            core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+              Unit (core.convert.FromSame
+              (per_epoch_processing.deposit_writes.DepositWritesError E))
+              residual
+          ok (r3, state3)
+      else ok (core.result.Result.Ok (), state2)
+    | core.ops.control_flow.ControlFlow.Break residual =>
+      let r2 ←
+        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+          Unit (core.convert.FromSame
+          (per_epoch_processing.deposit_writes.DepositWritesError E)) residual
+      ok (r2, state2)
+  | core.result.Result.Err e =>
+    ok (core.result.Result.Err
+      (per_epoch_processing.deposit_writes.DepositWritesError.State e), state1)
+
 /-- [state_processing::per_epoch_processing::effective_balance::hysteresis_thresholds]:
     Source: 'consensus/state_processing/src/per_epoch_processing/effective_balance.rs', lines 10:0-20:1
     Visibility: public -/

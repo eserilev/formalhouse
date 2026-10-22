@@ -44,7 +44,7 @@ It is not joined to the main result.
 |---|---|---|---|
 | Justification and finalization | `justification.rs` (#53) | read the bits and roots, write the checkpoints | progressive balances totals (#27) |
 | Inactivity, rewards, registry, slashings, deposit top-up, effective balance | `single_pass_step.rs`, the step modules (#5 to #12, #22) and the loop `registry_rows.rs` | `RowsContract` (`Trusted/RegistryRows.lean`): `StateRows::apply_step` in `single_pass.rs` reads row `i`, runs the step and writes the row back | base reward and total active balance (#26, #27), exit cache (#24), activation queue (#25) |
-| Pending deposits | `pending_deposits.rs` (#10) | the pubkey map; `Validator::from_deposit` and `add_validator_to_registry` (`types` crate, not translated) | pubkey cache |
+| Pending deposits | `pending_deposits.rs` (#10) and the writes `deposit_writes.rs` | `DepositWritesContract` (`Trusted/EpochTail.lean`): the queue write, the pubkey lookup, one balance read and write, `add_validator_to_registry` and one effective balance update in `StateDeposits` | pubkey cache |
 | Pending consolidations | `pending_consolidations.rs` (#11) | the index table and the balance write back | none |
 | Builder pending payments | `builder_pending_payments.rs` (#4) | the list writes | total active balance |
 | Proposer lookahead, PTC window, next sync committee | `epoch_committees.rs`, `balance_weighted_selection.rs`, `compute_shuffled_index_with.rs` (#54) | `SeedMixLink`, `EBLink`, the index lists, the milhouse PTC shift, the sync committee keys and aggregate key | committee cache (#28), shuffle (#29) |
@@ -175,6 +175,21 @@ churn and rows of one `passM` of `lhRowStepFull`, and an error exactly when that
 The only trusted part is `RowsContract`: what `StateRows`, the trait implementation in
 `single_pass.rs`, does for one row. `StateRows` reads the base reward only for an eligible
 validator, as before. `lhRowStepFull_base_reward` shows that the steps read it only then.
+
+## The deposit writes after the single pass
+
+`single_pass.rs` runs the deposit writes after the loop through `apply_deposit_writes` in
+`deposit_writes.rs`: the queue write, the new validator deposits in order, and the effective
+balance update of each new validator. The code is generic over the trait `DepositWrites`, so
+Aeneas translates the order, the branches and the index arithmetic. `apply_deposit_writes_spec`
+shows that it returns `Ok` exactly when the model returns `ok`, with the same state.
+`apply_deposit_writes_model` states this for `lhNewValidators` after `lhQueueWrite`. Each error
+site of the Rust (a failed state read or write, a balance overflow, an index overflow) returns
+`Err` only when the spec fails too. The queue write needs the next deposit index to be at most the
+queue length: `lhDepositPlan_next_le` proves it for every plan.
+
+The only trusted part is `DepositWritesContract`: what `StateDeposits`, the trait implementation
+in `single_pass.rs`, does for each method.
 
 ## Justification and finalization
 
@@ -434,6 +449,8 @@ charon cargo --preset=aeneas \
   --start-from 'state_processing::per_epoch_processing::justification' \
   --start-from 'state_processing::per_epoch_processing::epoch_committees' \
   --start-from 'state_processing::per_epoch_processing::tail_updates' \
+  --start-from 'state_processing::per_epoch_processing::registry_rows' \
+  --start-from 'state_processing::per_epoch_processing::deposit_writes' \
   --include safe_arith --include types::state::balance_weighted_selection \
   --include swap_or_not_shuffle::shuffle_hash --include swap_or_not_shuffle::compute_shuffled_index_with \
   --include types::builder --include alloy_primitives::bits \
@@ -494,6 +511,12 @@ copies the rest of the body into each branch, and the generated code grows expon
   reference, in index order, and maps each index to its position in the table. The moves read
   and write only these rows, so the table run equals the full-registry run of
   `process_pending_consolidations_eq`. The glue writes the new balances back.
+- `DepositWritesContract` (`EpochProofs/Trusted/EpochTail.lean`): each method of
+  `StateDeposits` in `single_pass.rs` does the spec write. The queue write keeps the deposits
+  from the next index on and appends the postponed deposits. The pubkey lookup returns the first
+  index with the pubkey. `add_validator` is `add_validator_to_registry` and returns the new
+  index. `update_effective_balance` is the effective balance update of one validator. The
+  generic code (`deposit_writes.rs`) is translated.
 - `RowsContract` (`EpochProofs/Trusted/RegistryRows.lean`): `StateRows::apply_step` in
   `single_pass.rs` reads row `i` from the milhouse lists and the caches, runs `single_pass_step`
   on it, writes the changed fields back and changes no other row. A row read or write never
