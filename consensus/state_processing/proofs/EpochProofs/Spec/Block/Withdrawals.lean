@@ -6,7 +6,7 @@ import EpochProofs.Spec.EffectiveBalanceUpdates
 # Reference: `process_withdrawals`
 
 Transcribed from `specs/capella`, `specs/electra` and `specs/gloas/beacon-chain.md`
-(v1.7.0-beta.2). Each function is the latest fork version and quotes its pyspec.
+(v1.7.0-beta.4). Each function is the latest fork version and quotes its pyspec.
 A `for` loop with `break` is a recursive helper on the list. A `for _ in range(n)` loop is a
 recursive helper on a fuel of `n`.
 -/
@@ -298,6 +298,28 @@ def get_pending_partial_withdrawals (p : Preset) (state : BeaconState)
   get_pending_partial_withdrawals_loop p state epoch prior_withdrawals withdrawals_limit
     state.pending_partial_withdrawals withdrawal_index processed_count withdrawals
 
+/-- ```python
+def get_builder_balance_after_withdrawals(
+    state: BeaconState, builder_index: BuilderIndex, withdrawals: Sequence[Withdrawal]
+) -> Gwei:
+    validator_index = convert_builder_index_to_validator_index(builder_index)
+    withdrawn = Gwei(
+        sum(
+            withdrawal.amount
+            for withdrawal in withdrawals
+            if withdrawal.validator_index == validator_index
+        )
+    )
+    return saturating_sub(state.builders[builder_index].balance, withdrawn)
+``` -/
+def get_builder_balance_after_withdrawals (state : BeaconState) (builder_index : BuilderIndex)
+    (withdrawals : List Withdrawal) : SpecM Gwei := do
+  let validator_index := convert_builder_index_to_validator_index builder_index
+  let withdrawn ← uint64Sum
+    ((withdrawals.filter fun withdrawal => withdrawal.validator_index == validator_index).map
+      (·.amount))
+  pure (saturating_sub (← listGet state.builders builder_index).balance withdrawn)
+
 /-- The `for _ in range(builders_limit)` loop of `get_builders_sweep_withdrawals`. The fuel is
 the number of iterations left. -/
 def get_builders_sweep_withdrawals_loop (state : BeaconState) (epoch : Epoch)
@@ -313,14 +335,15 @@ def get_builders_sweep_withdrawals_loop (state : BeaconState) (epoch : Epoch)
       return (withdrawals, withdrawal_index, processed_count)
 
     let builder ← listGet state.builders builder_index
+    let balance ← get_builder_balance_after_withdrawals state builder_index all_withdrawals
     let mut withdrawals := withdrawals
     let mut withdrawal_index := withdrawal_index
-    if builder.withdrawable_epoch ≤ epoch && builder.balance > 0 then
+    if builder.withdrawable_epoch ≤ epoch && balance > 0 then
       withdrawals := withdrawals ++ [{
         index := withdrawal_index
         validator_index := convert_builder_index_to_validator_index builder_index
         address := builder.execution_address
-        amount := builder.balance }]
+        amount := balance }]
       withdrawal_index ← uint64Add withdrawal_index 1
 
     let builder_index ← uint64Mod (← uint64Add builder_index 1) state.builders.length
@@ -333,7 +356,7 @@ def get_builders_sweep_withdrawals(
     state: BeaconState,
     withdrawal_index: WithdrawalIndex,
     prior_withdrawals: Sequence[Withdrawal],
-) -> Tuple[Sequence[Withdrawal], WithdrawalIndex, Uint64]:
+) -> tuple[Sequence[Withdrawal], WithdrawalIndex, Uint64]:
     epoch = get_current_epoch(state)
     builders_limit = min(len(state.builders), MAX_BUILDERS_PER_WITHDRAWALS_SWEEP)
     withdrawals_limit = MAX_WITHDRAWALS_PER_PAYLOAD - 1
@@ -349,13 +372,14 @@ def get_builders_sweep_withdrawals(
             break
 
         builder = state.builders[builder_index]
-        if builder.withdrawable_epoch <= epoch and builder.balance > 0:
+        balance = get_builder_balance_after_withdrawals(state, builder_index, all_withdrawals)
+        if builder.withdrawable_epoch <= epoch and balance > 0:
             withdrawals.append(
                 Withdrawal(
                     index=withdrawal_index,
                     validator_index=convert_builder_index_to_validator_index(builder_index),
                     address=builder.execution_address,
-                    amount=builder.balance,
+                    amount=balance,
                 )
             )
             withdrawal_index += 1

@@ -3,7 +3,7 @@ import EpochProofs.Spec.Block.ExecutionRequests
 /-!
 # Reference: parent execution payload and execution payload bid
 
-Transcribed from `specs/gloas/beacon-chain.md` (v1.7.0-beta.2). Each definition quotes its
+Transcribed from `specs/gloas/beacon-chain.md` (v1.7.0-beta.4). Each definition quotes its
 pyspec. The blob schedule is a parameter: `max_blobs_per_block epoch` is
 `get_blob_parameters(epoch).max_blobs_per_block`. Gloas `process_operations` asserts
 `len(body.deposits) == 0`, so the legacy `process_deposit` is not here.
@@ -46,19 +46,8 @@ def apply_parent_execution_payload(
     assert len(requests.builder_deposits) <= MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD
     assert len(requests.builder_exits) <= MAX_BUILDER_EXIT_REQUESTS_PER_PAYLOAD
 
-    # Process execution requests from parent's payload. The execution
-    # requests are processed at state.slot (child's slot), not the parent's slot.
-    def for_ops(operations: Sequence[Any], fn: Callable[[BeaconState, Any], None]) -> None:
-        for operation in operations:
-            fn(state, operation)
-
-    for_ops(requests.deposits, process_deposit_request)
-    for_ops(requests.withdrawals, process_withdrawal_request)
-    for_ops(requests.consolidations, process_consolidation_request)
-    for_ops(requests.builder_deposits, process_builder_deposit_request)
-    for_ops(requests.builder_exits, process_builder_exit_request)
-
-    # Settle the builder payment
+    # Settle the builder payment before the requests so that a builder exit
+    # request is rejected while the payment is pending
     if parent_epoch == get_current_epoch(state):
         payment_index = SLOTS_PER_EPOCH + parent_slot % SLOTS_PER_EPOCH
         settle_builder_payment(state, payment_index)
@@ -75,6 +64,18 @@ def apply_parent_execution_payload(
                 builder_index=parent_bid.builder_index,
             )
         )
+
+    # Process execution requests from parent's payload. The execution
+    # requests are processed at state.slot (child's slot), not the parent's slot.
+    def for_ops(operations: Sequence[Any], fn: Callable[[BeaconState, Any], None]) -> None:
+        for operation in operations:
+            fn(state, operation)
+
+    for_ops(requests.deposits, process_deposit_request)
+    for_ops(requests.withdrawals, process_withdrawal_request)
+    for_ops(requests.consolidations, process_consolidation_request)
+    for_ops(requests.builder_deposits, process_builder_deposit_request)
+    for_ops(requests.builder_exits, process_builder_exit_request)
 
     # Update parent payload availability and latest block hash
     state.execution_payload_availability[parent_slot % SLOTS_PER_HISTORICAL_ROOT] = Boolean(True)
@@ -96,17 +97,6 @@ def apply_parent_execution_payload (p : Preset) (o : Oracle) (state : BeaconStat
     throw .assertionFailed
 
   let mut state := state
-  for operation in requests.deposits do
-    state ← process_deposit_request state operation
-  for operation in requests.withdrawals do
-    state ← process_withdrawal_request p state operation
-  for operation in requests.consolidations do
-    state ← process_consolidation_request p state operation
-  for operation in requests.builder_deposits do
-    state ← process_builder_deposit_request p o state operation
-  for operation in requests.builder_exits do
-    state ← process_builder_exit_request p state operation
-
   if parent_epoch == (← get_current_epoch p state) then
     let payment_index ← uint64Add p.SLOTS_PER_EPOCH (← uint64Mod parent_slot p.SLOTS_PER_EPOCH)
     state ← settle_builder_payment state payment_index
@@ -119,6 +109,17 @@ def apply_parent_execution_payload (p : Preset) (o : Oracle) (state : BeaconStat
         fee_recipient := parent_bid.fee_recipient
         amount := parent_bid.value
         builder_index := parent_bid.builder_index }] }
+
+  for operation in requests.deposits do
+    state ← process_deposit_request state operation
+  for operation in requests.withdrawals do
+    state ← process_withdrawal_request p state operation
+  for operation in requests.consolidations do
+    state ← process_consolidation_request p state operation
+  for operation in requests.builder_deposits do
+    state ← process_builder_deposit_request p o state operation
+  for operation in requests.builder_exits do
+    state ← process_builder_exit_request p state operation
 
   state := { state with
     execution_payload_availability := ← listSet state.execution_payload_availability

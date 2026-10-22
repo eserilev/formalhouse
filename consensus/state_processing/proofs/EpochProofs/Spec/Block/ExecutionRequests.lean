@@ -9,7 +9,7 @@ import EpochProofs.Spec.Block.Withdrawals
 # Reference: execution requests and builder registry helpers
 
 Transcribed from `specs/phase0`, `altair`, `capella`, `electra`, `fulu` and `gloas`
-`beacon-chain.md` (v1.7.0-beta.2). Each definition quotes the pyspec of its latest fork.
+`beacon-chain.md` (v1.7.0-beta.4). Each definition quotes the pyspec of its latest fork.
 Constants that are not in `Preset` are top-level values with the mainnet value.
 `has_execution_withdrawal_credential` and `withdrawalAddress` come from `Block/Withdrawals`.
 -/

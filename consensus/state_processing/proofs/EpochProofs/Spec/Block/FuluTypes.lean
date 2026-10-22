@@ -5,7 +5,7 @@ import EpochProofs.Spec.Block.Types
 # Fulu block containers, `FuluState` and `FuluOracle`
 
 Transcribed from `specs/deneb`, `specs/electra` and `specs/fulu/beacon-chain.md`
-(v1.7.0-beta.2). Names and field order match the spec. Containers that Fulu shares with Gloas
+(v1.7.0-beta.4). Names and field order match the spec. Containers that Fulu shares with Gloas
 (slashings, attestations, exits, sync aggregate, the three request types) come from
 `Block/Types`.
 

@@ -9,7 +9,7 @@ import EpochProofs.Spec.Block.SyncAggregate
 /-!
 # Reference: the Fulu `process_block_header` and `process_block`
 
-Transcribed from `specs/phase0` and `specs/fulu/beacon-chain.md` (v1.7.0-beta.2).
+Transcribed from `specs/phase0` and `specs/fulu/beacon-chain.md` (v1.7.0-beta.4).
 `process_randao`, `process_eth1_data` and `process_sync_aggregate` are shared with Gloas.
 `process_randao` and `process_eth1_data` read only `randao_reveal` and `eth1_data`, so they run
 on `FuluBeaconBlockBody.view`.

@@ -4,7 +4,7 @@ import EpochProofs.Spec.Block.FuluTypes
 # Reference: the Fulu `process_execution_payload`
 
 Transcribed from `specs/phase0`, `specs/deneb` and `specs/fulu/beacon-chain.md`
-(v1.7.0-beta.2). Gloas removes this function. The execution engine and the Fulu
+(v1.7.0-beta.4). Gloas removes this function. The execution engine and the Fulu
 `hash_tree_root` functions come from `FuluOracle`.
 -/
 

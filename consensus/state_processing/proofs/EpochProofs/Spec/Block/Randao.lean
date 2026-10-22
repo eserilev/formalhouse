@@ -3,7 +3,7 @@ import EpochProofs.Spec.Helpers
 /-!
 # Reference: `process_randao`
 
-Transcribed from `specs/phase0/beacon-chain.md` (v1.7.0-beta.2). Later forks do not change it.
+Transcribed from `specs/phase0/beacon-chain.md` (v1.7.0-beta.4). Later forks do not change it.
 `sha256` and BLS come from the `Oracle`.
 -/
 

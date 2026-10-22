@@ -77,7 +77,8 @@ theorem apply_parent_execution_payload_effect (p : Preset) (o : Oracle) (s s' : 
   peel_ok h
   all_goals first
     | (cases h
-       refine (request_loop_effect (by assumption : forIn requests.deposits _ _ = Except.ok _)
+       refine RequestEffect.trans ?_
+         ((request_loop_effect (by assumption : forIn requests.deposits _ _ = Except.ok _)
          (by loop_body fun h => (process_deposit_request_effect _ _ _ _ h).2)).trans
          ((request_loop_effect (by assumption : forIn requests.withdrawals _ _ = Except.ok _)
          (by loop_body fun h => (process_withdrawal_request_effect _ _ _ _ h).2)).trans
@@ -88,12 +89,12 @@ theorem apply_parent_execution_payload_effect (p : Preset) (o : Oracle) (s s' : 
            (process_builder_deposit_request_frame _ _ _ _ _ h).requestEffect)).trans
          ((request_loop_effect (by assumption : forIn requests.builder_exits _ _ = Except.ok _)
          (by loop_body fun h => (process_builder_exit_request_frame _ _ _ _ h).requestEffect)).trans
-         ?_))))
-       first
-         | (have hs := settle_builder_payment_frame _ _ _
-             ‹settle_builder_payment _ _ = Except.ok _›
-            exact (hs.requestEffect (p := p)).trans (.of_eq rfl rfl ⟨rfl, rfl, rfl, rfl⟩))
-         | exact .of_eq rfl rfl ⟨rfl, rfl, rfl, rfl⟩)
+         ?_)))))
+       · first
+           | exact (settle_builder_payment_frame _ _ _
+               ‹settle_builder_payment _ _ = Except.ok _›).requestEffect (p := p)
+           | exact .of_eq rfl rfl ⟨rfl, rfl, rfl, rfl⟩
+       · exact .of_eq rfl rfl ⟨rfl, rfl, rfl, rfl⟩)
 
 /-- `process_parent_execution_payload` has a request effect. -/
 theorem process_parent_execution_payload_effect (p : Preset) (o : Oracle) (s s' : BeaconState)

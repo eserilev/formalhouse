@@ -5,7 +5,7 @@ import EpochProofs.Spec.Helpers
 # Reference: `process_justification_and_finalization`
 
 Transcribed from `specs/phase0/beacon-chain.md` and `specs/altair/beacon-chain.md`
-(v1.7.0-beta.2). Later forks do not change these functions. Each definition quotes its pyspec.
+(v1.7.0-beta.4). Later forks do not change these functions. Each definition quotes its pyspec.
 `get_block_root` is in `Spec/Helpers.lean`.
 -/
 

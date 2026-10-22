@@ -4,7 +4,7 @@ import EpochProofs.Spec.Fulu
 /-!
 # Reference: the Fulu `process_epoch`
 
-Transcribed from `specs/fulu/beacon-chain.md` (v1.7.0-beta.2). Fulu has no builder payments and
+Transcribed from `specs/fulu/beacon-chain.md` (v1.7.0-beta.4). Fulu has no builder payments and
 no PTC window. Its registry update, pending deposits, sync committee update and proposer
 lookahead are the Fulu functions of `Spec/Fulu.lean`. The other steps are the shared functions,
 which read the same text in Fulu and Gloas.

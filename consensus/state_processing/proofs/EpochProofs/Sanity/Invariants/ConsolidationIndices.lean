@@ -471,7 +471,7 @@ theorem apply_parent_execution_payload_rstep (p : Preset) (o : Oracle) (s s' : B
   peel_ok h
   all_goals first
     | (cases h
-       refine (request_loop_rstep (by assumption : forIn requests.deposits _ _ = Except.ok _)
+       refine RStep.trans ?_ ((request_loop_rstep (by assumption : forIn requests.deposits _ _ = Except.ok _)
          (by loop_body (fun h => (process_deposit_request_cstep _ _ _ h).rstep))).trans
          ((request_loop_rstep (by assumption : forIn requests.withdrawals _ _ = Except.ok _)
          (by loop_body (fun h => (process_withdrawal_request_cstep p _ _ _ h).rstep))).trans
@@ -481,12 +481,12 @@ theorem apply_parent_execution_payload_rstep (p : Preset) (o : Oracle) (s s' : B
          (by loop_body (fun h => (process_builder_deposit_request_cstep p o _ _ _ h).rstep))).trans
          ((request_loop_rstep (by assumption : forIn requests.builder_exits _ _ = Except.ok _)
          (by loop_body (fun h => (process_builder_exit_request_cstep p _ _ _ h).rstep))).trans
-         ?_))))
-       first
-         | (have hset := settle_builder_payment_cstep _ _ _
-             ‹settle_builder_payment _ _ = Except.ok _›
-            exact CStep.rstep (hset.trans ⟨rfl, rfl⟩))
-         | exact CStep.rstep ⟨rfl, rfl⟩)
+         ?_)))))
+       · first
+           | exact CStep.rstep (settle_builder_payment_cstep _ _ _
+               ‹settle_builder_payment _ _ = Except.ok _›)
+           | exact CStep.rstep ⟨rfl, rfl⟩
+       · exact CStep.rstep ⟨rfl, rfl⟩)
 
 /-- `process_parent_execution_payload` is a request step. -/
 theorem process_parent_execution_payload_rstep (p : Preset) (o : Oracle) (s s' : BeaconState)

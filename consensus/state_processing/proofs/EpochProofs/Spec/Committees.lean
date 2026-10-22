@@ -5,7 +5,7 @@ import EpochProofs.Spec.PendingDeposits
 # Reference: shuffling, committees and balance weighted selection
 
 Transcribed from `specs/phase0`, `specs/altair`, `specs/electra` and `specs/gloas`
-`beacon-chain.md` (v1.7.0-beta.2). Each definition quotes the pyspec of its latest fork.
+`beacon-chain.md` (v1.7.0-beta.4). Each definition quotes the pyspec of its latest fork.
 `sha256` is `o.hash`. A Python `set` is a `List` without duplicates here.
 -/
 
