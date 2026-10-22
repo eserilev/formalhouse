@@ -108,7 +108,6 @@ import EpochProofs.Equiv.EpochContexts
 import EpochProofs.Equiv.PendingDepositsLen
 import EpochProofs.CacheBridge.EpochCacheBuild
 import EpochProofs.CacheBridge.BuildPath
-import EpochProofs.FormalhouseCachePath
 import EpochProofs.Equiv.ConsolidationTable
 import EpochProofs.Equiv.Onboarding
 open EpochProofs.Spec
@@ -778,7 +777,7 @@ open EpochProofs.Spec
 #print axioms EpochProofs.CacheBridge.epoch_cache_total_carry
 #print axioms EpochProofs.CacheBridge.activeAgree_of_epochInv
 #print axioms EpochProofs.CacheBridge.pubkey_cache_carry
-#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_cachepath
+#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_at_input
 #print axioms EpochProofs.Spec.consolidationStep_table
 #print axioms EpochProofs.Spec.consolidationStep_full_ok
 #print axioms EpochProofs.Spec.consolidationStep_count

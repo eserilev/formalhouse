@@ -4,6 +4,10 @@ import EpochProofs.Sanity.Invariants.ForkUpgrade
 import EpochProofs.Equiv.SinglePassLoopModel
 import EpochProofs.Equiv.DepositWrites
 import EpochProofs.Equiv.ListWrites
+import EpochProofs.CacheBridge.BuildPath
+import EpochProofs.Equiv.ConsolidationTable
+import EpochProofs.Equiv.Onboarding
+import EpochProofs.Equiv.EpochContexts
 
 /-!
 # Formalhouse: the final epoch results
@@ -28,11 +32,20 @@ Each step of the model is Lighthouse Rust that Aeneas translates, proved equal t
 - the PTC window shift: `ptc_window_writes_spec`, under `WindowContract`;
 - the effective balance updates after the consolidations: `update_effective_balances_at_spec`,
   under `EffectiveBalanceContract`;
+- the pending consolidations on the local table: `process_on_table_spec`, under
+  `ConsolidationStateContract` and `BTreeSetIter`;
+- the builder onboarding at the Gloas fork: `onboard_spec`, under `OnboardingContract`;
 - the other steps: see the step table in README.md.
 
-The contracts (`Trusted/RegistryRows.lean`, `Trusted/EpochTail.lean`) state what the milhouse
-implementations of the traits do. They are trusted. The glue in `process_epoch_single_pass` that
-builds the contexts and calls these functions is checked by review only.
+The contracts (`Trusted/RegistryRows.lean`, `Trusted/EpochTail.lean`,
+`Trusted/Consolidations.lean`, `Trusted/Onboarding.lean`) state what the milhouse
+implementations of the traits do. They are trusted. Each `?` site of `single_pass.rs` is listed
+in the error-site table of README.md with its status.
+
+`formalhouse_gloas_epoch_final` takes the cache build facts at the state that built each cache:
+the epoch cache total at a state `b` of the same epoch (`epoch_cache_total_carry`), the pubkey
+cache at an earlier state `b'` completed by `update_pubkey_cache` (`pubkey_cache_carry`). The
+progressive balances cache stays a fact about the epoch input.
 -/
 
 namespace EpochProofs.Formalhouse
@@ -68,7 +81,8 @@ structure GloasEpochInput (o : Spec.Oracle) (fo : Spec.FuluOracle) (c : Spec.Ful
     Spec.process_slot Spec.Preset.mainnet o u = .ok u1 ∧
     (u1.slot + 1) % Spec.Preset.mainnet.SLOTS_PER_EPOCH = 0
 
-/-- Every assumption of `formalhouse_gloas_epoch_final`, by kind. -/
+/-- Every assumption of `formalhouse_gloas_epoch_final`, by kind (the cache build facts are
+separate arguments of the theorem). -/
 structure GloasAssumptions (o : Spec.Oracle) (init : Spec.FuluState) (e : EState) : Prop where
   /-- Start state: the Fulu start state has the invariants of a genesis state. -/
   start : Spec.FuluStartOk init.state
@@ -112,11 +126,11 @@ theorem gloasEpochConds_of_run (o : Spec.Oracle) (fo : Spec.FuluOracle)
 open Aeneas Aeneas.Std Result in
 open CacheProofs.PB (LhCache Coherent lhPreviousEpochFlagAttestingBalance
   lhCurrentEpochFlagAttestingBalance) in
-/-- The final Gloas statement. On every Gloas epoch input of a run that starts in Fulu and
-crosses the Gloas fork: Lighthouse's epoch returns `ok` and equals Etheorem's `processEpoch`,
+/-- The Gloas statement with every cache fact stated at the epoch input. On every Gloas epoch
+input of a run that starts in Fulu and crosses the Gloas fork: Lighthouse's epoch returns `ok` and equals Etheorem's `processEpoch`,
 its progressive balances, epoch cache and PTC committee reads equal the spec values given the
 build fact of each cache, and its pubkey cache lookup equals the spec lookup. -/
-theorem formalhouse_gloas_epoch_final (o : Spec.Oracle) (fo : Spec.FuluOracle)
+theorem formalhouse_gloas_epoch_at_input (o : Spec.Oracle) (fo : Spec.FuluOracle)
     (c : Spec.FuluBlockConfig) (uc : Spec.UpgradeConfig) (init : Spec.FuluState) (e : EState)
     (hin : GloasEpochInput o fo c uc init (absEState e)) (ha : GloasAssumptions o init e)
     (cache : LhCache)
@@ -227,5 +241,85 @@ theorem formalhouse_fulu_epoch_final (o : Spec.Oracle) (fo : Spec.FuluOracle)
     ⟨ha.boundary, ha.etheorem, ha.oracle, ha.sha⟩ ha.slot ha.vectors ha.rows ha.committees
 
 end Fulu
+
+section GloasFinal
+
+attribute [local instance] EthCLSpecs.Gloas.mainnet EthCLSpecs.Gloas.mainnetConfig
+
+variable [HasherTag] [CryptoBackend]
+
+open Aeneas Aeneas.Std Result in
+open CacheProofs.PB (LhCache Coherent lhPreviousEpochFlagAttestingBalance
+  lhCurrentEpochFlagAttestingBalance) in
+/-- The final Gloas statement: `formalhouse_gloas_epoch_at_input` with the epoch cache total
+built at a state `b` of the same epoch, and the pubkey cache built at an earlier state `b'` and
+completed by `update_pubkey_cache`. -/
+theorem formalhouse_gloas_epoch_final (o : Spec.Oracle) (fo : Spec.FuluOracle)
+    (c : Spec.FuluBlockConfig) (uc : Spec.UpgradeConfig) (init : Spec.FuluState) (e : EState)
+    (hin : GloasEpochInput o fo c uc init (absEState e)) (ha : GloasAssumptions o init e)
+    (cache : LhCache)
+    (hcoh : Coherent EpochProofs.Spec.Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT
+      (pbState (absEState e)
+        ((absEState e).slot / EpochProofs.Spec.Preset.mainnet.SLOTS_PER_EPOCH)) cache)
+    (total : U64) (b : Spec.BeaconState)
+    (hagree : Spec.ActiveAgree ((absEState e).slot / EpochProofs.Spec.Preset.mainnet.SLOTS_PER_EPOCH)
+      b (absEState e))
+    (htotal : total.val = CacheProofs.EpochCache.activeSum
+      (CacheProofs.EpochCache.activeAt
+        (b.validators.map ecValidator)
+        ((absEState e).slot / EpochProofs.Spec.Preset.mainnet.SLOTS_PER_EPOCH))
+      (b.validators.map (·.effective_balance)))
+    {M : Type} {inst : types.state.pubkey_index.IndexMap M Spec.BLSPubkey}
+    {view : M → Spec.BLSPubkey → Option Usize} (laws : CacheProofs.IndexMapLaws inst view)
+    (b' : Spec.BeaconState) (hpre : Spec.PkPrefix b' (absEState e))
+    {m0 m : M} {len0 len : Usize}
+    (hpk0 : CacheProofs.Coherent view m0 len0 (b'.validators.map (·.pubkey)))
+    (hupd : CacheProofs.insertAll inst m0 len0
+      (((absEState e).validators.map (·.pubkey)).drop len0.val) = ok (some (m, len))) :
+    ∃ s', Spec.process_epoch_lh_order o (absEState e) = .ok s' ∧
+      (((∃ e', (EthCLSpecs.Gloas.processEpoch
+          (StateTransition := EthCLSpecs.Proofs.Gloas.GloasRun)).run (pureState e) =
+        .ok ((), pureState e') ∧ EpochProofs.Etheorem.absEState e' = s') ∧
+      let s := EpochProofs.Etheorem.absEState e
+      let cur := s.slot / EpochProofs.Spec.Preset.mainnet.SLOTS_PER_EPOCH
+      (∀ f : Usize, f.val < 3 → ∃ x : U64, lhCurrentEpochFlagAttestingBalance cache f = ok (.Ok x) ∧
+        (EpochProofs.Spec.get_unslashed_participating_indices EpochProofs.Spec.Preset.mainnet s
+            f.val cur >>=
+          EpochProofs.Spec.get_total_balance EpochProofs.Spec.Preset.mainnet s) = .ok x.val) ∧
+      (∀ f : Usize, f.val < 3 → 0 < cur →
+        ∃ x : U64, lhPreviousEpochFlagAttestingBalance cache f = ok (.Ok x) ∧
+        (EpochProofs.Spec.get_unslashed_participating_indices EpochProofs.Spec.Preset.mainnet s
+            f.val (cur - 1) >>=
+          EpochProofs.Spec.get_total_balance EpochProofs.Spec.Preset.mainnet s) = .ok x.val) ∧
+      (∀ inc : U64, inc.val = EpochProofs.Spec.Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT →
+        ∃ r, types.state.total_active_balance.floor_total_active_balance total inc = ok r ∧
+          EpochProofs.Spec.get_total_active_balance EpochProofs.Spec.Preset.mainnet s =
+            .ok r.val)) ∧
+      (∀ (st : Spec.BeaconState) (epoch : Nat) (seed : Spec.Bytes32),
+        Spec.get_seed Spec.Preset.mainnet o st epoch Spec.DOMAIN_BEACON_ATTESTER = .ok seed →
+        ∀ (shuffling : Slice Usize) (cps spe : Usize),
+        CommitteeCacheBuilt CacheProofs.Spec.CommitteeCache.Preset.mainnet o st epoch seed shuffling
+          cps →
+        spe.val = Spec.Preset.mainnet.SLOTS_PER_EPOCH →
+        0 < (Spec.get_active_validator_indices st epoch).length →
+        (Spec.get_active_validator_indices st epoch).length ≤ 2 ^ 24 →
+        (Spec.get_active_validator_indices st epoch).length * (cps.val * spe.val) ≤ Usize.max →
+        ∀ (start : Nat), Spec.compute_start_slot_at_epoch Spec.Preset.mainnet epoch = .ok start →
+        ∀ (committees : Slice (alloc.vec.Vec Usize)),
+        committees.val.length = Spec.Preset.mainnet.SLOTS_PER_EPOCH →
+        CommitteesFromCache shuffling cps spe epoch start committees →
+        ∀ k (hk : k < committees.val.length) l,
+          Spec.ptcIndices Spec.Preset.mainnet o st epoch (start + k) = .ok l →
+            (committees.val[k]).val.map (·.val) = l)) ∧
+    ∀ pk, ∃ r, inst.get_index m pk = ok r ∧
+      (r.map (·.val)).bind (fun i => (absEState e).validators[i]?) =
+        (absEState e).validators[((absEState e).validators.map (·.pubkey)).idxOf pk]? ∧
+      (r.isSome ↔ pk ∈ (absEState e).validators.map (·.pubkey)) ∧
+      ∀ i, r.map (·.val) = some i → i = ((absEState e).validators.map (·.pubkey)).idxOf pk :=
+  formalhouse_gloas_epoch_at_input o fo c uc init e hin ha cache hcoh total
+    (epoch_cache_total_carry total.val htotal hagree) laws
+    (pubkey_cache_carry laws hpre hpk0 hupd)
+
+end GloasFinal
 
 end EpochProofs.Formalhouse

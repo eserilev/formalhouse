@@ -52,7 +52,10 @@ EpochProofs/Spec/*.lean  <-- written by hand from the consensus specs
   1. Lighthouse's epoch `process_epoch_lh_order` returns `ok`.
   2. The result equals Etheorem's Gloas `processEpoch`.
   3. The progressive balances, epoch cache and PTC committee reads equal the spec values, given
-     the build fact of each cache.
+     the build fact of each cache. The epoch cache total and the pubkey cache may be built at an
+     earlier state of the run (`epoch_cache_total_carry`, `pubkey_cache_carry`).
+     `formalhouse_gloas_epoch_at_input` is the same result with every cache fact at the epoch
+     input.
   4. The pubkey cache lookup of the pending deposits equals the spec lookup.
 - `formalhouse_fulu_epoch_final`: on every input of the Fulu `process_epoch` of a reachable Fulu
   run, Lighthouse's Fulu epoch `process_epoch_lh_order_fulu` returns `ok`, and the result equals
@@ -743,7 +746,7 @@ after the full type name. It changes no definition and no proof.
 `initialize_progressive_balances_cache`, `build_committee_cache` and `update_pubkey_cache`. Each
 call keeps a cache that is already built, so the epoch can read a cache that an earlier state of
 the run built. `EpochProofs/CacheBridge/BuildPath.lean` carries the build facts to the epoch input,
-and `formalhouse_gloas_epoch_cachepath` restates the final Gloas result with them.
+and `formalhouse_gloas_epoch_final` uses them.
 
 | Cache | On the epoch path | What is proved | What stays trusted |
 |---|---|---|---|
@@ -922,8 +925,8 @@ copies the rest of the body into each branch, and the generated code grows expon
   - The shuffle takes at most `2^24` indices, and `usize` has 64 bits.
   - The sync committee pubkeys, the aggregate key and the milhouse PTC window shift stay glue.
 - The cache build facts of `formalhouse_gloas_epoch`: the cache proofs (`consensus/types/proofs`)
-  prove them for the build and update code. `formalhouse_gloas_epoch_cachepath` moves the epoch
-  cache and pubkey cache facts to the state that built the cache. Still trusted: that the cache
+  prove them for the build and update code. `formalhouse_gloas_epoch_final` takes the epoch
+  cache and pubkey cache facts at the state that built the cache. Still trusted: that the cache
   came from a state of this run, and that each block mutation calls its progressive balances
   update function.
 - `aeneas/discriminant-instance-name.patch` renames one generated instance so that the two
