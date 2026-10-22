@@ -706,6 +706,28 @@ attribute names its instance after the short type name, so the two files clash.
 `aeneas/setup.sh` applies `aeneas/discriminant-instance-name.patch`, which names the instance
 after the full type name. It changes no definition and no proof.
 
+### Where each cache is built on the epoch path
+
+`process_epoch_single_pass` starts with `initialize_epoch_cache`,
+`initialize_progressive_balances_cache`, `build_committee_cache` and `update_pubkey_cache`. Each
+call keeps a cache that is already built, so the epoch can read a cache that an earlier state of
+the run built. `EpochProofs/CacheBridge/BuildPath.lean` carries the build facts to the epoch input,
+and `formalhouse_gloas_epoch_cachepath` restates the final Gloas result with them.
+
+| Cache | On the epoch path | What is proved | What stays trusted |
+|---|---|---|---|
+| Epoch cache (total, base rewards) | kept if its key (epoch, decision root) matches, else rebuilt | `epoch_cache_total_carry`: the total built at a state `b` of the same epoch is the active sum of the epoch input, because the blocks keep the effective balances and the activity (`ActiveAgree`, kept by `state_transition_epochInv`) | the cache was built from a state of this run in this epoch |
+| Pubkey cache | kept, then completed with the new validators | `pubkey_cache_carry`: a cache that holds the pubkeys of an earlier state holds a prefix of the epoch input's pubkeys (`PkPrefix`, from `Reachable.pkPrefix` and `SlotReachG.pkPrefix`), and the insert run completes it | `IndexMapLaws`; the cache was built from a state of this run (see the note on `rebase_caches_on` below) |
+| Progressive balances cache | kept if built for the current epoch, else rebuilt (this PR: the check was `is_initialized`, which kept a cache of any epoch) | rebuilt: `build_coherent`; kept: the update theorems of #27 | each block operation that changes participation, `slashed` or an effective balance calls its update function (`process_operations.rs` attestations, `slash_validator.rs`, the single pass effective balance updates, `on_epoch_transition` in `altair.rs`), checked by review |
+| Committee cache for the PTC window | built fresh by `initialize_committee_cache_for_lookahead` | `committeeCacheBuilt_of_rust` | the init glue that feeds the active indices and the seed into `shuffling` |
+
+Note on `rebase_caches_on`: when the store loads a hot state, `rebase_on_finalized` copies the
+committee caches and the pubkey cache of the finalized state if the epochs match. It checks only
+the slot (`state.slot() >= finalized.slot()`), not that the state descends from the finalized
+block. `migrate_database` updates the finalized state before `prune_hot_db` deletes abandoned
+forks, so a state of an abandoned fork can get the caches of another chain. These proofs do not
+cover that path (it is in `beacon_node/store`).
+
 ## Building
 
 `setup.sh` runs `etheorem/setup.sh` and `aeneas/setup.sh`.
@@ -868,7 +890,10 @@ copies the rest of the body into each branch, and the generated code grows expon
   - The shuffle takes at most `2^24` indices, and `usize` has 64 bits.
   - The sync committee pubkeys, the aggregate key and the milhouse PTC window shift stay glue.
 - The cache build facts of `formalhouse_gloas_epoch`: the cache proofs (`consensus/types/proofs`)
-  prove them for the build and update code, not on the epoch path of `per_epoch_processing`.
+  prove them for the build and update code. `formalhouse_gloas_epoch_cachepath` moves the epoch
+  cache and pubkey cache facts to the state that built the cache. Still trusted: that the cache
+  came from a state of this run, and that each block mutation calls its progressive balances
+  update function.
 - `aeneas/discriminant-instance-name.patch` renames one generated instance so that the two
   `Generated.lean` files load together. It changes no definition.
 - `IndexMapLaws`: `HashTrieMap` behaves as a finite map, and `update_pubkey_cache` inserts the
