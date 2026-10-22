@@ -1,4 +1,5 @@
 import EpochProofs.Sanity.RowsEffectiveBalance
+import EpochProofs.Spec.PresetCfg
 
 /-!
 # Effective balance floor after `process_effective_balance_updates`
@@ -16,8 +17,8 @@ def PresetIncrementOk (p : Preset) : Prop :=
   ∧ p.MAX_EFFECTIVE_BALANCE_ELECTRA % p.EFFECTIVE_BALANCE_INCREMENT = 0
 
 /-- Mainnet holds `PresetIncrementOk`. -/
-theorem presetIncrementOk_mainnet : PresetIncrementOk Preset.mainnet :=
-  ⟨rfl, rfl⟩
+theorem presetIncrementOk_mainnet [PresetCfg] : PresetIncrementOk P :=
+  ⟨(by prfl), (by prfl)⟩
 
 /-- `get_max_effective_balance` is a multiple of the increment. -/
 theorem get_max_effective_balance_mod (p : Preset) (hp : PresetIncrementOk p)
@@ -110,16 +111,16 @@ theorem le_mul_of_three_mul_le {a b : Nat} (h : 3 * a ≤ 4 * b) : a ≤ 256 * b
 
 /-- On mainnet, a new effective balance is at most `4/3` of the balance, and so at most 256
 times the balance. -/
-theorem newEffectiveBalance_mainnet_floor (validator : Validator)
+theorem newEffectiveBalance_mainnet_floor [PresetCfg] (validator : Validator)
     (balance effective_balance : Gwei)
-    (h : newEffectiveBalance Preset.mainnet 250000000 1250000000 validator balance =
+    (h : newEffectiveBalance P 250000000 1250000000 validator balance =
       .ok effective_balance)
-    (hmod : validator.effective_balance % Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT = 0) :
+    (hmod : validator.effective_balance % P.EFFECTIVE_BALANCE_INCREMENT = 0) :
     3 * effective_balance ≤ 4 * balance ∧ effective_balance ≤ 256 * balance := by
-  obtain ⟨hm, hle, -⟩ := newEffectiveBalance_bounds Preset.mainnet presetIncrementOk_mainnet
+  obtain ⟨hm, hle, -⟩ := newEffectiveBalance_bounds P presetIncrementOk_mainnet
     _ _ validator balance effective_balance h hmod
-  have h3 := three_mul_le_of_floor Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT 250000000
-    effective_balance balance hm hle (by decide)
+  have h3 := three_mul_le_of_floor P.EFFECTIVE_BALANCE_INCREMENT 250000000
+    effective_balance balance hm hle (by pdecide)
   exact ⟨h3, le_mul_of_three_mul_le h3⟩
 
 /-- If `mapM` succeeds, each output is `f` of the input at the same index. -/
@@ -243,12 +244,12 @@ theorem process_effective_balance_updates_floor (p : Preset) (hp : PresetIncreme
   exact ⟨hm, three_mul_le_of_floor _ downward _ _ hm hle hdown⟩
 
 /-- On mainnet, `process_effective_balance_updates` establishes `EffectiveBalanceFloor`. -/
-theorem process_effective_balance_updates_floor_mainnet (state state' : BeaconState)
-    (h : process_effective_balance_updates Preset.mainnet state = .ok state')
+theorem process_effective_balance_updates_floor_mainnet [PresetCfg] (state state' : BeaconState)
+    (h : process_effective_balance_updates P state = .ok state')
     (hmod : ∀ v ∈ state.validators,
-      v.effective_balance % Preset.mainnet.EFFECTIVE_BALANCE_INCREMENT = 0) :
-    EffectiveBalanceFloor Preset.mainnet state' :=
-  process_effective_balance_updates_floor Preset.mainnet presetIncrementOk_mainnet _ _
-    hysteresisThresholds_mainnet (by decide) state state' h hmod
+      v.effective_balance % P.EFFECTIVE_BALANCE_INCREMENT = 0) :
+    EffectiveBalanceFloor P state' :=
+  process_effective_balance_updates_floor P presetIncrementOk_mainnet _ _
+    hysteresisThresholds_mainnet (by pdecide) state state' h hmod
 
 end EpochProofs.Spec

@@ -1,4 +1,5 @@
 import EpochProofs.Spec.Block.Upgrade
+import EpochProofs.Spec.PresetCfg
 import EpochProofs.Sanity.Invariants.FuluReachable
 import EpochProofs.Sanity.Invariants.TotalityFulu
 import EpochProofs.Sanity.SelectionPass
@@ -140,7 +141,7 @@ theorem upgrade_to_fulu_frame (p : Preset) (o : Oracle) (c : UpgradeConfig) (pre
   exact ⟨rfl, rfl, rfl, rfl, rfl, ⟨rfl, rfl, rfl, rfl⟩, rfl⟩
 
 /-- `UpgradeFrame` keeps the eight start facts. -/
-theorem FuluStartOk.of_frame {s s' : BeaconState} (hf : UpgradeFrame s s') (h : FuluStartOk s) :
+theorem FuluStartOk.of_frame [PresetCfg] {s s' : BeaconState} (hf : UpgradeFrame s s') (h : FuluStartOk s) :
     FuluStartOk s' := by
   obtain ⟨hv, hb, hi, hpp, hcp, hcs, hpc⟩ := hf
   refine ⟨h.ffg.of_checkpointsStable hcs, ?_, ExitDelay.of_validators_eq hv h.exitDelay,
@@ -155,13 +156,13 @@ theorem FuluStartOk.of_frame {s s' : BeaconState} (hf : UpgradeFrame s s') (h : 
     exact h.consolidations c hc
 
 /-- `upgrade_to_fulu` keeps the start facts of the Electra state. -/
-theorem upgrade_to_fulu_startOk (p : Preset) (o : Oracle) (c : UpgradeConfig) (pre post : FuluState)
+theorem upgrade_to_fulu_startOk [PresetCfg] (p : Preset) (o : Oracle) (c : UpgradeConfig) (pre post : FuluState)
     (h : upgrade_to_fulu p o c pre = .ok post) (hs : FuluStartOk pre.state) :
     FuluStartOk post.state :=
   FuluStartOk.of_frame (upgrade_to_fulu_frame p o c pre post h) hs
 
 /-- `upgrade_to_gloas` keeps the start facts of the Fulu state. -/
-theorem upgrade_to_gloas_startOk (p : Preset) (o : Oracle) (c : UpgradeConfig) (pre : FuluState)
+theorem upgrade_to_gloas_startOk [PresetCfg] (p : Preset) (o : Oracle) (c : UpgradeConfig) (pre : FuluState)
     (g : BeaconState) (h : upgrade_to_gloas p o c pre = .ok g) (hs : FuluStartOk pre.state) :
     FuluStartOk g :=
   FuluStartOk.of_frame (upgrade_to_gloas_frame p o c pre g h) hs
@@ -326,12 +327,12 @@ theorem upgrade_to_gloas_vectorLengths (p : Preset) (o : Oracle) (c : UpgradeCon
 /-- The state at the Gloas fork has the start facts. In a reachable Fulu run, the slot loop
 reaches `t`, `process_slot_fulu` gives `t1` at the last slot of an epoch, and the Fulu
 `process_epoch` gives `s2`. The slot increment gives the input of `upgrade_to_gloas`. -/
-theorem fulu_fork_state_startOk (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
+theorem fulu_fork_state_startOk [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
     (init : FuluState) (hi : FuluStartOk init.state) (hsupply : SupplyBoundFulu o fo c init)
     (fs t t1 : FuluState) (s2 : BeaconState) (slot : Slot) (hr : ReachableFulu o fo c init fs)
     (hslot64 : slot < 2 ^ 64) (hreach : SlotReachFulu o fo fs slot t) (hlt : t.state.slot < slot)
-    (ht : process_slot_fulu Preset.mainnet o fo t = .ok t1)
-    (hz : (t1.state.slot + 1) % Preset.mainnet.SLOTS_PER_EPOCH = 0)
+    (ht : process_slot_fulu P o fo t = .ok t1)
+    (hz : (t1.state.slot + 1) % P.SLOTS_PER_EPOCH = 0)
     (he : process_epoch_fulu_m o t1.state = .ok s2) :
     FuluStartOk { s2 with slot := s2.slot + 1 } := by
   have hst := loopInv_steps_fulu o fo slot fs.state.slot hslot64
@@ -341,31 +342,32 @@ theorem fulu_fork_state_startOk (o : Oracle) (fo : FuluOracle) (c : FuluBlockCon
   have hlt1 : t1.state.slot < slot := hs1 ▸ hlt
   have hpost := hst.2.1 _ _ hlt1 hz he hinv
   have hs2 := process_epoch_fulu_slot _ _ o _ _ he
-  have hz2 : (s2.slot + 1) % Preset.mainnet.SLOTS_PER_EPOCH = 0 := by rw [hs2]; exact hz
+  have hz2 : (s2.slot + 1) % P.SLOTS_PER_EPOCH = 0 := by rw [hs2]; exact hz
   have hloop := hst.2.2.2.1 _ hz2 hpost
   have htail := hreach.tail (reachable_fulu_tail o fo c init hi fs hr)
   have hv := (process_slot_fulu_frame _ o fo _ _ ht).1.1
   have hp1 := (PkSame.of_eq hv).pubkeysUnique htail.1
   have hc1 := (process_slot_fulu_cstep _ o fo _ _ ht).inRange htail.2.1
   have hw1 := WithdrawableU64.of_validators_eq hv htail.2.2
-  have hp2 := process_epoch_fulu_pubkeysUnique _ _ fuluCompat_mainnet o _ _ he hp1
-  have hc2 := process_epoch_fulu_inRange _ _ fuluCompat_mainnet o _ _ he hc1
+  have hp2 := process_epoch_fulu_pubkeysUnique _ _ fuluCompat o _ _ he hp1
+  have hc2 := process_epoch_fulu_inRange _ _ fuluCompat o _ _ he hc1
   have hw2 := process_epoch_fulu_withdrawableU64 o _ _ he hw1
-  have hA2 : AfterEB Preset.mainnet s2 := hpost.2.2.2.2.1
+  have hA2 : AfterEB P s2 := hpost.2.2.2.2.1
   obtain ⟨hffg, hrows, hd, hx, -⟩ := hloop
   exact ⟨hffg, hrows, hd, hx, hA2, hp2, hc2, hw2⟩
 
 /-- The Gloas state that `upgrade_to_gloas` makes at the fork of a reachable Fulu run has the
 start facts of the Gloas theorems. -/
-theorem fulu_gloas_fork_startOk (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
+theorem fulu_gloas_fork_startOk [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok]
+    (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
     (uc : UpgradeConfig) (init : FuluState) (hi : FuluStartOk init.state)
     (hsupply : SupplyBoundFulu o fo c init)
     (fs t t1 : FuluState) (s2 g : BeaconState) (slot : Slot) (hr : ReachableFulu o fo c init fs)
     (hslot64 : slot < 2 ^ 64) (hreach : SlotReachFulu o fo fs slot t) (hlt : t.state.slot < slot)
-    (ht : process_slot_fulu Preset.mainnet o fo t = .ok t1)
-    (hz : (t1.state.slot + 1) % Preset.mainnet.SLOTS_PER_EPOCH = 0)
+    (ht : process_slot_fulu P o fo t = .ok t1)
+    (hz : (t1.state.slot + 1) % P.SLOTS_PER_EPOCH = 0)
     (he : process_epoch_fulu_m o t1.state = .ok s2)
-    (hup : upgrade_to_gloas Preset.mainnet o uc
+    (hup : upgrade_to_gloas P o uc
       { t1 with state := { s2 with slot := s2.slot + 1 } } = .ok g) :
     FuluStartOk g :=
   upgrade_to_gloas_startOk _ o uc _ g hup
@@ -375,27 +377,28 @@ theorem fulu_gloas_fork_startOk (o : Oracle) (fo : FuluOracle) (c : FuluBlockCon
 Gloas run reaches from the upgraded state `g` has the same `ok` results with any epoch function
 `f` that agrees with `process_epoch` on the inputs that `EpochInputOk''` describes. The Gloas
 supply and economic hypotheses are on the Gloas run, as in `reachable_state_transition_sameOk'''`. -/
-theorem fulu_then_gloas_sameOk (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
+theorem fulu_then_gloas_sameOk [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok]
+    (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
     (uc : UpgradeConfig) (init : FuluState) (hi : FuluStartOk init.state)
     (hsupply : SupplyBoundFulu o fo c init)
     (fs t t1 : FuluState) (s2 g : BeaconState) (slot : Slot) (hr : ReachableFulu o fo c init fs)
     (hslot64 : slot < 2 ^ 64) (hreach : SlotReachFulu o fo fs slot t) (hlt : t.state.slot < slot)
-    (ht : process_slot_fulu Preset.mainnet o fo t = .ok t1)
-    (hz : (t1.state.slot + 1) % Preset.mainnet.SLOTS_PER_EPOCH = 0)
+    (ht : process_slot_fulu P o fo t = .ok t1)
+    (hz : (t1.state.slot + 1) % P.SLOTS_PER_EPOCH = 0)
     (he : process_epoch_fulu_m o t1.state = .ok s2)
-    (hup : upgrade_to_gloas Preset.mainnet o uc
+    (hup : upgrade_to_gloas P o uc
       { t1 with state := { s2 with slot := s2.slot + 1 } } = .ok g)
     (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch)
     (hsupplyG : SupplyBound o max_blobs_per_block GLOAS_FORK_EPOCH g)
     (Econ : BeaconState → Prop) (hecon : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH g Econ)
     (f : BeaconState → SpecM BeaconState)
-    (hf : ∀ t, EpochInputOk'' Econ t → SameOk (f t) (process_epoch Preset.mainnet o t))
+    (hf : ∀ t, EpochInputOk'' Econ t → SameOk (f t) (process_epoch P o t))
     (s : BeaconState) (hrg : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH g s)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (hslotb : signed_block.message.slot < 2 ^ 64) :
     SameOk (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH f s signed_block
         validate_result)
-      (state_transition Preset.mainnet o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
+      (state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
         validate_result) := by
   have hg := fulu_gloas_fork_startOk o fo c uc init hi hsupply fs t t1 s2 g slot hr hslot64 hreach
     hlt ht hz he hup
@@ -407,20 +410,20 @@ theorem fulu_then_gloas_sameOk (o : Oracle) (fo : FuluOracle) (c : FuluBlockConf
 
 /-- The states that the Gloas `process_slots` loop with target `slot` reaches from `s` on
 mainnet, one slot at a time, below the target. -/
-inductive SlotReachG (o : Oracle) (s : BeaconState) (slot : Slot) : BeaconState → Prop
+inductive SlotReachG [PresetCfg] (o : Oracle) (s : BeaconState) (slot : Slot) : BeaconState → Prop
   | refl : SlotReachG o s slot s
   | skip {t t1 : BeaconState} : SlotReachG o s slot t → t.slot < slot →
-      process_slot Preset.mainnet o t = .ok t1 →
-      (t1.slot + 1) % Preset.mainnet.SLOTS_PER_EPOCH ≠ 0 →
+      process_slot P o t = .ok t1 →
+      (t1.slot + 1) % P.SLOTS_PER_EPOCH ≠ 0 →
       SlotReachG o s slot { t1 with slot := t1.slot + 1 }
   | epoch {t t1 t2 : BeaconState} : SlotReachG o s slot t → t.slot < slot →
-      process_slot Preset.mainnet o t = .ok t1 →
-      (t1.slot + 1) % Preset.mainnet.SLOTS_PER_EPOCH = 0 →
-      process_epoch Preset.mainnet o t1 = .ok t2 →
+      process_slot P o t = .ok t1 →
+      (t1.slot + 1) % P.SLOTS_PER_EPOCH = 0 →
+      process_epoch P o t1 = .ok t2 →
       SlotReachG o s slot { t2 with slot := t2.slot + 1 }
 
 /-- The Gloas slot loop keeps `LoopInv`. -/
-theorem SlotReachG.loopInv {o : Oracle} {s t : BeaconState} {slot : Slot}
+theorem SlotReachG.loopInv [PresetCfg] [PresetCfg.Ok] {o : Oracle} {s t : BeaconState} {slot : Slot}
     (hslot64 : slot < 2 ^ 64) (hr : SlotReachG o s slot t) (hs : ReachInv s) :
     LoopInv s.slot t := by
   have hst := loopInv_steps o slot s.slot hslot64
@@ -439,7 +442,7 @@ theorem SlotReachG.loopInv {o : Oracle} {s t : BeaconState} {slot : Slot}
     exact hst.2.2.2.1 _ hz hQ
 
 /-- A target-bounded run of the loop is a run of `SlotReach`. -/
-theorem SlotReachG.slotReach {o : Oracle} {s t : BeaconState} {slot : Slot}
+theorem SlotReachG.slotReach [PresetCfg] {o : Oracle} {s t : BeaconState} {slot : Slot}
     (hr : SlotReachG o s slot t) : SlotReach o s t := by
   induction hr with
   | refl => exact .refl
@@ -449,15 +452,15 @@ theorem SlotReachG.slotReach {o : Oracle} {s t : BeaconState} {slot : Slot}
 /-- On mainnet, every input of the Gloas `process_epoch` in a reachable Gloas run has the
 facts of `EpochInputOk''`, if the start state has the eight start facts. The supply bound and
 `Econ` are hypotheses on the run. -/
-theorem gloas_reachable_invariants (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem gloas_reachable_invariants [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState) (hi : FuluStartOk init)
     (hsupply : SupplyBound o max_blobs_per_block GLOAS_FORK_EPOCH init)
     (Econ : BeaconState → Prop) (hecon : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH init Econ)
     (s t t1 : BeaconState) (slot : Slot)
     (hr : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s)
     (hslot64 : slot < 2 ^ 64) (hreach : SlotReachG o s slot t) (hlt : t.slot < slot)
-    (ht : process_slot Preset.mainnet o t = .ok t1)
-    (hz : (t1.slot + 1) % Preset.mainnet.SLOTS_PER_EPOCH = 0) :
+    (ht : process_slot P o t = .ok t1)
+    (hz : (t1.slot + 1) % P.SLOTS_PER_EPOCH = 0) :
     EpochInputOk'' Econ t1 := by
   have hst := loopInv_steps o slot s.slot hslot64
   have hs := reachable_inv o _ _ init hi.ffg hi.rows hi.exitDelay hi.exitEpochs hi.afterEB
@@ -481,15 +484,16 @@ theorem gloas_reachable_invariants (o : Oracle) (max_blobs_per_block : Epoch →
 
 /-- A Fulu run that crosses the Gloas fork: every input of the Gloas `process_epoch` after the
 fork has the facts of `EpochInputOk''`. -/
-theorem fulu_then_gloas_reachable_invariants (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
+theorem fulu_then_gloas_reachable_invariants [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok]
+    (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
     (uc : UpgradeConfig) (init : FuluState) (hi : FuluStartOk init.state)
     (hsupply : SupplyBoundFulu o fo c init)
     (fs t t1 : FuluState) (s2 g : BeaconState) (slot : Slot) (hr : ReachableFulu o fo c init fs)
     (hslot64 : slot < 2 ^ 64) (hreach : SlotReachFulu o fo fs slot t) (hlt : t.state.slot < slot)
-    (ht : process_slot_fulu Preset.mainnet o fo t = .ok t1)
-    (hz : (t1.state.slot + 1) % Preset.mainnet.SLOTS_PER_EPOCH = 0)
+    (ht : process_slot_fulu P o fo t = .ok t1)
+    (hz : (t1.state.slot + 1) % P.SLOTS_PER_EPOCH = 0)
     (he : process_epoch_fulu_m o t1.state = .ok s2)
-    (hup : upgrade_to_gloas Preset.mainnet o uc
+    (hup : upgrade_to_gloas P o uc
       { t1 with state := { s2 with slot := s2.slot + 1 } } = .ok g)
     (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch)
     (hsupplyG : SupplyBound o max_blobs_per_block GLOAS_FORK_EPOCH g)
@@ -497,8 +501,8 @@ theorem fulu_then_gloas_reachable_invariants (o : Oracle) (fo : FuluOracle) (c :
     (s u u1 : BeaconState) (slotG : Slot)
     (hrg : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH g s)
     (hslotG : slotG < 2 ^ 64) (hreachG : SlotReachG o s slotG u) (hltG : u.slot < slotG)
-    (hu : process_slot Preset.mainnet o u = .ok u1)
-    (hzG : (u1.slot + 1) % Preset.mainnet.SLOTS_PER_EPOCH = 0) :
+    (hu : process_slot P o u = .ok u1)
+    (hzG : (u1.slot + 1) % P.SLOTS_PER_EPOCH = 0) :
     EpochInputOk'' Econ u1 :=
   gloas_reachable_invariants o _ _ g
     (fulu_gloas_fork_startOk o fo c uc init hi hsupply fs t t1 s2 g slot hr hslot64 hreach hlt ht

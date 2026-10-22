@@ -1,4 +1,5 @@
 import EpochProofs.Trusted.EpochTail
+import EpochProofs.Spec.PresetCfg
 import EpochProofs.Equiv.SinglePassLoop
 import EpochProofs.Equiv.Justification
 
@@ -22,18 +23,18 @@ namespace Spec
 
 /-- The model from the deposit queue write to the effective balance updates of the new
 validators. -/
-def depositWritesSpec (o : Oracle) (t : BeaconState) (next : Nat) (dbtc : Gwei)
+def depositWritesSpec [PresetCfg] (o : Oracle) (t : BeaconState) (next : Nat) (dbtc : Gwei)
     (post news : List PendingDeposit) (eb : Bool) : SpecM BeaconState := do
   let t2 := { t with
     pending_deposits := t.pending_deposits.drop next ++ post
     deposit_balance_to_consume := dbtc }
-  let t3 ← news.foldlM (apply_pending_deposit Preset.mainnet o) t2
+  let t3 ← news.foldlM (apply_pending_deposit P o) t2
   if eb then
     (List.range' t2.validators.length (t3.validators.length - t2.validators.length)).foldlM
       ebUpdateAt t3
   else pure t3
 
-theorem depositWritesSpec_eq (o : Oracle) (s t : BeaconState) (plan : LhDepositPlan)
+theorem depositWritesSpec_eq [EpochProofs.Spec.PresetCfg] (o : Oracle) (s t : BeaconState) (plan : LhDepositPlan)
     (h : t.pending_deposits = s.pending_deposits) :
     depositWritesSpec o t plan.next_deposit_index plan.deposit_balance_to_consume plan.postponed
         plan.new_validator_deposits true =
@@ -57,9 +58,9 @@ theorem add_validator_to_registry_len (p : Preset) (t t' : BeaconState) (pubkey 
       | (simp only [reduceCtorEq] at h)
       | (cases h; simp)
 
-theorem apply_pending_deposit_known (o : Oracle) (t : BeaconState) (d : PendingDeposit)
+theorem apply_pending_deposit_known [PresetCfg] (o : Oracle) (t : BeaconState) (d : PendingDeposit)
     (hm : d.pubkey ∈ t.validators.map (·.pubkey)) :
-    apply_pending_deposit Preset.mainnet o t d = (do
+    apply_pending_deposit P o t d = (do
       let b ← listGet t.balances ((t.validators.map (·.pubkey)).idxOf d.pubkey)
       let c ← uint64Add b d.amount
       let bs ← listSet t.balances ((t.validators.map (·.pubkey)).idxOf d.pubkey) c
@@ -67,12 +68,12 @@ theorem apply_pending_deposit_known (o : Oracle) (t : BeaconState) (d : PendingD
   simp only [apply_pending_deposit, hm, not_true_eq_false, if_false, increase_balance,
     bind_assoc]
 
-theorem apply_pending_deposit_new (o : Oracle) (t : BeaconState) (d : PendingDeposit)
+theorem apply_pending_deposit_new [PresetCfg] (o : Oracle) (t : BeaconState) (d : PendingDeposit)
     (hm : d.pubkey ∉ t.validators.map (·.pubkey)) :
-    apply_pending_deposit Preset.mainnet o t d =
-      if is_valid_deposit_signature Preset.mainnet o d.pubkey d.withdrawal_credentials d.amount
+    apply_pending_deposit P o t d =
+      if is_valid_deposit_signature P o d.pubkey d.withdrawal_credentials d.amount
           d.signature then
-        add_validator_to_registry Preset.mainnet t d.pubkey d.withdrawal_credentials d.amount
+        add_validator_to_registry P t d.pubkey d.withdrawal_credentials d.amount
       else pure t := by
   simp only [apply_pending_deposit, hm, not_false_eq_true, if_true]
 
@@ -84,9 +85,9 @@ theorem foldlM_take_succ' {α β : Type} (f : β → α → SpecM β) (b x : β)
   simp only [List.foldlM_cons, List.foldlM_nil]
   cases f x l[i] <;> rfl
 
-theorem depositLoop_next_le (fs avail : Nat) :
+theorem depositLoop_next_le [PresetCfg] (fs avail : Nat) :
     ∀ (vs : List DepositSpecView) (ls : DepositLoopState) (r : DepositLoopResult),
-      depositLoop Preset.mainnet fs avail ls vs = .ok r →
+      depositLoop P fs avail ls vs = .ok r →
       r.state.next_deposit_index ≤ ls.next_deposit_index + vs.length
   | [], ls, r, h => by
     simp only [depositLoop, pure, Except.pure, Except.ok.injEq] at h
@@ -107,7 +108,7 @@ theorem depositLoop_next_le (fs avail : Nat) :
 
 /-- The deposit plan never skips past the end of the queue, so the queue write after the single
 pass succeeds. -/
-theorem lhDepositPlan_next_le (s : BeaconState) (tab : Gwei) (current_epoch : Epoch)
+theorem lhDepositPlan_next_le [EpochProofs.Spec.PresetCfg] (s : BeaconState) (tab : Gwei) (current_epoch : Epoch)
     (plan : LhDepositPlan) (h : lhDepositPlan s tab current_epoch = .ok plan) :
     plan.next_deposit_index ≤ s.pending_deposits.length := by
   unfold lhDepositPlan at h
@@ -173,7 +174,7 @@ theorem foldlM_error_of_take {α β : Type} (f : β → α → Spec.SpecM β) (b
   rw [List.foldlM_cons, he]
   rfl
 
-theorem update_effective_balances_loop_spec {S D E : Type} (inst : LhDepositWrites S D E)
+theorem update_effective_balances_loop_spec [EpochProofs.Spec.PresetCfg] {S D E : Type} (inst : LhDepositWrites S D E)
     (o : Spec.Oracle) (view : S → Spec.BeaconState) (absDep : D → Spec.PendingDeposit)
     (postOf : S → List Spec.PendingDeposit) (hc : DepositWritesContract inst o view absDep postOf)
     (idx : Slice Usize) (t0 : Spec.BeaconState) (s : S) (j : Usize) (hj : j.val ≤ idx.length)
@@ -244,25 +245,25 @@ theorem range'_snoc (L0 n : Nat) (h : L0 ≤ n) :
   congr 2
   omega
 
-theorem apply_new_validator_deposits_loop_spec {S D E : Type} (inst : LhDepositWrites S D E)
+theorem apply_new_validator_deposits_loop_spec [EpochProofs.Spec.PresetCfg] {S D E : Type} (inst : LhDepositWrites S D E)
     (o : Spec.Oracle) (view : S → Spec.BeaconState) (absDep : D → Spec.PendingDeposit)
     (postOf : S → List Spec.PendingDeposit) (hc : DepositWritesContract inst o view absDep postOf)
     (deps : Slice D) (t0 : Spec.BeaconState) (L0 : Nat) (s : S) (added : alloc.vec.Vec Usize)
     (i : Usize) (hi : i.val ≤ deps.length)
     (hp : ((deps.val.map absDep).take i.val).foldlM (Spec.apply_pending_deposit
-      Spec.Preset.mainnet o) t0 = .ok (view s))
+      Spec.P o) t0 = .ok (view s))
     (hL : L0 ≤ (view s).validators.length)
     (ha : added.val.map (·.val) = List.range' L0 ((view s).validators.length - L0))
     (hal : added.length ≤ i.val) :
     per_epoch_processing.deposit_writes.apply_new_validator_deposits_loop inst s deps added i
       ⦃ res => NewPost view L0 ((deps.val.map absDep).foldlM (Spec.apply_pending_deposit
-        Spec.Preset.mainnet o) t0) res ⦄ := by
+        Spec.P o) t0) res ⦄ := by
   unfold per_epoch_processing.deposit_writes.apply_new_validator_deposits_loop
   apply loop.spec_decr_nat
     (measure := fun (x : S × alloc.vec.Vec Usize × Usize) => deps.length - x.2.2.val)
     (inv := fun (x : S × alloc.vec.Vec Usize × Usize) => x.2.2.val ≤ deps.length ∧
       ((deps.val.map absDep).take x.2.2.val).foldlM (Spec.apply_pending_deposit
-        Spec.Preset.mainnet o) t0 = .ok (view x.1) ∧
+        Spec.P o) t0 = .ok (view x.1) ∧
       L0 ≤ (view x.1).validators.length ∧
       x.2.1.val.map (·.val) = List.range' L0 ((view x.1).validators.length - L0) ∧
       x.2.1.length ≤ x.2.2.val)
@@ -280,7 +281,7 @@ theorem apply_new_validator_deposits_loop_spec {S D E : Type} (inst : LhDepositW
       dsimp only
       set x := deps.val[i1.val] with hxv
       have hget : (deps.val.map absDep)[i1.val] = absDep x := by simp [hxv]
-      have hstep := Spec.foldlM_take_succ' (Spec.apply_pending_deposit Spec.Preset.mainnet o)
+      have hstep := Spec.foldlM_take_succ' (Spec.apply_pending_deposit Spec.P o)
         t0 (view s1) _ _ hml hp1
       rw [hget] at hstep
       obtain ⟨r, s2, hvi, hv2, hr⟩ := hc.validator_index s1 x
@@ -324,7 +325,7 @@ theorem apply_new_validator_deposits_loop_spec {S D E : Type} (inst : LhDepositW
             have hv3' : view s3 = { view s1 with
                 balances := (view s1).balances.set index.val c.val } := by rw [hv3, hv2]
             have hstep' : (List.take (i1.val + 1) (deps.val.map absDep)).foldlM
-                (Spec.apply_pending_deposit Spec.Preset.mainnet o) t0 = .ok (view s3) := by
+                (Spec.apply_pending_deposit Spec.P o) t0 = .ok (view s3) := by
               rw [hstep, hsp, hlg]
               simp only [except_ok_bind]
               rw [hav] at huc
@@ -359,11 +360,11 @@ theorem apply_new_validator_deposits_loop_spec {S D E : Type} (inst : LhDepositW
         have hsp := Spec.apply_pending_deposit_new o (view s1) (absDep x) hm
         dsimp only
         rw [hc.is_valid_signature, bind_tc_ok]
-        by_cases hsig : Spec.is_valid_deposit_signature Spec.Preset.mainnet o (absDep x).pubkey
+        by_cases hsig : Spec.is_valid_deposit_signature Spec.P o (absDep x).pubkey
             (absDep x).withdrawal_credentials (absDep x).amount (absDep x).signature = true
         · rw [if_pos hsig] at hsp
           simp only [hsig, if_true]
-          cases hreg : Spec.add_validator_to_registry Spec.Preset.mainnet (view s1)
+          cases hreg : Spec.add_validator_to_registry Spec.P (view s1)
               (absDep x).pubkey (absDep x).withdrawal_credentials (absDep x).amount with
           | ok t' =>
             rw [← hv2] at hreg
@@ -417,7 +418,7 @@ theorem apply_new_validator_deposits_loop_spec {S D E : Type} (inst : LhDepositW
 `DepositWritesContract`: `Ok` exactly when `depositWritesSpec` is `ok`, with the same state. The
 queue write needs the next deposit index to be at most the queue length, which
 `lhDepositPlan_next_le` gives for the plan. -/
-theorem apply_deposit_writes_spec {S D E : Type} (inst : LhDepositWrites S D E) (o : Spec.Oracle)
+theorem apply_deposit_writes_spec [EpochProofs.Spec.PresetCfg] {S D E : Type} (inst : LhDepositWrites S D E) (o : Spec.Oracle)
     (view : S → Spec.BeaconState) (absDep : D → Spec.PendingDeposit)
     (postOf : S → List Spec.PendingDeposit) (hc : DepositWritesContract inst o view absDep postOf)
     (s : S) (next : Usize) (dbtc : U64) (deps : Slice D) (eb : Bool)
@@ -490,7 +491,7 @@ theorem apply_deposit_writes_spec {S D E : Type} (inst : LhDepositWrites S D E) 
 /-- `apply_deposit_writes` is the model step from the queue write to the effective balance updates
 of the new validators (`lhNewValidators` after `lhQueueWrite`), for the plan of the epoch input
 `s`, on any state `view st` that still holds the queue of `s`. -/
-theorem apply_deposit_writes_model {S D E : Type} (inst : LhDepositWrites S D E)
+theorem apply_deposit_writes_model [EpochProofs.Spec.PresetCfg] {S D E : Type} (inst : LhDepositWrites S D E)
     (o : Spec.Oracle) (view : S → Spec.BeaconState) (absDep : D → Spec.PendingDeposit)
     (postOf : S → List Spec.PendingDeposit) (hc : DepositWritesContract inst o view absDep postOf)
     (s : Spec.BeaconState) (tab : Spec.Gwei) (current_epoch : Spec.Epoch) (plan : Spec.LhDepositPlan)

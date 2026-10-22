@@ -15,14 +15,12 @@ namespace EpochProofs.Etheorem
 
 open EthCLLib.Spec EthCLLib.Proofs SizzLean.Proofs EthCLSpecs.Proofs.Gloas
 
-section Mainnet
+section Generic
 
-attribute [local instance] EthCLSpecs.Gloas.mainnet EthCLSpecs.Gloas.mainnetConfig
+variable [EthCLSpecs.Gloas.Preset] [EthCLSpecs.Gloas.Config] [HasherTag] [CryptoBackend]
 
-variable [HasherTag] [CryptoBackend]
-
-/-- At an epoch boundary of a reachable run on mainnet, the Lighthouse epoch model returns
-`ok`, and Etheorem's Gloas `processEpoch` gives the same state.
+/-- At an epoch boundary of a reachable run, for a preset that agrees with Etheorem's (`hpa`), the
+Lighthouse epoch model returns `ok`, and Etheorem's Gloas `processEpoch` gives the same state.
 
 The conditions beyond `lighthouse_order_epoch_etheorem_reachable`:
 - `hslot`: the slot is at least `8192` below `2^64`. Near `2^64` the pyspec `get_block_root`
@@ -31,14 +29,17 @@ The conditions beyond `lighthouse_order_epoch_etheorem_reachable`:
 - `hrb`: the time and supply bounds of `RowBounds` (`TotalityRows.lean`): inactivity scores,
   supply, exit queue, registry size, and participation against the active balance.
 - `hcomm`: at the committee steps, the state conditions (`CommConds`) and the pyspec
-  preconditions (`CommPreconds`: a sync candidate, a proposer candidate (F4), at least 32 active
-  validators for the PTC, and selections that end within `2^64` passes). -/
-theorem lighthouse_epoch_total_etheorem (o : Spec.Oracle) (ho : OracleAgrees o)
+  preconditions (`CommPreconds`: a sync candidate, a proposer candidate (F4), at least
+  `SLOTS_PER_EPOCH` active validators for the PTC (F12), and selections that end within `2^64` passes). -/
+theorem lighthouse_epoch_total_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds]
+    (hpa : EpochPresetAgrees Spec.P)
+    (hhr : Spec.LH_HISTORICAL_ROOTS_LIMIT ≤ EthCLSpecs.Gloas.Const.historicalRootsLimit)
+    (o : Spec.Oracle) (ho : OracleAgrees o)
     (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState)
     (hin : Spec.EpochInputOk'' Spec.EpochSupply (absEState e))
     (hpre : Spec.TailPre (absEState e)) (hcond : EpochCondsIn e) (hsel : SelectionsFull e)
     (hslot : (absEState e).slot + 8192 < 2 ^ 64)
-    (hvec : (absEState e).VectorLengths Spec.Preset.mainnet)
+    (hvec : (absEState e).VectorLengths Spec.P)
     (hrb : Spec.RowBounds (absEState e))
     (hcomm : ∀ s, Spec.CommFrame (absEState e) s → Spec.CommConds o s ∧ Spec.CommPreconds o s) :
     ∃ s', Spec.process_epoch_lh_order o (absEState e) = .ok s' ∧
@@ -51,8 +52,9 @@ theorem lighthouse_epoch_total_etheorem (o : Spec.Oracle) (ho : OracleAgrees o)
   have hfull := (Spec.process_epoch_lh_full_sameOk' o (absEState e) hb hslot64 heb hexit hsup
     hvalid hcons s').mpr hs'
   have hlh := (Spec.process_epoch_lh_order_sameOk o (absEState e) hpre s').mpr hfull
-  exact ⟨s', hlh, lighthouse_order_epoch_etheorem_reachable o ho hsha e hin hpre hcond hsel hlh⟩
+  exact ⟨s', hlh, lighthouse_order_epoch_etheorem_reachable hpa hhr o ho hsha e hin hpre hcond hsel
+    hlh⟩
 
-end Mainnet
+end Generic
 
 end EpochProofs.Etheorem
