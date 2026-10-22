@@ -61,7 +61,7 @@ def MidOkFulu (t : BeaconState) : Prop :=
     (t.slot / 32 ≠ 0 → s1.finalized_checkpoint.epoch + 1 ≤ t.slot / 32) →
     OkWith (specFourStepsFulu s1) (fun s => TailFrame t s ∧ DepFrame t s)
 
-theorem midOkFulu_of_rowBounds [PresetCfg] (t : BeaconState) (hrows : RowsOk t)
+theorem midOkFulu_of_rowBounds [PresetCfg] [PresetCfg.Ok] (t : BeaconState) (hrows : RowsOk t)
     (hslot : t.slot + 8192 < 2 ^ 64) (heb : EBOk P t)
     (hrl : t.randao_mixes.length = 65536) (hsll : t.slashings.length = 8192)
     (hcons : ConsolidationsInRange t) (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : RowBounds t) :
@@ -130,7 +130,7 @@ theorem get_beacon_proposer_indices_fulu_total [PresetCfg] (o : Oracle) (s : Bea
   rw [hseed, tot_bind_ok]
   exact ⟨r, compute_proposer_indices_ok_fulu P o s e seed _ hin r hr1⟩
 
-theorem process_proposer_lookahead_fulu_total [PresetCfg] (o : Oracle) (s : BeaconState)
+theorem process_proposer_lookahead_fulu_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState)
     (hslot : s.slot + 8192 < 2 ^ 64) (hr : s.randao_mixes.length = 65536)
     (hreg : s.validators.length ≤ 2 ^ 40)
     (heb : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000)
@@ -189,7 +189,7 @@ def CommitteesOkFulu [PresetCfg] (o : Oracle) (t : BeaconState) : Prop :=
       let s ← process_sync_committee_updates_fulu P o s
       process_proposer_lookahead_fulu P o s) (fun _ => True)
 
-theorem committeesOkFulu_of [PresetCfg] (o : Oracle) (t : BeaconState) (hslot : t.slot + 8192 < 2 ^ 64)
+theorem committeesOkFulu_of [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState) (hslot : t.slot + 8192 < 2 ^ 64)
     (h : ∀ s, CommFrame t s → FuluCommConds o s ∧ FuluCommPreconds o s) :
     CommitteesOkFulu o t := by
   intro s hf
@@ -214,7 +214,7 @@ theorem committeesOkFulu_of [PresetCfg] (o : Oracle) (t : BeaconState) (hslot : 
 
 /-- The Fulu spec `process_epoch` succeeds on mainnet at the last slot of an epoch, from the
 reachable-state facts at its input, `RowBounds`, and the Fulu committee steps. -/
-theorem process_epoch_fulu_total [PresetCfg] [FuluCfg] (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
+theorem process_epoch_fulu_total [PresetCfg] [PresetCfg.Ok] [FuluCfg] (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
     (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % 32 = 0)
     (hvec : t.FuluVectorLengths P) (hffg : FfgInvariant P t)
     (heb : EBOk P t) (hcons : ConsolidationsInRange t)

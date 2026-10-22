@@ -34,7 +34,7 @@ def depositWritesSpec [PresetCfg] (o : Oracle) (t : BeaconState) (next : Nat) (d
       ebUpdateAt t3
   else pure t3
 
-theorem depositWritesSpec_eq (o : Oracle) (s t : BeaconState) (plan : LhDepositPlan)
+theorem depositWritesSpec_eq [EpochProofs.Spec.PresetCfg] (o : Oracle) (s t : BeaconState) (plan : LhDepositPlan)
     (h : t.pending_deposits = s.pending_deposits) :
     depositWritesSpec o t plan.next_deposit_index plan.deposit_balance_to_consume plan.postponed
         plan.new_validator_deposits true =
@@ -108,7 +108,7 @@ theorem depositLoop_next_le [PresetCfg] (fs avail : Nat) :
 
 /-- The deposit plan never skips past the end of the queue, so the queue write after the single
 pass succeeds. -/
-theorem lhDepositPlan_next_le (s : BeaconState) (tab : Gwei) (current_epoch : Epoch)
+theorem lhDepositPlan_next_le [EpochProofs.Spec.PresetCfg] (s : BeaconState) (tab : Gwei) (current_epoch : Epoch)
     (plan : LhDepositPlan) (h : lhDepositPlan s tab current_epoch = .ok plan) :
     plan.next_deposit_index ≤ s.pending_deposits.length := by
   unfold lhDepositPlan at h
@@ -174,7 +174,7 @@ theorem foldlM_error_of_take {α β : Type} (f : β → α → Spec.SpecM β) (b
   rw [List.foldlM_cons, he]
   rfl
 
-theorem update_effective_balances_loop_spec {S D E : Type} (inst : LhDepositWrites S D E)
+theorem update_effective_balances_loop_spec [EpochProofs.Spec.PresetCfg] {S D E : Type} (inst : LhDepositWrites S D E)
     (o : Spec.Oracle) (view : S → Spec.BeaconState) (absDep : D → Spec.PendingDeposit)
     (postOf : S → List Spec.PendingDeposit) (hc : DepositWritesContract inst o view absDep postOf)
     (idx : Slice Usize) (t0 : Spec.BeaconState) (s : S) (j : Usize) (hj : j.val ≤ idx.length)
@@ -418,7 +418,7 @@ theorem apply_new_validator_deposits_loop_spec [EpochProofs.Spec.PresetCfg] {S D
 `DepositWritesContract`: `Ok` exactly when `depositWritesSpec` is `ok`, with the same state. The
 queue write needs the next deposit index to be at most the queue length, which
 `lhDepositPlan_next_le` gives for the plan. -/
-theorem apply_deposit_writes_spec {S D E : Type} (inst : LhDepositWrites S D E) (o : Spec.Oracle)
+theorem apply_deposit_writes_spec [EpochProofs.Spec.PresetCfg] {S D E : Type} (inst : LhDepositWrites S D E) (o : Spec.Oracle)
     (view : S → Spec.BeaconState) (absDep : D → Spec.PendingDeposit)
     (postOf : S → List Spec.PendingDeposit) (hc : DepositWritesContract inst o view absDep postOf)
     (s : S) (next : Usize) (dbtc : U64) (deps : Slice D) (eb : Bool)
@@ -491,7 +491,7 @@ theorem apply_deposit_writes_spec {S D E : Type} (inst : LhDepositWrites S D E) 
 /-- `apply_deposit_writes` is the model step from the queue write to the effective balance updates
 of the new validators (`lhNewValidators` after `lhQueueWrite`), for the plan of the epoch input
 `s`, on any state `view st` that still holds the queue of `s`. -/
-theorem apply_deposit_writes_model {S D E : Type} (inst : LhDepositWrites S D E)
+theorem apply_deposit_writes_model [EpochProofs.Spec.PresetCfg] {S D E : Type} (inst : LhDepositWrites S D E)
     (o : Spec.Oracle) (view : S → Spec.BeaconState) (absDep : D → Spec.PendingDeposit)
     (postOf : S → List Spec.PendingDeposit) (hc : DepositWritesContract inst o view absDep postOf)
     (s : Spec.BeaconState) (tab : Spec.Gwei) (current_epoch : Spec.Epoch) (plan : Spec.LhDepositPlan)

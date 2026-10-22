@@ -118,7 +118,7 @@ abbrev LhEffectiveBalanceWrites (S E : Type) :=
   per_epoch_processing.list_writes.EffectiveBalanceWrites S E
 
 /-- Trusted: what the `EffectiveBalanceWrites` implementation in `single_pass.rs` does. -/
-structure EffectiveBalanceContract {S E : Type} (inst : LhEffectiveBalanceWrites S E)
+structure EffectiveBalanceContract [EpochProofs.Spec.PresetCfg] {S E : Type} (inst : LhEffectiveBalanceWrites S E)
     (view : S → Spec.BeaconState) : Prop where
   update_effective_balance : ∀ (s : S) (i : Usize),
     (∀ t', Spec.ebUpdateAt (view s) i.val = .ok t' →

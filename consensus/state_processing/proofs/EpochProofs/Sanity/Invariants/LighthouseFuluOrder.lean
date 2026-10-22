@@ -41,7 +41,7 @@ theorem lhAfterPassFulu_eq [PresetCfg] (o : Oracle) (s : BeaconState) (plan : Lh
   simp only [lhAfterPassG, lhMidFulu, lhNewValidators, lhQueueWrite, bind_assoc,
     lhApplyPendingDeposit_mainnet]
 
-theorem lhMidFulu_votesBlind (o : Oracle) (s : BeaconState) (plan : LhDepositPlan) :
+theorem lhMidFulu_votesBlind [PresetCfg] (o : Oracle) (s : BeaconState) (plan : LhDepositPlan) :
     VotesBlind (lhMidFulu o s plan) := by
   intro t
   have hq : lhQueueWrite s plan (clearVotes t) = clearVotes (lhQueueWrite s plan t) := rfl
@@ -53,7 +53,7 @@ theorem lhMidFulu_votesBlind (o : Oracle) (s : BeaconState) (plan : LhDepositPla
   simp only [lhMidFulu, hq, bind_assoc]
   exact h
 
-theorem lhMidFulu_slotKeep (o : Oracle) (s : BeaconState) (plan : LhDepositPlan) :
+theorem lhMidFulu_slotKeep [PresetCfg] (o : Oracle) (s : BeaconState) (plan : LhDepositPlan) :
     SlotKeep (lhMidFulu o s plan) := by
   intro t t' h
   have k := slotKeep_bind (lhNewValidators_slotKeep o plan)
@@ -123,7 +123,7 @@ theorem lhRestOrderFulu_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (T : Beac
   exact SameOk.flip (specOrderFulu_lhOrderFulu o T hroom)
 
 /-- The steps after the single pass in the Lighthouse Fulu order. -/
-def lhAfterPassOrderFulu (o : Oracle) (s : BeaconState) (_total_active_balance : Gwei)
+def lhAfterPassOrderFulu [PresetCfg] (o : Oracle) (s : BeaconState) (_total_active_balance : Gwei)
     (plan : LhDepositPlan) (x : (Epoch × Gwei) × List Row) : SpecM BeaconState :=
   lhMidFulu o s plan (s.withRowsChurn x.1 x.2) >>= lhRestOrderFulu o
 
@@ -151,7 +151,7 @@ theorem lhAfterPassOrderFulu_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s :
 /-! ## The whole Lighthouse Fulu epoch in the Lighthouse order -/
 
 /-- `lhFullTailFulu` with the steps after the single pass given as `after`. -/
-def lhFullTailWithFulu [PresetCfg]
+def lhFullTailWithFulu [PresetCfg] [FuluCfg]
     (after : BeaconState → Gwei → LhDepositPlan → (Epoch × Gwei) × List Row →
       SpecM BeaconState)
     (s : BeaconState) : SpecM BeaconState := do
@@ -169,13 +169,13 @@ def lhFullTailWithFulu [PresetCfg]
     (s.earliest_exit_epoch, s.exit_balance_to_consume) (rowsOf s)
   after s total_active_balance plan x
 
-theorem lhFullTailFulu_eq_with (o : Oracle) (s : BeaconState) :
+theorem lhFullTailFulu_eq_with [PresetCfg] [FuluCfg] (o : Oracle) (s : BeaconState) :
     lhFullTailFulu o s =
       lhFullTailWithFulu (fun s _ plan x => lhAfterPassG o (epochRest2Fulu o) s plan x) s := by
   unfold lhFullTailFulu lhFullTailG lhFullTailWithFulu lhAfterPassG
   rfl
 
-theorem lhFullTailWithFulu_sameOk
+theorem lhFullTailWithFulu_sameOk [PresetCfg] [FuluCfg]
     (a1 a2 : BeaconState → Gwei → LhDepositPlan → (Epoch × Gwei) × List Row →
       SpecM BeaconState) (s : BeaconState)
     (h : ∀ tab plan x, SameOk (a1 s tab plan x) (a2 s tab plan x)) :
@@ -194,13 +194,13 @@ theorem lhFullTailWithFulu_sameOk
 
 /-- The Fulu `process_epoch` on mainnet as Lighthouse runs it, in the Lighthouse order and with
 the Lighthouse resets. The genesis epoch takes the same path. -/
-def process_epoch_lh_order_fulu [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
+def process_epoch_lh_order_fulu [PresetCfg] [FuluCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
   let s1 ← lhJustificationAndFinalization P s
   lhFullTailWithFulu (lhAfterPassOrderFulu o) s1
 
 /-- Under `TailPre`, the Lighthouse Fulu order gives the same `ok` results as
 `process_epoch_lh_full_fulu`. -/
-theorem process_epoch_lh_order_fulu_sameOk (o : Oracle) (s : BeaconState) (hs : TailPre s) :
+theorem process_epoch_lh_order_fulu_sameOk [PresetCfg] [PresetCfg.Ok] [FuluCfg] (o : Oracle) (s : BeaconState) (hs : TailPre s) :
     SameOk (process_epoch_lh_order_fulu o s) (process_epoch_lh_full_fulu o s) := by
   unfold process_epoch_lh_order_fulu process_epoch_lh_full_fulu
   refine SameOk.bind (SameOk.refl _) fun s1 h1 => ?_
@@ -213,7 +213,7 @@ theorem process_epoch_lh_order_fulu_sameOk (o : Oracle) (s : BeaconState) (hs : 
 /-- The Lighthouse Fulu epoch in the Lighthouse order gives the same `ok` results as the Fulu
 `process_epoch` on mainnet, at an epoch boundary state with the invariants that reachable Gloas
 states have (`EpochInputOk''`) and `TailPre`. -/
-theorem lighthouse_fulu_epoch_sameOk [PresetCfg] [PresetCfg.Ok] [FuluCfg] (o : Oracle) (t : BeaconState)
+theorem lighthouse_fulu_epoch_sameOk [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (t : BeaconState)
     (hin : EpochInputOk'' EpochSupply t) (hpre : TailPre t) :
     SameOk (process_epoch_lh_order_fulu o t)
       (process_epoch_fulu P FC o t) := by

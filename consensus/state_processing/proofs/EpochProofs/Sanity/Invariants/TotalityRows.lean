@@ -420,10 +420,10 @@ def RowRel (P : Row → Row → Prop) : List Row → List Row → Prop
   | x :: xs, y :: ys => P x y ∧ RowRel P xs ys
   | _, _ => False
 
-theorem RowRel.cons [PresetCfg] {P : Row → Row → Prop} {x y : Row} {xs ys : List Row}
+theorem RowRel.cons {P : Row → Row → Prop} {x y : Row} {xs ys : List Row}
     (h : RowRel P (x :: xs) (y :: ys)) : P x y ∧ RowRel P xs ys := h
 
-theorem passM_rel [PresetCfg] {A : Type} (f : A → Row → SpecM (A × Row)) (I : Nat → A → Prop)
+theorem passM_rel {A : Type} (f : A → Row → SpecM (A × Row)) (I : Nat → A → Prop)
     (P : Row → Row → Prop) (Q : Row → Prop)
     (hf : ∀ r j a, Q r → I j a → ∃ a' r', f a r = .ok (a', r') ∧ I (j + 1) a' ∧ P r r') :
     ∀ (rows : List Row) (k : Nat) (a : A), I k a → (∀ r ∈ rows, Q r) →
@@ -441,7 +441,7 @@ theorem passM_rel [PresetCfg] {A : Type} (f : A → Row → SpecM (A × Row)) (I
       have : k + 1 + rs.length = k + (rs.length + 1) := by omega
       rw [← this]; exact hI2
 
-theorem RowRel.length [PresetCfg] {P : Row → Row → Prop} :
+theorem RowRel.length {P : Row → Row → Prop} :
     ∀ {xs ys : List Row}, RowRel P xs ys → ys.length = xs.length
   | [], [], _ => rfl
   | _ :: _, _ :: _, h => by
@@ -450,7 +450,7 @@ theorem RowRel.length [PresetCfg] {P : Row → Row → Prop} :
   | [], _ :: _, h => h.elim
   | _ :: _, [], h => h.elim
 
-theorem RowRel.map_eq [PresetCfg] {P : Row → Row → Prop} {β : Type} (g : Row → β)
+theorem RowRel.map_eq {P : Row → Row → Prop} {β : Type} (g : Row → β)
     (hg : ∀ a b, P a b → g b = g a) :
     ∀ {xs ys : List Row}, RowRel P xs ys → ys.map g = xs.map g
   | [], [], _ => rfl
@@ -460,7 +460,7 @@ theorem RowRel.map_eq [PresetCfg] {P : Row → Row → Prop} {β : Type} (g : Ro
   | [], _ :: _, h => h.elim
   | _ :: _, [], h => h.elim
 
-theorem RowRel.sum_le [PresetCfg] {P : Row → Row → Prop} (g h : Row → Nat)
+theorem RowRel.sum_le {P : Row → Row → Prop} (g h : Row → Nat)
     (hg : ∀ a b, P a b → g b ≤ g a + h a) :
     ∀ {xs ys : List Row}, RowRel P xs ys → (ys.map g).sum ≤ (xs.map g).sum + (xs.map h).sum
   | [], [], _ => by simp
@@ -473,7 +473,7 @@ theorem RowRel.sum_le [PresetCfg] {P : Row → Row → Prop} (g h : Row → Nat)
   | [], _ :: _, hr => hr.elim
   | _ :: _, [], hr => hr.elim
 
-theorem RowRel.forall [PresetCfg] {P : Row → Row → Prop} (Q Q' : Row → Prop)
+theorem RowRel.forall {P : Row → Row → Prop} (Q Q' : Row → Prop)
     (hq : ∀ a b, Q a → P a b → Q' b) :
     ∀ {xs ys : List Row}, RowRel P xs ys → (∀ r ∈ xs, Q r) → ∀ r ∈ ys, Q' r
   | [], [], _, _ => by simp
@@ -488,7 +488,7 @@ theorem RowRel.forall [PresetCfg] {P : Row → Row → Prop} (Q Q' : Row → Pro
   | _ :: _, [], hr, _ => hr.elim
 
 /-- `passM_rel` where the step may use a bound `K` on the number of rows done. -/
-theorem passM_rel_bounded [PresetCfg] {A : Type} (f : A → Row → SpecM (A × Row)) (I : Nat → A → Prop)
+theorem passM_rel_bounded {A : Type} (f : A → Row → SpecM (A × Row)) (I : Nat → A → Prop)
     (P : Row → Row → Prop) (K : Nat)
     (hf : ∀ r j a, I j a → j < K → ∃ a' r', f a r = .ok (a', r') ∧ I (j + 1) a' ∧ P r r') :
     ∀ (rows : List Row) (k : Nat) (a : A), I k a → k + rows.length ≤ K →
@@ -597,7 +597,7 @@ theorem slashings_pass_total [PresetCfg] (rows : List Row) (target per : Nat) (h
       exact ⟨(), x, hx, trivial, he, hle⟩) rows 0 () trivial hs
   exact ⟨ys, h, hr⟩
 
-theorem RowRel.comp [PresetCfg] {P Q : Row → Row → Prop} :
+theorem RowRel.comp {P Q : Row → Row → Prop} :
     ∀ {xs ys zs : List Row}, RowRel P xs ys → RowRel Q ys zs →
       RowRel (fun a c => ∃ b, P a b ∧ Q b c) xs zs
   | [], [], [], _, _ => trivial
@@ -632,7 +632,7 @@ def RegSlashOut (s3 s5 : BeaconState) : Prop :=
 
 /-- The registry update at the churn total `rtab`, then the slashings at `tab`. Fulu runs the
 registry update at a different churn total than the slashings. -/
-theorem regSlash_total_g [PresetCfg] (s3 : BeaconState) (tab rtab : Gwei) (hrows : RowsOk s3)
+theorem regSlash_total_g [PresetCfg] [PresetCfg.Ok] (s3 : BeaconState) (tab rtab : Gwei) (hrows : RowsOk s3)
     (hslot : s3.slot + 8192 < 2 ^ 64) (hrtab : rtab < 2 ^ 60) (htab_lo : 1000000000 ≤ tab)
     (heb : ∀ v ∈ s3.validators, v.effective_balance ≤ 2048000000000)
     (hn : s3.validators.length < 2 ^ 40) (hE : s3.earliest_exit_epoch < 2 ^ 62)
@@ -680,7 +680,7 @@ theorem regSlash_total_g [PresetCfg] (s3 : BeaconState) (tab rtab : Gwei) (hrows
   rw [h4096, hp5]
   exact OkWith.of_eq rfl ⟨ys5, E', B', rfl, RowRel.comp hr4 hr5⟩
 
-theorem regSlash_total [PresetCfg] (s3 : BeaconState) (tab : Gwei) (hrows : RowsOk s3)
+theorem regSlash_total [PresetCfg] [PresetCfg.Ok] (s3 : BeaconState) (tab : Gwei) (hrows : RowsOk s3)
     (hslot : s3.slot + 8192 < 2 ^ 64) (htab : tab < 2 ^ 60) (htab_lo : 1000000000 ≤ tab)
     (heb : ∀ v ∈ s3.validators, v.effective_balance ≤ 2048000000000)
     (hn : s3.validators.length < 2 ^ 40) (hE : s3.earliest_exit_epoch < 2 ^ 62)
@@ -828,13 +828,13 @@ theorem post_of_regSlash [PresetCfg] (t s1 s3 s5 : BeaconState) (hrl : t.randao_
   · show (ys.map (·.validator)).length = t.validators.length
     rw [List.length_map, hlt]
 
-theorem trw_inact_genesis [PresetCfg] (s : BeaconState) (h : s.slot / 32 = 0) :
+theorem trw_inact_genesis [PresetCfg] [PresetCfg.Ok] (s : BeaconState) (h : s.slot / 32 = 0) :
     process_inactivity_updates P s = .ok s := by
   unfold process_inactivity_updates
   rw [tot_current_epoch, trw_bind_ok, h]
   rfl
 
-theorem trw_rewards_genesis [PresetCfg] (tab : Gwei) (s : BeaconState) (h : s.slot / 32 = 0) :
+theorem trw_rewards_genesis [PresetCfg] [PresetCfg.Ok] (tab : Gwei) (s : BeaconState) (h : s.slot / 32 = 0) :
     process_rewards_and_penalties P tab s = .ok s := by
   unfold process_rewards_and_penalties
   rw [tot_current_epoch, trw_bind_ok, h]
@@ -855,7 +855,7 @@ def MidCore [PresetCfg] (g : Gwei → Gwei) (t : BeaconState) : Prop :=
 
 /-- On mainnet, the inactivity, rewards, registry and slashings steps succeed after
 justification and finalization, under `RowBounds`, for any churn total `g tab` below `2^60`. -/
-theorem midCore_of_rowBounds [PresetCfg] (g : Gwei → Gwei) (hg : ∀ x, x < 2 ^ 57 → g x < 2 ^ 60)
+theorem midCore_of_rowBounds [PresetCfg] [PresetCfg.Ok] (g : Gwei → Gwei) (hg : ∀ x, x < 2 ^ 57 → g x < 2 ^ 60)
     (t : BeaconState) (hrows : RowsOk t) (hslot : t.slot + 8192 < 2 ^ 64)
     (heb : EBOk P t) (hrl : t.randao_mixes.length = 65536)
     (hsll : t.slashings.length = 8192)
@@ -1023,7 +1023,7 @@ theorem midCore_of_rowBounds [PresetCfg] (g : Gwei → Gwei) (hg : ∀ x, x < 2 
 
 /-- On mainnet, the inactivity, rewards, registry and slashings steps succeed after
 justification and finalization, under `RowBounds`. -/
-theorem midOk_of_rowBounds [PresetCfg] (t : BeaconState) (hrows : RowsOk t) (hslot : t.slot + 8192 < 2 ^ 64)
+theorem midOk_of_rowBounds [PresetCfg] [PresetCfg.Ok] (t : BeaconState) (hrows : RowsOk t) (hslot : t.slot + 8192 < 2 ^ 64)
     (heb : EBOk P t) (hvec : t.VectorLengths P)
     (hcons : ConsolidationsInRange t) (hsl : t.slashings.sum * 3 < 2 ^ 64)
     (hrb : RowBounds t) : MidOk t := by
@@ -1147,7 +1147,7 @@ def DepCore [PresetCfg] (g : Gwei → Gwei) (o : Oracle) (t : BeaconState) : Pro
     OkWith (process_pending_deposits P (g tab) (apply_pending_deposit P o)
       s) (TailFrame t)
 
-theorem depCore_of_rowBounds [PresetCfg] (g : Gwei → Gwei) (o : Oracle) (t : BeaconState)
+theorem depCore_of_rowBounds [PresetCfg] [PresetCfg.Ok] (g : Gwei → Gwei) (o : Oracle) (t : BeaconState)
     (hslot0 : t.slot + 8192 < 2 ^ 64) (hrb : RowBounds t) : DepCore g o t := by
   intro s tab hf hd htab
   have hteb : @LT.lt Nat _ (totalEffectiveBalance t) (2 ^ 57) := hrb.supply
@@ -1294,7 +1294,7 @@ theorem depOk_of_rowBounds (o : Oracle) (t : BeaconState) (hslot0 : t.slot + 819
 /-- `process_epoch_total` with the per-validator steps and the pending deposits proved: on
 mainnet, the spec `process_epoch` succeeds from the facts at its input, `RowBounds`, and the
 committee steps (`CommitteesOk`). -/
-theorem process_epoch_total_rows [PresetCfg] (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
+theorem process_epoch_total_rows [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
     (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % 32 = 0)
     (hvec : t.VectorLengths P) (hffg : FfgInvariant P t)
     (heb : EBOk P t) (hcons : ConsolidationsInRange t)

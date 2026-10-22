@@ -23,7 +23,7 @@ def runSteps : List (BeaconState → SpecM BeaconState) → BeaconState → Spec
   | f :: fs, s => f s >>= runSteps fs
 
 /-- A step keeps `P`. -/
-def StepKeeps [PresetCfg] (P : BeaconState → Prop) (f : BeaconState → SpecM BeaconState) : Prop :=
+def StepKeeps (P : BeaconState → Prop) (f : BeaconState → SpecM BeaconState) : Prop :=
   ∀ s t, P s → f s = .ok t → P t
 
 theorem runSteps_append [PresetCfg] (pre post : List (BeaconState → SpecM BeaconState)) (s : BeaconState) :
@@ -38,7 +38,7 @@ theorem runSteps_append [PresetCfg] (pre post : List (BeaconState → SpecM Beac
     exact ih t
 
 /-- `runSteps` keeps `P` when each step keeps it. -/
-theorem runSteps_keeps [PresetCfg] (P : BeaconState → Prop) :
+theorem runSteps_keeps (P : BeaconState → Prop) :
     ∀ (fs : List (BeaconState → SpecM BeaconState)), (∀ f ∈ fs, StepKeeps P f) →
       ∀ s t, P s → runSteps fs s = .ok t → P t
   | [], _, s, t, hs, h => by cases h; exact hs
@@ -309,7 +309,7 @@ theorem map_ok_inv {α : Type} {f : α → BeaconState} {x : SpecM α} {t : Beac
   | ok v => cases h; exact ⟨v, rfl, rfl⟩
 
 /-- A step that only writes values keeps every condition on the fields it does not write. -/
-theorem keeps_of_shape [PresetCfg] {α : Type} (P : BeaconState → Prop) (X : BeaconState → SpecM BeaconState)
+theorem keeps_of_shape {α : Type} (P : BeaconState → Prop) (X : BeaconState → SpecM BeaconState)
     (xNew : BeaconState → SpecM α) (G : α → BeaconState → BeaconState)
     (hX : ∀ t, X t = (fun v => G v t) <$> xNew t) (hG : ∀ v t, P t → P (G v t)) :
     StepKeeps P X := by

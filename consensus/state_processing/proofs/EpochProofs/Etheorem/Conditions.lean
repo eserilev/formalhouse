@@ -320,7 +320,7 @@ the finalized epoch condition and the equal list lengths. `hin` holds the facts 
 lemmas carry to the step that reads them. `hhist`: the historical summaries are below
 `HISTORICAL_ROOTS_LIMIT`, a cap that beta.4 keeps. `hsel` holds the facts about Etheorem's
 output. -/
-theorem process_epoch_etheorem_in (o : Spec.Oracle) (ho : OracleAgrees o)
+theorem process_epoch_etheorem_in [PresetCfg] [PresetCfg.Ok] (o : Spec.Oracle) (ho : OracleAgrees o)
     (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState)
     (hb0 : Spec.BoundaryOk (absEState e)) (hslot : (absEState e).slot < 2 ^ 64)
     (hin : EpochCondsIn e)
@@ -495,7 +495,7 @@ The conditions that remain:
 - `hhist`: the historical summaries are below `HISTORICAL_ROOTS_LIMIT`. Beta.2 keeps this cap.
 - `hsel`: Etheorem's balance weighted selections return all their items (F3).
 - `ho`, `hsha`: the oracle is Etheorem's hash and BLS functions, and SHA-256 returns 32 bytes. -/
-theorem lighthouse_epoch_etheorem_reachable (o : Spec.Oracle) (ho : OracleAgrees o)
+theorem lighthouse_epoch_etheorem_reachable [PresetCfg] [PresetCfg.Ok] (o : Spec.Oracle) (ho : OracleAgrees o)
     (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState)
     (hin : Spec.EpochInputOk'' Spec.EpochSupply (absEState e)) (hcond : EpochCondsIn e)
     (hhist : (absEState e).historical_summaries.length < EthCLSpecs.Gloas.Const.historicalRootsLimit)

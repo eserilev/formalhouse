@@ -32,7 +32,7 @@ def addSums (s : BeaconState) (sums : List Gwei) : SpecM BeaconState :=
 
 /-- The plan fold from any accumulator: the sums come from the top-up fold, and the postponed
 and new deposits are appended. -/
-theorem lhPlan_fold_gen [PresetCfg] (P : List BLSPubkey) :
+theorem lhPlan_fold_gen (P : List BLSPubkey) :
     ∀ (handled : List (PendingDeposit × Bool)) (sums : List Gwei)
       (post news : List PendingDeposit),
       handled.foldlM (lhPlanStep P) (sums, post, news) =
@@ -69,7 +69,7 @@ theorem lhPlan_fold_gen [PresetCfg] (P : List BLSPubkey) :
 
 /-- The plan fold of `lhDepositPlan`: the sums are the top-up fold from zero, the postponed
 deposits and the new validator deposits are filters of the handled deposits. -/
-theorem lhPlan_fold_eq [PresetCfg] (P : List BLSPubkey) (n : Nat)
+theorem lhPlan_fold_eq (P : List BLSPubkey) (n : Nat)
     (handled : List (PendingDeposit × Bool)) :
     handled.foldlM (lhPlanStep P) (List.replicate n 0, [], []) =
       (fun sums => (sums, (handled.filter (·.2)).map (·.1), newDeposits P handled)) <$>

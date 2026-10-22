@@ -605,7 +605,7 @@ theorem not_mem_consolidationIndices {t : BeaconState} {i : Nat}
     exact h ⟨c, hc, by simp [ht]⟩
 
 /-- A `for` loop in `SpecM` keeps every property that each successful pass keeps. -/
-theorem forIn_ok_inv [PresetCfg] {α β : Type} (P : β → Prop) (f : α → β → SpecM (ForInStep β)) :
+theorem forIn_ok_inv {α β : Type} (P : β → Prop) (f : α → β → SpecM (ForInStep β)) :
     ∀ (l : List α), (∀ a ∈ l, ∀ b r, P b → f a b = .ok r → P r.value) →
       ∀ (b b' : β), P b → forIn l b f = .ok b' → P b' := by
   intro l

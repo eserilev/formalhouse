@@ -91,6 +91,9 @@ class PresetCfg where
 class PresetCfg.Ok [c : PresetCfg] : Prop where
   slots_pos : 0 < c.v.SLOTS_PER_EPOCH
   slots_gt_one : 1 < c.v.SLOTS_PER_EPOCH
+  slots_ge_six : 6 ≤ c.v.SLOTS_PER_EPOCH
+  hist_root_ge : 2 * c.v.SLOTS_PER_EPOCH ≤ c.v.SLOTS_PER_HISTORICAL_ROOT
+  hist_root_le : c.v.SLOTS_PER_HISTORICAL_ROOT ≤ 8192
   slashings_vector_pos : 0 < c.v.EPOCHS_PER_SLASHINGS_VECTOR
   slashings_vector_ge : 64 ≤ c.v.EPOCHS_PER_SLASHINGS_VECTOR
   slashings_vector_le : c.v.EPOCHS_PER_SLASHINGS_VECTOR ≤ 8192
@@ -183,6 +186,11 @@ theorem P_slot_slash_fit [PresetCfg] [PresetCfg.Ok] {x : Nat} (hx : x + 1 < 2 ^ 
   obtain ⟨V, hV, -, hV2⟩ := P_slashings_vector_nat
   have := P_slot_epoch_lt (x := x) (by omega)
   rw [hV]; omega
+/-- The slots per epoch and per historical root as `Nat` with their bounds. -/
+theorem P_slots_nat [PresetCfg] [h : PresetCfg.Ok] :
+    ∃ S R : Nat, P.SLOTS_PER_EPOCH = S ∧ P.SLOTS_PER_HISTORICAL_ROOT = R ∧ 6 ≤ S ∧ 2 * S ≤ R ∧
+      R ≤ 8192 :=
+  ⟨_, _, rfl, rfl, h.slots_ge_six, h.hist_root_ge, h.hist_root_le⟩
 theorem P_eth1_period_pos [PresetCfg] [h : PresetCfg.Ok] : 0 < P.EPOCHS_PER_ETH1_VOTING_PERIOD :=
   h.eth1_period_pos
 
@@ -196,7 +204,8 @@ theorem P_sync_seats_even [PresetCfg] [h : PresetCfg.Ok] :
 
 theorem mainnetCfg_ok : @PresetCfg.Ok mainnetCfg :=
   letI := mainnetCfg
-  { slots_pos := by decide, slots_gt_one := by decide, slashings_vector_pos := by decide, slashings_vector_ge := by decide,
+  { slots_pos := by decide, slots_gt_one := by decide, slots_ge_six := by decide,
+    hist_root_ge := by decide, hist_root_le := by decide, slashings_vector_pos := by decide, slashings_vector_ge := by decide,
     slashings_vector_le := by decide,
     historical_vector_pos := by decide, historical_vector_ge := by decide,
     historical_vector_le := by decide, eth1_period_pos := by decide,
@@ -204,7 +213,8 @@ theorem mainnetCfg_ok : @PresetCfg.Ok mainnetCfg :=
 
 theorem minimalCfg_ok : @PresetCfg.Ok minimalCfg :=
   letI := minimalCfg
-  { slots_pos := by decide, slots_gt_one := by decide, slashings_vector_pos := by decide, slashings_vector_ge := by decide,
+  { slots_pos := by decide, slots_gt_one := by decide, slots_ge_six := by decide,
+    hist_root_ge := by decide, hist_root_le := by decide, slashings_vector_pos := by decide, slashings_vector_ge := by decide,
     slashings_vector_le := by decide,
     historical_vector_pos := by decide, historical_vector_ge := by decide,
     historical_vector_le := by decide, eth1_period_pos := by decide,

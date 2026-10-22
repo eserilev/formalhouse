@@ -581,7 +581,7 @@ theorem ep_bound {x : Nat} (h : x + 8192 < 2 ^ 64) (k : Nat) (hk : k ≤ 3) :
   show x / 32 + k + 65536 < 18446744073709551616
   omega
 
-theorem get_next_sync_committee_total [PresetCfg] (o : Oracle) (s : BeaconState)
+theorem get_next_sync_committee_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState)
     (hslot : s.slot + 8192 < 2 ^ 64) (hr : s.randao_mixes.length = 65536)
     (hreg : s.validators.length ≤ 2 ^ 40)
     (heb : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000)
@@ -687,7 +687,7 @@ theorem get_beacon_proposer_indices_total [PresetCfg] (o : Oracle) (s : BeaconSt
   rw [hr1, tot_bind_ok, tot_get (show 0 < r.length by omega)]
   exact ⟨_, rfl⟩
 
-theorem process_proposer_lookahead_total [PresetCfg] (o : Oracle) (s : BeaconState)
+theorem process_proposer_lookahead_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState)
     (hslot : s.slot + 8192 < 2 ^ 64) (hr : s.randao_mixes.length = 65536)
     (hreg : s.validators.length ≤ 2 ^ 40)
     (heb : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000)
@@ -725,7 +725,7 @@ theorem ptcIndices_congr [PresetCfg] (o : Oracle) {s1 s2 : BeaconState} (hv : s1
 
 theorem slot_div_window {a j : Nat} (hj : j < 32) : (a * 32 + j) / 32 = a := by omega
 
-theorem process_ptc_window_total [PresetCfg] (o : Oracle) (s : BeaconState)
+theorem process_ptc_window_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState)
     (hslot : s.slot + 8192 < 2 ^ 64) (hr : s.randao_mixes.length = 65536)
     (hreg : s.validators.length ≤ 2 ^ 40)
     (heb : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000)
@@ -805,7 +805,7 @@ theorem CommFacts.congr {o : Oracle} {s1 s2 : BeaconState} (hs : s1.slot = s2.sl
   obtain ⟨h1, h2, h3, h4, h5, h6, h7⟩ := h
   exact ⟨hs ▸ h1, hr ▸ h2, hv ▸ h3, hv ▸ h4, hl ▸ h5, hw ▸ h6, hv ▸ h7⟩
 
-theorem process_sync_committee_updates_total [PresetCfg] (o : Oracle) (s : BeaconState)
+theorem process_sync_committee_updates_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState)
     (hslot : s.slot + 8192 < 2 ^ 64) (hr : s.randao_mixes.length = 65536)
     (hreg : s.validators.length ≤ 2 ^ 40)
     (heb : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000)
@@ -831,7 +831,7 @@ theorem process_sync_committee_updates_total [PresetCfg] (o : Oracle) (s : Beaco
 
 /-- The sync committee, proposer lookahead and PTC window steps succeed from the state facts and
 the pyspec preconditions. -/
-theorem committee_steps_total [PresetCfg] (o : Oracle) (s : BeaconState) (hf : CommFacts o s)
+theorem committee_steps_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (hf : CommFacts o s)
     (hp : CommPreconds o s) :
     OkWith (do
       let s ← process_sync_committee_updates P o s
@@ -882,7 +882,7 @@ theorem compute_ptc_first_slot_error [PresetCfg] (o : Oracle) (s : BeaconState) 
 
 /-- The pyspec `process_ptc_window` raises when fewer than `SLOTS_PER_EPOCH` validators are active
 at `current + 2`. This is a pyspec halt: no state passes this epoch boundary. -/
-theorem process_ptc_window_few_active_error [PresetCfg] (o : Oracle) (s : BeaconState)
+theorem process_ptc_window_few_active_error [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState)
     (hslot : s.slot + 8192 < 2 ^ 64) (hr : s.randao_mixes.length = 65536)
     (hreg : s.validators.length ≤ 2 ^ 40) (hlen : s.ptc_window.length = 96)
     (hfew : (get_active_validator_indices s (s.slot / 32 + 2)).length < 32) :

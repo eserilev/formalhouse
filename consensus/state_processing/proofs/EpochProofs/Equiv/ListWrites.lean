@@ -165,7 +165,7 @@ theorem apply_builder_pending_payments_spec [EpochProofs.Spec.PresetCfg] {S E : 
 
 /-- `apply_builder_pending_payments` equals the spec `process_builder_pending_payments` on the
 builder lists, under the trusted `PaymentWritesContract`. -/
-theorem apply_builder_pending_payments_equiv {S E : Type} (p : Spec.Preset)
+theorem apply_builder_pending_payments_equiv [EpochProofs.Spec.PresetCfg] {S E : Type} (p : Spec.Preset)
     (inst : LhPaymentWrites S E) (wview : S → List LhWithdrawal) (pview : S → List LhPayment)
     (hc : PaymentWritesContract inst wview pview) (s : S) (tab spe64 : U64) (spe : Usize)
     (hslots : spe64.val = p.SLOTS_PER_EPOCH) (hspe : spe.val = p.SLOTS_PER_EPOCH)
@@ -206,7 +206,7 @@ def EbPost {S E : Type} (view : S → Spec.BeaconState) (spec : Spec.SpecM Spec.
   | (.Ok _, s') => spec = .ok (view s')
   | (.Err _, _) => ∃ e, spec = .error e
 
-theorem update_effective_balances_at_loop_spec {S E : Type} (inst : LhEffectiveBalanceWrites S E)
+theorem update_effective_balances_at_loop_spec [EpochProofs.Spec.PresetCfg] {S E : Type} (inst : LhEffectiveBalanceWrites S E)
     (view : S → Spec.BeaconState) (hc : EffectiveBalanceContract inst view)
     (idx : Slice Usize) (t0 : Spec.BeaconState) (s : S) (j : Usize) (hj : j.val ≤ idx.length)
     (hp : ((idx.val.map (·.val)).take j.val).foldlM Spec.ebUpdateAt t0 = .ok (view s)) :
@@ -264,7 +264,7 @@ theorem update_effective_balances_at_loop_spec {S E : Type} (inst : LhEffectiveB
 `(consolidationIndices s).foldlM ebUpdateAt`, under the trusted `EffectiveBalanceContract`, when
 the Rust indices are the model indices. Lighthouse collects them from a `BTreeSet`, which iterates
 in ascending order without duplicates, as `consolidationIndices` sorts and removes duplicates. -/
-theorem update_effective_balances_at_spec {S E : Type} (inst : LhEffectiveBalanceWrites S E)
+theorem update_effective_balances_at_spec [EpochProofs.Spec.PresetCfg] {S E : Type} (inst : LhEffectiveBalanceWrites S E)
     (view : S → Spec.BeaconState) (hc : EffectiveBalanceContract inst view) (s : S)
     (idx : Slice Usize) (named : List Nat) (hidx : idx.val.map (·.val) = named) :
     per_epoch_processing.list_writes.update_effective_balances_at inst s idx

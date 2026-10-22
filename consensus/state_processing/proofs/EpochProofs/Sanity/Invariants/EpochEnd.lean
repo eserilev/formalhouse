@@ -75,7 +75,7 @@ private theorem set_or_append_list_forall {α : Type} {Q : α → Prop} {l l' : 
   · exact listSet_forall hl ha h
 
 /-- A `for` loop in `SpecM` keeps every property that each successful pass keeps. -/
-private theorem forIn_ok_invariant [PresetCfg] {α β : Type} (P : β → Prop)
+private theorem forIn_ok_invariant {α β : Type} (P : β → Prop)
     (f : α → β → SpecM (ForInStep β)) (hf : ∀ a b r, P b → f a b = .ok r → P r.value) :
     ∀ (l : List α) (b b' : β), P b → forIn l b f = .ok b' → P b' := by
   intro l

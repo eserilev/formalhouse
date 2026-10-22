@@ -23,7 +23,7 @@ variable [HasherTag] [CryptoBackend]
 /-- Lighthouse's epoch processing, in the Lighthouse order, equals Etheorem's Gloas
 `processEpoch` on mainnet. `hpre` holds at each epoch boundary of a reachable state, with
 `historical_summaries` below the Lighthouse limit. -/
-theorem lighthouse_order_epoch_etheorem (o : Spec.Oracle) (ho : OracleAgrees o)
+theorem lighthouse_order_epoch_etheorem [EpochProofs.Spec.PresetCfg] [EpochProofs.Spec.PresetCfg.Ok] (o : Spec.Oracle) (ho : OracleAgrees o)
     (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState)
     (hin : Spec.EpochInputOk'' Spec.EpochSupply (absEState e))
     (hpre : Spec.TailPre (absEState e)) (hc : EtheoremEpochConds e)

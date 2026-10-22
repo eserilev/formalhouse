@@ -243,7 +243,7 @@ theorem compute_ptc_length (p : Preset) (o : Oracle) (state : BeaconState) (slot
 
 /-- A successful `mapM` gives one result for each item, and each result is the `f` value of its
 item. -/
-theorem mapM_ok_forall [PresetCfg] {α β : Type} (f : α → SpecM β) (P : β → Prop)
+theorem mapM_ok_forall {α β : Type} (f : α → SpecM β) (P : β → Prop)
     (hf : ∀ a b, f a = .ok b → P b) (l : List α) (r : List β) (h : l.mapM f = .ok r) :
     r.length = l.length ∧ ∀ b ∈ r, P b := by
   obtain ⟨hlen, hget⟩ := mapM_ok_getElem f l r h

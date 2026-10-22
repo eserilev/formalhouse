@@ -232,7 +232,7 @@ def totalEffectiveBalance (s : BeaconState) : Gwei :=
   (s.validators.map (·.effective_balance)).sum
 
 /-- A filtered sum is at most the full sum. -/
-private theorem sum_filter_map_le [PresetCfg] {α : Type} (P : α → Bool) (f : α → Nat) :
+private theorem sum_filter_map_le {α : Type} (P : α → Bool) (f : α → Nat) :
     ∀ l : List α, ((l.filter P).map f).sum ≤ (l.map f).sum
   | [] => Nat.le_refl _
   | a :: l => by
@@ -296,7 +296,7 @@ theorem get_total_active_balance_bounds [PresetCfg] (p : Preset) (s : BeaconStat
 The next lemmas are copies of private lemmas of `RowsRewards.lean`. -/
 
 /-- A filtering loop where each test succeeds is `List.filter`. -/
-private theorem forIn_filter_ok [PresetCfg] {X Y : Type} (P : X → SpecM Bool) (Q : X → Bool) (out : X → Y)
+private theorem forIn_filter_ok {X Y : Type} (P : X → SpecM Bool) (Q : X → Bool) (out : X → Y)
     (body : X → List Y → SpecM (ForInStep (List Y)))
     (hbody : ∀ x acc, body x acc =
       (fun b => ForInStep.yield (if b then acc ++ [out x] else acc)) <$> P x) :
