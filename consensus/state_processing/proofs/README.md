@@ -4,6 +4,7 @@
 
 - `formalhouse_gloas_epoch_final_mainnet` and `formalhouse_gloas_epoch_final_minimal`: on every Gloas epoch input of a run that starts in Fulu and crosses the Gloas fork, Lighthouse's epoch returns Ok and its state equals Etheorem's `processEpoch`.
 - `formalhouse_fulu_epoch_final_mainnet` and `formalhouse_fulu_epoch_final_minimal`: the same for every Fulu epoch input of a reachable Fulu run.
+- Both also prove that Lighthouse's cache reads (progressive balances, epoch cache total) and its pubkey cache lookup equal the spec values, from the cache build facts.
 - Both rest on the trusted base below: 9 Rust contracts, 26 glue facts, 4 cache build facts, 4 spec preconditions, 5 supply and time bounds, 3 probability facts, 2 Etheorem list limits, 3 Oracle items, 1 start state, and 6 tools and references.
 - Every `#print axioms` line in `EpochProofs/Axioms.lean` uses only `propext`, `Classical.choice` and `Quot.sound`.
 
@@ -89,7 +90,7 @@ chain below 8 active validators, not 32.
 | Probability facts | in `committees`: each selection ends within `2^64` passes; `selections` (F3) | in `committees`; in `etheorem`: F3 and `ProposerFin` |
 | Etheorem list limits (alpha.11) | `etheoremRoom`: deposit room (F10), builder withdrawals room (F6) | in `etheorem`: deposit room (F10), historical summaries room |
 | Oracle | `oracle` (SHA-256, the roots, the BLS checks agree with Etheorem), `sha` | `oracle`, `sha` |
-| Cache build facts | arguments: progressive balances `Coherent`, the epoch cache total, `CommitteeCacheBuilt`, pubkey cache `Coherent` with `IndexMapLaws` | none (the Fulu model takes the spec values) |
+| Cache build facts | arguments: progressive balances `Coherent`, the epoch cache total, `CommitteeCacheBuilt`, pubkey cache `Coherent` with `IndexMapLaws` | arguments: progressive balances `Coherent`, the epoch cache total, pubkey cache `Coherent` with `IndexMapLaws` (no committee cache: the Fulu lookahead and sync committee read the validator list) |
 
 The reachable-state invariants (`EpochInputOk''`) are not assumptions. `fulu_reachable_invariants`
 and `fulu_then_gloas_reachable_invariants` prove them for every epoch input of the run.
@@ -920,7 +921,7 @@ trust that the cache came from a state of this run.
 
 - The progressive balances cache is `Coherent`, and each block mutation calls its update function.
 - The epoch cache total and base rewards come from a state of the same epoch.
-- `CommitteeCacheBuilt` for the lookahead epoch.
+- `CommitteeCacheBuilt` for the lookahead epoch (Gloas only).
 - The pubkey cache is `Coherent` and comes from an earlier state of this run.
 
 ### Spec preconditions (4)

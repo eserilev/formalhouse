@@ -21,7 +21,8 @@ instantiate them for the two presets.
   Lighthouse's epoch returns `ok` and equals Etheorem's Gloas `processEpoch`. Its cache reads
   and its pubkey cache lookup equal the spec values.
 - Fulu: on every input of the Fulu `process_epoch` of a reachable Fulu run, Lighthouse's Fulu
-  epoch returns `ok` and equals Etheorem's Fulu `processEpoch`.
+  epoch returns `ok` and equals Etheorem's Fulu `processEpoch`. Its cache reads and its pubkey
+  cache lookup equal the spec values.
 
 Lighthouse's epoch is the model `process_epoch_lh_order` (Fulu: `process_epoch_lh_order_fulu`).
 Each step of the model is Lighthouse Rust that Aeneas translates, proved equal to the step:
@@ -43,10 +44,11 @@ The contracts (`Trusted/RegistryRows.lean`, `Trusted/EpochTail.lean`,
 implementations of the traits do. They are trusted. Each `?` site of `single_pass.rs` is listed
 in the error-site table of README.md with its status.
 
-`formalhouse_gloas_epoch_final` takes the cache build facts at the state that built each cache:
-the epoch cache total at a state `b` of the same epoch (`epoch_cache_total_carry`), the pubkey
-cache at an earlier state `b'` completed by `update_pubkey_cache` (`pubkey_cache_carry`). The
-progressive balances cache stays a fact about the epoch input.
+`formalhouse_gloas_epoch_final` and `formalhouse_fulu_epoch_final` take the cache build facts at
+the state that built each cache: the epoch cache total at a state `b` of the same epoch
+(`epoch_cache_total_carry`), the pubkey cache at an earlier state `b'` completed by
+`update_pubkey_cache` (`pubkey_cache_carry`). The progressive balances cache stays a fact about
+the epoch input.
 -/
 
 namespace EpochProofs.Formalhouse
@@ -231,9 +233,10 @@ structure FuluAssumptions (o : Spec.Oracle) (fo : Spec.FuluOracle) (c : Spec.Ful
   oracle : OracleAgrees o
   sha : ∀ b : ByteArray, (sha b).size = 32
 
-/-- The final Fulu statement. On every Fulu epoch input of a reachable Fulu run, Lighthouse's
-Fulu epoch returns `ok`, and its state equals Etheorem's Fulu `processEpoch`. -/
-theorem formalhouse_fulu_epoch_final (hpa : Fulu.EpochPresetAgrees Spec.P Spec.FC)
+/-- The Fulu epoch result without the cache reads. On every Fulu epoch input of a reachable
+Fulu run, Lighthouse's Fulu epoch returns `ok`, and its state equals Etheorem's Fulu
+`processEpoch`. -/
+theorem formalhouse_fulu_epoch_core (hpa : Fulu.EpochPresetAgrees Spec.P Spec.FC)
     (o : Spec.Oracle) (fo : Spec.FuluOracle)
     (c : Spec.FuluBlockConfig) (init : Spec.FuluState) (e : EState)
     (hin : FuluEpochInput o fo c init (absEState e)) (ha : FuluAssumptions o fo c init e) :
@@ -243,6 +246,121 @@ theorem formalhouse_fulu_epoch_final (hpa : Fulu.EpochPresetAgrees Spec.P Spec.F
         .ok ((), pureState e') ∧ absEState e' = s' :=
   formalhouse_fulu_epoch_total_reachable hpa o fo c init ha.start ha.supply ha.econ e hin
     ⟨ha.boundary, ha.etheorem, ha.oracle, ha.sha⟩ ha.slot ha.vectors ha.rows ha.committees
+
+open Aeneas Aeneas.Std Result in
+open CacheProofs.PB (LhCache Coherent lhPreviousEpochFlagAttestingBalance
+  lhCurrentEpochFlagAttestingBalance) in
+/-- The Fulu statement with every cache fact stated at the epoch input. On every Fulu epoch
+input of a reachable Fulu run: Lighthouse's Fulu epoch returns `ok` and equals Etheorem's Fulu
+`processEpoch`, its progressive balances and epoch cache reads equal the spec values given the
+build fact of each cache, and its pubkey cache lookup equals the spec lookup. Lighthouse's Fulu
+proposer lookahead and sync committee read the validator list, not the committee cache, so Fulu
+has no committee cache read. The reachable-state invariants give `RowsOk`, `EpochSupply` and
+`PubkeysUnique` at the input, so the cache reads need no new state assumption. -/
+theorem formalhouse_fulu_epoch_at_input (hpa : Fulu.EpochPresetAgrees Spec.P Spec.FC)
+    (o : Spec.Oracle) (fo : Spec.FuluOracle)
+    (c : Spec.FuluBlockConfig) (init : Spec.FuluState) (e : EState)
+    (hin : FuluEpochInput o fo c init (absEState e)) (ha : FuluAssumptions o fo c init e)
+    (cache : LhCache)
+    (hcoh : Coherent EpochProofs.Spec.P.EFFECTIVE_BALANCE_INCREMENT
+      (pbState (absEState e)
+        ((absEState e).slot / EpochProofs.Spec.P.SLOTS_PER_EPOCH)) cache)
+    (total : U64)
+    (htotal : total.val = CacheProofs.EpochCache.activeSum
+      (CacheProofs.EpochCache.activeAt
+        ((absEState e).validators.map ecValidator)
+        ((absEState e).slot / EpochProofs.Spec.P.SLOTS_PER_EPOCH))
+      ((absEState e).validators.map (·.effective_balance)))
+    {M : Type} {inst : types.state.pubkey_index.IndexMap M Spec.BLSPubkey}
+    {view : M → Spec.BLSPubkey → Option Usize} (laws : CacheProofs.IndexMapLaws inst view)
+    {m : M} {len : Usize}
+    (hpk : CacheProofs.Coherent view m len ((absEState e).validators.map (·.pubkey))) :
+    ∃ s', Spec.process_epoch_lh_order_fulu o (absEState e) = .ok s' ∧
+      ((∃ e', (EthCLSpecs.Fulu.processEpoch
+          (StateTransition := EthCLSpecs.Proofs.Fulu.FuluRun)).run (pureState e) =
+        .ok ((), pureState e') ∧ absEState e' = s') ∧
+      let s := absEState e
+      let cur := s.slot / EpochProofs.Spec.P.SLOTS_PER_EPOCH
+      (∀ f : Usize, f.val < 3 → ∃ x : U64, lhCurrentEpochFlagAttestingBalance cache f = ok (.Ok x) ∧
+        (EpochProofs.Spec.get_unslashed_participating_indices EpochProofs.Spec.P s
+            f.val cur >>=
+          EpochProofs.Spec.get_total_balance EpochProofs.Spec.P s) = .ok x.val) ∧
+      (∀ f : Usize, f.val < 3 → 0 < cur →
+        ∃ x : U64, lhPreviousEpochFlagAttestingBalance cache f = ok (.Ok x) ∧
+        (EpochProofs.Spec.get_unslashed_participating_indices EpochProofs.Spec.P s
+            f.val (cur - 1) >>=
+          EpochProofs.Spec.get_total_balance EpochProofs.Spec.P s) = .ok x.val) ∧
+      (∀ inc : U64, inc.val = EpochProofs.Spec.P.EFFECTIVE_BALANCE_INCREMENT →
+        ∃ r, types.state.total_active_balance.floor_total_active_balance total inc = ok r ∧
+          EpochProofs.Spec.get_total_active_balance EpochProofs.Spec.P s =
+            .ok r.val)) ∧
+    ∀ pk, ∃ r, inst.get_index m pk = ok r ∧
+      (r.map (·.val)).bind (fun i => (absEState e).validators[i]?) =
+        (absEState e).validators[((absEState e).validators.map (·.pubkey)).idxOf pk]? ∧
+      (r.isSome ↔ pk ∈ (absEState e).validators.map (·.pubkey)) ∧
+      ∀ i, r.map (·.val) = some i → i = ((absEState e).validators.map (·.pubkey)).idxOf pk := by
+  have hinv := fuluEpochInput_ok o fo c init ha.start ha.supply ha.econ _ hin
+  obtain ⟨s', hs', he'⟩ := formalhouse_fulu_epoch_core hpa o fo c init e hin ha
+  exact ⟨s', hs', ⟨he', lh_cache_reads_mainnet _ hinv.1.1.1.2.1 hinv.1.1.2.2.2.2 cache hcoh
+      total htotal⟩,
+    fun pk => Spec.pubkey_cache_deposit_lookup laws (absEState e) hpk hinv.1.2.1 pk⟩
+
+open Aeneas Aeneas.Std Result in
+open CacheProofs.PB (LhCache Coherent lhPreviousEpochFlagAttestingBalance
+  lhCurrentEpochFlagAttestingBalance) in
+/-- The final Fulu statement: `formalhouse_fulu_epoch_at_input` with the epoch cache total built
+at a state `b` of the same epoch, and the pubkey cache built at an earlier state `b'` and
+completed by `update_pubkey_cache`. Same cache facts as `formalhouse_gloas_epoch_final`. -/
+theorem formalhouse_fulu_epoch_final (hpa : Fulu.EpochPresetAgrees Spec.P Spec.FC)
+    (o : Spec.Oracle) (fo : Spec.FuluOracle)
+    (c : Spec.FuluBlockConfig) (init : Spec.FuluState) (e : EState)
+    (hin : FuluEpochInput o fo c init (absEState e)) (ha : FuluAssumptions o fo c init e)
+    (cache : LhCache)
+    (hcoh : Coherent EpochProofs.Spec.P.EFFECTIVE_BALANCE_INCREMENT
+      (pbState (absEState e)
+        ((absEState e).slot / EpochProofs.Spec.P.SLOTS_PER_EPOCH)) cache)
+    (total : U64) (b : Spec.BeaconState)
+    (hagree : Spec.ActiveAgree ((absEState e).slot / EpochProofs.Spec.P.SLOTS_PER_EPOCH)
+      b (absEState e))
+    (htotal : total.val = CacheProofs.EpochCache.activeSum
+      (CacheProofs.EpochCache.activeAt
+        (b.validators.map ecValidator)
+        ((absEState e).slot / EpochProofs.Spec.P.SLOTS_PER_EPOCH))
+      (b.validators.map (·.effective_balance)))
+    {M : Type} {inst : types.state.pubkey_index.IndexMap M Spec.BLSPubkey}
+    {view : M → Spec.BLSPubkey → Option Usize} (laws : CacheProofs.IndexMapLaws inst view)
+    (b' : Spec.BeaconState) (hpre : Spec.PkPrefix b' (absEState e))
+    {m0 m : M} {len0 len : Usize}
+    (hpk0 : CacheProofs.Coherent view m0 len0 (b'.validators.map (·.pubkey)))
+    (hupd : CacheProofs.insertAll inst m0 len0
+      (((absEState e).validators.map (·.pubkey)).drop len0.val) = ok (some (m, len))) :
+    ∃ s', Spec.process_epoch_lh_order_fulu o (absEState e) = .ok s' ∧
+      ((∃ e', (EthCLSpecs.Fulu.processEpoch
+          (StateTransition := EthCLSpecs.Proofs.Fulu.FuluRun)).run (pureState e) =
+        .ok ((), pureState e') ∧ absEState e' = s') ∧
+      let s := absEState e
+      let cur := s.slot / EpochProofs.Spec.P.SLOTS_PER_EPOCH
+      (∀ f : Usize, f.val < 3 → ∃ x : U64, lhCurrentEpochFlagAttestingBalance cache f = ok (.Ok x) ∧
+        (EpochProofs.Spec.get_unslashed_participating_indices EpochProofs.Spec.P s
+            f.val cur >>=
+          EpochProofs.Spec.get_total_balance EpochProofs.Spec.P s) = .ok x.val) ∧
+      (∀ f : Usize, f.val < 3 → 0 < cur →
+        ∃ x : U64, lhPreviousEpochFlagAttestingBalance cache f = ok (.Ok x) ∧
+        (EpochProofs.Spec.get_unslashed_participating_indices EpochProofs.Spec.P s
+            f.val (cur - 1) >>=
+          EpochProofs.Spec.get_total_balance EpochProofs.Spec.P s) = .ok x.val) ∧
+      (∀ inc : U64, inc.val = EpochProofs.Spec.P.EFFECTIVE_BALANCE_INCREMENT →
+        ∃ r, types.state.total_active_balance.floor_total_active_balance total inc = ok r ∧
+          EpochProofs.Spec.get_total_active_balance EpochProofs.Spec.P s =
+            .ok r.val)) ∧
+    ∀ pk, ∃ r, inst.get_index m pk = ok r ∧
+      (r.map (·.val)).bind (fun i => (absEState e).validators[i]?) =
+        (absEState e).validators[((absEState e).validators.map (·.pubkey)).idxOf pk]? ∧
+      (r.isSome ↔ pk ∈ (absEState e).validators.map (·.pubkey)) ∧
+      ∀ i, r.map (·.val) = some i → i = ((absEState e).validators.map (·.pubkey)).idxOf pk :=
+  formalhouse_fulu_epoch_at_input hpa o fo c init e hin ha cache hcoh total
+    (epoch_cache_total_carry total.val htotal hagree) laws
+    (pubkey_cache_carry laws hpre hpk0 hupd)
 
 end Fulu
 
