@@ -5,8 +5,7 @@ name: beacon-state-cache-proofs
 on:
   push:
     branches:
-      - unstable
-      - stable
+      - formalhouse
     paths:
       - 'consensus/types/src/state/exit_queue.rs'
       - 'consensus/types/src/validator/activation_eligibility.rs'

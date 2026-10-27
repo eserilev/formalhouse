@@ -5,8 +5,7 @@ name: proofs
 on:
   push:
     branches:
-      - unstable
-      - stable
+      - formalhouse
   pull_request:
   workflow_dispatch:
 
@@ -46,7 +45,9 @@ jobs:
         id: select
         env:
           CHANGED: ${{ steps.filter.outputs.changes }}
-          FORCE_ALL: ${{ github.event_name == 'workflow_dispatch' }}
+          # A sync of sigp/lighthouse can change code that Charon pulls in beyond `sources`
+          # (safe_arith, types, alloy), so it re-verifies everything.
+          FORCE_ALL: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'sync/') }}
         run: |
           set -euo pipefail
           if [ "$FORCE_ALL" = "true" ] || jq -e 'index("_all")' <<<"$CHANGED" >/dev/null; then
