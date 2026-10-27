@@ -66,6 +66,96 @@ pub struct StepContext {
     pub effective_balance_updates: bool,
 }
 
+/// The values that `step_context` reads from the state, the caches and the spec.
+#[derive(Clone, Copy)]
+pub struct ContextInputs {
+    pub current_epoch: u64,
+    pub finalized_epoch: u64,
+    pub genesis_epoch: u64,
+    /// The total active balance and the previous epoch flag balances, from the caches.
+    pub total_active_balance: u64,
+    pub source_balance: u64,
+    pub target_balance: u64,
+    pub head_balance: u64,
+    /// The sum of `state.slashings`.
+    pub sum_slashings: u64,
+    pub min_epochs_to_inactivity_penalty: u64,
+    pub inactivity_score_bias: u64,
+    pub inactivity_score_recovery_rate: u64,
+    pub inactivity_penalty_quotient: u64,
+    pub proportional_slashing_multiplier: u64,
+    pub epochs_per_slashings_vector: u64,
+    pub effective_balance_increment: u64,
+    pub hysteresis_quotient: u64,
+    pub hysteresis_downward_multiplier: u64,
+    pub hysteresis_upward_multiplier: u64,
+    pub inactivity_updates: bool,
+    pub rewards_and_penalties: bool,
+    pub registry_updates: bool,
+    pub slashings: bool,
+    pub pending_deposits: bool,
+    pub effective_balance_updates: bool,
+}
+
+/// Computes the values that are the same for all validators in this epoch.
+pub fn step_context(i: &ContextInputs) -> Result<StepContext, ArithError> {
+    let previous_epoch = i.current_epoch.saturating_sub(1);
+    let finality_delay = previous_epoch.safe_sub(i.finalized_epoch)?;
+    let (source_increments, target_increments, head_increments, active_increments) =
+        rewards_penalties::participation_increments(
+            i.source_balance,
+            i.target_balance,
+            i.head_balance,
+            i.total_active_balance,
+            i.effective_balance_increment,
+        )?;
+    let (
+        adjusted_total_slashing_balance,
+        target_withdrawable_epoch,
+        penalty_per_effective_balance_increment,
+    ) = slashings_penalty::slashings_context(
+        i.sum_slashings,
+        i.proportional_slashing_multiplier,
+        i.total_active_balance,
+        i.current_epoch,
+        i.epochs_per_slashings_vector,
+        i.effective_balance_increment,
+    )?;
+    let (downward_threshold, upward_threshold) = effective_balance::hysteresis_thresholds(
+        i.effective_balance_increment,
+        i.hysteresis_quotient,
+        i.hysteresis_downward_multiplier,
+        i.hysteresis_upward_multiplier,
+    )?;
+    Ok(StepContext {
+        current_epoch: i.current_epoch,
+        previous_epoch,
+        finalized_epoch: i.finalized_epoch,
+        is_in_inactivity_leak: finality_delay > i.min_epochs_to_inactivity_penalty,
+        inactivity_score_bias: i.inactivity_score_bias,
+        inactivity_score_recovery_rate: i.inactivity_score_recovery_rate,
+        inactivity_penalty_quotient: i.inactivity_penalty_quotient,
+        source_increments,
+        target_increments,
+        head_increments,
+        active_increments,
+        total_active_balance: i.total_active_balance,
+        target_withdrawable_epoch,
+        adjusted_total_slashing_balance,
+        penalty_per_effective_balance_increment,
+        effective_balance_increment: i.effective_balance_increment,
+        downward_threshold,
+        upward_threshold,
+        after_genesis: i.current_epoch != i.genesis_epoch,
+        inactivity_updates: i.inactivity_updates,
+        rewards_and_penalties: i.rewards_and_penalties,
+        registry_updates: i.registry_updates,
+        slashings: i.slashings,
+        pending_deposits: i.pending_deposits,
+        effective_balance_updates: i.effective_balance_updates,
+    })
+}
+
 /// Per-validator inputs that the steps read but do not write.
 #[derive(Clone, Copy)]
 pub struct RowInputs {

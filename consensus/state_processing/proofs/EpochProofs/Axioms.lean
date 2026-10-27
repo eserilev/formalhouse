@@ -108,6 +108,7 @@ import EpochProofs.Trusted.CacheUpkeep
 import EpochProofs.CacheBridge.Upkeep
 import EpochProofs.FormalhouseUpkeep
 import EpochProofs.Equiv.EpochContexts
+import EpochProofs.Equiv.StepContext
 import EpochProofs.Equiv.PendingDepositsLen
 import EpochProofs.CacheBridge.EpochCacheBuild
 import EpochProofs.CacheBridge.BuildPath
@@ -736,6 +737,11 @@ open EpochProofs.Spec
 #print axioms EpochProofs.rowsContract_stepSpec
 #print axioms EpochProofs.single_pass_rows_eq_passM
 #print axioms EpochProofs.single_pass_rows_model
+#print axioms EpochProofs.saturating_sub_one
+#print axioms EpochProofs.rewardsFlagIncrements_of_total
+#print axioms EpochProofs.rewardsContext_epochs
+#print axioms EpochProofs.step_context_spec
+#print axioms EpochProofs.single_pass_rows_model_inputs
 #print axioms EpochProofs.Spec.depositWritesSpec_eq
 #print axioms EpochProofs.Spec.add_validator_to_registry_len
 #print axioms EpochProofs.Spec.apply_pending_deposit_known

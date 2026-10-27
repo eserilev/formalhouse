@@ -68,7 +68,7 @@ Etheorem's result to the model's. `absEState` covers every field of the state.
 
 ### Axiom audit
 
-`EpochProofs/Axioms.lean` prints the axioms of 718 theorems, including all the final ones. Each
+`EpochProofs/Axioms.lean` prints the axioms of 723 theorems, including all the final ones. Each
 depends only on `propext`, `Classical.choice` and `Quot.sound`, so none rests on `sorry`
 (`sorryAx`) or `native_decide` (`Lean.ofReduceBool`). CI rebuilds the proofs on every change and
 fails if any audited theorem reports another axiom.
@@ -107,7 +107,7 @@ Aeneas translates the loop and the order of the calls. The implementations of th
 the real `BeaconState` lists are trusted. The main one is `StateRows::apply_step`: it must read
 validator `i`, run the translated `single_pass_step`, write back exactly the fields that
 changed, touch no other validator, and never fail. The others write the deposits, the
-consolidation balances, the builder payments and the PTC window. 53 of the 171 `?` sites in
+consolidation balances, the builder payments and the PTC window. 53 of the 165 `?` sites in
 `single_pass.rs` are inside these implementations or pass on their errors.
 
 **2. The values passed into the translated code.** The translated functions take plain numbers
@@ -115,8 +115,11 @@ and booleans, not the `BeaconState`, because Aeneas cannot handle `&BeaconState`
 `&ChainSpec`. So `single_pass.rs`, which is not translated, reads the state and the spec and
 fills in the inputs:
 
-- `StepContext`, once per epoch: the epochs, the inactivity leak flag, the participation and
-  active balance totals, the slashings values, the spec constants and the hysteresis thresholds.
+- `ContextInputs`, once per epoch: the current and finalized epochs, the total active balance
+  and the previous epoch flag balances from the caches, the `slashings` sum and the spec
+  constants. The translated `step_context` computes the `StepContext` from them: the previous
+  epoch, the inactivity leak flag, the increments, the slashings values and the hysteresis
+  thresholds (`step_context_spec`).
 - `RowInputs`, per validator: the base reward, the validator's pending deposit total, whether a
   consolidation names it, and its maximum effective balance.
 - `DepositView`, per pending deposit: the deposit and the fields of its validator, including
@@ -124,12 +127,10 @@ fills in the inputs:
 - The churn and selection constants and the builder payment threshold.
 
 The proofs show the translated code gives the spec result for these inputs, and assume the
-inputs are right. A wrong input gives a wrong state with no error: a wrong `target_increments`
+inputs are right. A wrong input gives a wrong state with no error: a wrong target flag balance
 changes every validator's rewards. Some are partly covered: the cache proofs show the totals in
-the caches are right, so only the copy into `StepContext` is trusted, and overflow in the
-arithmetic formulas is ruled out (glue L1 to L7). Two values, the slashings target epoch and the
-hysteresis thresholds, Lighthouse computes once per epoch where the spec computes them per
-validator. They do not depend on the validator, so the values agree.
+the caches are right, so only the copy into `ContextInputs` is trusted, and overflow in the
+arithmetic formulas is ruled out (glue L1 to L7).
 
 **3. The caches.** There are two questions about a cache, and the proofs answer only the first.
 
@@ -152,11 +153,10 @@ Both cache bugs in [Findings](#findings) break this assumption, with correct cac
 committee cache built for another fork's state and copied into this one, and a pubkey cache read
 before the update function runs.
 
-Five more glue facts have no proof (N1 to N5 in `Trusted/EpochGlue.lean`): the superstruct
-accessors return `Ok` on a state of the right fork, `update_tree_hash_cache` succeeds,
-`is_in_inactivity_leak` and the `slashings` sum compute what the spec computes, and the active
-set fits the committee shuffle. If one of these is false, Lighthouse returns an error rather
-than a wrong state.
+Four more glue facts have no proof (N1 to N4 in `Trusted/EpochGlue.lean`): the superstruct
+accessors return `Ok` on a state of the right fork, `update_tree_hash_cache` succeeds, the
+`slashings` sum computes what the spec computes, and the active set fits the committee shuffle.
+If one of these is false, Lighthouse returns an error rather than a wrong state.
 
 <details>
 <summary>The full list</summary>
@@ -183,9 +183,8 @@ Paths are relative to `consensus/`. `single_pass.rs` is
 **Values computed outside the translated code.** These need the whole `BeaconState` or
 `ChainSpec`, which Aeneas turns into axioms.
 
-- `StepContext`, `RowInputs` and `DepositView`, including the base reward read from the epoch
+- `ContextInputs`, `RowInputs` and `DepositView`, including the base reward read from the epoch
   cache.
-- The slashings target epoch and the hysteresis thresholds.
 - `registry_constants`, `selection_constants` and the builder payment threshold (6/10).
 - Epoch and slot arithmetic, the per-validator deposit sum and the exit count per epoch: the
   formulas are trusted, and that they never overflow is proved.
@@ -215,14 +214,12 @@ copy the state fields. At the Gloas fork, `StateOnboarding` answers each builder
 query as the spec would, using the pubkey cache, the signature cache, a `HashMap` and a
 `HashSet`, and the result is written to the state.
 
-**The five glue facts with no proof (`Trusted/EpochGlue.lean`).**
+**The four glue facts with no proof (`Trusted/EpochGlue.lean`).**
 
 - N1: at most `2^24` validators are active, the committee shuffle limit.
 - N2: each superstruct accessor returns the field of the state's fork variant.
 - N3: `update_tree_hash_cache` succeeds when the latest block header has no state root yet.
-- N4: `is_in_inactivity_leak` computes `previous_epoch - finalized_epoch` as the spec does. The
-  spec subtraction is proved total.
-- N5: `safe_sum` over `slashings` equals the spec sum, which is proved total.
+- N4: `safe_sum` over `slashings` equals the spec sum, which is proved total.
 
 **Other crates.**
 
@@ -559,16 +556,16 @@ each bid is slow, so a real fix likely caches the advanced state for each parent
 
 ## Error sites
 
-`single_pass.rs` has 171 `?` sites. The theorem holds only if none of them returns an error
+`single_pass.rs` has 165 `?` sites. The theorem holds only if none of them returns an error
 where the spec succeeds.
 
 | Status | Sites |
 |---|---|
-| Proved: a translated function whose errors are spec errors, at a step the spec completes | 17 |
+| Proved: a translated function whose errors are spec errors, at a step the spec completes | 12 |
 | Inside a trusted Rust contract | 53 |
 | Fails only if a cache is not built (cache build facts) | 13 |
 | Bound proved, Rust formula trusted (glue L1 to L7) | 13 |
-| Named fact with no proved bound (glue N1 to N5) | 15 |
+| Named fact with no proved bound (glue N1 to N4) | 14 |
 | Pre-Electra path, not reached | 60 |
 
 `NOTES.md` lists every site with its line and reason.

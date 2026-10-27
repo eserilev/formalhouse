@@ -4616,8 +4616,220 @@ def per_epoch_processing.single_pass_step.StepContext.Insts.CoreMarkerCopy :
     per_epoch_processing.single_pass_step.StepContext.Insts.CoreCloneClone
 }
 
+/-- [state_processing::per_epoch_processing::single_pass_step::ContextInputs]
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 71:0-98:1
+    Visibility: public -/
+structure per_epoch_processing.single_pass_step.ContextInputs where
+  current_epoch : Std.U64
+  finalized_epoch : Std.U64
+  genesis_epoch : Std.U64
+  total_active_balance : Std.U64
+  source_balance : Std.U64
+  target_balance : Std.U64
+  head_balance : Std.U64
+  sum_slashings : Std.U64
+  min_epochs_to_inactivity_penalty : Std.U64
+  inactivity_score_bias : Std.U64
+  inactivity_score_recovery_rate : Std.U64
+  inactivity_penalty_quotient : Std.U64
+  proportional_slashing_multiplier : Std.U64
+  epochs_per_slashings_vector : Std.U64
+  effective_balance_increment : Std.U64
+  hysteresis_quotient : Std.U64
+  hysteresis_downward_multiplier : Std.U64
+  hysteresis_upward_multiplier : Std.U64
+  inactivity_updates : Bool
+  rewards_and_penalties : Bool
+  registry_updates : Bool
+  slashings : Bool
+  pending_deposits : Bool
+  effective_balance_updates : Bool
+
+/-- [state_processing::per_epoch_processing::single_pass_step::{impl core::clone::Clone for state_processing::per_epoch_processing::single_pass_step::ContextInputs}::clone]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 70:9-70:14
+    Visibility: public -/
+def
+  per_epoch_processing.single_pass_step.ContextInputs.Insts.CoreCloneClone.clone
+  (self : per_epoch_processing.single_pass_step.ContextInputs) :
+  Result per_epoch_processing.single_pass_step.ContextInputs
+  := do
+  ok self
+
+/-- Trait implementation: [state_processing::per_epoch_processing::single_pass_step::{impl core::clone::Clone for state_processing::per_epoch_processing::single_pass_step::ContextInputs}]
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 70:9-70:14 -/
+@[reducible]
+def per_epoch_processing.single_pass_step.ContextInputs.Insts.CoreCloneClone :
+  core.clone.Clone per_epoch_processing.single_pass_step.ContextInputs := {
+  clone :=
+    per_epoch_processing.single_pass_step.ContextInputs.Insts.CoreCloneClone.clone
+}
+
+/-- Trait implementation: [state_processing::per_epoch_processing::single_pass_step::{impl core::marker::Copy for state_processing::per_epoch_processing::single_pass_step::ContextInputs}]
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 70:16-70:20 -/
+@[reducible]
+def per_epoch_processing.single_pass_step.ContextInputs.Insts.CoreMarkerCopy :
+  core.marker.Copy per_epoch_processing.single_pass_step.ContextInputs := {
+  cloneInst :=
+    per_epoch_processing.single_pass_step.ContextInputs.Insts.CoreCloneClone
+}
+
+/-- [state_processing::per_epoch_processing::slashings_penalty::slashings_context]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/slashings_penalty.rs', lines 10:0-31:1
+    Visibility: public -/
+def per_epoch_processing.slashings_penalty.slashings_context
+  (sum_slashings : Std.U64) (proportional_slashing_multiplier : Std.U64)
+  (total_active_balance : Std.U64) (current_epoch : Std.U64)
+  (epochs_per_slashings_vector : Std.U64)
+  (effective_balance_increment : Std.U64) :
+  Result (core.result.Result (Std.U64 × Std.U64 × Std.U64)
+    safe_arith.ArithError)
+  := do
+  let r ←
+    U64.Insts.Safe_arithSafeArithU64.safe_mul sum_slashings
+      proportional_slashing_multiplier
+  let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
+    let adjusted_total_slashing_balance ←
+      core.cmp.min core.cmp.OrdU64 val total_active_balance
+    let r1 ←
+      U64.Insts.Safe_arithSafeArithU64.safe_div epochs_per_slashings_vector
+        2#u64
+    let cf1 ← core.result.Result.Insts.CoreOpsTry.branch r1
+    match cf1 with
+    | core.ops.control_flow.ControlFlow.Continue val1 =>
+      let r2 ← U64.Insts.Safe_arithSafeArithU64.safe_add current_epoch val1
+      let cf2 ← core.result.Result.Insts.CoreOpsTry.branch r2
+      match cf2 with
+      | core.ops.control_flow.ControlFlow.Continue val2 =>
+        let r3 ←
+          U64.Insts.Safe_arithSafeArithU64.safe_div total_active_balance
+            effective_balance_increment
+        let cf3 ← core.result.Result.Insts.CoreOpsTry.branch r3
+        match cf3 with
+        | core.ops.control_flow.ControlFlow.Continue val3 =>
+          let r4 ←
+            U64.Insts.Safe_arithSafeArithU64.safe_div
+              adjusted_total_slashing_balance val3
+          let cf4 ← core.result.Result.Insts.CoreOpsTry.branch r4
+          match cf4 with
+          | core.ops.control_flow.ControlFlow.Continue val4 =>
+            ok (core.result.Result.Ok (adjusted_total_slashing_balance, val2,
+              val4))
+          | core.ops.control_flow.ControlFlow.Break residual =>
+            core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+              (Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
+              safe_arith.ArithError) residual
+        | core.ops.control_flow.ControlFlow.Break residual =>
+          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+            (Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
+            safe_arith.ArithError) residual
+      | core.ops.control_flow.ControlFlow.Break residual =>
+        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+          (Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
+          safe_arith.ArithError) residual
+    | core.ops.control_flow.ControlFlow.Break residual =>
+      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+        (Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
+        safe_arith.ArithError) residual
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+      (Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
+      safe_arith.ArithError) residual
+
+/-- [state_processing::per_epoch_processing::single_pass_step::step_context]:
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 101:0-157:1
+    Visibility: public -/
+def per_epoch_processing.single_pass_step.step_context
+  (i : per_epoch_processing.single_pass_step.ContextInputs) :
+  Result (core.result.Result per_epoch_processing.single_pass_step.StepContext
+    safe_arith.ArithError)
+  := do
+  let previous_epoch ←
+    lift (core.num.U64.saturating_sub i.current_epoch 1#u64)
+  let r ←
+    U64.Insts.Safe_arithSafeArithU64.safe_sub previous_epoch i.finalized_epoch
+  let cf ← core.result.Result.Insts.CoreOpsTry.branch r
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
+    let r1 ←
+      per_epoch_processing.rewards_penalties.participation_increments
+        i.source_balance i.target_balance i.head_balance i.total_active_balance
+        i.effective_balance_increment
+    let cf1 ← core.result.Result.Insts.CoreOpsTry.branch r1
+    match cf1 with
+    | core.ops.control_flow.ControlFlow.Continue val1 =>
+      let (source_increments, target_increments, head_increments,
+        active_increments) :=
+        val1
+      let r2 ←
+        per_epoch_processing.slashings_penalty.slashings_context
+          i.sum_slashings i.proportional_slashing_multiplier
+          i.total_active_balance i.current_epoch i.epochs_per_slashings_vector
+          i.effective_balance_increment
+      let cf2 ← core.result.Result.Insts.CoreOpsTry.branch r2
+      match cf2 with
+      | core.ops.control_flow.ControlFlow.Continue val2 =>
+        let (adjusted_total_slashing_balance, target_withdrawable_epoch,
+          penalty_per_effective_balance_increment) :=
+          val2
+        let r3 ←
+          per_epoch_processing.effective_balance.hysteresis_thresholds
+            i.effective_balance_increment i.hysteresis_quotient
+            i.hysteresis_downward_multiplier i.hysteresis_upward_multiplier
+        let cf3 ← core.result.Result.Insts.CoreOpsTry.branch r3
+        match cf3 with
+        | core.ops.control_flow.ControlFlow.Continue val3 =>
+          let (downward_threshold, upward_threshold) := val3
+          ok (core.result.Result.Ok
+            {
+              current_epoch := i.current_epoch,
+              previous_epoch,
+              finalized_epoch := i.finalized_epoch,
+              is_in_inactivity_leak :=
+                (val > i.min_epochs_to_inactivity_penalty),
+              inactivity_score_bias := i.inactivity_score_bias,
+              inactivity_score_recovery_rate :=
+                i.inactivity_score_recovery_rate,
+              inactivity_penalty_quotient := i.inactivity_penalty_quotient,
+              source_increments,
+              target_increments,
+              head_increments,
+              active_increments,
+              total_active_balance := i.total_active_balance,
+              target_withdrawable_epoch,
+              adjusted_total_slashing_balance,
+              penalty_per_effective_balance_increment,
+              effective_balance_increment := i.effective_balance_increment,
+              downward_threshold,
+              upward_threshold,
+              after_genesis := (i.current_epoch != i.genesis_epoch),
+              inactivity_updates := i.inactivity_updates,
+              rewards_and_penalties := i.rewards_and_penalties,
+              registry_updates := i.registry_updates,
+              slashings := i.slashings,
+              pending_deposits := i.pending_deposits,
+              effective_balance_updates := i.effective_balance_updates
+            })
+        | core.ops.control_flow.ControlFlow.Break residual =>
+          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+            per_epoch_processing.single_pass_step.StepContext
+            (core.convert.FromSame safe_arith.ArithError) residual
+      | core.ops.control_flow.ControlFlow.Break residual =>
+        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+          per_epoch_processing.single_pass_step.StepContext
+          (core.convert.FromSame safe_arith.ArithError) residual
+    | core.ops.control_flow.ControlFlow.Break residual =>
+      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+        per_epoch_processing.single_pass_step.StepContext
+        (core.convert.FromSame safe_arith.ArithError) residual
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+      per_epoch_processing.single_pass_step.StepContext (core.convert.FromSame
+      safe_arith.ArithError) residual
+
 /-- [state_processing::per_epoch_processing::single_pass_step::RowInputs]
-    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 71:0-81:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 161:0-171:1
     Visibility: public -/
 structure per_epoch_processing.single_pass_step.RowInputs where
   base_reward : Std.U64
@@ -4626,7 +4838,7 @@ structure per_epoch_processing.single_pass_step.RowInputs where
   effective_balance_limit : Std.U64
 
 /-- [state_processing::per_epoch_processing::single_pass_step::{impl core::clone::Clone for state_processing::per_epoch_processing::single_pass_step::RowInputs}::clone]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 70:9-70:14
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 160:9-160:14
     Visibility: public -/
 def per_epoch_processing.single_pass_step.RowInputs.Insts.CoreCloneClone.clone
   (self : per_epoch_processing.single_pass_step.RowInputs) :
@@ -4635,7 +4847,7 @@ def per_epoch_processing.single_pass_step.RowInputs.Insts.CoreCloneClone.clone
   ok self
 
 /-- Trait implementation: [state_processing::per_epoch_processing::single_pass_step::{impl core::clone::Clone for state_processing::per_epoch_processing::single_pass_step::RowInputs}]
-    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 70:9-70:14 -/
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 160:9-160:14 -/
 @[reducible]
 def per_epoch_processing.single_pass_step.RowInputs.Insts.CoreCloneClone :
   core.clone.Clone per_epoch_processing.single_pass_step.RowInputs := {
@@ -4644,7 +4856,7 @@ def per_epoch_processing.single_pass_step.RowInputs.Insts.CoreCloneClone :
 }
 
 /-- Trait implementation: [state_processing::per_epoch_processing::single_pass_step::{impl core::marker::Copy for state_processing::per_epoch_processing::single_pass_step::RowInputs}]
-    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 70:16-70:20 -/
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 160:16-160:20 -/
 @[reducible]
 def per_epoch_processing.single_pass_step.RowInputs.Insts.CoreMarkerCopy :
   core.marker.Copy per_epoch_processing.single_pass_step.RowInputs := {
@@ -4653,7 +4865,7 @@ def per_epoch_processing.single_pass_step.RowInputs.Insts.CoreMarkerCopy :
 }
 
 /-- [state_processing::per_epoch_processing::single_pass_step::is_active_previous_epoch]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 84:0-86:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 174:0-176:1
     Visibility: public -/
 def per_epoch_processing.single_pass_step.is_active_previous_epoch
   (row : per_epoch_processing.single_pass_step.ValidatorRow)
@@ -4665,7 +4877,7 @@ def per_epoch_processing.single_pass_step.is_active_previous_epoch
   else ok false
 
 /-- [state_processing::per_epoch_processing::single_pass_step::is_eligible]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 89:0-97:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 179:0-187:1
     Visibility: public -/
 def per_epoch_processing.single_pass_step.is_eligible
   (row : per_epoch_processing.single_pass_step.ValidatorRow)
@@ -4691,7 +4903,7 @@ def per_epoch_processing.single_pass_step.is_eligible
     else ok (core.result.Result.Ok false)
 
 /-- [state_processing::per_epoch_processing::single_pass_step::is_unslashed_participating]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 100:0-104:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 190:0-194:1
     Visibility: public -/
 def per_epoch_processing.single_pass_step.is_unslashed_participating
   (row : per_epoch_processing.single_pass_step.ValidatorRow)
@@ -4711,7 +4923,7 @@ def per_epoch_processing.single_pass_step.is_unslashed_participating
   else ok false
 
 /-- [state_processing::per_epoch_processing::single_pass_step::inactivity_step]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 106:0-126:1 -/
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 196:0-216:1 -/
 def per_epoch_processing.single_pass_step.inactivity_step
   (row : per_epoch_processing.single_pass_step.ValidatorRow)
   (is_eligible : Bool)
@@ -4742,7 +4954,7 @@ def per_epoch_processing.single_pass_step.inactivity_step
   else ok (core.result.Result.Ok row)
 
 /-- [state_processing::per_epoch_processing::single_pass_step::rewards_step]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 128:0-155:1 -/
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 218:0-245:1 -/
 def per_epoch_processing.single_pass_step.rewards_step
   (row : per_epoch_processing.single_pass_step.ValidatorRow)
   (is_eligible : Bool) (base_reward : Std.U64)
@@ -4782,7 +4994,7 @@ def per_epoch_processing.single_pass_step.rewards_step
   else ok (core.result.Result.Ok row)
 
 /-- [state_processing::per_epoch_processing::single_pass_step::registry_step]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 157:0-194:1 -/
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 247:0-284:1 -/
 def per_epoch_processing.single_pass_step.registry_step
   (row : per_epoch_processing.single_pass_step.ValidatorRow)
   (churn : per_epoch_processing.single_pass_step.ExitChurn)
@@ -4910,7 +5122,7 @@ def per_epoch_processing.slashings_penalty.new_balance_after_slashing
   else ok (core.result.Result.Ok balance)
 
 /-- [state_processing::per_epoch_processing::single_pass_step::slashings_step]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 196:0-213:1 -/
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 286:0-303:1 -/
 def per_epoch_processing.single_pass_step.slashings_step
   (row : per_epoch_processing.single_pass_step.ValidatorRow)
   (ctx : per_epoch_processing.single_pass_step.StepContext) :
@@ -4936,7 +5148,7 @@ def per_epoch_processing.single_pass_step.slashings_step
   else ok (core.result.Result.Ok row)
 
 /-- [state_processing::per_epoch_processing::single_pass_step::deposit_step]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 215:0-225:1 -/
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 305:0-315:1 -/
 def per_epoch_processing.single_pass_step.deposit_step
   (row : per_epoch_processing.single_pass_step.ValidatorRow)
   (deposit : Std.U64) (ctx : per_epoch_processing.single_pass_step.StepContext)
@@ -4958,7 +5170,7 @@ def per_epoch_processing.single_pass_step.deposit_step
   else ok (core.result.Result.Ok row)
 
 /-- [state_processing::per_epoch_processing::single_pass_step::effective_balance_step]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 227:0-247:1 -/
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 317:0-337:1 -/
 def per_epoch_processing.single_pass_step.effective_balance_step
   (row : per_epoch_processing.single_pass_step.ValidatorRow)
   (inputs : per_epoch_processing.single_pass_step.RowInputs)
@@ -4987,7 +5199,7 @@ def per_epoch_processing.single_pass_step.effective_balance_step
   else ok (core.result.Result.Ok row)
 
 /-- [state_processing::per_epoch_processing::single_pass_step::single_pass_step]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 251:0-266:1
+    Source: 'consensus/state_processing/src/per_epoch_processing/single_pass_step.rs', lines 341:0-356:1
     Visibility: public -/
 def per_epoch_processing.single_pass_step.single_pass_step
   (row : per_epoch_processing.single_pass_step.ValidatorRow)
@@ -5074,70 +5286,6 @@ def per_epoch_processing.single_pass_step.single_pass_step
     core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
       (per_epoch_processing.single_pass_step.ValidatorRow ×
       per_epoch_processing.single_pass_step.ExitChurn) (core.convert.FromSame
-      safe_arith.ArithError) residual
-
-/-- [state_processing::per_epoch_processing::slashings_penalty::slashings_context]:
-    Source: 'consensus/state_processing/src/per_epoch_processing/slashings_penalty.rs', lines 10:0-31:1
-    Visibility: public -/
-def per_epoch_processing.slashings_penalty.slashings_context
-  (sum_slashings : Std.U64) (proportional_slashing_multiplier : Std.U64)
-  (total_active_balance : Std.U64) (current_epoch : Std.U64)
-  (epochs_per_slashings_vector : Std.U64)
-  (effective_balance_increment : Std.U64) :
-  Result (core.result.Result (Std.U64 × Std.U64 × Std.U64)
-    safe_arith.ArithError)
-  := do
-  let r ←
-    U64.Insts.Safe_arithSafeArithU64.safe_mul sum_slashings
-      proportional_slashing_multiplier
-  let cf ← core.result.Result.Insts.CoreOpsTry.branch r
-  match cf with
-  | core.ops.control_flow.ControlFlow.Continue val =>
-    let adjusted_total_slashing_balance ←
-      core.cmp.min core.cmp.OrdU64 val total_active_balance
-    let r1 ←
-      U64.Insts.Safe_arithSafeArithU64.safe_div epochs_per_slashings_vector
-        2#u64
-    let cf1 ← core.result.Result.Insts.CoreOpsTry.branch r1
-    match cf1 with
-    | core.ops.control_flow.ControlFlow.Continue val1 =>
-      let r2 ← U64.Insts.Safe_arithSafeArithU64.safe_add current_epoch val1
-      let cf2 ← core.result.Result.Insts.CoreOpsTry.branch r2
-      match cf2 with
-      | core.ops.control_flow.ControlFlow.Continue val2 =>
-        let r3 ←
-          U64.Insts.Safe_arithSafeArithU64.safe_div total_active_balance
-            effective_balance_increment
-        let cf3 ← core.result.Result.Insts.CoreOpsTry.branch r3
-        match cf3 with
-        | core.ops.control_flow.ControlFlow.Continue val3 =>
-          let r4 ←
-            U64.Insts.Safe_arithSafeArithU64.safe_div
-              adjusted_total_slashing_balance val3
-          let cf4 ← core.result.Result.Insts.CoreOpsTry.branch r4
-          match cf4 with
-          | core.ops.control_flow.ControlFlow.Continue val4 =>
-            ok (core.result.Result.Ok (adjusted_total_slashing_balance, val2,
-              val4))
-          | core.ops.control_flow.ControlFlow.Break residual =>
-            core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
-              (Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
-              safe_arith.ArithError) residual
-        | core.ops.control_flow.ControlFlow.Break residual =>
-          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
-            (Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
-            safe_arith.ArithError) residual
-      | core.ops.control_flow.ControlFlow.Break residual =>
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
-          (Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
-          safe_arith.ArithError) residual
-    | core.ops.control_flow.ControlFlow.Break residual =>
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
-        (Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
-        safe_arith.ArithError) residual
-  | core.ops.control_flow.ControlFlow.Break residual =>
-    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
-      (Std.U64 × Std.U64 × Std.U64) (core.convert.FromSame
       safe_arith.ArithError) residual
 
 /-- [state_processing::per_epoch_processing::tail_updates::eth1_data_votes_reset_due]:

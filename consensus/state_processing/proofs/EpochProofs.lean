@@ -197,6 +197,7 @@ import EpochProofs.Trusted.CacheUpkeep
 import EpochProofs.CacheBridge.Upkeep
 import EpochProofs.FormalhouseUpkeep
 import EpochProofs.Equiv.EpochContexts
+import EpochProofs.Equiv.StepContext
 import EpochProofs.Equiv.PendingDepositsLen
 import EpochProofs.CacheBridge.EpochCacheBuild
 import EpochProofs.CacheBridge.BuildPath
