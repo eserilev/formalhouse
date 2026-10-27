@@ -124,8 +124,8 @@ and the store. `consensus/types/proofs` proves the build and update functions, b
 every caller uses them. So the Gloas theorem assumes that the progressive balances cache is
 coherent with the epoch state, that the epoch cache was built at a state of the same epoch, and
 that the pubkey cache was built at an earlier state of the run. The Fulu theorem assumes every
-cache read. Both Lighthouse bugs in [Findings](#findings) are cache bugs: a cache copied from
-another fork, and a cache read before it is updated.
+cache read. Two of the Lighthouse bugs in [Findings](#findings) are cache bugs: a cache copied
+from another fork, and a cache read before it is updated.
 
 Five more glue facts have no proof (N1 to N5 in `Trusted/EpochGlue.lean`): the superstruct
 accessors return `Ok` on a state of the right fork, `update_tree_hash_cache` succeeds,
@@ -350,8 +350,13 @@ These are outside the code the proofs cover.
 
 - A state of an abandoned fork can get another chain's committee caches. See
   [Cross-fork committee caches](#cross-fork-committee-caches) below.
-- In Gloas, a withdrawal or consolidation request can be skipped when the pubkey cache lags. See
+- In Gloas, a withdrawal or consolidation request is skipped if the pubkey cache lags, which
+  other code prevents on almost every path. See
   [Gloas parent requests skip the pubkey cache update](#gloas-parent-requests-skip-the-pubkey-cache-update)
+  below.
+- In Gloas, gossip checks a builder's bid against the head state, not the bid's parent state
+  advanced to the bid's slot. See
+  [Gloas gossip bid checks use the head state](#gloas-gossip-bid-checks-use-the-head-state)
   below.
 - `initialize_progressive_balances_cache` keeps any cache that `is_initialized`, whatever epoch
   it was built for, and the cache readers do not check the epoch. No path that produces a stale
@@ -453,45 +458,65 @@ let Some(validator_index) = state.pubkey_cache().get(&request.validator_pubkey) 
 
 Lighthouse skips the request, and the spec applies it.
 
-**When the cache lags.** A state rebuilt from disk: `load_hot_state` loads the epoch boundary
-state, copies the pubkey cache of the in-memory finalized state into it
-([rebasing](#cross-fork-committee-caches)), and replays the blocks of that epoch. When the caller
-passes `update_cache = true`, as block import, reorgs and the HTTP API do, a replay hook builds
-all caches on the boundary state first, so the cache is complete. When it passes `false`, nothing
-updates the cache: the replay crosses no epoch boundary, and the replayer takes state roots from
-the stored blocks, so a wrong result is not detected. The cache then lacks every validator added
-after the in-memory finalized state. The light client server loads states this way
-(`light_client_server_cache.rs`).
-
-**Example.** An operator consolidates an old validator A into a new compounding validator B.
-The node runs with `--epochs-per-migration 16`, so its in-memory finalized state moves every 16
-epochs.
-
-| Epoch | What happens |
-|---|---|
-| 100 | Lighthouse migrates. Its in-memory finalized state is now at epoch about 98. |
-| 101 | B's deposit adds B to the registry. |
-| about 108 | B is active. The next migration is at epoch 116. |
-| 112 | The consolidation A→B is in the payload of slot `N`, and block `N+1` applies it. The head state's cache is current, so this is correct. |
-| 113 | The light client server needs the state after block `N+1` and it has left the state cache. Lighthouse rebuilds it from disk without updating the cache. The cache comes from the epoch 98 state, which has no B, so the replay skips the consolidation. |
-
-The rebuilt state has the wrong balances for A and B, so the Merkle branches the light client
-server builds from it do not match the real state root.
-
-**Conditions.** B must be active but missing from the in-memory finalized state. Activation
-takes at least about 7 epochs after B is added, and by default Lighthouse migrates every epoch
-(`DEFAULT_EPOCHS_PER_MIGRATION = 1`), so with default settings B is already in the cache. The
-bug needs the in-memory finalized state to lag the chain's by about 5 epochs or more (a larger
-`--epochs-per-migration`, or migrations that fail or are postponed), and a load with
-`update_cache = false`. Gloas is not on mainnet yet.
+**Where it matters.** Almost nowhere today. States in memory keep their pubkey cache current.
+A state rebuilt from disk gets the in-memory finalized state's pubkey cache when it is rebased,
+and the replay of its epoch's blocks starts at the epoch boundary. With `update_cache = true`,
+as block import, reorgs and the HTTP API use, a replay hook builds all caches on that boundary
+state before any block, so the cache is complete. Only loads with `update_cache = false`, such
+as the light client server and the store's state iterators, replay with the copied cache. They
+skip a request only if its validator was added after the in-memory finalized state, which by
+default trails the chain's finalized state by about an epoch. So the bug is a missing call that
+other code masks. Gloas is not on mainnet yet.
 
 **Test.** `gloas_parent_requests_do_not_depend_on_pubkey_cache` gives a state a lagging cache
 and checks that a parent withdrawal request for the missing validator is applied. It failed on
-sigp `unstable` at `ec2442d24b`. The full sequence above is argued from the code, not
-reproduced.
+sigp `unstable` at `ec2442d24b`.
 
 **Fix.** Call `state.update_pubkey_cache()?` at the start of `apply_parent_execution_payload`, as
 the Electra path does.
+
+#### Gloas gossip bid checks use the head state
+
+**Background.** In Gloas, builders send bids over gossip: for slot `S`, building on block `P`,
+pay the proposer `V`. A bid is valid only if the builder exists, is active and can cover `V`
+from its balance, minus what it already owes. The spec runs these checks against the parent
+state advanced to the bid's slot (`validate_execution_payload_bid_gossip`):
+
+```python
+state = store.block_states[bid.parent_block_root]
+process_slots(state, bid.slot)
+```
+
+A failed check either IGNOREs the bid (drop it) or REJECTs it (drop it and penalize the peer).
+
+**The bug.** `GossipVerifiedPayloadBid::new`
+(`beacon_node/beacon_chain/src/payload_bid_verification/gossip_verified_bid.rs`) runs the checks
+against the head snapshot state, advanced only at the Gloas fork. That state differs from
+the spec's when the bid builds on the head's parent, which `is_bid_compatible_with_head`
+accepts, or when an epoch boundary lies between the head and the bid's slot.
+
+**Example.** Builder X won a slot in epoch 9, but the payment stayed below quorum. The pending
+payment counts against X's balance until epoch processing drops it at the start of epoch 11. At
+the last slot of epoch 10, X bids for the first slot of epoch 11. The spec advances the state
+into epoch 11, the payment is dropped, X can cover the bid, so the bid is valid. Lighthouse checks the head state,
+where the payment is still pending, returns `BuilderCantCoverBid` and drops a valid bid. A
+Lighthouse proposer at that slot never sees it.
+
+Two cases, argued from the code but not tested, REJECT a valid bid and penalize the peer that
+sent it: a bid on the head's parent whose builder exits in the bid's parent payload, which the
+head block has already applied (the spec IGNOREs), and a builder that becomes active when
+finality advances at the epoch boundary before the bid's slot.
+
+**Impact.** Gossip only. Block production checks the chosen bid again against its own state, and
+block import validates the block. Valid bids are dropped, and in the REJECT cases honest peers
+lose score. Gloas is not on mainnet yet.
+
+**Test.** A local test written during the audit reproduced the example against sigp `unstable`
+at `ec2442d24b`. It is not published.
+
+**Fix.** Load the parent state advanced to the bid's slot (`get_advanced_hot_state`) and run the
+builder and signature checks on it. A sketch compiles but is not yet tested. Loading a state for
+each bid is slow, so a real fix likely caches the advanced state for each parent and slot.
 
 ### In the spec and Etheorem
 
