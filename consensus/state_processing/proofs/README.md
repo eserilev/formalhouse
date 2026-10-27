@@ -350,9 +350,9 @@ These are outside the code the proofs cover.
 
 - A state of an abandoned fork can get another chain's committee caches. See
   [Cross-fork committee caches](#cross-fork-committee-caches) below.
-- In Gloas, `apply_parent_execution_payload` reads the pubkey cache for the parent's withdrawal
-  and consolidation requests without calling `update_pubkey_cache`. The Electra and Fulu path
-  calls it. A request for a validator missing from the cache is skipped.
+- In Gloas, a withdrawal or consolidation request can be skipped when the pubkey cache lags. See
+  [Gloas parent requests skip the pubkey cache update](#gloas-parent-requests-skip-the-pubkey-cache-update)
+  below.
 - `initialize_progressive_balances_cache` keeps any cache that `is_initialized`, whatever epoch
   it was built for, and the cache readers do not check the epoch. No path that produces a stale
   cache is known, so this is hardening rather than a bug. The proof needs a cache of the current
@@ -430,6 +430,68 @@ loads a hot state by root has been audited.
 **Fix.** Keep the finalized block root with the finalized state, and rebase only a state that
 descends from it (`state.get_block_root(finalized_slot) == finalized_block_root`), or that is the
 finalized state itself. With this check the test passes, as do the other `store_tests`.
+
+#### Gloas parent requests skip the pubkey cache update
+
+**Background.** Withdrawal and consolidation requests from the execution layer name validators
+by pubkey. The spec scans the registry for the pubkey and ignores the request if none matches.
+Lighthouse looks the pubkey up in the state's pubkey cache instead. The cache is filled lazily:
+`update_pubkey_cache()` adds the validators past its end. Before Gloas, `process_operations`
+calls it right before the requests. In Gloas, a block's payload requests are processed in the
+next block, by `apply_parent_execution_payload`, at the start of `per_block_processing`.
+
+**The bug.** `apply_parent_execution_payload`
+(`consensus/state_processing/src/per_block_processing.rs`) calls
+`process_withdrawal_requests` and `process_consolidation_requests` without
+`update_pubkey_cache()`. A validator that exists but is missing from the cache looks absent:
+
+```rust
+let Some(validator_index) = state.pubkey_cache().get(&request.validator_pubkey) else {
+    continue;
+};
+```
+
+Lighthouse skips the request, and the spec applies it.
+
+**When the cache lags.** A state rebuilt from disk: `load_hot_state` loads the epoch boundary
+state, copies the pubkey cache of the in-memory finalized state into it
+([rebasing](#cross-fork-committee-caches)), and replays the blocks of that epoch. When the caller
+passes `update_cache = true`, as block import, reorgs and the HTTP API do, a replay hook builds
+all caches on the boundary state first, so the cache is complete. When it passes `false`, nothing
+updates the cache: the replay crosses no epoch boundary, and the replayer takes state roots from
+the stored blocks, so a wrong result is not detected. The cache then lacks every validator added
+after the in-memory finalized state. The light client server loads states this way
+(`light_client_server_cache.rs`).
+
+**Example.** An operator consolidates an old validator A into a new compounding validator B.
+The node runs with `--epochs-per-migration 16`, so its in-memory finalized state moves every 16
+epochs.
+
+| Epoch | What happens |
+|---|---|
+| 100 | Lighthouse migrates. Its in-memory finalized state is now at epoch about 98. |
+| 101 | B's deposit adds B to the registry. |
+| about 108 | B is active. The next migration is at epoch 116. |
+| 112 | The consolidation A→B is in the payload of slot `N`, and block `N+1` applies it. The head state's cache is current, so this is correct. |
+| 113 | The light client server needs the state after block `N+1` and it has left the state cache. Lighthouse rebuilds it from disk without updating the cache. The cache comes from the epoch 98 state, which has no B, so the replay skips the consolidation. |
+
+The rebuilt state has the wrong balances for A and B, so the Merkle branches the light client
+server builds from it do not match the real state root.
+
+**Conditions.** B must be active but missing from the in-memory finalized state. Activation
+takes at least about 7 epochs after B is added, and by default Lighthouse migrates every epoch
+(`DEFAULT_EPOCHS_PER_MIGRATION = 1`), so with default settings B is already in the cache. The
+bug needs the in-memory finalized state to lag the chain's by about 5 epochs or more (a larger
+`--epochs-per-migration`, or migrations that fail or are postponed), and a load with
+`update_cache = false`. Gloas is not on mainnet yet.
+
+**Test.** `gloas_parent_requests_do_not_depend_on_pubkey_cache` gives a state a lagging cache
+and checks that a parent withdrawal request for the missing validator is applied. It failed on
+sigp `unstable` at `ec2442d24b`. The full sequence above is argued from the code, not
+reproduced.
+
+**Fix.** Call `state.update_pubkey_cache()?` at the start of `apply_parent_execution_payload`, as
+the Electra path does.
 
 ### In the spec and Etheorem
 
