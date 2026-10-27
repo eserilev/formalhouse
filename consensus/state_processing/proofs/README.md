@@ -118,14 +118,26 @@ payment threshold. It also computes the slashings target epoch and the hysteresi
 once per epoch, where the spec computes them for each validator. The proofs assume each of these
 equals its spec value.
 
-**3. The caches.** Lighthouse reads the progressive balances, epoch, committee and pubkey caches
-during the epoch, but builds and updates them elsewhere: in block processing, slot processing
-and the store. `consensus/types/proofs` proves the build and update functions, but not that
-every caller uses them. So the Gloas theorem assumes that the progressive balances cache is
-coherent with the epoch state, that the epoch cache was built at a state of the same epoch, and
-that the pubkey cache was built at an earlier state of the run. The Fulu theorem assumes every
-cache read. Two of the Lighthouse bugs in [Findings](#findings) are cache bugs: a cache copied
-from another fork, and a cache read before it is updated.
+**3. The caches.** There are two questions about a cache, and the proofs answer only the first.
+
+- *Does the cache code compute the right thing?* Proved. `consensus/types/proofs` shows that
+  building each cache from a state gives the spec values, and that each update hook keeps the
+  cache correct as the state changes.
+- *Is the cache in this state the result of that code, run on this state?* Assumed. Epoch
+  processing reuses the cache already in the `BeaconState`. That cache may have been built
+  blocks earlier and updated by block processing, copied from another state when the store
+  loaded this one, or cloned with the state. Whether it is right depends on all of that code,
+  which is not translated.
+
+So the Gloas theorem assumes that the progressive balances cache is correct for the epoch state,
+that the epoch cache was built at a state of the same epoch, and that the pubkey cache was built
+at an earlier state of the run. From the last two, the proofs show the values read at the epoch
+are right. The committee cache for the lookahead is built fresh in the epoch, so only its inputs
+are trusted. The Fulu theorem assumes every cache read.
+
+Both cache bugs in [Findings](#findings) break this assumption, with correct cache code: a
+committee cache built for another fork's state and copied into this one, and a pubkey cache read
+before the update function runs.
 
 Five more glue facts have no proof (N1 to N5 in `Trusted/EpochGlue.lean`): the superstruct
 accessors return `Ok` on a state of the right fork, `update_tree_hash_cache` succeeds,
