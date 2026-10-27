@@ -110,13 +110,26 @@ changed, touch no other validator, and never fail. The others write the deposits
 consolidation balances, the builder payments and the PTC window. 53 of the 171 `?` sites in
 `single_pass.rs` are inside these implementations or pass on their errors.
 
-**2. The values passed into the translated code.** `single_pass.rs` computes some inputs itself,
-because they need the whole state or the `ChainSpec`, and passes them to the translated
-functions: the participation flags and rewards inputs (`StepContext`, `RowInputs`), the
-pending deposit views (`DepositView`), the churn and selection constants, and the builder
-payment threshold. It also computes the slashings target epoch and the hysteresis thresholds
-once per epoch, where the spec computes them for each validator. The proofs assume each of these
-equals its spec value.
+**2. The values passed into the translated code.** The translated functions take plain numbers
+and booleans, not the `BeaconState`, because Aeneas cannot handle `&BeaconState` or
+`&ChainSpec`. So `single_pass.rs`, which is not translated, reads the state and the spec and
+fills in the inputs:
+
+- `StepContext`, once per epoch: the epochs, the inactivity leak flag, the participation and
+  active balance totals, the slashings values, the spec constants and the hysteresis thresholds.
+- `RowInputs`, per validator: the base reward, the validator's pending deposit total, whether a
+  consolidation names it, and its maximum effective balance.
+- `DepositView`, per pending deposit: the deposit and the fields of its validator, including
+  whether the pubkey is already a validator.
+- The churn and selection constants and the builder payment threshold.
+
+The proofs show the translated code gives the spec result for these inputs, and assume the
+inputs are right. A wrong input gives a wrong state with no error: a wrong `target_increments`
+changes every validator's rewards. Some are partly covered: the cache proofs show the totals in
+the caches are right, so only the copy into `StepContext` is trusted, and overflow in the
+arithmetic formulas is ruled out (glue L1 to L7). Two values, the slashings target epoch and the
+hysteresis thresholds, Lighthouse computes once per epoch where the spec computes them per
+validator. They do not depend on the validator, so the values agree.
 
 **3. The caches.** There are two questions about a cache, and the proofs answer only the first.
 
