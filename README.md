@@ -1,3 +1,16 @@
+# Formalhouse
+
+Formalhouse is Lighthouse with machine-checked proofs (Aeneas + Lean). Parts of the Rust code are
+proved equal to the consensus spec. For epoch processing, `lighthouse_epoch_etheorem_reachable`
+shows that Lighthouse gives the same state as Etheorem, an independent Lean spec, on every
+reachable mainnet state.
+
+- Proof index: issue #44. Tracking issues: #32 slashing protection, #33 epoch processing, #34
+  Lean spec, #35 caches.
+- Branches: `unstable` copies sigp/lighthouse `unstable`. `formalhouse` adds the proofs and gets a
+  daily merge of `unstable`.
+- Trusted base, branch model and sync: [FORMALHOUSE.md](FORMALHOUSE.md).
+
 # Lighthouse: Ethereum consensus client
 
 An open-source Ethereum consensus client, written in Rust and maintained by Sigma Prime.
