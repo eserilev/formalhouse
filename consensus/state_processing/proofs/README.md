@@ -19,7 +19,7 @@ Take a chain that starts in Fulu and crosses the Gloas fork. At every epoch boun
 3. The two resulting states are equal.
 4. Gloas only: the cache reads that Lighthouse's epoch processing makes (progressive balances,
    epoch cache, committee cache, pubkey cache) equal the values that the spec computes, given
-   the cache provenance assumptions below. The Fulu model reads the spec values directly, so
+   the cache assumptions below. The Fulu model reads the spec values directly, so
    for Fulu the cache reads are assumed, not proved.
 
 The theorems are in `EpochProofs/FormalhouseFinal.lean`:
@@ -43,9 +43,9 @@ Three terms in this statement need a precise meaning.
 
 **Lighthouse's epoch processing** is `process_epoch_lh_order`, a Lean model of
 `process_epoch_single_pass` and `altair.rs` in Lighthouse's own order. Each step of the model is
-the Aeneas translation of the Rust function. The steps are joined by the Rust contracts and glue
-assumptions listed below, wherever the code reads or writes `milhouse` lists or calls code that
-Aeneas does not translate. The model is only as faithful as those assumptions. The Rust is the
+the Aeneas translation of the Rust function. Where the code reads or writes `milhouse` lists or
+calls code that Aeneas does not translate, the model stands in for the Rust. The model is only
+as faithful as those places, which [What is trusted](#what-is-trusted) lists. The Rust is the
 `formalhouse` branch, which is Lighthouse `unstable` with the epoch logic moved into modules that
 Aeneas accepts.
 
@@ -81,169 +81,190 @@ fails if any audited theorem reports another axiom.
 - Fork choice, networking and the store. The store's cache rebasing (`rebase_caches_on`) is
   outside the proofs; see [Findings](#findings).
 - The Fulu cache reads.
-- Heze, and the forks before Fulu. The pre-Electra paths of `single_pass.rs` are out of scope.
+- Heze, and the forks before Fulu. The pre-Electra paths of `single_pass.rs` are not checked.
 - The genesis state. The Electra state before the Fulu fork is assumed to satisfy the start
   invariants (`FuluStartOk`), because no Electra spec is transcribed.
 
 ## What is trusted
 
-The final theorems take every assumption as a named hypothesis or a named fact. None of the items
-below is proved; a reader who accepts them accepts the result. `GloasAssumptions` and
-`FuluAssumptions` collect the hypotheses. Each item says how it is justified.
+The trusted base has three parts: Lighthouse code that the proofs do not check, assumptions
+about the chain, and the tools and references. `NOTES.md` lists the same items by their Lean
+names.
 
-| Group | Count | What it says | Justified by | Size |
-|---|---|---|---|---|
-| Rust contracts | 9 | What a trait implementation over `milhouse` lists does | code review | covers 53 of the 171 error sites in `single_pass.rs` |
-| Glue assumptions | 26 | A Rust expression or call that Aeneas does not translate equals its model | code review | mostly one call or formula each |
-| Cache provenance | 4 | Each cache was built from a state of this run | an audit of every cache write | 13 error sites |
-| Spec preconditions | 4 | Conditions without which the pyspec itself raises | the pyspec | not Lighthouse assumptions |
-| Supply and time bounds | 5 | ETH supply, `u64` slots, list sizes | physical limits | |
-| Hash-output assumptions | 3 | Hash-based selection loops end | overwhelming probability | |
-| Etheorem list limits | 2 | Room under Etheorem's alpha.11 list limits | far above real chain sizes | |
-| Oracle | 3 | BLS, SHA-256, `hash_tree_root` | parameters, not axioms | |
-| Start state | 1 | `FuluStartOk` | holds at genesis, not proved | |
-| Tools and references | 6 | Lean, Charon, Aeneas, Etheorem, the transcription | external | |
+### Lighthouse code that is not checked
 
-### Rust contracts (9)
+The final theorems are about `process_epoch_lh_order`, a Lean model of the epoch. Where Aeneas
+translates the Rust, the model is proved equal to the translation. Where it does not, the model
+stands in for the Rust, and the items below say what the model takes that Rust to do. They are
+not hypotheses of the final theorems. They are checked by code review.
 
-The translated code is generic over traits, so Aeneas checks the loop structure, the order of
-the calls and the error handling. Each contract states what the `milhouse` implementation of one
-trait does. They are in `EpochProofs/Trusted/`.
+Paths below are relative to `consensus/`. `single_pass.rs` is
+`state_processing/src/per_epoch_processing/single_pass.rs`.
 
-- `RowsContract` (`RegistryRows.lean`): `StateRows::apply_step` reads row `i`, runs
-  `single_pass_step`, writes the changed fields back and changes no other row.
-- `DepositWritesContract` (`EpochTail.lean`): the deposit queue write, the pubkey lookup,
-  `add_validator` and the effective balance update of a new validator.
-- `PaymentWritesContract` (`EpochTail.lean`): the builder payments read and write, and the
-  withdrawal append.
-- `WindowContract` (`EpochTail.lean`): the PTC window shift.
-- `EffectiveBalanceContract` (`EpochTail.lean`): the effective balance updates after the
-  consolidations.
-- `ConsolidationStateContract` (`Consolidations.lean`): the reads and writes of the
-  consolidation step.
-- `BTreeSetIter` (`Consolidations.lean`): a `BTreeSet` iterates in increasing order, each member
+**`milhouse` list access in `single_pass.rs`.** Aeneas cannot translate `milhouse`'s
+tree-backed lists. So the code that loops over the validators is generic over traits, Aeneas
+translates the loop, and the trait implementations over the real lists are trusted.
+
+- `StateRows::apply_step` reads row `i`, runs `single_pass_step`, writes the changed fields
+  back, changes no other row, and never fails. That includes the cache updates inside it
+  (`write_back_row`, `record_effective_balance_update`).
+- `StateDeposits` (`write_queue`, `validator_index`, `balance`, `set_balance`,
+  `is_valid_signature`, `add_validator`, `update_effective_balance`): each method does the spec
+  operation of the same name, and the pubkey lookup returns the first matching index.
+- `StateBuilderPayments` reads and writes the builder pending payments and appends a builder
+  pending withdrawal.
+- `PtcWindowWrites` shifts the PTC window: drop the oldest epoch, append the new one, write it
+  back.
+- `StateEffectiveBalances::update_effective_balance` is the spec effective balance update for
+  the validators that consolidations touch.
+- `StateConsolidations` returns the pending consolidations and the validator fields, and sets
+  balances and pops entries as the spec does.
+- In `process_proposer_lookahead`, `Vector::new` accepts the new lookahead. Its length is
+  proved; only that `Vector::new` accepts it is trusted.
+
+**Builder onboarding at the Gloas fork (`state_processing/src/upgrade/gloas.rs`).** The same
+reason, plus Rust's `HashMap` and `HashSet`, which are not translated.
+
+- `StateOnboarding` (the pubkey cache, the signature cache, and the hash tables) answers each
+  onboarding query as the spec would.
+- `upgrade_to_fulu` and `upgrade_to_gloas` copy the state fields and write the onboarding
+  result as the spec does.
+
+**Standard library and data structures.** Code outside the crate is not translated, so the
+proofs assume only the laws they need.
+
+- In `get_validators_in_consolidations`, a `BTreeSet` iterates in increasing order, each member
   once.
-- `OnboardingContract` (`Onboarding.lean`): the caches and hash tables of the builder onboarding
-  at the Gloas fork.
-- `IndexMapLaws`: `HashTrieMap` behaves as a finite map, and `update_pubkey_cache` inserts the
-  new pubkeys in order.
+- `HashTrieMap` (`types/src/state/pubkey_cache.rs`) behaves as a finite map.
+- `BeaconState::update_pubkey_cache` inserts each new pubkey at the next index, in order. It is
+  a `milhouse` iterator loop with an early return, which Aeneas does not accept.
 
-### Glue assumptions (26)
+**Calls and formulas in `single_pass.rs`.** These take `&BeaconState` or `&ChainSpec`, which
+Aeneas turns into axioms, or use iterator adapters, which Aeneas rejects. So `single_pass.rs`
+computes them and passes the values into the translated code.
 
-- `Trusted/EpochGlue.lean` (12): formulas in `single_pass.rs`. For L1 to L7 the bound that rules
-  out an error is proved and only the formula is trusted. N1 to N5 have no proved bound, so they
-  are the weakest items here:
-  - N1 `ShuffleSize`: at most `2^24` active validators. Activation needs 32 ETH, so the active
-    set stays far below this, but no invariant proves it.
-  - N2 `ForkFields`: each superstruct accessor returns the field of the state variant, because
-    the field exists from that fork on.
-  - N3 `TreeHashOk`: `update_tree_hash_cache` succeeds when the latest block header has no state
-    root yet.
-  - N4 `FinalityDelayLink`: `is_in_inactivity_leak` computes `previous_epoch - finalized_epoch`
-    as the spec does.
-  - N5 `SlashingsSumLink`: `safe_sum` of `state.slashings` is the spec sum.
-- `SeedMixLink`: `get_seed_mix` reads the RANDAO mix that `get_seed` reads.
-- `EBLink`: `get_effective_balance` reads the registry.
-- `HashLink`: `Sha256Hash` computes SHA-256.
-- The index lists of the committee steps: the active validators, and the active unslashed
-  validators for the proposers.
-- `CommitteesFromCache`: the loop in `process_ptc_window` that joins the committees of each slot.
-- The chain constants: `ConstantsMatch`, `SelectionConstantsMatch`, and the payment threshold
-  6/10.
-- The inputs that `single_pass.rs` passes to the translated functions: the inactivity flags, the
-  rewards inputs, the registry inputs, the slashings sum and the deposit views.
-- Justification: `weigh_justification_and_finalization.rs` reads the bits and roots and writes
-  the checkpoints.
-- The reset and historical summary writes. `HistoricalSummary::new` hashes the roots as
-  `hash_tree_root` does.
-- `rotate_participation_flags` moves the current participation to the previous one.
-- The sync committee pubkeys. The aggregate key comes from the BLS Oracle.
-- `Validator::from_deposit` copies its inputs, and `add_validator_to_registry` pushes one entry
-  onto each of the five lists.
-- The field copies of the fork upgrades, and the write of the builder onboarding result.
+- The epoch and slot arithmetic (the next epoch, the lookahead epoch and slots) and the
+  per-validator pending deposit sum compute the formulas the model uses. That they never
+  overflow is proved.
+- `build_exit_cache` counts the exits per epoch. That the count never overflows is proved.
+- `BeaconState::get_seed_mix` reads the RANDAO mix that the spec `get_seed` reads.
+- The `EffectiveBalances` implementation for `BeaconState` reads the effective balances from
+  the registry.
+- The index lists passed to the proposer lookahead and sync committee selection are the spec's
+  active validators (for the Gloas proposers, active and unslashed).
+- The loop in `process_ptc_window` joins the committees of each slot from the committee cache.
+- The superstruct accessors return the field of the state's fork variant. Each field exists
+  from its fork on, so the accessor does not fail.
+- `BeaconState::is_in_inactivity_leak` computes `previous_epoch - finalized_epoch` as the spec
+  does.
+- `safe_sum` in `SlashingsContext::new` is the spec sum of `slashings`.
+- The values passed to the translated code equal their spec values: the `StepContext` fields,
+  the `RowInputs` (base reward from the epoch cache, deposit, consolidation flag, max effective
+  balance), and the `DepositView`s from `PendingDepositsContext::new`.
 - Lighthouse computes the slashings target epoch and the hysteresis thresholds once per epoch,
-  where the spec computes them once per validator. The values are the same.
+  where the spec computes them per validator. The values are the same.
+- `registry_constants`, `selection_constants` and the builder payment threshold (6/10) are the
+  spec constants.
 
-### Cache provenance (4)
+**Other epoch code.** These are the state-access wrappers around translated logic.
 
-`consensus/types/proofs` proves the cache build and update code. The Gloas epoch proof assumes
-that each cache came from a state of this run:
+- `weigh_justification_and_finalization.rs` reads the justification bits and block roots and
+  writes the checkpoints. The decisions in `justification.rs` are translated.
+- `HistoricalSummary::new` (`types/src/state/historical_summary.rs`) hashes the roots as
+  `hash_tree_root` does.
+- `BeaconState::rotate_participation_flags` moves the current participation to the previous.
+- `Validator::from_deposit` (`types/src/validator/validator.rs`) copies its inputs.
+- `get_next_sync_committee` collects the pubkeys of the selected validators.
+- `BeaconState::update_tree_hash_cache`, called from
+  `state_processing/src/epoch_cache.rs`, succeeds.
 
-- The progressive balances cache is `Coherent` at a state of the epoch, and Lighthouse runs the
-  update hooks for every write between that state and the epoch input (`CacheUpkeep`,
-  `Trusted/CacheUpkeep.lean`).
-- The epoch cache total and base rewards come from a state of the same epoch.
-- `CommitteeCacheBuilt` holds for the lookahead epoch.
-- The pubkey cache is `Coherent` and comes from an earlier state of this run.
+**Caches.** Lighthouse builds and updates its caches in block processing, slot processing and
+the store, outside the epoch code. `consensus/types/proofs` proves the build and update
+functions, but not that every caller uses them correctly.
 
-### Spec preconditions (4)
+- Gloas: the theorem assumes that the progressive balances cache is coherent with the state at
+  the epoch input, that the epoch cache total comes from a state of the same epoch, that the
+  committee cache was built for the lookahead epoch, and that the pubkey cache comes from an
+  earlier state of the run. `formalhouse_gloas_epoch_final_upkeep` replaces the first with an
+  assumption that every write between a coherent state and the epoch runs its cache hook. An
+  audit of the call sites supports this.
+- The base rewards that `StateRows` reads from the epoch cache are assumed through
+  `StateRows::apply_step`.
+- Fulu: every cache read is assumed.
 
-The pyspec raises when one of these fails, so no implementation can agree with it there. They
-are conditions on the chain, not on Lighthouse.
+The two Lighthouse bugs under [Findings](#findings) are in exactly this part: caches copied
+from or not updated for the right state.
 
-- Gloas: an unslashed validator is active at `current + 2` (finding F4 in `NOTES.md`).
-- Gloas: at least `SLOTS_PER_EPOCH` validators are active at `current + 2` (F12). The PTC is
-  empty otherwise. This is 32 validators on mainnet and 8 on minimal.
-- A sync committee candidate exists at the next epoch.
-- Fulu: a validator is active at the next epoch and at `current + 2`.
+**Crypto.** These are external crates in C and assembly.
 
-### Supply and time bounds (5)
+- `Sha256Hash` (`swap_or_not_shuffle/src/shuffle_hash.rs`) computes SHA-256 and returns 32
+  bytes.
+- blst's deposit signature check and aggregate public key match the BLS functions of the
+  Oracle below.
 
-- `RowBounds`: bounds on inactivity scores, the total effective balance, the funds, the exit
-  fields and the validator count. Inactivity scores stay below `2^22`, which rules out the
-  `uint64` overflow of `effective_balance * inactivity_score` (F5). Scores grow by 4 per epoch
-  of inactivity leak, so the bound fails only after about a million epochs of leak.
-- `slot + 8192 < 2^64`.
-- `SupplyBound`: at most 139M ETH is active before each block.
-- `EpochSupply`: the same kind of bound at each epoch input.
-- `HistRoom`: `historical_summaries` is below Lighthouse's list limit of `2^24`.
+### Assumptions about the chain
 
-### Hash-output assumptions (3)
+These are hypotheses of the final theorems. When one fails, either the pyspec itself fails, or
+the chain is far outside anything physically possible.
 
-These are statements about hash outputs. They hold with overwhelming probability, and no proof
-can establish them.
+**Pyspec halts.** The pyspec raises without these, so no implementation can agree with it.
 
-- F3: each Etheorem balance-weighted selection returns all its items within `10^7` passes.
-- `SelFin`: each spec selection ends within `2^64` passes.
-- `ProposerFin`: the Electra proposer loop ends before its last pass.
+- Gloas: an unslashed validator is active two epochs ahead (F4).
+- Gloas: at least `SLOTS_PER_EPOCH` validators are active two epochs ahead, or the PTC is empty
+  (F12). That is 32 validators on mainnet and 8 on minimal.
+- A validator is a sync committee candidate at the next epoch.
+- Fulu: a validator is active at the next epoch and two epochs ahead.
 
-### Etheorem list limits (2)
+**Physical limits.** Limits set by the ETH supply and by time.
 
-Etheorem pins spec v1.7.0-alpha.11, where some `BeaconState` lists have limits that beta.4
-removed. Etheorem drops items past a limit, where the pyspec has no limit.
+- At most 139M ETH is active before each block and at each epoch (`SupplyBound`,
+  `EpochSupply`).
+- Inactivity scores stay below `2^22`, which rules out the `uint64` overflow of
+  `effective_balance * inactivity_score` (F5). Scores grow by 4 per epoch of leak, so this takes
+  about a million epochs. The same group bounds the effective balance sum, the funds, the exit
+  fields and the validator count (`RowBounds`).
+- `slot + 8192 < 2^64`, and the epoch runs at the last slot of an epoch.
+- `historical_summaries` holds fewer than `2^24` entries, Lighthouse's list limit.
+- At most `2^24` validators are active, the committee shuffle limit. Activation needs 32 ETH, so
+  this follows from the supply, but no proof carries it.
 
-- F6: room in `builder_pending_withdrawals`.
-- F10: `validators + 16 <= 2^40`.
+**Reachable-state facts not yet carried to the epoch.** These hold on every real chain. The
+invariant proofs cover most of the state, but not yet these fields:
 
-### Oracle (3)
+- validator pubkeys are unique, and each passes `KeyValidate`;
+- the SSZ vectors, `proposer_lookahead` and `ptc_window` have their lengths;
+- at most `2^40` validators, and each effective balance is at most 2048 ETH;
+- the states at which the caches were built agree with the epoch input on the activity and the
+  pubkeys they read.
 
-`Spec/Oracle.lean` takes these functions as parameters, not axioms. The theorems hold for every
-value of the parameters that agrees with Etheorem.
+**Hash outputs.** These are facts about hash values. They hold with overwhelming probability,
+and no proof can establish them.
 
-- BLS: signature verification in `apply_pending_deposit`, and the aggregate key.
-- SHA-256.
-- `hash_tree_root` of the historical summary roots.
+- Each Etheorem balance-weighted selection returns all its items within `10^7` passes (F3).
+- Each spec selection ends within `2^64` passes.
+- The Electra proposer loop ends before its last pass.
 
-### Start state (1)
+**Start state.** The Electra state before the Fulu fork satisfies the genesis invariants
+(`FuluStartOk`). A genesis state does, but no Electra spec is transcribed, so the step from
+genesis to the Fulu fork is not proved.
 
-- `FuluStartOk`: the Electra state before `upgrade_to_fulu` satisfies the start invariants. A
-  genesis state does, but no Electra spec is transcribed, so this is not proved.
-
-### Tools and references (6)
+### Tools and references
 
 - The Lean kernel.
 - Charon and Aeneas, at the revisions in `.github/workflows/proofs.yml`, and the Aeneas Lean
-  library. Its four `sorry` warnings are not reachable from these theorems.
+  library. Its four `sorry` warnings are not reachable from these theorems. Aeneas makes no
+  end-to-end soundness claim.
 - `aeneas/discriminant-instance-name.patch`, which renames one generated instance and changes no
   definition.
-- Etheorem at the commit in `lakefile.toml`: branch `formalhouse-pin` of `eserilev/etheorem`.
-  It is upstream Etheorem plus a port to Lean v4.31.0 and the removal of the eth1 bridge
-  deposit path from Fulu, which consensus-specs v1.7.0-alpha.9 removed
-  ([etheorem#144](https://github.com/etheorem/etheorem/pull/144)).
-- The Lean transcription of the spec in `EpochProofs/Spec/`, for the parts that Etheorem does
-  not replace: block processing, which defines the runs, and the fork upgrades. It is checked
-  by review against the pyspec, not by the EF vectors.
-- The pre-Electra paths of `single_pass.rs` are out of scope.
+- Etheorem at the pin in `lakefile.toml`. It pins spec v1.7.0-alpha.11, whose lists have limits
+  that beta.4 removed. The theorems assume room under them: in `builder_pending_withdrawals`
+  (F6), in the registry (`validators + 16 <= 2^40`, F10), and for Fulu in
+  `historical_summaries`.
+- The Oracle (`Spec/Oracle.lean`): BLS, SHA-256 and `hash_tree_root` are parameters, not
+  axioms. The theorems hold for every Oracle that agrees with Etheorem.
+- The hand-written transcription of block processing and the fork upgrades in
+  `EpochProofs/Spec/`. It defines which states are reachable. It is reviewed against the pyspec,
+  not run against the EF vectors.
 
 ## How the proof is built
 
