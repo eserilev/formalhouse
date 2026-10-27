@@ -342,7 +342,10 @@ same result on reachable states:
 
 ## Findings
 
-The proofs found these differences. Each is described in more detail in `NOTES.md`.
+None of these came from a failing proof. The proofs need explicit assumptions about the code
+around them, and auditing those assumptions by hand found the first two Lighthouse bugs below.
+The third came up during the same audit and is outside the scope of the proofs. The spec and
+Etheorem findings came from proving the two specs equal. `NOTES.md` has more detail on each.
 
 ### In Lighthouse
 
@@ -355,7 +358,8 @@ These are outside the code the proofs cover.
   [Gloas parent requests skip the pubkey cache update](#gloas-parent-requests-skip-the-pubkey-cache-update)
   below.
 - In Gloas, gossip checks a builder's bid against the head state, not the bid's parent state
-  advanced to the bid's slot. See
+  advanced to the bid's slot. This is outside the proofs; it was found while auditing which
+  state each cache read uses. See
   [Gloas gossip bid checks use the head state](#gloas-gossip-bid-checks-use-the-head-state)
   below.
 - `initialize_progressive_balances_cache` keeps any cache that `is_initialized`, whatever epoch
