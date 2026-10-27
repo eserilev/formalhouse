@@ -124,8 +124,8 @@ and the store. `consensus/types/proofs` proves the build and update functions, b
 every caller uses them. So the Gloas theorem assumes that the progressive balances cache is
 coherent with the epoch state, that the epoch cache was built at a state of the same epoch, and
 that the pubkey cache was built at an earlier state of the run. The Fulu theorem assumes every
-cache read. All three Lighthouse issues in [Findings](#findings) are cache bugs: a cache copied
-from another fork, a cache read before it is updated, and a cache kept from the wrong epoch.
+cache read. Both Lighthouse bugs in [Findings](#findings) are cache bugs: a cache copied from
+another fork, and a cache read before it is updated.
 
 Five more glue facts have no proof (N1 to N5 in `Trusted/EpochGlue.lean`): the superstruct
 accessors return `Ok` on a state of the right fork, `update_tree_hash_cache` succeeds,
@@ -344,19 +344,94 @@ same result on reachable states:
 
 The proofs found these differences. Each is described in more detail in `NOTES.md`.
 
-In Lighthouse, outside the code these proofs cover:
+### In Lighthouse
 
-- `StateCache::rebase_on_finalized` checks only the slot, not ancestry, before it copies the
-  finalized state's committee caches. Between `migrate_database` and `prune_hot_db`, a state of
-  an abandoned fork can get another chain's committee caches.
+These are outside the code the proofs cover.
+
+- A state of an abandoned fork can get another chain's committee caches. See
+  [Cross-fork committee caches](#cross-fork-committee-caches) below.
 - In Gloas, `apply_parent_execution_payload` reads the pubkey cache for the parent's withdrawal
   and consolidation requests without calling `update_pubkey_cache`. The Electra and Fulu path
   calls it. A request for a validator missing from the cache is skipped.
 - `initialize_progressive_balances_cache` keeps any cache that `is_initialized`, whatever epoch
-  it was built for. The proof needs a cache of the current epoch, so the `formalhouse` branch
-  rebuilds a cache of another epoch (commit `9dcec02a0`).
+  it was built for, and the cache readers do not check the epoch. No path that produces a stale
+  cache is known, so this is hardening rather than a bug. The proof needs a cache of the current
+  epoch, so the `formalhouse` branch rebuilds a cache of another epoch (commit `9dcec02a0`).
 
-In the spec and Etheorem:
+#### Cross-fork committee caches
+
+**Background.** A `BeaconState` carries caches next to the state itself. The committee cache
+holds the committees of the previous, current and next epoch. Building it shuffles the active
+validators with a seed from the chain's RANDAO history, so two forks can have different
+committees for the same epoch.
+
+When Lighthouse loads a recent state from the hot database, it builds it from a stored snapshot
+or diff, or from an earlier stored state plus a replay of blocks. Before any replay, it rebases
+that state on the finalized state it keeps in memory: the loaded state reuses the finalized
+state's tree nodes wherever they are equal, and `rebase_caches_on` copies the finalized state's
+caches into it to avoid rebuilding them. It copies each committee cache whose epoch is also the
+loaded state's previous, current or next epoch. A replay then carries the copied caches forward.
+
+**The bug.** `StateCache::rebase_on_finalized` (`beacon_node/store/src/state_cache.rs`) decides
+whether to rebase with one check:
+
+```rust
+if let Some(finalized_state) = &self.finalized_state
+    && state.slot() >= finalized_state.state.slot()
+{
+    state.rebase_on(&finalized_state.state, spec)?;
+}
+```
+
+It checks the slot, not ancestry. Once pruning has run, every hot state at or after the finalized slot does. But
+there is a window in which states of forks that conflict with finalization are still on disk.
+
+**The window.** After a finalization, the migrator (`run_migration` in
+`beacon_node/beacon_chain/src/migrate.rs`) runs two steps, normally on a background thread:
+
+```
+  finalization        migrate_database            prune_hot_db
+  notification        ends with                   deletes the states
+  arrives             update_finalized_state      of conflicting forks
+      │                     │                          │
+──────●─────────────────────●━━━━━━━━━━━━━━━━━━━━━━━━━━●──────────►
+                            ◄──────── the window ──────►
+                       rebasing now uses the        their states are
+                       new finalized state          still on disk
+```
+
+1. `migrate_database` moves the finalized data to the freezer and ends with
+   `update_finalized_state`. From then on, `rebase_on_finalized` rebases on the new finalized
+   state.
+2. `prune_hot_db` deletes the states and blocks of forks that conflict with the new finalized
+   block.
+
+A state of a conflicting fork that is loaded between the two steps passes the slot check and
+gets the finalized chain's committee caches. The committees of epoch E depend on the active
+validators at E and on the RANDAO mix at the end of epoch E−2. If the fork split before those
+were fixed, its own committees can differ, and the copied cache is then wrong. The window is
+usually short. It stays open until the next migration when `prune_hot_db` returns an error
+(`run_migration` logs it and returns).
+
+The pubkey cache is copied the same way, with only a length check. Validator indices are
+assigned in deposit order on every fork, so we expect it to be correct, but no test covers it.
+
+**Test.** `store_tests::abandoned_fork_state_loaded_after_finalization_has_own_committee_caches`
+(minimal preset): fork B splits from fork A at epoch 1, and fork A finalizes epoch 4. Fork B's
+state at slot 32 is loaded inside the window. It gets fork A's committee cache for epoch 3, not
+its own.
+
+**Impact.** Low, as far as we know. Gossip blocks and attestations check that they
+descend from the finalized checkpoint before they load a state, and block production and duties
+work from the head. The exposure we know of is the HTTP API when a caller asks for such a state
+by its root, for example `/eth/v1/beacon/states/{state_id}/committees`. Not every caller that
+loads a hot state by root has been audited.
+
+**Fix.** Keep the finalized block root with the finalized state, and rebase only a state that
+descends from it (`state.get_block_root(finalized_slot) == finalized_block_root`), or that is the
+finalized state itself. With this check the test passes, as do the other `store_tests`.
+
+### In the spec and Etheorem
 
 - Gloas halts with fewer than `SLOTS_PER_EPOCH` validators active two epochs ahead
   (`process_ptc_window_few_active_error`), and when all of them are slashed (F4).
