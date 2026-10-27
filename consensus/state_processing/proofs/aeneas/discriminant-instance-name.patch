@@ -1,0 +1,14 @@
+diff --git a/backends/lean/Aeneas/Data/Discriminant.lean b/backends/lean/Aeneas/Data/Discriminant.lean
+index 8a8b38f2..604e19cf 100644
+--- a/backends/lean/Aeneas/Data/Discriminant.lean
++++ b/backends/lean/Aeneas/Data/Discriminant.lean
+@@ -126,7 +126,8 @@ def generateReadDiscriminantCmds (declName : Name) (ty : ScalarTy) (discrValues
+   -- Generate the syntax for the instance
+   let binders := binders.extract 0 indVal.numParams
+   let args := header.argNames.map mkIdent
+-  let instStx ← `(instance $binders:bracketedBinder* : Aeneas.Std.Discriminant ($header.targetType) ($ty) where
++  let instName := mkIdent (Name.mkStr declName "instDiscriminant")
++  let instStx ← `(instance $instName:ident $binders:bracketedBinder* : Aeneas.Std.Discriminant ($header.targetType) ($ty) where
+       read_discriminant := @$(mkIdent auxFunName):ident $args*)
+ 
+   --

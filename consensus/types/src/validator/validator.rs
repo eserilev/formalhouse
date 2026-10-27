@@ -5,11 +5,13 @@ use serde::{Deserialize, Serialize};
 use ssz_derive::{Decode, Encode};
 use tree_hash_derive::TreeHash;
 
+use super::deposit_balance;
 use crate::{
     attestation::Checkpoint,
     core::{Address, ChainSpec, Epoch, EthSpec, Hash256},
     fork::ForkName,
     state::BeaconState,
+    validator::activation_eligibility,
 };
 
 /// Information about a `BeaconChain` validator.
@@ -31,7 +33,6 @@ pub struct Validator {
 }
 
 impl Validator {
-    #[allow(clippy::arithmetic_side_effects)]
     pub fn from_deposit(
         pubkey: PublicKeyBytes,
         withdrawal_credentials: Hash256,
@@ -51,9 +52,9 @@ impl Validator {
         };
 
         let max_effective_balance = validator.get_max_effective_balance(spec, fork_name);
-        // safe math is unnecessary here since the spec.effective_balance_increment is never <= 0
-        validator.effective_balance = std::cmp::min(
-            amount - (amount % spec.effective_balance_increment),
+        validator.effective_balance = deposit_balance::deposit_effective_balance(
+            amount,
+            spec.effective_balance_increment,
             max_effective_balance,
         );
 
@@ -129,10 +130,12 @@ impl Validator {
         finalized_checkpoint: &Checkpoint,
         spec: &ChainSpec,
     ) -> bool {
-        // Placement in queue is finalized
-        self.activation_eligibility_epoch <= finalized_checkpoint.epoch
-        // Has not yet been activated
-        && self.activation_epoch == spec.far_future_epoch
+        activation_eligibility::is_eligible_for_activation(
+            self.activation_eligibility_epoch.as_u64(),
+            self.activation_epoch.as_u64(),
+            finalized_checkpoint.epoch.as_u64(),
+            spec.far_future_epoch.as_u64(),
+        )
     }
 
     /// Returns `true` if the validator *could* be eligible for activation at `epoch`.
@@ -141,14 +144,15 @@ impl Validator {
     /// returning true is a necessary but *not sufficient* condition for a validator to activate in
     /// the epoch transition at the end of `epoch`.
     pub fn could_be_eligible_for_activation_at(&self, epoch: Epoch, spec: &ChainSpec) -> bool {
-        // Has not yet been activated
-        self.activation_epoch == spec.far_future_epoch
-        // Placement in queue could be finalized.
-        //
         // NOTE: the epoch distance is 1 rather than 2 because we consider the activations that
         // occur at the *end* of `epoch`, after `process_justification_and_finalization` has already
         // updated the state's checkpoint.
-        && self.activation_eligibility_epoch < epoch
+        activation_eligibility::could_be_eligible_for_activation_at(
+            self.activation_eligibility_epoch.as_u64(),
+            self.activation_epoch.as_u64(),
+            epoch.as_u64(),
+            spec.far_future_epoch.as_u64(),
+        )
     }
 
     /// Returns `true` if the validator has eth1 withdrawal credential.
@@ -277,11 +281,11 @@ impl Validator {
     /// Returns the max effective balance for a validator in gwei.
     pub fn get_max_effective_balance(&self, spec: &ChainSpec, current_fork: ForkName) -> u64 {
         if current_fork >= ForkName::Electra {
-            if self.has_compounding_withdrawal_credential(spec) {
-                spec.max_effective_balance_electra
-            } else {
-                spec.min_activation_balance
-            }
+            deposit_balance::max_effective_balance_electra(
+                self.has_compounding_withdrawal_credential(spec),
+                spec.max_effective_balance_electra,
+                spec.min_activation_balance,
+            )
         } else {
             spec.max_effective_balance
         }

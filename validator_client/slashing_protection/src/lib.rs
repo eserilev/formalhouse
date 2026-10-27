@@ -1,8 +1,10 @@
 mod attestation_tests;
 mod block_tests;
+mod exhaustive_tests;
 mod extra_interchange_tests;
 pub mod interchange_test;
 mod parallel_tests;
+pub mod pure_check;
 mod registration_tests;
 mod signed_attestation;
 mod signed_block;

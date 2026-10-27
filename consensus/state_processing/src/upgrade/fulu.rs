@@ -1,7 +1,12 @@
+use crate::per_epoch_processing::epoch_committees;
+use crate::per_epoch_processing::single_pass::selection_constants;
 use milhouse::Vector;
 use safe_arith::SafeArith;
 use std::mem;
-use types::{BeaconState, BeaconStateError as Error, BeaconStateFulu, ChainSpec, EthSpec, Fork};
+use swap_or_not_shuffle::Sha256Hash;
+use types::{
+    BeaconState, BeaconStateError as Error, BeaconStateFulu, ChainSpec, Domain, EthSpec, Fork,
+};
 
 /// Transform a `Electra` state into an `Fulu` state.
 pub fn upgrade_to_fulu<E: EthSpec>(
@@ -22,16 +27,26 @@ fn initialize_proposer_lookahead<E: EthSpec>(
     spec: &ChainSpec,
 ) -> Result<Vector<u64, E::ProposerLookaheadSlots>, Error> {
     let current_epoch = state.current_epoch();
+    let domain = spec
+        .get_domain_constant(Domain::BeaconProposer)
+        .to_le_bytes();
+    let constants = selection_constants(state, spec);
     let mut lookahead = Vec::with_capacity(E::proposer_lookahead_slots());
     for i in 0..(spec.min_seed_lookahead.safe_add(1)?.as_u64()) {
         let target_epoch = current_epoch.safe_add(i)?;
-        lookahead.extend(
-            state
-                .get_beacon_proposer_indices(target_epoch, spec)
-                .map(|vec| vec.into_iter().map(|x| x as u64))?,
-        );
+        let indices = state.get_active_validator_indices(target_epoch, spec)?;
+        let mix = *state.get_seed_mix(target_epoch, spec)?;
+        let proposers = epoch_committees::proposer_indices_for_epoch::<Sha256Hash, _>(
+            state,
+            &indices,
+            &domain,
+            target_epoch.as_u64(),
+            &mix.0,
+            target_epoch.start_slot(E::slots_per_epoch()).as_u64(),
+            &constants,
+        )?;
+        lookahead.extend(proposers.into_iter().map(|x| x as u64));
     }
-
     Vector::new(lookahead).map_err(|e| e.into())
 }
 

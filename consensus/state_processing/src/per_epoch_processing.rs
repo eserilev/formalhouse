@@ -14,16 +14,31 @@ pub use weigh_justification_and_finalization::weigh_justification_and_finalizati
 
 pub mod altair;
 pub mod base;
+pub mod builder_pending_payments;
 pub mod capella;
+pub mod deposit_writes;
+pub mod effective_balance;
 pub mod effective_balance_updates;
+pub mod epoch_committees;
 pub mod epoch_processing_summary;
 pub mod errors;
 pub mod historical_roots_update;
+pub mod inactivity_updates;
+pub mod justification;
 pub mod justification_and_finalization_state;
+pub mod list_writes;
+pub mod pending_consolidations;
+pub mod pending_deposits;
+pub mod registry_rows;
+pub mod registry_update;
 pub mod registry_updates;
 pub mod resets;
+pub mod rewards_penalties;
 pub mod single_pass;
+pub mod single_pass_step;
 pub mod slashings;
+pub mod slashings_penalty;
+pub mod tail_updates;
 pub mod tests;
 pub mod weigh_justification_and_finalization;
 

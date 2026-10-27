@@ -1,28 +1,28 @@
 use crate::{
-    common::{
-        decrease_balance, increase_balance,
-        update_progressive_balances_cache::initialize_progressive_balances_cache,
-    },
+    common::update_progressive_balances_cache::initialize_progressive_balances_cache,
     epoch_cache::{PreEpochCache, initialize_epoch_cache},
     per_block_processing::is_valid_deposit_signature,
-    per_epoch_processing::{Delta, Error, ParticipationEpochSummary},
+    per_epoch_processing::{
+        Error, ParticipationEpochSummary, deposit_writes, effective_balance, epoch_committees,
+        inactivity_updates, list_writes, pending_consolidations, pending_deposits, registry_rows,
+        registry_update, rewards_penalties, single_pass_step, slashings_penalty,
+    },
 };
 use itertools::izip;
-use milhouse::{Cow, List, Vector};
+use milhouse::{AnyListIter, AnyListIterCow, Cow, List, UpdateMap, Vector};
 use safe_arith::{SafeArith, SafeArithIter};
-use std::cmp::{max, min};
+use std::cmp::max;
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
+use swap_or_not_shuffle::Sha256Hash;
 use tracing::instrument;
 use typenum::Unsigned;
 use types::{
-    ActivationQueue, BeaconState, BeaconStateError, BuilderPendingPayment, ChainSpec, Checkpoint,
-    CommitteeCache, DepositData, Epoch, EthSpec, ExitCache, ForkName, ParticipationFlags,
-    PendingDeposit, ProgressiveBalancesCache, RelativeEpoch, Validator,
-    consts::altair::{
-        NUM_FLAG_INDICES, PARTICIPATION_FLAG_WEIGHTS, TIMELY_HEAD_FLAG_INDEX,
-        TIMELY_TARGET_FLAG_INDEX, WEIGHT_DENOMINATOR,
-    },
+    ActivationQueue, BeaconState, BeaconStateError, BuilderPendingPayment,
+    BuilderPendingWithdrawal, ChainSpec, CommitteeCache, DepositData, Domain, Epoch, EpochCache,
+    EthSpec, ExitCache, ForkName, ParticipationFlags, PendingDeposit, ProgressiveBalancesCache,
+    RelativeEpoch, Validator,
+    consts::altair::{TIMELY_HEAD_FLAG_INDEX, TIMELY_SOURCE_FLAG_INDEX, TIMELY_TARGET_FLAG_INDEX},
 };
 
 pub struct SinglePassConfig {
@@ -80,7 +80,6 @@ impl SinglePassConfig {
 struct StateContext {
     current_epoch: Epoch,
     next_epoch: Epoch,
-    finalized_checkpoint: Checkpoint,
     is_in_inactivity_leak: bool,
     total_active_balance: u64,
     churn_limit: u64,
@@ -88,7 +87,9 @@ struct StateContext {
 }
 
 struct RewardsAndPenaltiesContext {
-    unslashed_participating_increments_array: [u64; NUM_FLAG_INDICES],
+    source_increments: u64,
+    target_increments: u64,
+    head_increments: u64,
     active_increments: u64,
 }
 
@@ -177,7 +178,6 @@ pub fn process_epoch_single_pass<E: EthSpec>(
     let state_ctxt = &StateContext {
         current_epoch,
         next_epoch,
-        finalized_checkpoint,
         is_in_inactivity_leak,
         total_active_balance,
         churn_limit,
@@ -239,125 +239,204 @@ pub fn process_epoch_single_pass<E: EthSpec>(
     };
     let effective_balances_ctxt = &EffectiveBalancesContext::new(spec)?;
 
-    // Iterate over the validators and related fields in one pass.
-    let mut validators_iter = validators.iter_cow();
-    let mut balances_iter = balances.iter_cow();
-    let mut inactivity_scores_iter = inactivity_scores.iter_cow();
-
-    for (index, &previous_epoch_participation, &current_epoch_participation) in izip!(
-        0..num_validators,
-        previous_epoch_participation.iter(),
-        current_epoch_participation.iter(),
-    ) {
-        let (_, mut validator) = validators_iter
-            .next_cow()
-            .ok_or(BeaconStateError::UnknownValidator(index))?;
-        let (_, mut balance) = balances_iter
-            .next_cow()
-            .ok_or(BeaconStateError::UnknownValidator(index))?;
-        let (_, mut inactivity_score) = inactivity_scores_iter
-            .next_cow()
-            .ok_or(BeaconStateError::UnknownValidator(index))?;
-
-        let is_active_current_epoch = validator.is_active_at(current_epoch);
-        let is_active_previous_epoch = validator.is_active_at(previous_epoch);
-        let is_eligible = is_active_previous_epoch
-            || (validator.slashed && previous_epoch.safe_add(1)? < validator.withdrawable_epoch);
-
-        let base_reward = if is_eligible {
-            epoch_cache.get_base_reward(index)?
-        } else {
-            0
+    // After Electra, `single_pass_step` runs the first four steps for each validator.
+    let single_pass_step_ctxt = if fork_name.electra_enabled() {
+        let step_ctxt = single_pass_step::StepContext {
+            current_epoch: current_epoch.as_u64(),
+            previous_epoch: previous_epoch.as_u64(),
+            finalized_epoch: finalized_checkpoint.epoch.as_u64(),
+            is_in_inactivity_leak,
+            inactivity_score_bias: spec.inactivity_score_bias,
+            inactivity_score_recovery_rate: spec.inactivity_score_recovery_rate,
+            inactivity_penalty_quotient: spec.inactivity_penalty_quotient_for_fork(fork_name),
+            source_increments: rewards_ctxt.source_increments,
+            target_increments: rewards_ctxt.target_increments,
+            head_increments: rewards_ctxt.head_increments,
+            active_increments: rewards_ctxt.active_increments,
+            total_active_balance,
+            target_withdrawable_epoch: slashings_ctxt.target_withdrawable_epoch.as_u64(),
+            adjusted_total_slashing_balance: slashings_ctxt.adjusted_total_slashing_balance,
+            penalty_per_effective_balance_increment: slashings_ctxt
+                .penalty_per_effective_balance_increment,
+            effective_balance_increment: spec.effective_balance_increment,
+            downward_threshold: effective_balances_ctxt.downward_threshold,
+            upward_threshold: effective_balances_ctxt.upward_threshold,
+            after_genesis: current_epoch != E::genesis_epoch(),
+            inactivity_updates: conf.inactivity_updates,
+            rewards_and_penalties: conf.rewards_and_penalties,
+            registry_updates: conf.registry_updates,
+            slashings: conf.slashings,
+            pending_deposits: pending_deposits_ctxt.is_some(),
+            effective_balance_updates: conf.effective_balance_updates,
         };
+        Some((step_ctxt, registry_constants(fork_name, spec)))
+    } else {
+        None
+    };
 
-        let validator_info = &ValidatorInfo {
-            index,
-            effective_balance: validator.effective_balance,
-            base_reward,
-            is_eligible,
-            is_slashed: validator.slashed,
-            is_active_current_epoch,
-            is_active_previous_epoch,
+    if let Some((step_ctxt, registry_constants)) = &single_pass_step_ctxt {
+        let churn = single_pass_step::ExitChurn {
+            earliest_exit_epoch: earliest_exit_epoch
+                .ok_or(Error::MissingEarliestExitEpoch)?
+                .as_u64(),
+            exit_balance_to_consume: exit_balance_to_consume
+                .ok_or(Error::MissingExitBalanceToConsume)?,
+        };
+        let previous_epoch_participation = previous_epoch_participation.iter();
+        let current_epoch_participation = current_epoch_participation.iter();
+        let len = num_validators
+            .min(previous_epoch_participation.len())
+            .min(current_epoch_participation.len());
+        let mut rows = StateRows {
+            len,
+            validators: validators.iter_cow(),
+            balances: balances.iter_cow(),
+            inactivity_scores: inactivity_scores.iter_cow(),
             previous_epoch_participation,
             current_epoch_participation,
+            epoch_cache,
+            exit_cache,
+            progressive_balances,
+            next_epoch_cache: &mut next_epoch_cache,
+            deposits: pending_deposits_ctxt
+                .as_ref()
+                .map(|ctxt| &ctxt.validator_deposits_to_process),
+            validators_in_consolidations: &validators_in_consolidations,
+            state_ctxt,
+            spec,
+            effective_balance_updates: conf.effective_balance_updates,
         };
+        let churn =
+            registry_rows::single_pass_rows(&mut rows, churn, step_ctxt, registry_constants)?;
+        earliest_exit_epoch = Some(Epoch::new(churn.earliest_exit_epoch));
+        exit_balance_to_consume = Some(churn.exit_balance_to_consume);
+    } else {
+        // Iterate over the validators and related fields in one pass.
+        let mut validators_iter = validators.iter_cow();
+        let mut balances_iter = balances.iter_cow();
+        let mut inactivity_scores_iter = inactivity_scores.iter_cow();
 
-        if current_epoch != E::genesis_epoch() {
-            // `process_inactivity_updates`
-            if conf.inactivity_updates {
-                process_single_inactivity_update(
-                    &mut inactivity_score,
-                    validator_info,
-                    state_ctxt,
-                    spec,
-                )?;
-            }
+        for (index, &previous_epoch_participation, &current_epoch_participation) in izip!(
+            0..num_validators,
+            previous_epoch_participation.iter(),
+            current_epoch_participation.iter(),
+        ) {
+            let (_, mut validator) = validators_iter
+                .next_cow()
+                .ok_or(BeaconStateError::UnknownValidator(index))?;
+            let (_, mut balance) = balances_iter
+                .next_cow()
+                .ok_or(BeaconStateError::UnknownValidator(index))?;
+            let (_, mut inactivity_score) = inactivity_scores_iter
+                .next_cow()
+                .ok_or(BeaconStateError::UnknownValidator(index))?;
 
-            // `process_rewards_and_penalties`
-            if conf.rewards_and_penalties {
-                process_single_reward_and_penalty(
-                    &mut balance,
-                    &inactivity_score,
-                    validator_info,
-                    rewards_ctxt,
-                    state_ctxt,
-                    spec,
-                )?;
-            }
-        }
+            let is_active_current_epoch = validator.is_active_at(current_epoch);
+            let is_active_previous_epoch = validator.is_active_at(previous_epoch);
+            let is_eligible = is_active_previous_epoch
+                || (validator.slashed
+                    && previous_epoch.safe_add(1)? < validator.withdrawable_epoch);
 
-        // `process_registry_updates`
-        if conf.registry_updates {
-            let activation_queue_refs = activation_queues
-                .as_mut()
-                .map(|(current_queue, next_queue)| (&*current_queue, next_queue));
-            process_single_registry_update(
-                &mut validator,
-                validator_info,
-                exit_cache,
-                activation_queue_refs,
-                state_ctxt,
-                earliest_exit_epoch.as_mut(),
-                exit_balance_to_consume.as_mut(),
-                spec,
-            )?;
-        }
-
-        // `process_slashings`
-        if conf.slashings {
-            process_single_slashing(&mut balance, &validator, slashings_ctxt, state_ctxt, spec)?;
-        }
-
-        // `process_pending_deposits`
-        if let Some(pending_balance_deposits_ctxt) = &pending_deposits_ctxt {
-            process_pending_deposits_for_validator(
-                &mut balance,
-                validator_info,
-                pending_balance_deposits_ctxt,
-            )?;
-        }
-
-        // `process_effective_balance_updates`
-        if conf.effective_balance_updates {
-            if validators_in_consolidations.contains(&validator_info.index) {
-                process_single_dummy_effective_balance_update(
-                    validator_info.index,
-                    &validator,
-                    &mut next_epoch_cache,
-                    state_ctxt,
-                )?;
+            let base_reward = if is_eligible {
+                epoch_cache.get_base_reward(index)?
             } else {
-                process_single_effective_balance_update(
-                    validator_info.index,
-                    *balance,
+                0
+            };
+
+            let validator_info = &ValidatorInfo {
+                index,
+                effective_balance: validator.effective_balance,
+                base_reward,
+                is_eligible,
+                is_slashed: validator.slashed,
+                is_active_current_epoch,
+                is_active_previous_epoch,
+                previous_epoch_participation,
+                current_epoch_participation,
+            };
+
+            if current_epoch != E::genesis_epoch() {
+                // `process_inactivity_updates`
+                if conf.inactivity_updates {
+                    process_single_inactivity_update(
+                        &mut inactivity_score,
+                        validator_info,
+                        state_ctxt,
+                        spec,
+                    )?;
+                }
+
+                // `process_rewards_and_penalties`
+                if conf.rewards_and_penalties {
+                    process_single_reward_and_penalty(
+                        &mut balance,
+                        &inactivity_score,
+                        validator_info,
+                        rewards_ctxt,
+                        state_ctxt,
+                        spec,
+                    )?;
+                }
+            }
+
+            // `process_registry_updates`
+            if conf.registry_updates {
+                let (activation_queue, next_epoch_activation_queue) = activation_queues
+                    .as_mut()
+                    .ok_or(Error::SinglePassMissingActivationQueue)?;
+                process_single_registry_update_pre_electra(
                     &mut validator,
-                    validator_info.current_epoch_participation,
-                    &mut next_epoch_cache,
-                    progressive_balances,
-                    effective_balances_ctxt,
+                    validator_info,
+                    exit_cache,
+                    activation_queue,
+                    next_epoch_activation_queue,
                     state_ctxt,
                     spec,
                 )?;
+            }
+
+            // `process_slashings`
+            if conf.slashings {
+                process_single_slashing(
+                    &mut balance,
+                    &validator,
+                    slashings_ctxt,
+                    state_ctxt,
+                    spec,
+                )?;
+            }
+
+            // `process_pending_deposits`
+            if let Some(pending_balance_deposits_ctxt) = &pending_deposits_ctxt {
+                process_pending_deposits_for_validator(
+                    &mut balance,
+                    validator_info,
+                    pending_balance_deposits_ctxt,
+                )?;
+            }
+
+            // `process_effective_balance_updates`
+            if conf.effective_balance_updates {
+                if validators_in_consolidations.contains(&validator_info.index) {
+                    process_single_dummy_effective_balance_update(
+                        validator_info.index,
+                        &validator,
+                        &mut next_epoch_cache,
+                        state_ctxt,
+                    )?;
+                } else {
+                    process_single_effective_balance_update(
+                        validator_info.index,
+                        *balance,
+                        &mut validator,
+                        validator_info.current_epoch_participation,
+                        &mut next_epoch_cache,
+                        progressive_balances,
+                        effective_balances_ctxt,
+                        state_ctxt,
+                        spec,
+                    )?;
+                }
             }
         }
     }
@@ -379,80 +458,21 @@ pub fn process_epoch_single_pass<E: EthSpec>(
     // of the `pending_deposits` list. But we may as well preserve the write ordering used
     // by the spec and do this first.
     if let Some(ctxt) = pending_deposits_ctxt {
-        let mut new_balance_deposits: Vec<PendingDeposit> = state
-            .pending_deposits()?
-            .iter_from(ctxt.next_deposit_index)?
-            .cloned()
-            .collect();
-        for deposit in ctxt.deposits_to_postpone {
-            new_balance_deposits.push(deposit);
-        }
-        state.set_pending_deposits_from_iter(new_balance_deposits)?;
-        *state.deposit_balance_to_consume_mut()? = ctxt.deposit_balance_to_consume;
-
-        // `new_validator_deposits` may contain multiple deposits with the same pubkey where
-        // the first deposit creates the new validator and the others are topups.
-        // Each item in the vec is a (pubkey, validator_index)
-        let mut added_validators = Vec::new();
-        for deposit in ctxt.new_validator_deposits {
-            let deposit_data = DepositData {
-                pubkey: deposit.pubkey,
-                withdrawal_credentials: deposit.withdrawal_credentials,
-                amount: deposit.amount,
-                signature: deposit.signature,
-            };
-            // Only check the signature if this is the first deposit for the validator,
-            // following the logic from `apply_pending_deposit` in the spec.
-            if let Some(validator_index) = state.get_validator_index(&deposit_data.pubkey)? {
-                state
-                    .get_balance_mut(validator_index)?
-                    .safe_add_assign(deposit_data.amount)?;
-            } else if is_valid_deposit_signature(&deposit_data, spec).is_ok() {
-                // Apply the new deposit to the state
-                let validator_index = state.add_validator_to_registry(
-                    deposit_data.pubkey,
-                    deposit_data.withdrawal_credentials,
-                    deposit_data.amount,
-                    spec,
-                )?;
-                added_validators.push((deposit_data.pubkey, validator_index));
-            }
-        }
-        if conf.effective_balance_updates {
-            // Re-process effective balance updates for validators affected by top-up of new validators.
-            let (
-                mut validators,
-                balances,
-                _,
-                current_epoch_participation,
-                _,
-                progressive_balances,
-                _,
-                _,
-            ) = state.mutable_validator_fields()?;
-            for (_, validator_index) in added_validators.iter() {
-                let balance = *balances
-                    .get(*validator_index)
-                    .ok_or(BeaconStateError::UnknownValidator(*validator_index))?;
-                let mut validator = validators
-                    .get_cow(*validator_index)
-                    .ok_or(BeaconStateError::UnknownValidator(*validator_index))?;
-                let validator_current_epoch_participation = *current_epoch_participation
-                    .get(*validator_index)
-                    .ok_or(BeaconStateError::UnknownValidator(*validator_index))?;
-                process_single_effective_balance_update(
-                    *validator_index,
-                    balance,
-                    &mut validator,
-                    validator_current_epoch_participation,
-                    &mut next_epoch_cache,
-                    progressive_balances,
-                    effective_balances_ctxt,
-                    state_ctxt,
-                    spec,
-                )?;
-            }
-        }
+        let mut deposits = StateDeposits {
+            state,
+            postponed: ctxt.deposits_to_postpone,
+            next_epoch_cache: &mut next_epoch_cache,
+            effective_balances_ctxt,
+            state_ctxt,
+            spec,
+        };
+        deposit_writes::apply_deposit_writes(
+            &mut deposits,
+            ctxt.next_deposit_index,
+            ctxt.deposit_balance_to_consume,
+            &ctxt.new_validator_deposits,
+            conf.effective_balance_updates,
+        )?;
     }
 
     // Process consolidations outside the single-pass loop, as they depend on balances for multiple
@@ -507,29 +527,55 @@ pub fn process_proposer_lookahead<E: EthSpec>(
     state: &mut BeaconState<E>,
     spec: &ChainSpec,
 ) -> Result<(), Error> {
-    let mut lookahead = state.proposer_lookahead()?.clone().to_vec();
-
-    // Shift out proposers in the first epoch
-    lookahead.copy_within((E::slots_per_epoch() as usize).., 0);
+    let lookahead = state.proposer_lookahead()?.clone().to_vec();
 
     let next_epoch = state
         .current_epoch()
         .safe_add(spec.min_seed_lookahead.as_u64())?
         .safe_add(1)?;
-    let last_epoch_proposers = state.get_beacon_proposer_indices(next_epoch, spec)?;
 
-    // Fill in the last epoch with new proposer indices
-    let last_epoch_start = E::proposer_lookahead_slots().safe_sub(E::slots_per_epoch() as usize)?;
-    for (i, proposer) in last_epoch_proposers.into_iter().enumerate() {
-        let index = last_epoch_start.safe_add(i)?;
-        *lookahead
-            .get_mut(index)
-            .ok_or(Error::ProposerLookaheadOutOfBounds(index))? = proposer as u64;
-    }
+    // Shift out proposers in the first epoch and fill in the last epoch. Post-Gloas, slashed
+    // validators are excluded from proposer selection.
+    let exclude_slashed = state.fork_name_unchecked().gloas_enabled();
+    let indices: Vec<usize> = state
+        .validators()
+        .iter()
+        .enumerate()
+        .filter(|(_, validator)| {
+            validator.is_active_at(next_epoch) && !(exclude_slashed && validator.slashed)
+        })
+        .map(|(index, _)| index)
+        .collect();
+    let mix = *state.get_seed_mix(next_epoch, spec)?;
+    let lookahead = epoch_committees::next_proposer_lookahead::<Sha256Hash, _>(
+        &*state,
+        &lookahead,
+        &indices,
+        &spec
+            .get_domain_constant(Domain::BeaconProposer)
+            .to_le_bytes(),
+        next_epoch.as_u64(),
+        &mix.0,
+        next_epoch.start_slot(E::slots_per_epoch()).as_u64(),
+        &selection_constants(state, spec),
+    )
+    .map_err(BeaconStateError::from)?;
 
     *state.proposer_lookahead_mut()? = Vector::new(lookahead)?;
 
     Ok(())
+}
+
+/// The chain constants of the balance-weighted selection.
+pub(crate) fn selection_constants<E: EthSpec>(
+    state: &BeaconState<E>,
+    spec: &ChainSpec,
+) -> epoch_committees::SelectionConstants {
+    epoch_committees::SelectionConstants {
+        shuffle_round_count: spec.shuffle_round_count,
+        max_effective_balance: spec.max_effective_balance_for_fork(state.fork_name_unchecked()),
+        slots_per_epoch: E::slots_per_epoch(),
+    }
 }
 
 /// Process the PTC window, returning the committee cache built for the lookahead epoch.
@@ -542,15 +588,6 @@ pub fn process_ptc_window<E: EthSpec>(
 ) -> Result<Arc<CommitteeCache>, Error> {
     let slots_per_epoch = E::slots_per_epoch() as usize;
 
-    // Convert Vector -> List to use tree-efficient pop_front.
-    let ptc_window = state.ptc_window()?.clone();
-    let mut window: List<_, E::PtcWindowLength> = List::from(ptc_window);
-
-    // Drop the oldest epoch from the front (reuses shared tree nodes).
-    window
-        .pop_front(slots_per_epoch)
-        .map_err(|e| Error::BeaconStateError(BeaconStateError::MilhouseError(e)))?;
-
     // Compute PTC for the new lookahead epoch
     let next_epoch = state
         .current_epoch()
@@ -561,36 +598,35 @@ pub fn process_ptc_window<E: EthSpec>(
     // Build a committee cache for the lookahead epoch (beyond the normal Next bound)
     let committee_cache = state.initialize_committee_cache_for_lookahead(next_epoch, spec)?;
 
+    let mut committees = Vec::with_capacity(slots_per_epoch);
     for i in 0..slots_per_epoch {
         let slot = start_slot.safe_add(i as u64)?;
-        let ptc = state.compute_ptc_with_cache(slot, &committee_cache, spec)?;
-        let ptc_u64: Vec<u64> = ptc.into_iter().map(|v| v as u64).collect();
-        let entry = ssz_types::FixedVector::new(ptc_u64)
-            .map_err(|e| Error::BeaconStateError(BeaconStateError::SszTypesError(e)))?;
-        window
-            .push(entry)
-            .map_err(|e| Error::BeaconStateError(BeaconStateError::MilhouseError(e)))?;
+        let committee_indices: Vec<usize> = committee_cache
+            .get_beacon_committees_at_slot(slot)?
+            .iter()
+            .flat_map(|committee| committee.committee.iter().copied())
+            .collect();
+        committees.push(committee_indices);
     }
+    let mix = *state.get_seed_mix(next_epoch, spec)?;
+    let ptcs = epoch_committees::ptc_for_epoch::<Sha256Hash, _>(
+        &*state,
+        &committees,
+        &spec.get_domain_constant(Domain::PTCAttester).to_le_bytes(),
+        next_epoch.as_u64(),
+        &mix.0,
+        start_slot.as_u64(),
+        E::ptc_size(),
+        &selection_constants(state, spec),
+    )
+    .map_err(BeaconStateError::from)?;
 
-    // Convert List back to Vector.
-    *state.ptc_window_mut()? = Vector::try_from(window)
-        .map_err(|e| Error::BeaconStateError(BeaconStateError::MilhouseError(e)))?;
+    // Convert Vector -> List to use tree-efficient pop_front.
+    let window = List::from(state.ptc_window()?.clone());
+    let mut window = PtcWindowWrites { state, window };
+    list_writes::shift_window(&mut window, slots_per_epoch, &ptcs)?;
 
     Ok(committee_cache)
-}
-
-/// Calculate the quorum threshold for builder payments based on total active balance.
-fn get_builder_payment_quorum_threshold<E: EthSpec>(
-    state_ctxt: &StateContext,
-    spec: &ChainSpec,
-) -> Result<u64, Error> {
-    let per_slot_balance = state_ctxt
-        .total_active_balance
-        .safe_div(E::slots_per_epoch())?;
-    let quorum = per_slot_balance.safe_mul(spec.builder_payment_threshold_numerator)?;
-    quorum
-        .safe_div(spec.builder_payment_threshold_denominator)
-        .map_err(Error::from)
 }
 
 /// Processes the builder pending payments from the previous epoch.
@@ -599,36 +635,81 @@ fn process_builder_pending_payments<E: EthSpec>(
     state_ctxt: &StateContext,
     spec: &ChainSpec,
 ) -> Result<(), Error> {
-    let quorum = get_builder_payment_quorum_threshold::<E>(state_ctxt, spec)?;
+    list_writes::apply_builder_pending_payments(
+        &mut StateBuilderPayments { state },
+        state_ctxt.total_active_balance,
+        E::slots_per_epoch(),
+        E::SlotsPerEpoch::to_usize(),
+        spec.builder_payment_threshold_numerator,
+        spec.builder_payment_threshold_denominator,
+    )?;
+    Ok(())
+}
 
-    // Collect qualifying payments and append to `builder_pending_withdrawals`.
-    // We use this pattern rather than a loop to avoid multiple borrows of the state's fields.
-    let new_pending_builder_withdrawals = state
-        .builder_pending_payments()?
-        .iter()
-        .take(E::SlotsPerEpoch::to_usize())
-        .filter(|payment| payment.weight >= quorum)
-        .map(|payment| payment.withdrawal.clone())
-        .collect::<Vec<_>>();
-    for payment_withdrawal in new_pending_builder_withdrawals {
-        state
-            .builder_pending_withdrawals_mut()?
-            .push(payment_withdrawal)?;
+impl From<list_writes::ListWritesError<Error>> for Error {
+    fn from(e: list_writes::ListWritesError<Error>) -> Error {
+        match e {
+            list_writes::ListWritesError::Arith(e) => e.into(),
+            list_writes::ListWritesError::State(e) => e,
+        }
+    }
+}
+
+/// The builder payment lists that `list_writes::apply_builder_pending_payments` writes.
+struct StateBuilderPayments<'a, E: EthSpec> {
+    state: &'a mut BeaconState<E>,
+}
+
+impl<E: EthSpec> list_writes::BuilderPaymentWrites<Error> for StateBuilderPayments<'_, E> {
+    fn payments(&self) -> Result<Vec<BuilderPendingPayment>, Error> {
+        Ok(self
+            .state
+            .builder_pending_payments()?
+            .iter()
+            .cloned()
+            .collect())
     }
 
-    // NOTE: this could be a little more memory-efficient with some juggling to reuse parts
-    // of the persistent tree (could convert to list, use pop_front, convert back).
-    let updated_payments = state
-        .builder_pending_payments()?
-        .iter()
-        .skip(E::SlotsPerEpoch::to_usize())
-        .cloned()
-        .chain((0..E::SlotsPerEpoch::to_usize()).map(|_| BuilderPendingPayment::default()))
-        .collect::<Vec<_>>();
+    fn push_withdrawal(&mut self, withdrawal: BuilderPendingWithdrawal) -> Result<(), Error> {
+        self.state
+            .builder_pending_withdrawals_mut()?
+            .push(withdrawal)?;
+        Ok(())
+    }
 
-    *state.builder_pending_payments_mut()? = Vector::new(updated_payments)?;
+    fn set_payments(&mut self, payments: Vec<BuilderPendingPayment>) -> Result<(), Error> {
+        *self.state.builder_pending_payments_mut()? = Vector::new(payments)?;
+        Ok(())
+    }
+}
 
-    Ok(())
+/// The PTC window that `list_writes::shift_window` shifts, as a list until `commit`.
+struct PtcWindowWrites<'a, E: EthSpec> {
+    state: &'a mut BeaconState<E>,
+    window: List<ssz_types::FixedVector<u64, E::PTCSize>, E::PtcWindowLength>,
+}
+
+impl<E: EthSpec> list_writes::WindowWrites<Vec<usize>, Error> for PtcWindowWrites<'_, E> {
+    fn pop_front(&mut self, n: usize) -> Result<(), Error> {
+        self.window
+            .pop_front(n)
+            .map_err(|e| Error::BeaconStateError(BeaconStateError::MilhouseError(e)))
+    }
+
+    fn push(&mut self, item: &Vec<usize>) -> Result<(), Error> {
+        let ptc_u64: Vec<u64> = item.iter().map(|&v| v as u64).collect();
+        let entry = ssz_types::FixedVector::new(ptc_u64)
+            .map_err(|e| Error::BeaconStateError(BeaconStateError::SszTypesError(e)))?;
+        self.window
+            .push(entry)
+            .map_err(|e| Error::BeaconStateError(BeaconStateError::MilhouseError(e)))
+    }
+
+    fn commit(&mut self) -> Result<(), Error> {
+        *self.state.ptc_window_mut()? = Vector::try_from(self.window.clone())
+            .map_err(|e| Error::BeaconStateError(BeaconStateError::MilhouseError(e)))?;
+        Ok(())
+    }
 }
 
 fn process_single_inactivity_update(
@@ -637,28 +718,18 @@ fn process_single_inactivity_update(
     state_ctxt: &StateContext,
     spec: &ChainSpec,
 ) -> Result<(), Error> {
-    if !validator_info.is_eligible {
-        return Ok(());
-    }
+    let new_inactivity_score = inactivity_updates::new_inactivity_score(
+        **inactivity_score,
+        validator_info.is_eligible,
+        validator_info.is_unslashed_participating_index(TIMELY_TARGET_FLAG_INDEX)?,
+        state_ctxt.is_in_inactivity_leak,
+        spec.inactivity_score_bias,
+        spec.inactivity_score_recovery_rate,
+    )?;
 
-    // Increase inactivity score of inactive validators
-    if validator_info.is_unslashed_participating_index(TIMELY_TARGET_FLAG_INDEX)? {
-        // Avoid mutating when the inactivity score is 0 and can't go any lower -- the common
-        // case.
-        if **inactivity_score == 0 {
-            return Ok(());
-        }
-        inactivity_score.make_mut()?.safe_sub_assign(1)?;
-    } else {
-        inactivity_score
-            .make_mut()?
-            .safe_add_assign(spec.inactivity_score_bias)?;
-    }
-
-    // Decrease the score of all validators for forgiveness when not during a leak
-    if !state_ctxt.is_in_inactivity_leak {
-        let deduction = min(spec.inactivity_score_recovery_rate, **inactivity_score);
-        inactivity_score.make_mut()?.safe_sub_assign(deduction)?;
+    // Only mutate when the score changes. It does not change in the common case.
+    if new_inactivity_score != **inactivity_score {
+        *inactivity_score.make_mut()? = new_inactivity_score;
     }
 
     Ok(())
@@ -672,162 +743,63 @@ fn process_single_reward_and_penalty(
     state_ctxt: &StateContext,
     spec: &ChainSpec,
 ) -> Result<(), Error> {
-    if !validator_info.is_eligible {
-        return Ok(());
-    }
-
-    let mut delta = Delta::default();
-    for flag_index in 0..NUM_FLAG_INDICES {
-        get_flag_index_delta(
-            &mut delta,
-            validator_info,
-            flag_index,
-            rewards_ctxt,
-            state_ctxt,
-        )?;
-    }
-    get_inactivity_penalty_delta(
-        &mut delta,
-        validator_info,
-        inactivity_score,
-        state_ctxt,
-        spec,
+    let new_balance = rewards_penalties::new_balance_after_rewards(
+        **balance,
+        validator_info.is_eligible,
+        validator_info.base_reward,
+        validator_info.effective_balance,
+        *inactivity_score,
+        validator_info.is_unslashed_participating_index(TIMELY_SOURCE_FLAG_INDEX)?,
+        validator_info.is_unslashed_participating_index(TIMELY_TARGET_FLAG_INDEX)?,
+        validator_info.is_unslashed_participating_index(TIMELY_HEAD_FLAG_INDEX)?,
+        state_ctxt.is_in_inactivity_leak,
+        rewards_ctxt.get_unslashed_participating_increments(TIMELY_SOURCE_FLAG_INDEX)?,
+        rewards_ctxt.get_unslashed_participating_increments(TIMELY_TARGET_FLAG_INDEX)?,
+        rewards_ctxt.get_unslashed_participating_increments(TIMELY_HEAD_FLAG_INDEX)?,
+        rewards_ctxt.active_increments,
+        spec.inactivity_score_bias,
+        spec.inactivity_penalty_quotient_for_fork(state_ctxt.fork_name),
     )?;
-
-    if delta.rewards != 0 || delta.penalties != 0 {
-        let balance = balance.make_mut()?;
-        balance.safe_add_assign(delta.rewards)?;
-        *balance = balance.saturating_sub(delta.penalties);
-    }
-
-    Ok(())
-}
-
-fn get_flag_index_delta(
-    delta: &mut Delta,
-    validator_info: &ValidatorInfo,
-    flag_index: usize,
-    rewards_ctxt: &RewardsAndPenaltiesContext,
-    state_ctxt: &StateContext,
-) -> Result<(), Error> {
-    let base_reward = validator_info.base_reward;
-    let weight = get_flag_weight(flag_index)?;
-    let unslashed_participating_increments =
-        rewards_ctxt.get_unslashed_participating_increments(flag_index)?;
-
-    if validator_info.is_unslashed_participating_index(flag_index)? {
-        if !state_ctxt.is_in_inactivity_leak {
-            let reward_numerator = base_reward
-                .safe_mul(weight)?
-                .safe_mul(unslashed_participating_increments)?;
-            delta.reward(
-                reward_numerator.safe_div(
-                    rewards_ctxt
-                        .active_increments
-                        .safe_mul(WEIGHT_DENOMINATOR)?,
-                )?,
-            )?;
-        }
-    } else if flag_index != TIMELY_HEAD_FLAG_INDEX {
-        delta.penalize(base_reward.safe_mul(weight)?.safe_div(WEIGHT_DENOMINATOR)?)?;
+    if new_balance != **balance {
+        *balance.make_mut()? = new_balance;
     }
     Ok(())
 }
 
 /// Get the weight for a `flag_index` from the constant list of all weights.
-fn get_flag_weight(flag_index: usize) -> Result<u64, Error> {
-    PARTICIPATION_FLAG_WEIGHTS
-        .get(flag_index)
-        .copied()
-        .ok_or(Error::InvalidFlagIndex(flag_index))
-}
-
-fn get_inactivity_penalty_delta(
-    delta: &mut Delta,
-    validator_info: &ValidatorInfo,
-    inactivity_score: &u64,
-    state_ctxt: &StateContext,
-    spec: &ChainSpec,
-) -> Result<(), Error> {
-    if !validator_info.is_unslashed_participating_index(TIMELY_TARGET_FLAG_INDEX)? {
-        let penalty_numerator = validator_info
-            .effective_balance
-            .safe_mul(*inactivity_score)?;
-        let penalty_denominator = spec
-            .inactivity_score_bias
-            .safe_mul(spec.inactivity_penalty_quotient_for_fork(state_ctxt.fork_name))?;
-        delta.penalize(penalty_numerator.safe_div(penalty_denominator)?)?;
-    }
-    Ok(())
-}
-
 impl RewardsAndPenaltiesContext {
     fn new(
         progressive_balances: &ProgressiveBalancesCache,
         state_ctxt: &StateContext,
         spec: &ChainSpec,
     ) -> Result<Self, Error> {
-        let mut unslashed_participating_increments_array = [0; NUM_FLAG_INDICES];
-        for flag_index in 0..NUM_FLAG_INDICES {
-            let unslashed_participating_balance =
-                progressive_balances.previous_epoch_flag_attesting_balance(flag_index)?;
-            let unslashed_participating_increments =
-                unslashed_participating_balance.safe_div(spec.effective_balance_increment)?;
-
-            *unslashed_participating_increments_array
-                .get_mut(flag_index)
-                .ok_or(Error::InvalidFlagIndex(flag_index))? = unslashed_participating_increments;
-        }
-        let active_increments = state_ctxt
-            .total_active_balance
-            .safe_div(spec.effective_balance_increment)?;
+        let (source_increments, target_increments, head_increments, active_increments) =
+            rewards_penalties::participation_increments(
+                progressive_balances
+                    .previous_epoch_flag_attesting_balance(TIMELY_SOURCE_FLAG_INDEX)?,
+                progressive_balances
+                    .previous_epoch_flag_attesting_balance(TIMELY_TARGET_FLAG_INDEX)?,
+                progressive_balances
+                    .previous_epoch_flag_attesting_balance(TIMELY_HEAD_FLAG_INDEX)?,
+                state_ctxt.total_active_balance,
+                spec.effective_balance_increment,
+            )?;
 
         Ok(Self {
-            unslashed_participating_increments_array,
+            source_increments,
+            target_increments,
+            head_increments,
             active_increments,
         })
     }
 
     fn get_unslashed_participating_increments(&self, flag_index: usize) -> Result<u64, Error> {
-        self.unslashed_participating_increments_array
-            .get(flag_index)
-            .copied()
-            .ok_or(Error::InvalidFlagIndex(flag_index))
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn process_single_registry_update(
-    validator: &mut Cow<Validator>,
-    validator_info: &ValidatorInfo,
-    exit_cache: &mut ExitCache,
-    activation_queues: Option<(&BTreeSet<usize>, &mut ActivationQueue)>,
-    state_ctxt: &StateContext,
-    earliest_exit_epoch: Option<&mut Epoch>,
-    exit_balance_to_consume: Option<&mut u64>,
-    spec: &ChainSpec,
-) -> Result<(), Error> {
-    if !state_ctxt.fork_name.electra_enabled() {
-        let (activation_queue, next_epoch_activation_queue) =
-            activation_queues.ok_or(Error::SinglePassMissingActivationQueue)?;
-        process_single_registry_update_pre_electra(
-            validator,
-            validator_info,
-            exit_cache,
-            activation_queue,
-            next_epoch_activation_queue,
-            state_ctxt,
-            spec,
-        )
-    } else {
-        process_single_registry_update_post_electra(
-            validator,
-            exit_cache,
-            state_ctxt,
-            earliest_exit_epoch.ok_or(Error::MissingEarliestExitEpoch)?,
-            exit_balance_to_consume.ok_or(Error::MissingExitBalanceToConsume)?,
-            spec,
-        )
+        match flag_index {
+            TIMELY_SOURCE_FLAG_INDEX => Ok(self.source_increments),
+            TIMELY_TARGET_FLAG_INDEX => Ok(self.target_increments),
+            TIMELY_HEAD_FLAG_INDEX => Ok(self.head_increments),
+            _ => Err(Error::InvalidFlagIndex(flag_index)),
+        }
     }
 }
 
@@ -867,40 +839,341 @@ fn process_single_registry_update_pre_electra(
     Ok(())
 }
 
-fn process_single_registry_update_post_electra(
-    validator: &mut Cow<Validator>,
-    exit_cache: &mut ExitCache,
-    state_ctxt: &StateContext,
-    earliest_exit_epoch: &mut Epoch,
-    exit_balance_to_consume: &mut u64,
-    spec: &ChainSpec,
-) -> Result<(), Error> {
-    let current_epoch = state_ctxt.current_epoch;
+fn registry_constants(fork_name: ForkName, spec: &ChainSpec) -> registry_update::RegistryConstants {
+    let gloas = fork_name.gloas_enabled();
+    registry_update::RegistryConstants {
+        far_future_epoch: spec.far_future_epoch.as_u64(),
+        min_activation_balance: spec.min_activation_balance,
+        ejection_balance: spec.ejection_balance,
+        max_seed_lookahead: spec.max_seed_lookahead.as_u64(),
+        min_validator_withdrawability_delay: spec.min_validator_withdrawability_delay.as_u64(),
+        min_per_epoch_churn_limit: spec.min_per_epoch_churn_limit_electra,
+        churn_limit_quotient: if gloas {
+            spec.churn_limit_quotient_gloas
+        } else {
+            spec.churn_limit_quotient
+        },
+        effective_balance_increment: spec.effective_balance_increment,
+        exit_churn_cap: if gloas {
+            u64::MAX
+        } else {
+            spec.max_per_epoch_activation_exit_churn_limit
+        },
+    }
+}
 
-    if validator.is_eligible_for_activation_queue(spec, state_ctxt.fork_name) {
-        validator.make_mut()?.activation_eligibility_epoch = current_epoch.safe_add(1)?;
+/// The constants of the activation churn: `get_activation_churn_limit` after Gloas and
+/// `get_activation_exit_churn_limit` before.
+fn activation_churn_constants(
+    fork_name: ForkName,
+    spec: &ChainSpec,
+) -> registry_update::RegistryConstants {
+    registry_update::RegistryConstants {
+        exit_churn_cap: if fork_name.gloas_enabled() {
+            spec.max_per_epoch_activation_churn_limit_gloas
+        } else {
+            spec.max_per_epoch_activation_exit_churn_limit
+        },
+        ..registry_constants(fork_name, spec)
+    }
+}
+
+/// Writes back the fields that `single_pass_step` changed. Only changed fields are written, so
+/// unchanged tree nodes stay shared.
+fn write_back_row(
+    old: &single_pass_step::ValidatorRow,
+    new: &single_pass_step::ValidatorRow,
+    validator: &mut Cow<Validator>,
+    balance: &mut Cow<u64>,
+    inactivity_score: &mut Cow<u64>,
+    exit_cache: &mut ExitCache,
+) -> Result<(), Error> {
+    if new.inactivity_score != old.inactivity_score {
+        *inactivity_score.make_mut()? = new.inactivity_score;
+    }
+    if new.balance != old.balance {
+        *balance.make_mut()? = new.balance;
+    }
+    if new.activation_eligibility_epoch != old.activation_eligibility_epoch
+        || new.activation_epoch != old.activation_epoch
+        || new.exit_epoch != old.exit_epoch
+        || new.withdrawable_epoch != old.withdrawable_epoch
+    {
+        let validator = validator.make_mut()?;
+        validator.activation_eligibility_epoch = Epoch::new(new.activation_eligibility_epoch);
+        validator.activation_epoch = Epoch::new(new.activation_epoch);
+        validator.exit_epoch = Epoch::new(new.exit_epoch);
+        validator.withdrawable_epoch = Epoch::new(new.withdrawable_epoch);
+    }
+    if new.effective_balance != old.effective_balance {
+        validator.make_mut()?.effective_balance = new.effective_balance;
+    }
+    if new.exit_epoch != old.exit_epoch {
+        exit_cache.record_validator_exit(Epoch::new(new.exit_epoch))?;
+    }
+    Ok(())
+}
+
+/// The validator rows of the state, read and written in index order by
+/// `registry_rows::single_pass_rows`.
+struct StateRows<'a, 'c, VU, BU, IU, PU>
+where
+    VU: UpdateMap<Validator>,
+    BU: UpdateMap<u64>,
+    IU: UpdateMap<u64>,
+    PU: UpdateMap<ParticipationFlags>,
+{
+    len: usize,
+    validators: AnyListIterCow<'a, Validator, VU>,
+    balances: AnyListIterCow<'a, u64, BU>,
+    inactivity_scores: AnyListIterCow<'a, u64, IU>,
+    previous_epoch_participation: AnyListIter<'a, ParticipationFlags, PU>,
+    current_epoch_participation: AnyListIter<'a, ParticipationFlags, PU>,
+    epoch_cache: &'c EpochCache,
+    exit_cache: &'c mut ExitCache,
+    progressive_balances: &'c mut ProgressiveBalancesCache,
+    next_epoch_cache: &'c mut PreEpochCache,
+    deposits: Option<&'c HashMap<usize, u64>>,
+    validators_in_consolidations: &'c BTreeSet<usize>,
+    state_ctxt: &'c StateContext,
+    spec: &'c ChainSpec,
+    effective_balance_updates: bool,
+}
+
+fn rows_error<T, X: Into<Error>>(
+    result: Result<T, X>,
+) -> Result<T, registry_rows::RowsError<Error>> {
+    result.map_err(|e| registry_rows::RowsError::Rows(e.into()))
+}
+
+impl From<registry_rows::RowsError<Error>> for Error {
+    fn from(e: registry_rows::RowsError<Error>) -> Error {
+        match e {
+            registry_rows::RowsError::Step(e) => e.into(),
+            registry_rows::RowsError::Rows(e) => e,
+        }
+    }
+}
+
+impl From<deposit_writes::DepositWritesError<Error>> for Error {
+    fn from(e: deposit_writes::DepositWritesError<Error>) -> Error {
+        match e {
+            deposit_writes::DepositWritesError::Arith(e) => e.into(),
+            deposit_writes::DepositWritesError::State(e) => e,
+        }
+    }
+}
+
+/// The state that `deposit_writes::apply_deposit_writes` writes after the single pass.
+struct StateDeposits<'a, E: EthSpec> {
+    state: &'a mut BeaconState<E>,
+    postponed: Vec<PendingDeposit>,
+    next_epoch_cache: &'a mut PreEpochCache,
+    effective_balances_ctxt: &'a EffectiveBalancesContext,
+    state_ctxt: &'a StateContext,
+    spec: &'a ChainSpec,
+}
+
+impl<E: EthSpec> deposit_writes::DepositWrites<PendingDeposit, Error> for StateDeposits<'_, E> {
+    fn write_queue(
+        &mut self,
+        next_deposit_index: usize,
+        deposit_balance_to_consume: u64,
+    ) -> Result<(), Error> {
+        let mut new_balance_deposits: Vec<PendingDeposit> = self
+            .state
+            .pending_deposits()?
+            .iter_from(next_deposit_index)?
+            .cloned()
+            .collect();
+        new_balance_deposits.append(&mut self.postponed);
+        self.state
+            .set_pending_deposits_from_iter(new_balance_deposits)?;
+        *self.state.deposit_balance_to_consume_mut()? = deposit_balance_to_consume;
+        Ok(())
     }
 
-    if validator.is_active_at(current_epoch) && validator.effective_balance <= spec.ejection_balance
-    {
-        initiate_validator_exit(
-            validator,
-            exit_cache,
-            state_ctxt,
-            Some(earliest_exit_epoch),
-            Some(exit_balance_to_consume),
-            spec,
+    fn validator_index(&mut self, deposit: &PendingDeposit) -> Result<Option<usize>, Error> {
+        Ok(self.state.get_validator_index(&deposit.pubkey)?)
+    }
+
+    fn amount(&self, deposit: &PendingDeposit) -> u64 {
+        deposit.amount
+    }
+
+    fn balance(&self, index: usize) -> Result<u64, Error> {
+        Ok(self.state.get_balance(index)?)
+    }
+
+    fn set_balance(&mut self, index: usize, balance: u64) -> Result<(), Error> {
+        *self.state.get_balance_mut(index)? = balance;
+        Ok(())
+    }
+
+    fn is_valid_signature(&self, deposit: &PendingDeposit) -> bool {
+        let deposit_data = DepositData {
+            pubkey: deposit.pubkey,
+            withdrawal_credentials: deposit.withdrawal_credentials,
+            amount: deposit.amount,
+            signature: deposit.signature.clone(),
+        };
+        is_valid_deposit_signature(&deposit_data, self.spec).is_ok()
+    }
+
+    fn add_validator(&mut self, deposit: &PendingDeposit) -> Result<usize, Error> {
+        Ok(self.state.add_validator_to_registry(
+            deposit.pubkey,
+            deposit.withdrawal_credentials,
+            deposit.amount,
+            self.spec,
+        )?)
+    }
+
+    fn update_effective_balance(&mut self, index: usize) -> Result<(), Error> {
+        update_effective_balance_at(
+            self.state,
+            index,
+            self.next_epoch_cache,
+            self.effective_balances_ctxt,
+            self.state_ctxt,
+            self.spec,
+        )
+    }
+}
+
+impl<VU, BU, IU, PU> registry_rows::RegistryRows<Error> for StateRows<'_, '_, VU, BU, IU, PU>
+where
+    VU: UpdateMap<Validator>,
+    BU: UpdateMap<u64>,
+    IU: UpdateMap<u64>,
+    PU: UpdateMap<ParticipationFlags>,
+{
+    fn row_count(&self) -> usize {
+        self.len
+    }
+
+    fn apply_step(
+        &mut self,
+        index: usize,
+        churn: single_pass_step::ExitChurn,
+        ctx: &single_pass_step::StepContext,
+        constants: &registry_update::RegistryConstants,
+    ) -> Result<single_pass_step::ExitChurn, registry_rows::RowsError<Error>> {
+        let (_, mut validator) = rows_error(
+            self.validators
+                .next_cow()
+                .ok_or(BeaconStateError::UnknownValidator(index)),
+        )?;
+        let (_, mut balance) = rows_error(
+            self.balances
+                .next_cow()
+                .ok_or(BeaconStateError::UnknownValidator(index)),
+        )?;
+        let (_, mut inactivity_score) = rows_error(
+            self.inactivity_scores
+                .next_cow()
+                .ok_or(BeaconStateError::UnknownValidator(index)),
+        )?;
+        let previous_epoch_participation = *rows_error(
+            self.previous_epoch_participation
+                .next()
+                .ok_or(BeaconStateError::UnknownValidator(index)),
+        )?;
+        let current_epoch_participation = *rows_error(
+            self.current_epoch_participation
+                .next()
+                .ok_or(BeaconStateError::UnknownValidator(index)),
+        )?;
+
+        let row = single_pass_step::ValidatorRow {
+            balance: *balance,
+            inactivity_score: *inactivity_score,
+            effective_balance: validator.effective_balance,
+            slashed: validator.slashed,
+            activation_eligibility_epoch: validator.activation_eligibility_epoch.as_u64(),
+            activation_epoch: validator.activation_epoch.as_u64(),
+            exit_epoch: validator.exit_epoch.as_u64(),
+            withdrawable_epoch: validator.withdrawable_epoch.as_u64(),
+            previous_epoch_participation: previous_epoch_participation.into_u8(),
+        };
+        let is_eligible = single_pass_step::is_eligible(&row, ctx.previous_epoch)
+            .map_err(registry_rows::RowsError::Step)?;
+        let base_reward = if is_eligible {
+            rows_error(self.epoch_cache.get_base_reward(index))?
+        } else {
+            0
+        };
+        let in_consolidation = self.validators_in_consolidations.contains(&index);
+        let inputs = single_pass_step::RowInputs {
+            base_reward,
+            deposit: self
+                .deposits
+                .and_then(|deposits| deposits.get(&index).copied())
+                .unwrap_or(0),
+            in_consolidation,
+            effective_balance_limit: validator
+                .get_max_effective_balance(self.spec, self.state_ctxt.fork_name),
+        };
+        let (new_row, new_churn) =
+            single_pass_step::single_pass_step(row, &inputs, churn, ctx, constants)
+                .map_err(registry_rows::RowsError::Step)?;
+        rows_error(write_back_row(
+            &row,
+            &new_row,
+            &mut validator,
+            &mut balance,
+            &mut inactivity_score,
+            self.exit_cache,
+        ))?;
+
+        if self.effective_balance_updates {
+            if in_consolidation {
+                rows_error(process_single_dummy_effective_balance_update(
+                    index,
+                    &validator,
+                    self.next_epoch_cache,
+                    self.state_ctxt,
+                ))?;
+            } else {
+                rows_error(record_effective_balance_update(
+                    index,
+                    row.effective_balance,
+                    &validator,
+                    current_epoch_participation,
+                    self.next_epoch_cache,
+                    self.progressive_balances,
+                    self.state_ctxt,
+                ))?;
+            }
+        }
+        Ok(new_churn)
+    }
+}
+
+/// Updates the caches after `single_pass_step` ran the effective balance update of a validator.
+fn record_effective_balance_update(
+    validator_index: usize,
+    old_effective_balance: u64,
+    validator: &Validator,
+    validator_current_epoch_participation: ParticipationFlags,
+    next_epoch_cache: &mut PreEpochCache,
+    progressive_balances: &mut ProgressiveBalancesCache,
+    state_ctxt: &StateContext,
+) -> Result<(), Error> {
+    let new_effective_balance = validator.effective_balance;
+    if new_effective_balance != old_effective_balance {
+        progressive_balances.on_effective_balance_change(
+            validator.slashed,
+            validator_current_epoch_participation,
+            old_effective_balance,
+            new_effective_balance,
         )?;
     }
-
-    if validator.is_eligible_for_activation_with_finalized_checkpoint(
-        &state_ctxt.finalized_checkpoint,
-        spec,
-    ) {
-        validator.make_mut()?.activation_epoch =
-            spec.compute_activation_exit_epoch(current_epoch)?;
-    }
-
+    next_epoch_cache.update_effective_balance(
+        validator_index,
+        new_effective_balance,
+        validator.is_active_at(state_ctxt.next_epoch),
+    )?;
     Ok(())
 }
 
@@ -1027,24 +1300,22 @@ impl SlashingsContext {
         spec: &ChainSpec,
     ) -> Result<Self, Error> {
         let sum_slashings = state.get_all_slashings().iter().copied().safe_sum()?;
-        let adjusted_total_slashing_balance = min(
-            sum_slashings.safe_mul(state.get_proportional_slashing_multiplier(spec))?,
+        let (
+            adjusted_total_slashing_balance,
+            target_withdrawable_epoch,
+            penalty_per_effective_balance_increment,
+        ) = slashings_penalty::slashings_context(
+            sum_slashings,
+            state.get_proportional_slashing_multiplier(spec),
             state_ctxt.total_active_balance,
-        );
-
-        let target_withdrawable_epoch = state_ctxt
-            .current_epoch
-            .safe_add(E::EpochsPerSlashingsVector::to_u64().safe_div(2)?)?;
-
-        let penalty_per_effective_balance_increment = adjusted_total_slashing_balance.safe_div(
-            state_ctxt
-                .total_active_balance
-                .safe_div(spec.effective_balance_increment)?,
+            state_ctxt.current_epoch.as_u64(),
+            E::EpochsPerSlashingsVector::to_u64(),
+            spec.effective_balance_increment,
         )?;
 
         Ok(Self {
             adjusted_total_slashing_balance,
-            target_withdrawable_epoch,
+            target_withdrawable_epoch: Epoch::new(target_withdrawable_epoch),
             penalty_per_effective_balance_increment,
         })
     }
@@ -1057,24 +1328,20 @@ fn process_single_slashing(
     state_ctxt: &StateContext,
     spec: &ChainSpec,
 ) -> Result<(), Error> {
-    if validator.slashed && slashings_ctxt.target_withdrawable_epoch == validator.withdrawable_epoch
-    {
-        let increment = spec.effective_balance_increment;
-        let penalty = if state_ctxt.fork_name.electra_enabled() {
-            let effective_balance_increments = validator.effective_balance.safe_div(increment)?;
-            slashings_ctxt
-                .penalty_per_effective_balance_increment
-                .safe_mul(effective_balance_increments)?
-        } else {
-            let penalty_numerator = validator
-                .effective_balance
-                .safe_div(increment)?
-                .safe_mul(slashings_ctxt.adjusted_total_slashing_balance)?;
-            penalty_numerator
-                .safe_div(state_ctxt.total_active_balance)?
-                .safe_mul(increment)?
-        };
-        *balance.make_mut()? = balance.saturating_sub(penalty);
+    let new_balance = slashings_penalty::new_balance_after_slashing(
+        **balance,
+        validator.slashed,
+        validator.withdrawable_epoch.as_u64(),
+        validator.effective_balance,
+        slashings_ctxt.target_withdrawable_epoch.as_u64(),
+        slashings_ctxt.adjusted_total_slashing_balance,
+        slashings_ctxt.penalty_per_effective_balance_increment,
+        state_ctxt.total_active_balance,
+        spec.effective_balance_increment,
+        state_ctxt.fork_name.electra_enabled(),
+    )?;
+    if new_balance != **balance {
+        *balance.make_mut()? = new_balance;
     }
     Ok(())
 }
@@ -1085,121 +1352,100 @@ impl PendingDepositsContext {
         spec: &ChainSpec,
         config: &SinglePassConfig,
     ) -> Result<Self, Error> {
-        let available_for_processing = state
-            .deposit_balance_to_consume()?
-            .safe_add(state.get_activation_exit_churn_limit(spec)?)?;
         let current_epoch = state.current_epoch();
         let next_epoch = state.next_epoch()?;
-        let mut processed_amount = 0;
-        let mut next_deposit_index = 0;
-        let mut validator_deposits_to_process = HashMap::new();
-        let mut deposits_to_postpone = vec![];
-        let mut new_validator_deposits = vec![];
-        let mut is_churn_limit_reached = false;
         let finalized_slot = state
             .finalized_checkpoint()
             .epoch
             .start_slot(E::slots_per_epoch());
+        let fulu_enabled = state.fork_name_unchecked().fulu_enabled();
+        let constants = pending_deposits::DepositConstants {
+            far_future_epoch: spec.far_future_epoch.as_u64(),
+            ejection_balance: spec.ejection_balance,
+            max_pending_deposits_per_epoch: E::max_pending_deposits_per_epoch() as u64,
+            registry_updates: config.registry_updates,
+        };
 
+        // The decisions never look past `max_pending_deposits_per_epoch` deposits.
         let pending_deposits = state.pending_deposits()?;
-
-        for deposit in pending_deposits.iter() {
+        let mut views = Vec::new();
+        let mut validator_indices = Vec::new();
+        for deposit in pending_deposits
+            .iter()
+            .take(E::max_pending_deposits_per_epoch())
+        {
             // Do not process deposit requests if pre-Fulu and the Eth1 bridge deposits are not yet applied.
             // Support for the former Eth1 bridge deposit mechanism was removed in Fulu.
-            if !state.fork_name_unchecked().fulu_enabled()
+            let eth1_bridge_blocked = !fulu_enabled
                 && deposit.slot > spec.genesis_slot
-                && state.eth1_deposit_index() < state.deposit_requests_start_index()?
-            {
-                break;
-            }
-            // Do not process is deposit slot has not been finalized.
-            if deposit.slot > finalized_slot {
-                break;
-            }
-            // Do not process if we have reached the limit for the number of deposits
-            // processed in an epoch.
-            if next_deposit_index >= E::max_pending_deposits_per_epoch() {
-                break;
-            }
-            // We have to do a bit of indexing into `validators` here, but I can't see any way
-            // around that without changing the spec.
-            //
-            // We need to work out if `validator.exit_epoch` will be set to a non-default value
-            // *after* changes applied by `process_registry_updates`, which in our implementation
-            // does not happen until after this (but in the spec happens before). However it's not
-            // hard to work out: we don't need to know exactly what value the `exit_epoch` will
-            // take, just whether it is non-default. Nor do we need to know the value of
-            // `withdrawable_epoch`, because `next_epoch <= withdrawable_epoch` will evaluate to
-            // `true` both for the actual value & the default placeholder value (`FAR_FUTURE_EPOCH`).
-            let mut is_validator_exited = false;
-            let mut is_validator_withdrawn = false;
+                && state.eth1_deposit_index() < state.deposit_requests_start_index()?;
             let opt_validator_index = state.pubkey_cache().get(&deposit.pubkey);
-            if let Some(validator_index) = opt_validator_index {
+            let view = if let Some(validator_index) = opt_validator_index {
                 let validator = state.get_validator(validator_index)?;
-                let already_exited = validator.exit_epoch < spec.far_future_epoch;
-                // In the spec process_registry_updates is called before process_pending_deposits
-                // so we must account for process_registry_updates ejecting the validator for low balance
-                // and setting the exit_epoch to < far_future_epoch. Note that in the spec the effective
-                // balance update does not happen until *after* the registry update, so we don't need to
-                // account for changes to the effective balance that would push it below the ejection
-                // balance here.
-                // Note: we only consider this if registry_updates are enabled in the config.
-                // EF tests require us to run epoch_processing functions in isolation.
-                let will_be_exited = config.registry_updates
-                    && (validator.is_active_at(current_epoch)
-                        && validator.effective_balance <= spec.ejection_balance);
-                is_validator_exited = already_exited || will_be_exited;
-                is_validator_withdrawn = validator.withdrawable_epoch < next_epoch;
-            }
-
-            if is_validator_withdrawn {
-                // Deposited balance will never become active. Queue a balance increase but do not
-                // consume churn. Validator index must be known if the validator is known to be
-                // withdrawn (see calculation of `is_validator_withdrawn` above).
-                let validator_index =
-                    opt_validator_index.ok_or(Error::PendingDepositsLogicError)?;
-                validator_deposits_to_process
-                    .entry(validator_index)
-                    .or_insert(0)
-                    .safe_add_assign(deposit.amount)?;
-            } else if is_validator_exited {
-                // Validator is exiting, postpone the deposit until after withdrawable epoch
-                deposits_to_postpone.push(deposit.clone());
+                pending_deposits::DepositView {
+                    slot: deposit.slot.as_u64(),
+                    amount: deposit.amount,
+                    is_known_validator: true,
+                    exit_epoch: validator.exit_epoch.as_u64(),
+                    withdrawable_epoch: validator.withdrawable_epoch.as_u64(),
+                    activation_epoch: validator.activation_epoch.as_u64(),
+                    effective_balance: validator.effective_balance,
+                    eth1_bridge_blocked,
+                }
             } else {
-                // Check if deposit fits in the churn, otherwise, do no more deposit processing in this epoch.
-                is_churn_limit_reached =
-                    processed_amount.safe_add(deposit.amount)? > available_for_processing;
-                if is_churn_limit_reached {
-                    break;
+                pending_deposits::DepositView {
+                    slot: deposit.slot.as_u64(),
+                    amount: deposit.amount,
+                    is_known_validator: false,
+                    exit_epoch: 0,
+                    withdrawable_epoch: 0,
+                    activation_epoch: 0,
+                    effective_balance: 0,
+                    eth1_bridge_blocked,
                 }
-                processed_amount.safe_add_assign(deposit.amount)?;
-
-                // Deposit fits in the churn, process it. Increase balance and consume churn.
-                if let Some(validator_index) = state.pubkey_cache().get(&deposit.pubkey) {
-                    validator_deposits_to_process
-                        .entry(validator_index)
-                        .or_insert(0)
-                        .safe_add_assign(deposit.amount)?;
-                } else {
-                    // The `PendingDeposit` is for a new validator
-                    new_validator_deposits.push(deposit.clone());
-                }
-            }
-
-            // Regardless of how the deposit was handled, we move on in the queue.
-            next_deposit_index.safe_add_assign(1)?;
+            };
+            views.push(view);
+            validator_indices.push(opt_validator_index);
         }
 
-        // Accumulate churn only if the churn limit has been hit.
-        let deposit_balance_to_consume = if is_churn_limit_reached {
-            available_for_processing.safe_sub(processed_amount)?
-        } else {
-            0
-        };
+        let outcome = pending_deposits::process_pending_deposits(
+            &views,
+            finalized_slot.as_u64(),
+            current_epoch.as_u64(),
+            next_epoch.as_u64(),
+            state.deposit_balance_to_consume()?,
+            registry_update::exit_churn_limit(
+                state.get_total_active_balance()?,
+                &activation_churn_constants(state.fork_name_unchecked(), spec),
+            )?,
+            &constants,
+        )?;
+
+        let next_deposit_index = outcome.next_deposit_index as usize;
+        let mut validator_deposits_to_process = HashMap::new();
+        let mut deposits_to_postpone = vec![];
+        let mut new_validator_deposits = vec![];
+        for (i, deposit) in pending_deposits.iter().take(next_deposit_index).enumerate() {
+            let postpone = outcome
+                .postponed
+                .get(i)
+                .copied()
+                .ok_or(Error::PendingDepositsLogicError)?;
+            if postpone {
+                deposits_to_postpone.push(deposit.clone());
+            } else if let Some(Some(validator_index)) = validator_indices.get(i) {
+                validator_deposits_to_process
+                    .entry(*validator_index)
+                    .or_insert(0)
+                    .safe_add_assign(deposit.amount)?;
+            } else {
+                new_validator_deposits.push(deposit.clone());
+            }
+        }
 
         Ok(Self {
             next_deposit_index,
-            deposit_balance_to_consume,
+            deposit_balance_to_consume: outcome.deposit_balance_to_consume,
             validator_deposits_to_process,
             deposits_to_postpone,
             new_validator_deposits,
@@ -1259,41 +1505,19 @@ fn process_pending_consolidations<E: EthSpec>(
     state_ctxt: &StateContext,
     spec: &ChainSpec,
 ) -> Result<(), Error> {
-    let mut next_pending_consolidation: usize = 0;
-    let next_epoch = state.next_epoch()?;
-    let pending_consolidations = state.pending_consolidations()?.to_owned_list();
-
-    for pending_consolidation in pending_consolidations.iter() {
-        let source_index = pending_consolidation.source_index as usize;
-        let target_index = pending_consolidation.target_index as usize;
-        let source_validator = state.get_validator(source_index)?;
-        if source_validator.slashed {
-            next_pending_consolidation.safe_add_assign(1)?;
-            continue;
-        }
-        if source_validator.withdrawable_epoch > next_epoch {
-            break;
-        }
-
-        // Calculate the consolidated balance
-        let source_effective_balance = std::cmp::min(
-            *state
-                .balances()
-                .get(source_index)
-                .ok_or(BeaconStateError::UnknownValidator(source_index))?,
-            source_validator.effective_balance,
-        );
-
-        // Move active balance to target. Excess balance is withdrawable.
-        decrease_balance(state, source_index, source_effective_balance)?;
-        increase_balance(state, target_index, source_effective_balance)?;
-
-        next_pending_consolidation.safe_add_assign(1)?;
-    }
-
-    state
-        .pending_consolidations_mut()?
-        .pop_front(next_pending_consolidation)?;
+    // The moves only touch validators that consolidations reference, so they work on a local
+    // table of those validators.
+    let local_indices: Vec<usize> = validators_in_consolidations.iter().copied().collect();
+    pending_consolidations::process_on_table(&mut StateConsolidations { state }, &local_indices)
+        .map_err(|error| match error {
+            pending_consolidations::TableError::State(e) => e,
+            pending_consolidations::TableError::UnknownValidator(index) => {
+                Error::from(BeaconStateError::UnknownValidator(index))
+            }
+            pending_consolidations::TableError::Overflow => {
+                Error::from(safe_arith::ArithError::Overflow)
+            }
+        })?;
 
     // the spec tests require we don't perform effective balance updates when testing pending_consolidations
     if !perform_effective_balance_updates {
@@ -1301,42 +1525,134 @@ fn process_pending_consolidations<E: EthSpec>(
     }
 
     // Re-process effective balance updates for validators affected by consolidations.
-    let (mut validators, balances, _, current_epoch_participation, _, progressive_balances, _, _) =
-        state.mutable_validator_fields()?;
-    for &validator_index in validators_in_consolidations {
-        let balance = *balances
-            .get(validator_index)
-            .ok_or(BeaconStateError::UnknownValidator(validator_index))?;
-        let mut validator = validators
-            .get_cow(validator_index)
-            .ok_or(BeaconStateError::UnknownValidator(validator_index))?;
-        let validator_current_epoch_participation = *current_epoch_participation
-            .get(validator_index)
-            .ok_or(BeaconStateError::UnknownValidator(validator_index))?;
-
-        process_single_effective_balance_update(
-            validator_index,
-            balance,
-            &mut validator,
-            validator_current_epoch_participation,
+    let indices: Vec<usize> = validators_in_consolidations.iter().copied().collect();
+    list_writes::update_effective_balances_at(
+        &mut StateEffectiveBalances {
+            state,
             next_epoch_cache,
-            progressive_balances,
             effective_balances_ctxt,
             state_ctxt,
             spec,
-        )?;
-    }
+        },
+        &indices,
+    )?;
     Ok(())
+}
+
+/// The state that `pending_consolidations::process_on_table` reads and writes.
+struct StateConsolidations<'a, E: EthSpec> {
+    state: &'a mut BeaconState<E>,
+}
+
+impl<E: EthSpec> pending_consolidations::ConsolidationState<Error> for StateConsolidations<'_, E> {
+    fn next_epoch(&self) -> Result<u64, Error> {
+        Ok(self.state.next_epoch()?.as_u64())
+    }
+
+    fn pending(&self) -> Result<Vec<pending_consolidations::PendingPair>, Error> {
+        Ok(self
+            .state
+            .pending_consolidations()?
+            .iter()
+            .map(|consolidation| pending_consolidations::PendingPair {
+                source: consolidation.source_index,
+                target: consolidation.target_index,
+            })
+            .collect())
+    }
+
+    fn local_validator(&self, index: usize) -> pending_consolidations::LocalValidator {
+        let validator = self.state.validators().get(index);
+        pending_consolidations::LocalValidator {
+            exists: validator.is_some(),
+            slashed: validator.is_some_and(|validator| validator.slashed),
+            withdrawable_epoch: validator
+                .map_or(0, |validator| validator.withdrawable_epoch.as_u64()),
+            effective_balance: validator.map_or(0, |validator| validator.effective_balance),
+        }
+    }
+
+    fn balance(&self, index: usize) -> u64 {
+        self.state.balances().get(index).copied().unwrap_or(0)
+    }
+
+    fn set_balance(&mut self, index: usize, value: u64) {
+        if self.state.balances().get(index) != Some(&value)
+            && let Ok(balance) = self.state.get_balance_mut(index)
+        {
+            *balance = value;
+        }
+    }
+
+    fn pop_pending(&mut self, n: usize) -> Result<(), Error> {
+        self.state.pending_consolidations_mut()?.pop_front(n)?;
+        Ok(())
+    }
+}
+
+/// The effective balances that `list_writes::update_effective_balances_at` updates.
+struct StateEffectiveBalances<'a, E: EthSpec> {
+    state: &'a mut BeaconState<E>,
+    next_epoch_cache: &'a mut PreEpochCache,
+    effective_balances_ctxt: &'a EffectiveBalancesContext,
+    state_ctxt: &'a StateContext,
+    spec: &'a ChainSpec,
+}
+
+impl<E: EthSpec> list_writes::EffectiveBalanceWrites<Error> for StateEffectiveBalances<'_, E> {
+    fn update_effective_balance(&mut self, index: usize) -> Result<(), Error> {
+        update_effective_balance_at(
+            self.state,
+            index,
+            self.next_epoch_cache,
+            self.effective_balances_ctxt,
+            self.state_ctxt,
+            self.spec,
+        )
+    }
+}
+
+/// Runs the effective balance update of validator `index` and records it in the caches.
+fn update_effective_balance_at<E: EthSpec>(
+    state: &mut BeaconState<E>,
+    index: usize,
+    next_epoch_cache: &mut PreEpochCache,
+    effective_balances_ctxt: &EffectiveBalancesContext,
+    state_ctxt: &StateContext,
+    spec: &ChainSpec,
+) -> Result<(), Error> {
+    let (mut validators, balances, _, current_epoch_participation, _, progressive_balances, _, _) =
+        state.mutable_validator_fields()?;
+    let balance = *balances
+        .get(index)
+        .ok_or(BeaconStateError::UnknownValidator(index))?;
+    let mut validator = validators
+        .get_cow(index)
+        .ok_or(BeaconStateError::UnknownValidator(index))?;
+    let validator_current_epoch_participation = *current_epoch_participation
+        .get(index)
+        .ok_or(BeaconStateError::UnknownValidator(index))?;
+    process_single_effective_balance_update(
+        index,
+        balance,
+        &mut validator,
+        validator_current_epoch_participation,
+        next_epoch_cache,
+        progressive_balances,
+        effective_balances_ctxt,
+        state_ctxt,
+        spec,
+    )
 }
 
 impl EffectiveBalancesContext {
     fn new(spec: &ChainSpec) -> Result<Self, Error> {
-        let hysteresis_increment = spec
-            .effective_balance_increment
-            .safe_div(spec.hysteresis_quotient)?;
-        let downward_threshold =
-            hysteresis_increment.safe_mul(spec.hysteresis_downward_multiplier)?;
-        let upward_threshold = hysteresis_increment.safe_mul(spec.hysteresis_upward_multiplier)?;
+        let (downward_threshold, upward_threshold) = effective_balance::hysteresis_thresholds(
+            spec.effective_balance_increment,
+            spec.hysteresis_quotient,
+            spec.hysteresis_downward_multiplier,
+            spec.hysteresis_upward_multiplier,
+        )?;
 
         Ok(Self {
             downward_threshold,
@@ -1385,20 +1701,14 @@ fn process_single_effective_balance_update(
     let effective_balance_limit = validator.get_max_effective_balance(spec, state_ctxt.fork_name);
 
     let old_effective_balance = validator.effective_balance;
-    let new_effective_balance = if balance.safe_add(eb_ctxt.downward_threshold)?
-        < validator.effective_balance
-        || validator
-            .effective_balance
-            .safe_add(eb_ctxt.upward_threshold)?
-            < balance
-    {
-        min(
-            balance.safe_sub(balance.safe_rem(spec.effective_balance_increment)?)?,
-            effective_balance_limit,
-        )
-    } else {
-        validator.effective_balance
-    };
+    let new_effective_balance = effective_balance::new_effective_balance(
+        balance,
+        validator.effective_balance,
+        effective_balance_limit,
+        eb_ctxt.downward_threshold,
+        eb_ctxt.upward_threshold,
+        spec.effective_balance_increment,
+    )?;
 
     let is_active_next_epoch = validator.is_active_at(state_ctxt.next_epoch);
 

@@ -35,15 +35,20 @@ Pull requests and Workflows.
 
 - Index of all proofs: issue #44. Tracking issues: #32 slashing protection, #33 epoch
   processing, #34 Lean spec, #35 caches.
-- The main result for epoch processing is `lighthouse_epoch_etheorem_reachable`. On every
-  reachable mainnet state, Lighthouse epoch processing gives the same state as Etheorem, an
-  independent Lean spec that passes the EF test vectors.
+- The main results for epoch processing are `formalhouse_gloas_epoch_final` and
+  `formalhouse_fulu_epoch_final` (`EpochProofs/FormalhouseFinal.lean`), each for mainnet and
+  minimal. On every epoch input of a reachable run, Lighthouse's epoch processing returns Ok and
+  gives the same state as Etheorem, an independent Lean spec that passes the EF test vectors.
 
 ## Trusted base
 
+The full list, with counts, is the "Trusted base" section of
+`consensus/state_processing/proofs/README.md`. In short:
+
 - The Lean kernel, Charon and Aeneas.
-- The Rust glue that Aeneas does not translate, for example the milhouse loop in
-  `single_pass.rs`. Lean models of this glue are written by hand.
-- The caches, until the cache proofs (#35) are joined to the epoch result.
-- The hash function and BLS, given as parameters.
-- The conditions that each capstone theorem lists.
+- Rust contracts: the milhouse implementations of the traits that the translated code calls,
+  for example `RowsContract` for the single-pass loop.
+- Glue facts: Rust expressions that Aeneas does not translate, each linked to the model.
+- Cache build facts, spec preconditions, supply and time bounds, probability facts and the
+  Etheorem list limits.
+- The hash function and BLS, given as an Oracle.

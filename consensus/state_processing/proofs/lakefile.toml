@@ -1,0 +1,34 @@
+name = "epoch_proofs"
+defaultTargets = ["EpochProofs"]
+
+# Aeneas provides the Lean semantics for the translated Rust (`Result`, `Slice`, `Array`,
+# the `loop` combinator and the `step` tactic). Pinned: the generated file in
+# `EpochProofs/Generated.lean` must be produced by the matching Aeneas/Charon versions.
+# See README.md. The CI workflow reads `rev` from here, so this is the single source of truth.
+[[require]]
+name = "aeneas"
+git = "https://github.com/AeneasVerif/aeneas"
+rev = "453b09f98f2b593c0544a8ad654b77e2a3bc621a"
+subDir = "backends/lean"
+
+# Etheorem: an executable Lean spec of the consensus specs that passes the EF vectors.
+# `EpochProofs/Etheorem/` proves our reference equal to it. Pinned to the fork branch
+# `formalhouse-pin`, which builds on our Lean version and carries the patches in README.md.
+[[require]]
+name = "EthCLSpecs"
+git = "https://github.com/eserilev/etheorem"
+rev = "4e065a433822fe78cab1d1bbf45cff54d97d2ece"
+subDir = "packages/EthCLSpecs"
+
+# The BeaconState cache proofs in `consensus/types/proofs`. The epoch proofs import them to
+# replace the cache facts that the epoch theorems take as hypotheses.
+[[require]]
+name = "cache_proofs"
+path = "../../types/proofs"
+
+# The loop proofs need more than the default budget.
+[leanOptions]
+maxHeartbeats = 1000000
+
+[[lean_lib]]
+name = "EpochProofs"
