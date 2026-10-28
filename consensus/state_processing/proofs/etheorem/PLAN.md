@@ -149,7 +149,7 @@ the steps before it.
   validators active at `current + 2`, some slot of that epoch has an empty beacon committee.
   `compute_ptc` then fails `assert total > 0` (gloas:1213, unchanged in beta.4), and
   `process_epoch` raises. A Gloas chain with fewer than 32 active validators (8 on minimal)
-  halts. Lighthouse halts the same way. `CommPreconds` takes at least 32 active validators.
+  halts. Lighthouse halts the same way. `CommitteeStepPreconds` takes at least 32 active validators.
 
 ## The Oracle
 

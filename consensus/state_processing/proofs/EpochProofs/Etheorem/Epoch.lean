@@ -136,7 +136,7 @@ State facts:
   length, and the registry has room for `MAX_PENDING_DEPOSITS_PER_EPOCH` new validators.
 - `consolidationLens`: one balance for each validator before the pending consolidations.
 - `builderRoom`: the new builder withdrawals fit under Etheorem's list limit (F6).
-- `summariesRoom`: the historical summaries list has room for one more item. Beta.2 keeps
+- `summariesRoom`: the historical summaries list has room for one more item. Beta.4 keeps
   this `HISTORICAL_ROOTS_LIMIT` cap.
 
 Facts about Etheorem's output (F3):

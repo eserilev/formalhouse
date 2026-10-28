@@ -2,16 +2,18 @@ import EpochProofs.NonVacuity
 import EpochProofs.HeadlinePresets
 
 /-!
-# The hypotheses of the readable theorems can hold together
+# The hypotheses of the headline theorems can hold together
 
-The witness of `NonVacuity.lean` (`wt`, `we`, `wef`: minimal preset, last slot of epoch 0, eight
-active validators at 2048 ETH) also satisfies the bundles of `FormalhouseReadable.lean`.
+The witness of `NonVacuity.lean` (`witnessState`, and the Etheorem states `witnessEtheorem`,
+`witnessEtheoremFulu` that map to it: minimal preset, last slot of epoch 0, eight active
+validators at 2048 ETH) also satisfies the bundles of `FormalhouseReadable.lean`.
 
-- `sameOk_witness`, `sameOk_witness_fulu`: the state hypotheses that the SameOk theorems use
-  (the reachable-state invariants, `TailPre`, so also `HistRoom`) hold at `wt`, `wtf`. The SameOk
-  theorems then apply there (`sameOk_at_witness`).
-- `gloasChain_witness`, `fuluChain_witness`: `GloasChainAssumptions` (`FuluChainAssumptions`),
-  `EtheoremFaithful` and `OracleMatchesEtheorem` hold at `we` (`wef`), given the facts that
+- `sameOk_hyps_at_witness`, `sameOk_hyps_at_witness_fulu`: the state hypotheses that the
+  `_agrees_pyspec` theorems use (`ReachableInvariants`, `AtEpochBoundary`, so also
+  `HistoricalSummariesBelowLimit`) hold at `witnessState`, `witnessStateFulu`. The Gloas one then
+  applies there (`sameOk_at_witness`).
+- `gloas_bundles_at_witness`, `fulu_bundles_at_witness`: the chain, Etheorem divergence and
+  oracle bundles hold together at `witnessEtheorem` (`witnessEtheoremFulu`), given the facts that
   `NonVacuity.lean` also takes as they are (F3, the Fulu Etheorem conditions, SHA-256 output
   size).
 
@@ -30,18 +32,25 @@ local instance : @PresetCfg.Ok minimalCfg := minimalCfg_ok
 local instance : @PresetCfg.Bounds minimalCfg := minimalCfg_bounds
 local instance : FuluCfg.Ok := ⟨fuluCompat_minimal⟩
 
-/-- The state hypotheses of the Gloas SameOk theorem hold at `wt`. -/
-theorem sameOk_witness : EpochInputOk'' EpochSupply wt ∧ TailPre wt ∧ HistRoom wt :=
-  ⟨wt_epochInputOk, wt_tailPre, wt_tailPre.2.2⟩
+/-- The state hypotheses of the Gloas agreement theorem hold at `witnessState`. -/
+theorem sameOk_hyps_at_witness :
+    ReachableInvariants witnessState ∧ AtEpochBoundary witnessState ∧
+      HistoricalSummariesBelowLimit witnessState :=
+  ⟨witnessState_epochInputOk, witnessState_tailPre, witnessState_tailPre.2.2⟩
 
-/-- The state hypotheses of the Fulu SameOk theorem hold at `wtf`. -/
-theorem sameOk_witness_fulu : EpochInputOk'' EpochSupply wtf ∧ TailPre wtf ∧ HistRoom wtf :=
-  ⟨wtf_epochInputOk, wt_tailPre, wt_tailPre.2.2⟩
+/-- The state hypotheses of the Fulu agreement theorem hold at `witnessStateFulu`. -/
+theorem sameOk_hyps_at_witness_fulu :
+    ReachableInvariants witnessStateFulu ∧ AtEpochBoundary witnessStateFulu ∧
+      HistoricalSummariesBelowLimit witnessStateFulu :=
+  ⟨witnessStateFulu_epochInputOk, witnessState_tailPre, witnessState_tailPre.2.2⟩
 
-/-- At `wt`, Lighthouse's Gloas epoch and the transcription agree, for every oracle. -/
+/-- At `witnessState`, the Lean model of Lighthouse's Gloas epoch and the transcription agree,
+for every oracle. -/
 theorem sameOk_at_witness (o : Oracle) :
-    SameOk (process_epoch_lh_order o wt) (process_epoch P o wt) :=
-  gloas_sameOk_of_invariants o wt_epochInputOk wt_tailPre
+    SameResultOrBothFail (process_epoch_lighthouse o witnessState)
+      (process_epoch P o witnessState) :=
+  lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants o witnessState_epochInputOk
+    witnessState_tailPre
 
 end Minimal
 
@@ -55,14 +64,19 @@ local instance : FuluCfg.Ok := ⟨fuluCompat_minimal⟩
 
 variable [EthCLLib.Spec.HasherTag] [EthCLLib.Spec.CryptoBackend]
 
-/-- The Gloas chain, Etheorem and oracle bundles hold together at `we`. -/
-theorem gloasChain_witness (hsel : Etheorem.SelectionsFull we)
+/-- The Gloas chain, Etheorem divergence and oracle bundles hold together at
+`witnessEtheorem`. -/
+theorem gloas_bundles_at_witness (hsel : Etheorem.SelectionsFull witnessEtheorem)
     (hsha : ∀ b : ByteArray, (EthCLLib.Spec.sha b).size = 32) :
-    ∃ o, GloasChainAssumptions o (Etheorem.absEState we) ∧ EtheoremFaithful we ∧
-      OracleMatchesEtheorem o := by
-  obtain ⟨o, ha⟩ := gloasAssumptions_witness hsel hsha
-  exact ⟨o, ⟨fun t h => (ha.committees t h).2, ha.rows, ha.slot, ha.boundary.2.2, ha.vectors,
+    ∃ o, GloasChainAssumptions o (toSpecState witnessEtheorem) ∧
+      GloasEtheoremDivergenceAssumptions witnessEtheorem ∧ GloasOracleMatchesEtheorem o := by
+  obtain ⟨o, ha⟩ := gloasFinalHypotheses_witness hsel hsha
+  refine ⟨o, ⟨fun t h => ?_, fun t h => ?_, ha.rows, ha.slot, ha.boundary.2.2, ha.vectors,
     fun t h => (ha.committees t h).1⟩, ⟨ha.selections, ha.etheoremRoom⟩, ⟨ha.oracle, ha.sha⟩⟩
+  · have hp := (ha.committees t h).2
+    exact ⟨hp.syncActive, hp.proposers, hp.ptc32⟩
+  · have hp := (ha.committees t h).2
+    exact ⟨hp.selSync, hp.selProp, hp.selPtc⟩
 
 end GloasEState
 
@@ -76,18 +90,24 @@ local instance : FuluCfg.Ok := ⟨fuluCompat_minimal⟩
 
 variable [EthCLLib.Spec.HasherTag] [EthCLLib.Spec.CryptoBackend]
 
-/-- The Fulu chain, Etheorem and oracle bundles hold together at `wef`, given the Fulu Etheorem
-conditions. -/
-theorem fuluChain_witness
+/-- The Fulu chain, Etheorem divergence and oracle bundles hold together at
+`witnessEtheoremFulu`, given the Fulu Etheorem conditions. -/
+theorem fulu_bundles_at_witness
     (hsha : ∀ b : ByteArray, (EthCLLib.Spec.sha b).size = 32) :
-    ∃ o, Etheorem.Fulu.FuluEpochConds P o wef →
-      FuluChainAssumptions o (Etheorem.Fulu.absEState wef) ∧ EtheoremFaithfulFulu o wef ∧
-        OracleMatchesEtheoremFulu o := by
+    ∃ o, Etheorem.Fulu.FuluEpochConds P o witnessEtheoremFulu →
+      FuluChainAssumptions o (toSpecStateFulu witnessEtheoremFulu) ∧
+        FuluEtheoremDivergenceAssumptions o witnessEtheoremFulu ∧
+        FuluOracleMatchesEtheorem o := by
   obtain ⟨o, ho, hk⟩ := fulu_oracle_witness
   refine ⟨o, fun hconds => ⟨?_, ⟨hconds⟩, ⟨ho, hsha⟩⟩⟩
-  have hc := wef_abs ▸ wtf_fuluCommAt o (fun v _ => hk _)
-  exact ⟨fun t h => (hc t h).2, wef_abs ▸ wtf_rowBounds, by rw [wef_abs]; decide +kernel,
-    wef_abs ▸ wt_tailPre.2.2, wef_abs ▸ wtf_fuluVectors, fun t h => (hc t h).1⟩
+  rw [toSpecStateFulu, witnessEtheoremFulu_abs]
+  have hc := witnessStateFulu_atCommitteeStepState o (fun v _ => hk _)
+  refine ⟨fun t h => ?_, fun t h => ?_, witnessStateFulu_rowBounds, by decide +kernel,
+    witnessState_tailPre.2.2, witnessStateFulu_fuluVectors, fun t h => (hc t h).1⟩
+  · have hp := (hc t h).2
+    exact ⟨hp.syncActive, hp.proposers⟩
+  · have hp := (hc t h).2
+    exact ⟨hp.selSync, hp.selProp⟩
 
 end FuluEState
 

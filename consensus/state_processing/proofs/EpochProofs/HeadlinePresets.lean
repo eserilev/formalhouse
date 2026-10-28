@@ -4,14 +4,13 @@ import EpochProofs.Headline
 # The headline theorems on mainnet and minimal
 
 Each instantiates a theorem of `Headline.lean` with the preset, its `PresetCfg.Ok` and
-`PresetCfg.Bounds` facts, the Fulu config, and the Etheorem preset with the agreement facts.
+`PresetCfg.Bounds` facts, the Fulu config, and the Etheorem preset with the agreement facts
+(`hpreset`; `hhistLimit` by `decide`).
 -/
 
 namespace EpochProofs.Formalhouse
 
 open EthCLLib.Spec EpochProofs.Etheorem
-open EpochProofs.Spec (SameOk HistRoom)
-open CacheProofs.PB (LhCache)
 open Aeneas.Std (U64)
 
 section Mainnet
@@ -23,63 +22,76 @@ local instance : Spec.FuluCfg.Ok := ⟨Spec.fuluCompat_mainnet⟩
 
 section
 attribute [local instance] EthCLSpecs.Gloas.mainnet EthCLSpecs.Gloas.mainnetConfig
-/-- `lighthouse_gloas_epoch` on mainnet. -/
-theorem lighthouse_gloas_epoch_mainnet [HasherTag] [CryptoBackend] {o fo c uc init}
-    {e : EState} {cache : LhCache} {total : U64} {M : Type} {inst} {m : M}
-    (run : GloasEpochRun o fo c uc init (absEState e))
-    (chain : GloasChainAssumptions o (absEState e)) (ef : EtheoremFaithful e)
-    (oracle : OracleMatchesEtheorem o)
-    (caches : GloasCacheFacts cache total inst m (absEState e)) :
-    LighthouseEqualsEtheorem o e ∧ GloasCacheReadsCorrect cache total inst m (absEState e) :=
-  lighthouse_gloas_epoch epochPresetAgrees_mainnet (by decide) run chain ef oracle caches
+/-- `lighthouse_model_gloas_epoch_eq_etheorem` on mainnet. -/
+theorem lighthouse_model_gloas_epoch_eq_etheorem_mainnet [HasherTag] [CryptoBackend]
+    {o fo c uc init} {e : EtheoremState} {progressiveCache : ProgressiveBalancesInner}
+    {totalActiveBalance : U64} {M : Type} {pubkeyIndex} {pubkeyMap : M}
+    (hrun : GloasEpochRun o fo c uc init (toSpecState e))
+    (hchain : GloasChainAssumptions o (toSpecState e))
+    (hetheorem : GloasEtheoremDivergenceAssumptions e) (horacle : GloasOracleMatchesEtheorem o)
+    (hcaches : GloasCacheProvenance progressiveCache totalActiveBalance pubkeyIndex pubkeyMap
+      (toSpecState e)) :
+    GloasLighthouseEqualsEtheorem o e ∧
+      GloasCacheReadsCorrect progressiveCache totalActiveBalance pubkeyIndex pubkeyMap
+        (toSpecState e) :=
+  lighthouse_model_gloas_epoch_eq_etheorem epochPresetAgrees_mainnet (by decide) hrun hchain
+    hetheorem horacle hcaches
 
-/-- `lighthouse_gloas_epoch_rust` on mainnet. -/
-theorem lighthouse_gloas_epoch_rust_mainnet [HasherTag] [CryptoBackend] {o fo c uc init}
-    {e : EState} {cache : LhCache} {total : U64} {M : Type} {inst} {m : M}
+/-- `lighthouse_rust_gloas_epoch_eq_etheorem` on mainnet. -/
+theorem lighthouse_rust_gloas_epoch_eq_etheorem_mainnet [HasherTag] [CryptoBackend]
+    {o fo c uc init} {e : EtheoremState} {progressiveCache : ProgressiveBalancesInner}
+    {totalActiveBalance : U64} {M : Type} {pubkeyIndex} {pubkeyMap : M}
     {σ E : Type} {G : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {st : σ}
-    (run : GloasEpochRun o fo c uc init (absEState e))
-    (chain : GloasChainAssumptions o (absEState e)) (ef : EtheoremFaithful e)
-    (oracle : OracleMatchesEtheorem o)
-    (caches : GloasCacheFacts cache total inst m (absEState e))
-    (rust : RustEpoch G o view st (absEState e)) :
-    RustEqualsEtheorem G view st e :=
-  lighthouse_gloas_epoch_rust epochPresetAgrees_mainnet (by decide) run chain ef oracle caches rust
+    (hrun : GloasEpochRun o fo c uc init (toSpecState e))
+    (hchain : GloasChainAssumptions o (toSpecState e))
+    (hetheorem : GloasEtheoremDivergenceAssumptions e) (horacle : GloasOracleMatchesEtheorem o)
+    (hcaches : GloasCacheProvenance progressiveCache totalActiveBalance pubkeyIndex pubkeyMap
+      (toSpecState e))
+    (hrust : GloasRustGlueFacts G o view st (toSpecState e)) :
+    GloasRustEqualsEtheorem G view st e :=
+  lighthouse_rust_gloas_epoch_eq_etheorem epochPresetAgrees_mainnet (by decide) hrun hchain
+    hetheorem horacle hcaches hrust
 end
 
 section
 attribute [local instance] EthCLSpecs.Fulu.mainnet EthCLSpecs.Fulu.mainnetConfig
-/-- `lighthouse_fulu_epoch` on mainnet. -/
-theorem lighthouse_fulu_epoch_mainnet [HasherTag] [CryptoBackend] {o fo c init}
-    {e : Fulu.EState} (run : FuluEpochRun o fo c init (Fulu.absEState e))
-    (chain : FuluChainAssumptions o (Fulu.absEState e)) (ef : EtheoremFaithfulFulu o e)
-    (oracle : OracleMatchesEtheoremFulu o) :
-    LighthouseEqualsEtheoremFulu o e :=
-  lighthouse_fulu_epoch Fulu.epochPresetAgrees_mainnet run chain ef oracle
+/-- `lighthouse_model_fulu_epoch_eq_etheorem` on mainnet. -/
+theorem lighthouse_model_fulu_epoch_eq_etheorem_mainnet [HasherTag] [CryptoBackend]
+    {o fo c init} {e : EtheoremFuluState} (hrun : FuluEpochRun o fo c init (toSpecStateFulu e))
+    (hchain : FuluChainAssumptions o (toSpecStateFulu e))
+    (hetheorem : FuluEtheoremDivergenceAssumptions o e) (horacle : FuluOracleMatchesEtheorem o) :
+    FuluLighthouseEqualsEtheorem o e :=
+  lighthouse_model_fulu_epoch_eq_etheorem Fulu.epochPresetAgrees_mainnet hrun hchain hetheorem
+    horacle
 
-/-- `lighthouse_fulu_epoch_rust` on mainnet. -/
-theorem lighthouse_fulu_epoch_rust_mainnet [HasherTag] [CryptoBackend] {o fo c init}
-    {e : Fulu.EState} {σ E : Type} {G : Compose.EpochGlueFulu σ E}
-    {view : σ → Spec.BeaconState} {st : σ} (run : FuluEpochRun o fo c init (Fulu.absEState e))
-    (chain : FuluChainAssumptions o (Fulu.absEState e)) (ef : EtheoremFaithfulFulu o e)
-    (oracle : OracleMatchesEtheoremFulu o)
-    (rust : RustEpochFulu G o view st (Fulu.absEState e)) :
-    RustEqualsEtheoremFulu G view st e :=
-  lighthouse_fulu_epoch_rust Fulu.epochPresetAgrees_mainnet run chain ef oracle rust
+/-- `lighthouse_rust_fulu_epoch_eq_etheorem` on mainnet. -/
+theorem lighthouse_rust_fulu_epoch_eq_etheorem_mainnet [HasherTag] [CryptoBackend]
+    {o fo c init} {e : EtheoremFuluState} {σ E : Type} {G : Compose.EpochGlueFulu σ E}
+    {view : σ → Spec.BeaconState} {st : σ} (hrun : FuluEpochRun o fo c init (toSpecStateFulu e))
+    (hchain : FuluChainAssumptions o (toSpecStateFulu e))
+    (hetheorem : FuluEtheoremDivergenceAssumptions o e) (horacle : FuluOracleMatchesEtheorem o)
+    (hrust : FuluRustGlueFacts G o view st (toSpecStateFulu e)) :
+    FuluRustEqualsEtheorem G view st e :=
+  lighthouse_rust_fulu_epoch_eq_etheorem Fulu.epochPresetAgrees_mainnet hrun hchain hetheorem
+    horacle hrust
 end
 
-/-- `lighthouse_gloas_epoch_sameOk_spec` on mainnet. -/
-theorem lighthouse_gloas_epoch_sameOk_spec_mainnet {o : Spec.Oracle} {fo : Spec.FuluOracle}
-    {c : Spec.FuluBlockConfig} {uc : Spec.UpgradeConfig} {init : Spec.FuluState}
-    {s : Spec.BeaconState} (run : GloasEpochRun o fo c uc init s) (hroom : HistRoom s) :
-    SameOk (Spec.process_epoch_lh_order o s) (Spec.process_epoch Spec.P o s) :=
-  lighthouse_gloas_epoch_sameOk_spec run hroom
+/-- `lighthouse_model_gloas_epoch_agrees_pyspec` on mainnet. -/
+theorem lighthouse_model_gloas_epoch_agrees_pyspec_mainnet {o : Spec.Oracle}
+    {fo : Spec.FuluOracle} {c : Spec.FuluBlockConfig} {uc : Spec.UpgradeConfig}
+    {init : Spec.FuluState} {s : Spec.BeaconState} (hrun : GloasEpochRun o fo c uc init s)
+    (hhist : HistoricalSummariesBelowLimit s) :
+    SameResultOrBothFail (process_epoch_lighthouse o s) (Spec.process_epoch Spec.P o s) :=
+  lighthouse_model_gloas_epoch_agrees_pyspec hrun hhist
 
-/-- `lighthouse_fulu_epoch_sameOk_spec` on mainnet. -/
-theorem lighthouse_fulu_epoch_sameOk_spec_mainnet {o : Spec.Oracle} {fo : Spec.FuluOracle}
-    {c : Spec.FuluBlockConfig} {init : Spec.FuluState} {s : Spec.BeaconState}
-    (run : FuluEpochRun o fo c init s) (hroom : HistRoom s) :
-    SameOk (Spec.process_epoch_lh_order_fulu o s) (Spec.process_epoch_fulu Spec.P Spec.FC o s) :=
-  lighthouse_fulu_epoch_sameOk_spec run hroom
+/-- `lighthouse_model_fulu_epoch_agrees_pyspec` on mainnet. -/
+theorem lighthouse_model_fulu_epoch_agrees_pyspec_mainnet {o : Spec.Oracle}
+    {fo : Spec.FuluOracle} {c : Spec.FuluBlockConfig} {init : Spec.FuluState}
+    {s : Spec.BeaconState} (hrun : FuluEpochRun o fo c init s)
+    (hhist : HistoricalSummariesBelowLimit s) :
+    SameResultOrBothFail (process_epoch_lighthouse_fulu o s)
+      (Spec.process_epoch_fulu Spec.P Spec.FC o s) :=
+  lighthouse_model_fulu_epoch_agrees_pyspec hrun hhist
 
 end Mainnet
 
@@ -92,63 +104,76 @@ local instance : Spec.FuluCfg.Ok := ⟨Spec.fuluCompat_minimal⟩
 
 section
 attribute [local instance] EthCLSpecs.Gloas.minimal EthCLSpecs.Gloas.minimalConfig
-/-- `lighthouse_gloas_epoch` on minimal. -/
-theorem lighthouse_gloas_epoch_minimal [HasherTag] [CryptoBackend] {o fo c uc init}
-    {e : EState} {cache : LhCache} {total : U64} {M : Type} {inst} {m : M}
-    (run : GloasEpochRun o fo c uc init (absEState e))
-    (chain : GloasChainAssumptions o (absEState e)) (ef : EtheoremFaithful e)
-    (oracle : OracleMatchesEtheorem o)
-    (caches : GloasCacheFacts cache total inst m (absEState e)) :
-    LighthouseEqualsEtheorem o e ∧ GloasCacheReadsCorrect cache total inst m (absEState e) :=
-  lighthouse_gloas_epoch epochPresetAgrees_minimal (by decide) run chain ef oracle caches
+/-- `lighthouse_model_gloas_epoch_eq_etheorem` on minimal. -/
+theorem lighthouse_model_gloas_epoch_eq_etheorem_minimal [HasherTag] [CryptoBackend]
+    {o fo c uc init} {e : EtheoremState} {progressiveCache : ProgressiveBalancesInner}
+    {totalActiveBalance : U64} {M : Type} {pubkeyIndex} {pubkeyMap : M}
+    (hrun : GloasEpochRun o fo c uc init (toSpecState e))
+    (hchain : GloasChainAssumptions o (toSpecState e))
+    (hetheorem : GloasEtheoremDivergenceAssumptions e) (horacle : GloasOracleMatchesEtheorem o)
+    (hcaches : GloasCacheProvenance progressiveCache totalActiveBalance pubkeyIndex pubkeyMap
+      (toSpecState e)) :
+    GloasLighthouseEqualsEtheorem o e ∧
+      GloasCacheReadsCorrect progressiveCache totalActiveBalance pubkeyIndex pubkeyMap
+        (toSpecState e) :=
+  lighthouse_model_gloas_epoch_eq_etheorem epochPresetAgrees_minimal (by decide) hrun hchain
+    hetheorem horacle hcaches
 
-/-- `lighthouse_gloas_epoch_rust` on minimal. -/
-theorem lighthouse_gloas_epoch_rust_minimal [HasherTag] [CryptoBackend] {o fo c uc init}
-    {e : EState} {cache : LhCache} {total : U64} {M : Type} {inst} {m : M}
+/-- `lighthouse_rust_gloas_epoch_eq_etheorem` on minimal. -/
+theorem lighthouse_rust_gloas_epoch_eq_etheorem_minimal [HasherTag] [CryptoBackend]
+    {o fo c uc init} {e : EtheoremState} {progressiveCache : ProgressiveBalancesInner}
+    {totalActiveBalance : U64} {M : Type} {pubkeyIndex} {pubkeyMap : M}
     {σ E : Type} {G : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {st : σ}
-    (run : GloasEpochRun o fo c uc init (absEState e))
-    (chain : GloasChainAssumptions o (absEState e)) (ef : EtheoremFaithful e)
-    (oracle : OracleMatchesEtheorem o)
-    (caches : GloasCacheFacts cache total inst m (absEState e))
-    (rust : RustEpoch G o view st (absEState e)) :
-    RustEqualsEtheorem G view st e :=
-  lighthouse_gloas_epoch_rust epochPresetAgrees_minimal (by decide) run chain ef oracle caches rust
+    (hrun : GloasEpochRun o fo c uc init (toSpecState e))
+    (hchain : GloasChainAssumptions o (toSpecState e))
+    (hetheorem : GloasEtheoremDivergenceAssumptions e) (horacle : GloasOracleMatchesEtheorem o)
+    (hcaches : GloasCacheProvenance progressiveCache totalActiveBalance pubkeyIndex pubkeyMap
+      (toSpecState e))
+    (hrust : GloasRustGlueFacts G o view st (toSpecState e)) :
+    GloasRustEqualsEtheorem G view st e :=
+  lighthouse_rust_gloas_epoch_eq_etheorem epochPresetAgrees_minimal (by decide) hrun hchain
+    hetheorem horacle hcaches hrust
 end
 
 section
 attribute [local instance] EthCLSpecs.Fulu.minimal EthCLSpecs.Fulu.minimalConfig
-/-- `lighthouse_fulu_epoch` on minimal. -/
-theorem lighthouse_fulu_epoch_minimal [HasherTag] [CryptoBackend] {o fo c init}
-    {e : Fulu.EState} (run : FuluEpochRun o fo c init (Fulu.absEState e))
-    (chain : FuluChainAssumptions o (Fulu.absEState e)) (ef : EtheoremFaithfulFulu o e)
-    (oracle : OracleMatchesEtheoremFulu o) :
-    LighthouseEqualsEtheoremFulu o e :=
-  lighthouse_fulu_epoch Fulu.epochPresetAgrees_minimal run chain ef oracle
+/-- `lighthouse_model_fulu_epoch_eq_etheorem` on minimal. -/
+theorem lighthouse_model_fulu_epoch_eq_etheorem_minimal [HasherTag] [CryptoBackend]
+    {o fo c init} {e : EtheoremFuluState} (hrun : FuluEpochRun o fo c init (toSpecStateFulu e))
+    (hchain : FuluChainAssumptions o (toSpecStateFulu e))
+    (hetheorem : FuluEtheoremDivergenceAssumptions o e) (horacle : FuluOracleMatchesEtheorem o) :
+    FuluLighthouseEqualsEtheorem o e :=
+  lighthouse_model_fulu_epoch_eq_etheorem Fulu.epochPresetAgrees_minimal hrun hchain hetheorem
+    horacle
 
-/-- `lighthouse_fulu_epoch_rust` on minimal. -/
-theorem lighthouse_fulu_epoch_rust_minimal [HasherTag] [CryptoBackend] {o fo c init}
-    {e : Fulu.EState} {σ E : Type} {G : Compose.EpochGlueFulu σ E}
-    {view : σ → Spec.BeaconState} {st : σ} (run : FuluEpochRun o fo c init (Fulu.absEState e))
-    (chain : FuluChainAssumptions o (Fulu.absEState e)) (ef : EtheoremFaithfulFulu o e)
-    (oracle : OracleMatchesEtheoremFulu o)
-    (rust : RustEpochFulu G o view st (Fulu.absEState e)) :
-    RustEqualsEtheoremFulu G view st e :=
-  lighthouse_fulu_epoch_rust Fulu.epochPresetAgrees_minimal run chain ef oracle rust
+/-- `lighthouse_rust_fulu_epoch_eq_etheorem` on minimal. -/
+theorem lighthouse_rust_fulu_epoch_eq_etheorem_minimal [HasherTag] [CryptoBackend]
+    {o fo c init} {e : EtheoremFuluState} {σ E : Type} {G : Compose.EpochGlueFulu σ E}
+    {view : σ → Spec.BeaconState} {st : σ} (hrun : FuluEpochRun o fo c init (toSpecStateFulu e))
+    (hchain : FuluChainAssumptions o (toSpecStateFulu e))
+    (hetheorem : FuluEtheoremDivergenceAssumptions o e) (horacle : FuluOracleMatchesEtheorem o)
+    (hrust : FuluRustGlueFacts G o view st (toSpecStateFulu e)) :
+    FuluRustEqualsEtheorem G view st e :=
+  lighthouse_rust_fulu_epoch_eq_etheorem Fulu.epochPresetAgrees_minimal hrun hchain hetheorem
+    horacle hrust
 end
 
-/-- `lighthouse_gloas_epoch_sameOk_spec` on minimal. -/
-theorem lighthouse_gloas_epoch_sameOk_spec_minimal {o : Spec.Oracle} {fo : Spec.FuluOracle}
-    {c : Spec.FuluBlockConfig} {uc : Spec.UpgradeConfig} {init : Spec.FuluState}
-    {s : Spec.BeaconState} (run : GloasEpochRun o fo c uc init s) (hroom : HistRoom s) :
-    SameOk (Spec.process_epoch_lh_order o s) (Spec.process_epoch Spec.P o s) :=
-  lighthouse_gloas_epoch_sameOk_spec run hroom
+/-- `lighthouse_model_gloas_epoch_agrees_pyspec` on minimal. -/
+theorem lighthouse_model_gloas_epoch_agrees_pyspec_minimal {o : Spec.Oracle}
+    {fo : Spec.FuluOracle} {c : Spec.FuluBlockConfig} {uc : Spec.UpgradeConfig}
+    {init : Spec.FuluState} {s : Spec.BeaconState} (hrun : GloasEpochRun o fo c uc init s)
+    (hhist : HistoricalSummariesBelowLimit s) :
+    SameResultOrBothFail (process_epoch_lighthouse o s) (Spec.process_epoch Spec.P o s) :=
+  lighthouse_model_gloas_epoch_agrees_pyspec hrun hhist
 
-/-- `lighthouse_fulu_epoch_sameOk_spec` on minimal. -/
-theorem lighthouse_fulu_epoch_sameOk_spec_minimal {o : Spec.Oracle} {fo : Spec.FuluOracle}
-    {c : Spec.FuluBlockConfig} {init : Spec.FuluState} {s : Spec.BeaconState}
-    (run : FuluEpochRun o fo c init s) (hroom : HistRoom s) :
-    SameOk (Spec.process_epoch_lh_order_fulu o s) (Spec.process_epoch_fulu Spec.P Spec.FC o s) :=
-  lighthouse_fulu_epoch_sameOk_spec run hroom
+/-- `lighthouse_model_fulu_epoch_agrees_pyspec` on minimal. -/
+theorem lighthouse_model_fulu_epoch_agrees_pyspec_minimal {o : Spec.Oracle}
+    {fo : Spec.FuluOracle} {c : Spec.FuluBlockConfig} {init : Spec.FuluState}
+    {s : Spec.BeaconState} (hrun : FuluEpochRun o fo c init s)
+    (hhist : HistoricalSummariesBelowLimit s) :
+    SameResultOrBothFail (process_epoch_lighthouse_fulu o s)
+      (Spec.process_epoch_fulu Spec.P Spec.FC o s) :=
+  lighthouse_model_fulu_epoch_agrees_pyspec hrun hhist
 
 end Minimal
 

@@ -37,7 +37,7 @@ theorem formalhouse_gloas_epoch_rust (hpa : EpochPresetAgrees Spec.P)
     (hhr : Spec.LH_HISTORICAL_ROOTS_LIMIT ≤ EthCLSpecs.Gloas.Const.historicalRootsLimit)
     (o : Spec.Oracle) (fo : Spec.FuluOracle)
     (c : Spec.FuluBlockConfig) (uc : Spec.UpgradeConfig) (init : Spec.FuluState) (e : EState)
-    (hin : GloasEpochInput o fo c uc init (absEState e)) (ha : GloasAssumptions o init e)
+    (hin : GloasEpochInput o fo c uc init (absEState e)) (ha : GloasFinalHypotheses o init e)
     (cache : LhCache)
     (hcoh : Coherent EpochProofs.Spec.P.EFFECTIVE_BALANCE_INCREMENT
       (pbState (absEState e)
@@ -87,7 +87,7 @@ Etheorem's Fulu `processEpoch`. -/
 theorem formalhouse_fulu_epoch_rust (hpa : Fulu.EpochPresetAgrees Spec.P Spec.FC)
     (o : Spec.Oracle) (fo : Spec.FuluOracle)
     (c : Spec.FuluBlockConfig) (init : Spec.FuluState) (e : EState)
-    (hin : FuluEpochInput o fo c init (absEState e)) (ha : FuluAssumptions o fo c init e)
+    (hin : FuluEpochInput o fo c init (absEState e)) (ha : FuluFinalHypotheses o fo c init e)
     {σ E : Type} (G : Compose.EpochGlueFulu σ E) (view : σ → Spec.BeaconState) (st : σ)
     (hst : view st = absEState e) (hL : Compose.EpochLinksFulu G o view st) :
     ∃ st', Compose.epochFulu G st = ok (some st') ∧

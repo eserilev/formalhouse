@@ -36,7 +36,8 @@ def twoPasses {A B R : Type} (f : A → R → SpecM (A × R)) (g : B → R → S
   let y ← passM g b x.2
   pure ((x.1, y.1), y.2)
 
-/-- The two computations give the same `ok` values. -/
+/-- The two computations give the same `ok` values: each returns `ok v` exactly when the other
+does. So either both return the same state, or both fail (possibly with different errors). -/
 def SameOk {α : Type} (x y : SpecM α) : Prop := ∀ v, x = .ok v ↔ y = .ok v
 
 theorem SameOk.refl {α : Type} (x : SpecM α) : SameOk x x := fun _ => Iff.rfl

@@ -10,9 +10,10 @@ stages and are out of date. `README.md` states the current result and the truste
 - Both rest on the trusted base below: 9 Rust contracts, 24 glue facts, 4 cache build facts, 4 spec preconditions, 5 supply and time bounds, 3 probability facts, 2 Etheorem list limits, 3 Oracle items, 1 start state, and 6 tools and references.
 - `formalhouse_gloas_epoch_rust` and `formalhouse_fulu_epoch_rust` (and their `_mainnet`, `_minimal` versions): the same result about the composed Rust `Compose.epoch` and `Compose.epochFulu` instead of the model. They rest on the same base plus the 7 glue facts that the composition makes explicit (below).
 - Every `#print axioms` line in `EpochProofs/Axioms.lean` uses only `propext`, `Classical.choice` and `Quot.sound`.
-- 2026-10-27: the final theorems before this date were vacuous. `committees` quantified over every state `s` with `CommFrame (absEState e) s`, which admits the input with its validator lists emptied, so `CommPreconds.syncActive` failed and the hypothesis was false for every input. It is now `Spec.CommAt` / `Spec.CommAtFulu`, at the one state `epochToCommittees` returns. The same day, `DepositWritesContract.add_validator` got the `2^40` guard: without it the contract was unsatisfiable whenever a deposit exists (a `Usize` index one larger at each returned state), which made the `_rust` theorems vacuous on epochs with new validators. `EpochProofs/NonVacuity.lean` now witnesses `GloasAssumptions` and `FuluAssumptions` on a minimal-preset state (see README.md for what it does not cover).
-- Readable restatement (`FormalhouseReadable.lean`, `Headline.lean`, `HeadlinePresets.lean`): `lighthouse_gloas_epoch`, `lighthouse_gloas_epoch_rust`, `lighthouse_fulu_epoch`, `lighthouse_fulu_epoch_rust` and their presets, proved from the `formalhouse_*` theorems by unfolding. Named conclusions (`LighthouseEqualsEtheorem`, `RustEqualsEtheorem`, `GloasCacheReadsCorrect` = `ProgressiveBalancesReadsCorrect` ∧ `EpochCacheTotalCorrect` ∧ `PubkeyLookupCorrect`) and hypothesis bundles (`GloasEpochRun`, `GloasCacheFacts`, `GloasChainAssumptions`, `EtheoremFaithful`, `OracleMatchesEtheorem`, `RustEpoch`, and the Fulu ones). Two old hypotheses are derived from the run: `PubkeysUnique` (Gloas) and the first two parts of `TailPre` (`GloasEpochRun.tailPre`, `FuluEpochRun.tailPre`). `ptc_committees_from_cache` is the PTC conjunct as its own theorem.
-- `lighthouse_gloas_epoch_sameOk_spec`, `lighthouse_fulu_epoch_sameOk_spec` (+ presets): `SameOk` of the model and the transcription's `process_epoch` on every epoch input of a run, assuming only the run and `HistRoom`. Built from `process_epoch_lh_order_sameOk` and `process_epoch_lh_full_sameOk'` (Fulu: `lighthouse_fulu_epoch_sameOk`). Kept: `EpochSupply` (in the run; `rewards_overflow_example` shows the balance bound is needed) and `HistRoom` (Lighthouse list limit, the transcription has none). Not attempted: dropping the effective balance sum and slashings parts of `EpochSupply`, which both sides likely fail on together but the row proofs use. `NonVacuityReadable.lean` witnesses the state hypotheses and the new bundles on `wt`/`we`/`wef`; the runs have no witness.
+- 2026-10-27: the final theorems before this date were vacuous. `committees` quantified over every state `s` with `CommFrame (absEState e) s`, which admits the input with its validator lists emptied, so `CommitteeStepPreconds.syncActive` failed and the hypothesis was false for every input. It is now `Spec.AtCommitteeStepState` / `Spec.FuluAtCommitteeStepState`, at the one state `epochToCommittees` returns. The same day, `DepositWritesContract.add_validator` got the `2^40` guard: without it the contract was unsatisfiable whenever a deposit exists (a `Usize` index one larger at each returned state), which made the `_rust` theorems vacuous on epochs with new validators. `EpochProofs/NonVacuity.lean` now witnesses `GloasFinalHypotheses` and `FuluFinalHypotheses` on a minimal-preset state (see README.md for what it does not cover).
+- Readable restatement (`FormalhouseReadable.lean`, `Headline.lean`, `HeadlinePresets.lean`): `lighthouse_model_gloas_epoch_eq_etheorem`, `lighthouse_rust_gloas_epoch_eq_etheorem`, `lighthouse_model_fulu_epoch_eq_etheorem`, `lighthouse_rust_fulu_epoch_eq_etheorem` and their presets, proved from the `formalhouse_*` theorems by unfolding. Named conclusions (`GloasLighthouseEqualsEtheorem`, `GloasRustEqualsEtheorem`, `GloasCacheReadsCorrect` = `ProgressiveBalancesReadsCorrect` ∧ `EpochCacheTotalCorrect` ∧ `PubkeyLookupCorrect`) and hypothesis bundles (`GloasEpochRun`, `GloasCacheProvenance`, `GloasChainAssumptions`, `GloasEtheoremDivergenceAssumptions`, `GloasOracleMatchesEtheorem`, `GloasRustGlueFacts`, and the Fulu ones). Two old hypotheses are derived from the run: `PubkeysUnique` (Gloas) and the first two parts of `TailPre` (`GloasEpochRun.atEpochBoundary`, `FuluEpochRun.atEpochBoundary`). `ptc_committees_from_cache` is the PTC conjunct as its own theorem.
+- `lighthouse_model_gloas_epoch_agrees_pyspec`, `lighthouse_model_fulu_epoch_agrees_pyspec` (+ presets): `SameOk` of the model and the transcription's `process_epoch` on every epoch input of a run, assuming only the run and `HistRoom`. Built from `process_epoch_lh_order_sameOk` and `process_epoch_lh_full_sameOk'` (Fulu: `lighthouse_fulu_epoch_sameOk`). Kept: `EpochSupply` (in the run; `rewards_overflow_example` shows the balance bound is needed) and `HistRoom` (Lighthouse list limit, the transcription has none). Not attempted: dropping the effective balance sum and slashings parts of `EpochSupply`, which both sides likely fail on together but the row proofs use. `NonVacuityReadable.lean` witnesses the state hypotheses and the new bundles on `witnessState`/`witnessEtheorem`/`witnessEtheoremFulu`; the runs have no witness.
+- 2026-10-27, readable names: the headline theorems, bundles and witnesses were renamed so that a reader who knows Lighthouse and the consensus specs can guess them. Theorems: `lighthouse_gloas_epoch` → `lighthouse_model_gloas_epoch_eq_etheorem`, `lighthouse_gloas_epoch_rust` → `lighthouse_rust_gloas_epoch_eq_etheorem`, `lighthouse_gloas_epoch_sameOk_spec` → `lighthouse_model_gloas_epoch_agrees_pyspec` (Fulu alike, and the `_mainnet`/`_minimal` versions); the `*_readable` duplicates are gone, `gloas_epoch_upkeep_readable`/`_at_input_readable` are `lighthouse_model_gloas_epoch_eq_etheorem_upkeep`/`_at_input`. Bundles: `EtheoremFaithful*` → `GloasEtheoremDivergenceAssumptions`/`FuluEtheoremDivergenceAssumptions` (fields `selectionsFull`, `listLimitRoom`; Fulu `bridgeConds`), `RustEpoch*` → `GloasRustGlueFacts`/`FuluRustGlueFacts` (fields `viewEq`, `glue`), `GloasCacheFacts*` → `GloasCacheProvenance*`, `OracleMatchesEtheorem*` and the conclusions get a `Gloas`/`Fulu` prefix. Chain bundle fields: `rows` → `physicalLimits`, `committees` → `committeeStepStateFacts`, `histRoom` → `historicalSummaries`, and `preconditions` split into `pyspecPreconditions` and `selectionsEnd` (the hash-output facts). `GloasAssumptions`/`FuluAssumptions` → `GloasFinalHypotheses`/`FuluFinalHypotheses`. `CommAt`/`CommConds`/`CommPreconds` (+Fulu) → `AtCommitteeStepState`/`CommitteeStepFacts`/`CommitteeStepPreconds` (`FuluAtCommitteeStepState`, ...). Witnesses: `wt`, `wtf`, `we`, `wef`, `wv`, `ev`, `evf` → `witnessState`, `witnessStateFulu`, `witnessEtheorem`, `witnessEtheoremFulu`, `witnessValidator`, `witnessEtheoremValidator`, `witnessEtheoremValidatorFulu`. Widely used names keep their name and get an `abbrev` in `FormalhouseReadable.lean` used in the headline statements: `EtheoremState`, `toSpecState` (`absEState`), `SameResultOrBothFail` (`SameOk`), `process_epoch_lighthouse` (`process_epoch_lh_order`), `HistoricalSummariesBelowLimit` (`HistRoom`), `PhysicalLimits` (`RowBounds`), `EpochBalanceBounds` (`EpochSupply`), `ReachableInvariants` (`EpochInputOk''`), `AtEpochBoundary` (`TailPre`), `LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT`, `ProgressiveBalancesInner` (`LhCache`), `PresetMatchesEtheorem` (`EpochPresetAgrees`), and the Fulu ones. No statement changed meaning.
 
 Goal: prove that Lighthouse's Gloas epoch processing equals the consensus spec for every state.
 
@@ -84,10 +85,10 @@ chain below 8 active validators, not 32.
   run, Lighthouse's Fulu epoch `process_epoch_lh_order_fulu` returns `ok`, and the result equals
   Etheorem's Fulu `processEpoch`.
 
-`GloasEpochInput` and `FuluEpochInput` describe the run. `GloasAssumptions` and
-`FuluAssumptions` hold every other assumption, by kind:
+`GloasEpochInput` and `FuluEpochInput` describe the run. `GloasFinalHypotheses` and
+`FuluFinalHypotheses` hold every other assumption, by kind:
 
-| Kind | Gloas (`GloasAssumptions`, `GloasEpochInput`) | Fulu (`FuluAssumptions`) |
+| Kind | Gloas (`GloasFinalHypotheses`, `GloasEpochInput`) | Fulu (`FuluFinalHypotheses`) |
 |---|---|---|
 | Start state | `start`: `FuluStartOk` of the Fulu start state | `start` |
 | Supply and time bounds | the supply bounds of both runs and `EpochSupply` (in `GloasEpochInput`), `rows` (`RowBounds`, F5), `boundary`, `slot` | `supply`, `econ`, `rows`, `boundary`, `slot` |
@@ -491,7 +492,7 @@ Etheorem's.
 | Builder pending payments | Proved |
 | Effective balance updates | Proved |
 | Slashings reset, RANDAO mixes reset, historical summaries, participation | Proved |
-| Sync committee, proposer lookahead, PTC window | Proved (`committee_steps_total`), from `CommConds` and `CommPreconds` |
+| Sync committee, proposer lookahead, PTC window | Proved (`committee_steps_total`), from `CommitteeStepFacts` and `CommitteeStepPreconds` |
 
 Conditions beyond the reachable-state invariants: `slot + 8192 < 2^64` (the pyspec
 `get_block_root` adds `SLOTS_PER_HISTORICAL_ROOT` to a slot), and the SSZ vector lengths
@@ -499,10 +500,10 @@ Conditions beyond the reachable-state invariants: `slot + 8192 < 2^64` (the pysp
 
 The committee steps (`Sanity/Invariants/TotalityCommittees.lean`) read two more sets of facts
 at the state before them:
-- `CommConds`: at most `2^40` validators, `effective_balance ≤ MAX_EFFECTIVE_BALANCE_ELECTRA`,
+- `CommitteeStepFacts`: at most `2^40` validators, `effective_balance ≤ MAX_EFFECTIVE_BALANCE_ELECTRA`,
   the lengths of `proposer_lookahead` and `ptc_window`, and valid public keys. These are
   invariants of reachable states. No proof carries them through the earlier epoch steps yet.
-- `CommPreconds`: the pyspec raises without them. A validator is active at the next epoch (sync
+- `CommitteeStepPreconds`: the pyspec raises without them. A validator is active at the next epoch (sync
   committee). An active validator at `current + 2` is not slashed (F4). At least
   `SLOTS_PER_EPOCH` validators are active at `current + 2`. Each balance weighted selection
   ends within `2^64` passes (a fact about the hash values, like F3).
@@ -524,7 +525,7 @@ without them too:
 - Each flag's previous-epoch participating increments at most `1024` times the current active
   increments. This bounds the sum of the rewards.
 `process_epoch_total_rows` and `lighthouse_epoch_total_etheorem` take `RowBounds` and the
-committee step conditions (`CommConds`, `CommPreconds`).
+committee step conditions (`CommitteeStepFacts`, `CommitteeStepPreconds`).
 
 ## The whole state transition
 
@@ -965,8 +966,13 @@ reading of the step table.
 - `SinglePassLinks.depositPlan`: `PendingDepositsContext::new` hands `apply_deposit_writes` the
   plan of the model (`lhDepositPlan`).
 - `usize` has 64 bits (`usize64`).
-- `SinglePassLinks.registryRoom`: the new validators of the epoch fit under `2^40`, where the
-  milhouse validator list fails. A state fact, true on every real chain, not derived here.
+- `SinglePassLinks.depositRoom` (was `registryRoom`): the new validators of the epoch fit under
+  `2^40`, where the milhouse validator list fails. A state fact, true on every real chain, not
+  derived here. It is the Lighthouse counterpart of `EpochCondsIn.depositRoom` (Etheorem's
+  `2^40` registry limit with room for `MAX_PENDING_DEPOSITS_PER_EPOCH`). Deriving it from that
+  would need a bound `new_validator_deposits.length ≤ MAX_PENDING_DEPOSITS_PER_EPOCH` on
+  `lhDepositPlan`, the validator count carried across justification, and for Fulu a frame lemma
+  from `FuluEpochConds.depositRoom` (stated before step 6) back to the input; not done.
 
 ### Cache build facts (4)
 
@@ -981,7 +987,7 @@ trust that the cache came from a state of this run.
 ### Spec preconditions (4)
 
 The pyspec itself raises when these fail, so they are not Lighthouse assumptions. They are
-stated at the state that the epoch passes to the committee steps (`CommAt`, `CommAtFulu`).
+stated at the state that the epoch passes to the committee steps (`AtCommitteeStepState`, `FuluAtCommitteeStepState`).
 
 - F4 (Gloas): an unslashed active validator at `current + 2`.
 - F12 (Gloas): at least `SLOTS_PER_EPOCH` active validators at `current + 2`.
