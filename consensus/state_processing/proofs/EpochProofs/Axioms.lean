@@ -116,6 +116,7 @@ import EpochProofs.Equiv.ConsolidationTable
 import EpochProofs.Equiv.Onboarding
 import EpochProofs.Sanity.GlueBounds
 import EpochProofs.FormalhouseRust
+import EpochProofs.NonVacuity
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -892,3 +893,22 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_rust
 #print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_rust_mainnet
 #print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_rust_minimal
+#print axioms EpochProofs.Spec.process_epoch_committees
+#print axioms EpochProofs.Spec.epochToCommittees_parts
+#print axioms EpochProofs.Spec.epochToCommittees_total
+#print axioms EpochProofs.Spec.process_epoch_fulu_committees
+#print axioms EpochProofs.Spec.epochToCommitteesFulu_parts
+#print axioms EpochProofs.Spec.epochToCommitteesFulu_total
+#print axioms EpochProofs.Spec.selFin_full
+#print axioms EpochProofs.Witness.wt_epochToCommittees
+#print axioms EpochProofs.Witness.wtf_epochToCommitteesFulu
+#print axioms EpochProofs.Witness.wt_commAt
+#print axioms EpochProofs.Witness.wtf_fuluCommAt
+#print axioms EpochProofs.Witness.gloas_spec_witness
+#print axioms EpochProofs.Witness.fulu_spec_witness
+#print axioms EpochProofs.Witness.we_abs
+#print axioms EpochProofs.Witness.wef_abs
+#print axioms EpochProofs.Witness.oracle_witness
+#print axioms EpochProofs.Witness.fulu_oracle_witness
+#print axioms EpochProofs.Witness.gloasAssumptions_witness
+#print axioms EpochProofs.Witness.fuluAssumptions_witness

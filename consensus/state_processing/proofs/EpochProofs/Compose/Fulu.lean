@@ -208,6 +208,8 @@ theorem singlePassFulu_spec [Spec.PresetCfg.Ok] [Spec.FuluCfg.Ok] (G : SinglePas
   obtain ⟨plan, hplan, hT⟩ := Spec.specM_bind_ok hT
   obtain ⟨⟨dn, up⟩, hh, hT⟩ := Spec.specM_bind_ok hT
   obtain ⟨x, hx, hT⟩ := Spec.specM_bind_ok hT
+  have hxlen : x.2.length = (view st).validators.length := by
+    rw [(Spec.passM_rows _ _ _ _ hx).1, Spec.rowsOf_length]
   have htarget : cur + Spec.P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < Spec.UINT64_SIZE := by
     rw [Spec.get_current_epoch_ok_eq hcur]; exact Spec.P_slot_target_lt hslot
   -- The step context.
@@ -237,7 +239,7 @@ theorem singlePassFulu_spec [Spec.PresetCfg.Ok] [Spec.FuluCfg.Ok] (G : SinglePas
   subst hxv
   -- The steps after the loop.
   obtain ⟨st4, ha, hv4⟩ := afterLoop_spec G o view st Spec.fuluTabM hL tab cur htab hcur plan
-    hplan (G.rowsReturn st rows' ch) _ (hL.rowsReturn rows' ch) T hT
+    hplan (G.rowsReturn st rows' ch) _ (hL.rowsReturn rows' ch) (by rw [← hxlen]) T hT
   refine ⟨st4, ?_, hv4⟩
   unfold singlePassCore
   rw [hr0]

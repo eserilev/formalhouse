@@ -191,18 +191,80 @@ structure FuluCommPreconds [PresetCfg] (o : Oracle) (s : BeaconState) : Prop whe
   selProp : ∀ seed, SelFin P o s (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 2))
     seed 1 true
 
-/-- The Fulu sync committee update and proposer lookahead succeed on every state with the facts
-that the earlier steps keep. -/
-def CommitteesOkFulu [PresetCfg] (o : Oracle) (t : BeaconState) : Prop :=
-  ∀ s, CommFrame t s → OkWith (do
-      let s ← process_sync_committee_updates_fulu P o s
-      process_proposer_lookahead_fulu P o s) (fun _ => True)
+/-- The steps of the Fulu `process_epoch` before the two committee steps. Its result is the state
+that `process_sync_committee_updates_fulu` reads. -/
+def epochToCommitteesFulu (p : Preset) (f : FuluConfig) (o : Oracle) (state : BeaconState) :
+    SpecM BeaconState := do
+  let state ← process_justification_and_finalization p state
+  let state ← process_inactivity_updates p state
+  let state ← process_rewards_and_penalties p (← get_total_active_balance p state) state
+  let state ← process_registry_updates_fulu p f (← get_total_active_balance p state) state
+  let state ← process_slashings p (← get_total_active_balance p state) state
+  let state ← process_eth1_data_reset p state
+  let state ← process_pending_deposits_fulu p f (← get_total_active_balance p state)
+    (apply_pending_deposit p o) state
+  let state ← process_pending_consolidations p state
+  let state ← process_effective_balance_updates p state
+  let state ← process_slashings_reset p state
+  let state ← process_randao_mixes_reset p state
+  let state ← process_historical_summaries_update p o state
+  pure (process_participation_flag_updates state)
 
-theorem committeesOkFulu_of [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : Oracle) (t : BeaconState) (hslot : t.slot + 8192 < 2 ^ 64)
-    (h : ∀ s, CommFrame t s → FuluCommConds o s ∧ FuluCommPreconds o s) :
+/-- The two committee steps of the Fulu `process_epoch`. -/
+def committeeStepsFulu (p : Preset) (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
+  let state ← process_sync_committee_updates_fulu p o state
+  process_proposer_lookahead_fulu p o state
+
+/-- The Fulu `process_epoch` is `epochToCommitteesFulu`, then the committee steps. -/
+theorem process_epoch_fulu_committees (p : Preset) (f : FuluConfig) (o : Oracle)
+    (s : BeaconState) :
+    process_epoch_fulu p f o s = epochToCommitteesFulu p f o s >>= committeeStepsFulu p o := by
+  simp only [process_epoch_fulu, epochToCommitteesFulu, committeeStepsFulu, bind_assoc,
+    pure_bind]
+
+/-- The steps of `epochRestFulu` before the committee steps. -/
+def epochRestToCommitteesFulu [PresetCfg] [FuluCfg] (o : Oracle) (state : BeaconState) :
+    SpecM BeaconState := do
+  let state ← process_eth1_data_reset P state
+  let state ← process_pending_deposits P
+    (fuluTabM (← get_total_active_balance P state))
+    (apply_pending_deposit P o) state
+  let state ← process_pending_consolidations P state
+  let state ← process_effective_balance_updates P state
+  let state ← process_slashings_reset P state
+  let state ← process_randao_mixes_reset P state
+  let state ← process_historical_summaries_update P o state
+  pure (process_participation_flag_updates state)
+
+/-- `epochToCommitteesFulu` on mainnet in three parts, as `process_epoch_fulu_parts`. -/
+theorem epochToCommitteesFulu_parts [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle)
+    (s : BeaconState) :
+    epochToCommitteesFulu P FC o s = (do
+      let s1 ← process_justification_and_finalization P s
+      let s5 ← specFourStepsFulu s1
+      epochRestToCommitteesFulu o s5) := by
+  unfold epochToCommitteesFulu
+  simp only [process_registry_updates_fulu_eq P FC fuluCompat,
+    process_pending_deposits_fulu_tab_eq P FC fuluCompat, specFourStepsFulu,
+    epochRestToCommitteesFulu, fuluTabM, bind_assoc]
+
+/-- The Fulu committee conditions at the epoch input `t`, at the state that the epoch passes to
+the committee steps (`epochToCommitteesFulu`). See `CommAt`. -/
+def CommAtFulu [PresetCfg] [FuluCfg] (o : Oracle) (t : BeaconState) : Prop :=
+  ∀ s, epochToCommitteesFulu P FC o t = .ok s → FuluCommConds o s ∧ FuluCommPreconds o s
+
+/-- The Fulu sync committee update and proposer lookahead succeed on the state that
+`epochToCommitteesFulu` returns. -/
+def CommitteesOkFulu [PresetCfg] [FuluCfg] (o : Oracle) (t : BeaconState) : Prop :=
+  ∀ s, epochToCommitteesFulu P FC o t = .ok s → CommFrame t s →
+    OkWith (committeeStepsFulu P o s) (fun _ => True)
+
+theorem committeesOkFulu_of [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] [FuluCfg] (o : Oracle) (t : BeaconState) (hslot : t.slot + 8192 < 2 ^ 64)
+    (h : CommAtFulu o t) :
     CommitteesOkFulu o t := by
-  intro s hf
-  obtain ⟨hc, hp⟩ := h s hf
+  intro s hs hf
+  obtain ⟨hc, hp⟩ := h s hs
+  unfold committeeStepsFulu
   have hs : s.slot + 8192 < 2 ^ 64 := hf.slot ▸ hslot
   obtain ⟨s1, h1, e1s, e1v, e1r, e1l, -⟩ := process_sync_committee_updates_total o s hs hf.randao
     hc.regLen hc.ebMax hc.keys hp.syncActive hp.selSync
@@ -221,22 +283,22 @@ theorem committeesOkFulu_of [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : O
 
 /-! ## The whole Fulu epoch -/
 
-/-- The Fulu spec `process_epoch` succeeds on mainnet at the last slot of an epoch, from the
-reachable-state facts at its input, `RowBounds`, and the Fulu committee steps. -/
-theorem process_epoch_fulu_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] [FuluCfg]
+/-- The Fulu steps before the committee steps succeed on mainnet at the last slot of an epoch,
+from the reachable-state facts at the epoch input and `RowBounds`, and keep `CommFrame`. -/
+theorem epochToCommitteesFulu_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] [FuluCfg]
     [FuluCfg.Ok] (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
     (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % P.SLOTS_PER_EPOCH = 0)
     (hvec : t.FuluVectorLengths P) (hffg : FfgInvariant P t)
     (heb : EBOk P t) (hcons : ConsolidationsInRange t)
-    (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : RowBounds t) (hcomm : CommitteesOkFulu o t) :
-    ∃ s', process_epoch_fulu P FC o t = .ok s' := by
+    (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : RowBounds t) :
+    ∃ s, epochToCommitteesFulu P FC o t = .ok s ∧ CommFrame t s := by
   have hsup : totalEffectiveBalance t < 2 ^ 60 := Nat.lt_trans hrb.supply (by decide)
   have hmid := midOkFulu_of_rowBounds t hrows hslot heb hvec.2.2.1 hvec.2.2.2.1 hcons hsl hrb
   have hdep := depCore_of_rowBounds fuluTabM o t hslot hrb
   have hslot64 : t.slot < 2 ^ 64 := Nat.lt_of_le_of_lt (Nat.le_add_right _ _) hslot
   obtain ⟨hbr, -, -, -, hbits, -⟩ := hvec
   have hcp := tot_cp hffg.1.2 hffg.2 hslot64
-  rw [process_epoch_fulu_parts]
+  rw [epochToCommitteesFulu_parts]
   obtain ⟨s1, h1, -⟩ := process_justification_and_finalization_total t hrows hslot hlast hbr hbits
     hcp hsup
   rw [h1, tot_bind_ok]
@@ -251,7 +313,7 @@ theorem process_epoch_fulu_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] [
   obtain ⟨s5, h5, f5, d5⟩ := hmid s1 (process_justification_and_finalization_shape _ t s1 h1)
     hfin0 hfin
   rw [h5, tot_bind_ok]
-  unfold epochRestFulu
+  unfold epochRestToCommitteesFulu
   -- eth1 data reset
   obtain ⟨s6, h6, e6⟩ := process_eth1_data_reset_total s5 (f5.slot ▸ hslot64)
   have f6 : TailFrame t s6 ∧ DepFrame t s6 := by
@@ -299,10 +361,23 @@ theorem process_epoch_fulu_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] [
   rw [h13, tot_bind_ok]
   have k13 : RowsOk s13 ∧ s13.slot = t.slot ∧ s13.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR := by
     subst e13; exact k12
-  -- participation flags, then the committee steps
-  obtain ⟨s', hs', -⟩ := hcomm (process_participation_flag_updates s13)
+  -- participation flags
+  exact ⟨_, rfl,
     ⟨k13.2.1, ⟨k13.1.1, k13.1.2.1, k13.1.2.2.2, by simp [process_participation_flag_updates]⟩,
-      k13.2.2⟩
-  exact ⟨s', hs'⟩
+      k13.2.2⟩⟩
+
+/-- The Fulu spec `process_epoch` succeeds on mainnet at the last slot of an epoch, from the
+reachable-state facts at its input, `RowBounds`, and the Fulu committee steps. -/
+theorem process_epoch_fulu_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] [FuluCfg]
+    [FuluCfg.Ok] (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
+    (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % P.SLOTS_PER_EPOCH = 0)
+    (hvec : t.FuluVectorLengths P) (hffg : FfgInvariant P t)
+    (heb : EBOk P t) (hcons : ConsolidationsInRange t)
+    (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : RowBounds t) (hcomm : CommitteesOkFulu o t) :
+    ∃ s', process_epoch_fulu P FC o t = .ok s' := by
+  obtain ⟨s, hs, hf⟩ := epochToCommitteesFulu_total o t hrows hslot hlast hvec hffg heb hcons hsl
+    hrb
+  obtain ⟨s', hs', -⟩ := hcomm s hs hf
+  exact ⟨s', by rw [process_epoch_fulu_committees, hs, tot_bind_ok]; exact hs'⟩
 
 end EpochProofs.Spec

@@ -19,8 +19,11 @@ about these writes.
   no field of the state.
 - `balance` and `set_balance` read and write one balance. A read out of range fails.
 - `is_valid_signature` is the spec `is_valid_deposit_signature`.
-- `add_validator` is the spec `add_validator_to_registry` and returns the new index. It fails
-  when the spec fails.
+- `add_validator` is the spec `add_validator_to_registry` and returns the new index, below
+  `VALIDATOR_REGISTRY_LIMIT = 2^40` validators (the milhouse list fails at the limit, the spec has
+  no limit). It fails when the spec fails. Without the limit the contract was false for every
+  implementation with a deposit: each call returns a `Usize` index one larger than the last, and
+  the contract holds at every state it returns.
 - `update_effective_balance` is the effective balance update of one validator. It fails when the
   spec fails.
 
@@ -70,10 +73,11 @@ structure DepositWritesContract [EpochProofs.Spec.PresetCfg] {S D E : Type} (ins
     ok (Spec.is_valid_deposit_signature Spec.P o (absDep d).pubkey
       (absDep d).withdrawal_credentials (absDep d).amount (absDep d).signature)
   add_validator : ∀ (s : S) (d : D),
-    (∀ t', Spec.add_validator_to_registry Spec.P (view s) (absDep d).pubkey
+    ((view s).validators.length < 2 ^ 40 →
+      ∀ t', Spec.add_validator_to_registry Spec.P (view s) (absDep d).pubkey
         (absDep d).withdrawal_credentials (absDep d).amount = .ok t' →
-      ∃ (i : Usize) (s' : S), inst.add_validator s d = ok (.Ok i, s') ∧ view s' = t' ∧
-        i.val = (view s).validators.length) ∧
+        ∃ (i : Usize) (s' : S), inst.add_validator s d = ok (.Ok i, s') ∧ view s' = t' ∧
+          i.val = (view s).validators.length) ∧
     (∀ e, Spec.add_validator_to_registry Spec.P (view s) (absDep d).pubkey
         (absDep d).withdrawal_credentials (absDep d).amount = .error e →
       ∃ (e' : E) (s' : S), inst.add_validator s d = ok (.Err e', s'))
