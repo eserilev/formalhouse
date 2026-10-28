@@ -115,6 +115,7 @@ import EpochProofs.CacheBridge.BuildPath
 import EpochProofs.Equiv.ConsolidationTable
 import EpochProofs.Equiv.Onboarding
 import EpochProofs.Sanity.GlueBounds
+import EpochProofs.FormalhouseRust
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -839,3 +840,55 @@ open EpochProofs.Spec
 #print axioms EpochProofs.CacheBridge.PBTrace.coherent
 #print axioms EpochProofs.CacheBridge.coherent_of_upkeep
 #print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_final_upkeep
+#print axioms EpochProofs.Spec.lhFullTailWith_order_eq
+#print axioms EpochProofs.Spec.forIn_keep
+#print axioms EpochProofs.Spec.foldlM_keep
+#print axioms EpochProofs.Spec.add_validator_balLen
+#print axioms EpochProofs.Spec.apply_balLen
+#print axioms EpochProofs.Spec.ebUpdateAt_balLen
+#print axioms EpochProofs.Spec.KeepB.trans
+#print axioms EpochProofs.Spec.MidKeep.trans
+#print axioms EpochProofs.Spec.add_validator_midKeep
+#print axioms EpochProofs.Spec.apply_midKeep
+#print axioms EpochProofs.Spec.ebUpdateAt_midKeep
+#print axioms EpochProofs.Spec.consolidations_keepB
+#print axioms EpochProofs.Spec.lhNewValidators_keep
+#print axioms EpochProofs.Spec.ebFold_keepB
+#print axioms EpochProofs.Spec.process_builder_pending_payments_frame
+#print axioms EpochProofs.Spec.lhMid_eq
+#print axioms EpochProofs.Spec.lhMidCore_keep
+#print axioms EpochProofs.Spec.lhSinglePass_keep
+#print axioms EpochProofs.Spec.lhWeighJustificationAndFinalization_eq
+#print axioms EpochProofs.Spec.process_proposer_lookahead_len
+#print axioms EpochProofs.Spec.uint64Add_ok_sum
+#print axioms EpochProofs.Spec.process_proposer_lookahead_start
+#print axioms EpochProofs.Spec.lhTailOrder_eq
+#print axioms EpochProofs.Spec.lhRestOrder_eq
+#print axioms EpochProofs.Spec.process_sync_committee_updates_split
+#print axioms EpochProofs.Spec.lhFullTailWithFulu_order_eq
+#print axioms EpochProofs.Spec.lhSinglePassFulu_keep
+#print axioms EpochProofs.Spec.lhRestOrderFulu_eq
+#print axioms EpochProofs.Spec.process_proposer_lookahead_fulu_len
+#print axioms EpochProofs.Spec.process_proposer_lookahead_fulu_start
+#print axioms EpochProofs.Compose.justification_spec
+#print axioms EpochProofs.Compose.afterLoop_spec
+#print axioms EpochProofs.Compose.payments_spec
+#print axioms EpochProofs.Compose.singlePass_spec
+#print axioms EpochProofs.Compose.slots_lt_2_32
+#print axioms EpochProofs.Compose.lookahead_spec
+#print axioms EpochProofs.Compose.ptcWindow_spec
+#print axioms EpochProofs.Compose.absResult_ok
+#print axioms EpochProofs.Compose.resets_spec
+#print axioms EpochProofs.Compose.syncUpdate_spec
+#print axioms EpochProofs.Compose.tail_spec
+#print axioms EpochProofs.Compose.epoch_spec
+#print axioms EpochProofs.Compose.rowsContract_stepSpec_fulu
+#print axioms EpochProofs.Compose.lookahead_spec_fulu
+#print axioms EpochProofs.Compose.singlePassFulu_spec
+#print axioms EpochProofs.Compose.epochFulu_spec
+#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_rust
+#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_rust_mainnet
+#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_rust_minimal
+#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_rust
+#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_rust_mainnet
+#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_rust_minimal

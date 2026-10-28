@@ -28,6 +28,13 @@ The theorems are in `EpochProofs/FormalhouseFinal.lean`:
 |---|---|---|---|
 | `formalhouse_gloas_epoch_final` | Gloas, after the fork from Fulu | `_mainnet`, `_minimal` | includes the cache reads |
 | `formalhouse_fulu_epoch_final` | Fulu | `_mainnet`, `_minimal` | cache reads assumed |
+| `formalhouse_gloas_epoch_rust` | as `_final` | `_mainnet`, `_minimal` | as `_final`, state result only |
+| `formalhouse_fulu_epoch_rust` | as `_final` | `_mainnet`, `_minimal` | as `_final` |
+
+The `_rust` theorems (`EpochProofs/FormalhouseRust.lean`) take the hypotheses of the `_final`
+ones, plus the untranslated glue and its trusted facts, and state the result about the composed
+Rust `Compose.epoch` (Fulu: `Compose.epochFulu`) instead of the model: it returns `Ok`, and its
+state equals Etheorem's.
 
 The Gloas theorem, without its hypotheses and cache conclusions:
 
@@ -45,11 +52,20 @@ Four terms in this statement need a precise meaning.
 `process_epoch_single_pass` and `altair.rs` in Lighthouse's own order. For each step, a separate
 theorem proves the model step equal to the Aeneas translation of the Rust, except where Aeneas
 cannot reach (see [Lighthouse code that is not checked](#lighthouse-code-that-is-not-checked)).
-Lean does not compose these step theorems into the final theorems: the final theorems are about
-the model, and that each model step is the one its step theorem covers is checked by reading.
-The step table in [How the proof is built](#how-the-proof-is-built) lists them. The Rust is the
-`formalhouse` branch, which is Lighthouse `unstable` with the epoch logic moved into modules that
-Aeneas accepts.
+`EpochProofs/Compose/` writes the same epoch as one Lean function, `Compose.epoch` (Fulu:
+`Compose.epochFulu`): the calls of the translated functions of `Generated.lean`, in Lighthouse's
+order, with the untranslated code between them as parameters (the glue). `epoch_spec` and
+`epochFulu_spec` prove that it returns `Ok` with the model's state whenever the model returns
+`ok`, given the trusted facts about the glue (`EpochLinks`). So Lean checks that each model step
+is the one its step theorem covers. What the glue stands for is still checked only by review,
+and so is the deposit plan: the composition takes the plan that `PendingDepositsContext::new`
+hands to `apply_deposit_writes` as glue, and the translated `process_pending_deposits` in it is
+linked to the model's decisions by reading (`process_pending_deposits_equiv`). The cache builds
+at the start of the epoch are not in the composition: they write no field of the state and can
+only make Lighthouse return an error. The step table in
+[How the proof is built](#how-the-proof-is-built) lists the steps. The Rust is the `formalhouse`
+branch, which is Lighthouse `unstable` with the epoch logic moved into modules that Aeneas
+accepts.
 
 **Every epoch boundary** means every state that a run reaches, not every value of the
 `BeaconState` type. `FuluEpochInput` and `GloasEpochInput` say that the state comes from a run
@@ -71,7 +87,7 @@ Etheorem's result to the model's. `absEState` covers every field of the state.
 
 ### Axiom audit
 
-`EpochProofs/Axioms.lean` prints the axioms of 723 theorems, including all the final ones. Each
+`EpochProofs/Axioms.lean` prints the axioms of 775 theorems, including all the final ones. Each
 depends only on `propext`, `Classical.choice` and `Quot.sound`, so none rests on `sorry`
 (`sorryAx`) or `native_decide` (`Lean.ofReduceBool`). CI rebuilds the proofs on every change and
 fails if any audited theorem reports another axiom.
@@ -217,9 +233,18 @@ copy the state fields. At the Gloas fork, `StateOnboarding` answers each builder
 query as the spec would, using the pubkey cache, the signature cache, a `HashMap` and a
 `HashSet`, and the result is written to the state.
 
+**Borrows of the state.** The composition (`Compose/`) makes these explicit. Each wrapper that
+`single_pass.rs` builds around the state holds, and writes, only its part of the state:
+`StateRows` the validator rows, and the end of its borrow writes the rows and the exit churn
+that the loop returns; `StateDeposits` the state and the postponed deposits;
+`StateBuilderPayments` the two builder lists; `PtcWindowWrites` the PTC window. `usize` has 64
+bits.
+
 **The four glue facts with no proof (`Trusted/EpochGlue.lean`).**
 
-- N1: at most `2^24` validators are active, the committee shuffle limit.
+- N1: at most `2^24` validators are active, the committee shuffle limit. The composition
+  assumes it at the three states where Lighthouse shuffles: the lookahead, the PTC committees
+  and the sync committee.
 - N2: each superstruct accessor returns the field of the state's fork variant.
 - N3: `update_tree_hash_cache` succeeds when the latest block header has no state root yet.
 - N4: `safe_sum` over `slashings` equals the spec sum, which is proved total.
@@ -305,7 +330,9 @@ EpochProofs/Generated.lean
    |  EpochProofs/Equiv/        each translated function equals its model step
    v
 process_epoch_lh_order          the steps in Lighthouse's order, joined by the
-   |                            Rust contracts and glue facts (EpochProofs/Trusted/)
+   |                            Rust contracts and glue facts (EpochProofs/Trusted/);
+   |                            EpochProofs/Compose/ joins the translated functions
+   |                            themselves and proves the result equal to this model
    |  EpochProofs/Sanity/       Lighthouse's order and single pass equal the spec's
    v                            order and separate passes, on reachable states
 EpochProofs/Spec/               a line-by-line transcription of the pyspec
@@ -326,19 +353,19 @@ iterator adapters, no early return inside a loop. The loops that touch the state
 over traits (`RegistryRows`, `DepositWrites` and others), so Aeneas translates the loop and the
 proofs reason about the trait through its contract.
 
-| Step, in Lighthouse's order | Translated Rust | Trusted |
-|---|---|---|
-| Justification and finalization | `justification.rs` | the reads and checkpoint writes (glue) |
-| Inactivity, rewards, registry, slashings, deposit top-ups, effective balances | `single_pass_step.rs`, `registry_rows.rs` and the step modules | `RowsContract` |
-| Pending deposits | `pending_deposits.rs`, `deposit_balance.rs`, `deposit_writes.rs` | `DepositWritesContract` |
-| Pending consolidations | `pending_consolidations.rs`, `list_writes.rs` | `ConsolidationStateContract`, `BTreeSetIter`, `EffectiveBalanceContract` |
-| Builder pending payments (Gloas) | `builder_pending_payments.rs`, `list_writes.rs` | `PaymentWritesContract` |
-| Proposer lookahead | `epoch_committees.rs`, `balance_weighted_selection.rs`, `compute_shuffled_index_with.rs` | `SeedMixLink`, `EBLink`, the index lists |
-| PTC window (Gloas) | as the lookahead, and `list_writes.rs` | `WindowContract`, `CommitteesFromCache` |
-| Next sync committee | as the lookahead | the pubkeys, the aggregate key |
-| Eth1, slashings and RANDAO resets, historical summaries | `tail_updates.rs` | the vector writes |
-| Participation flag rotation | none | one `types` call (glue) |
-| Fork upgrades | `epoch_committees.rs`, `upgrade/builder_onboarding.rs` | the field copies, `OnboardingContract` |
+| Step, in Lighthouse's order | Translated Rust | Trusted | Composed in Lean |
+|---|---|---|---|
+| Justification and finalization | `justification.rs` | the reads and checkpoint writes (glue) | `justification_spec` |
+| Inactivity, rewards, registry, slashings, deposit top-ups, effective balances | `single_pass_step.rs`, `registry_rows.rs` and the step modules | `RowsContract` | `singlePass_spec` |
+| Pending deposits | `pending_deposits.rs`, `deposit_balance.rs`, `deposit_writes.rs` | `DepositWritesContract`, the deposit plan | `afterLoop_spec`, the writes only |
+| Pending consolidations | `pending_consolidations.rs`, `list_writes.rs` | `ConsolidationStateContract`, `BTreeSetIter`, `EffectiveBalanceContract` | `afterLoop_spec` |
+| Builder pending payments (Gloas) | `builder_pending_payments.rs`, `list_writes.rs` | `PaymentWritesContract` | `payments_spec` |
+| Proposer lookahead | `epoch_committees.rs`, `balance_weighted_selection.rs`, `compute_shuffled_index_with.rs` | `SeedMixLink`, `EBLink`, the index lists | `lookahead_spec` |
+| PTC window (Gloas) | as the lookahead, and `list_writes.rs` | `WindowContract`, `CommitteesFromCache` | `ptcWindow_spec` |
+| Next sync committee | as the lookahead | the pubkeys, the aggregate key | `syncUpdate_spec` |
+| Eth1, slashings and RANDAO resets, historical summaries | `tail_updates.rs` | the vector writes | `resets_spec` |
+| Participation flag rotation | none | one `types` call (glue) | `resets_spec` |
+| Fork upgrades | `epoch_committees.rs`, `upgrade/builder_onboarding.rs` | the field copies, `OnboardingContract` | no, not part of the epoch |
 
 Fulu runs through the same translated functions as Gloas, with the Fulu constants. It has no
 builder payments and no PTC window.

@@ -40,6 +40,9 @@ Each step of the model is Lighthouse Rust that Aeneas translates, proved equal t
 - the builder onboarding at the Gloas fork: `onboard_spec`, under `OnboardingContract`;
 - the other steps: see the step table in README.md.
 
+`FormalhouseRust.lean` states the same results about the composed Rust (`Compose/`), where Lean
+checks that each step is the one its step theorem covers.
+
 The contracts (`Trusted/RegistryRows.lean`, `Trusted/EpochTail.lean`,
 `Trusted/Consolidations.lean`, `Trusted/Onboarding.lean`) state what the milhouse
 implementations of the traits do. They are trusted. Each `?` site of `single_pass.rs` is listed

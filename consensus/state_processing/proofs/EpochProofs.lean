@@ -209,3 +209,10 @@ import EpochProofs.Trusted.Onboarding
 import EpochProofs.Equiv.Onboarding
 import EpochProofs.Sanity.GlueBounds
 import EpochProofs.Trusted.EpochGlue
+import EpochProofs.Compose.Justification
+import EpochProofs.Compose.SinglePass
+import EpochProofs.Compose.Committees
+import EpochProofs.Compose.Tail
+import EpochProofs.Compose.Epoch
+import EpochProofs.Compose.Fulu
+import EpochProofs.FormalhouseRust
