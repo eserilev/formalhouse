@@ -85,9 +85,29 @@ the same meaning in both versions. Only the list limits differ, and they are ass
 **Equal** means `absEState`, the map from an Etheorem state to the transcription's state, sends
 Etheorem's result to the model's. `absEState` covers every field of the state.
 
+### The hypotheses can hold together
+
+A theorem whose hypotheses cannot all hold proves nothing. Until 2026-10-27 the final theorems
+had this bug: `committees` stated the committee conditions at every state with the input's slot,
+list lengths and RANDAO length (`CommFrame`), and that includes the input with its validator
+lists emptied, where no validator is active. The hypothesis was false for every input. It is now
+stated at the one state that the epoch passes to the committee steps (`Spec.CommAt`,
+`Spec.CommAtFulu`).
+
+`EpochProofs/NonVacuity.lean` gives a witness on the minimal preset: a state at the last slot of
+epoch 0 with eight active validators at 2048 ETH. Lean computes the epoch on it.
+`gloasAssumptions_witness` and `fuluAssumptions_witness` build `GloasAssumptions` and
+`FuluAssumptions` there, with an oracle that agrees with Etheorem. They take as given only the
+fields that no small witness can settle: Etheorem's selections (F3), SHA-256 returning 32 bytes,
+and for Fulu the run bounds (`supply`, `econ`) and `FuluEpochConds`. `gloas_spec_witness` and
+`fulu_spec_witness` add the start-state and reachable-state invariants (`FuluStartOk`,
+`EpochInputOk''`) at the same state and show that the spec epoch returns `ok` there. The run
+hypotheses (`GloasEpochInput`, `FuluEpochInput`), the cache facts and the glue facts of the
+`_rust` theorems have no witness.
+
 ### Axiom audit
 
-`EpochProofs/Axioms.lean` prints the axioms of 775 theorems, including all the final ones. Each
+`EpochProofs/Axioms.lean` prints the axioms of 794 theorems, including all the final ones. Each
 depends only on `propext`, `Classical.choice` and `Quot.sound`, so none rests on `sorry`
 (`sorryAx`) or `native_decide` (`Lean.ofReduceBool`). CI rebuilds the proofs on every change and
 fails if any audited theorem reports another axiom.
@@ -189,7 +209,8 @@ Paths are relative to `consensus/`. `single_pass.rs` is
   `record_effective_balance_update`).
 - `StateDeposits`: the deposit queue write, the pubkey lookup (the first matching index), the
   balance read and write, the signature check, `add_validator` (which pushes one entry onto
-  each of the five validator lists), and the effective balance update of a new validator.
+  each of the five validator lists, below `2^40` validators), and the effective balance update
+  of a new validator.
 - `StateBuilderPayments`: read and write the builder pending payments, append a builder pending
   withdrawal.
 - `PtcWindowWrites`: drop the oldest PTC epoch, append the new one, write back.
@@ -265,6 +286,9 @@ the chain is far outside anything physically possible.
 
 **Pyspec halts.** The pyspec raises without these, so no implementation can agree with it.
 
+These and the committee state facts below are stated at the state that the epoch passes to the
+committee steps (`Spec.CommAt`, `Spec.CommAtFulu`), which is a function of the epoch input.
+
 - Gloas: an unslashed validator is active two epochs ahead (F4).
 - Gloas: at least `SLOTS_PER_EPOCH` validators are active two epochs ahead, or the PTC is empty
   (F12). That is 32 validators on mainnet and 8 on minimal.
@@ -288,6 +312,8 @@ invariant proofs cover most of the state, but not yet these fields:
 - validator pubkeys are unique, and each passes `KeyValidate`;
 - the SSZ vectors, `proposer_lookahead` and `ptc_window` have their lengths;
 - at most `2^40` validators, and each effective balance is at most 2048 ETH;
+- `_rust` only: the new validators of the epoch fit under `2^40`, where Lighthouse's validator
+  list fails (`SinglePassLinks.registryRoom`);
 - the states at which the caches were built agree with the epoch input on the activity and the
   pubkeys they read.
 

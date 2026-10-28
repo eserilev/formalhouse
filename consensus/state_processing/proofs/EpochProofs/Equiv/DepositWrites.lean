@@ -254,7 +254,7 @@ theorem apply_new_validator_deposits_loop_spec [EpochProofs.Spec.PresetCfg] {S D
       Spec.P o) t0 = .ok (view s))
     (hL : L0 ≤ (view s).validators.length)
     (ha : added.val.map (·.val) = List.range' L0 ((view s).validators.length - L0))
-    (hal : added.length ≤ i.val) :
+    (hal : added.length ≤ i.val) (hroom : L0 + deps.length ≤ 2 ^ 40) :
     per_epoch_processing.deposit_writes.apply_new_validator_deposits_loop inst s deps added i
       ⦃ res => NewPost view L0 ((deps.val.map absDep).foldlM (Spec.apply_pending_deposit
         Spec.P o) t0) res ⦄ := by
@@ -368,7 +368,13 @@ theorem apply_new_validator_deposits_loop_spec [EpochProofs.Spec.PresetCfg] {S D
               (absDep x).pubkey (absDep x).withdrawal_credentials (absDep x).amount with
           | ok t' =>
             rw [← hv2] at hreg
-            obtain ⟨index, s3, hav, hv3, hidx⟩ := (hc.add_validator s2 x).1 t' hreg
+            have hroom2 : (view s2).validators.length < 2 ^ 40 := by
+              have hlen1 : added1.val.length = (view s1).validators.length - L0 := by
+                rw [← List.length_map (f := (·.val)), ha1, List.length_range']
+              have : added1.length ≤ i1.val := hal1
+              simp only [alloc.vec.Vec.length] at this
+              rw [hv2]; omega
+            obtain ⟨index, s3, hav, hv3, hidx⟩ := (hc.add_validator s2 x).1 hroom2 t' hreg
             rw [hav]
             simp only [bind_tc_ok, uncurry_apply_pair]
             have hpush : added1.val.length < Usize.max := by
@@ -422,7 +428,8 @@ theorem apply_deposit_writes_spec [EpochProofs.Spec.PresetCfg] {S D E : Type} (i
     (view : S → Spec.BeaconState) (absDep : D → Spec.PendingDeposit)
     (postOf : S → List Spec.PendingDeposit) (hc : DepositWritesContract inst o view absDep postOf)
     (s : S) (next : Usize) (dbtc : U64) (deps : Slice D) (eb : Bool)
-    (hnext : next.val ≤ (view s).pending_deposits.length) :
+    (hnext : next.val ≤ (view s).pending_deposits.length)
+    (hroom : (view s).validators.length + deps.length ≤ 2 ^ 40) :
     per_epoch_processing.deposit_writes.apply_deposit_writes inst s next dbtc deps eb
       ⦃ res => TailPost view (Spec.depositWritesSpec o (view s) next.val dbtc.val (postOf s)
         (deps.val.map absDep) eb) res ⦄ := by
@@ -433,7 +440,7 @@ theorem apply_deposit_writes_spec [EpochProofs.Spec.PresetCfg] {S D E : Type} (i
   unfold per_epoch_processing.deposit_writes.apply_new_validator_deposits
   apply spec_bind (apply_new_validator_deposits_loop_spec inst o view absDep postOf hc deps
     (view s1) (view s1).validators.length s1 (alloc.vec.Vec.new Usize) 0#usize (by simp)
-    (by simp [pure, Except.pure]) le_rfl (by simp) (by simp))
+    (by simp [pure, Except.pure]) le_rfl (by simp) (by simp) (by rw [hv1]; exact hroom))
   rintro ⟨r1, s2⟩ hpost
   cases r1 with
   | Ok added =>
@@ -499,13 +506,17 @@ theorem apply_deposit_writes_model [EpochProofs.Spec.PresetCfg] {S D E : Type} (
     (hq : (view st).pending_deposits = s.pending_deposits) (next : Usize) (dbtc : U64)
     (deps : Slice D) (hnext : next.val = plan.next_deposit_index)
     (hdbtc : dbtc.val = plan.deposit_balance_to_consume) (hpost : postOf st = plan.postponed)
-    (hdeps : deps.val.map absDep = plan.new_validator_deposits) :
+    (hdeps : deps.val.map absDep = plan.new_validator_deposits)
+    (hroom : (view st).validators.length + plan.new_validator_deposits.length ≤ 2 ^ 40) :
     per_epoch_processing.deposit_writes.apply_deposit_writes inst st next dbtc deps true
       ⦃ res => TailPost view (Spec.lhNewValidators o plan (Spec.lhQueueWrite s plan (view st)))
         res ⦄ := by
   have hle : next.val ≤ (view st).pending_deposits.length := by
     rw [hq, hnext]; exact Spec.lhDepositPlan_next_le s tab current_epoch plan hplan
+  have hdl : deps.length = plan.new_validator_deposits.length := by
+    rw [← hdeps, List.length_map]
   have h := apply_deposit_writes_spec inst o view absDep postOf hc st next dbtc deps true hle
+    (by rw [hdl]; exact hroom)
   rwa [hnext, hdbtc, hpost, hdeps, Spec.depositWritesSpec_eq o s (view st) plan hq] at h
 
 end EpochProofs

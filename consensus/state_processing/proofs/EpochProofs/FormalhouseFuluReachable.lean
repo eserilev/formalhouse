@@ -84,8 +84,7 @@ theorem formalhouse_fulu_epoch_total_reachable [Spec.PresetCfg.Bounds]
     (hslot : (absEState e).slot + 8192 < 2 ^ 64)
     (hvec : (absEState e).FuluVectorLengths Spec.P)
     (hrb : Spec.RowBounds (absEState e))
-    (hcomm : ∀ s, Spec.CommFrame (absEState e) s →
-      Spec.FuluCommConds o s ∧ Spec.FuluCommPreconds o s) :
+    (hcomm : Spec.CommAtFulu o (absEState e)) :
     ∃ s', Spec.process_epoch_lh_order_fulu o (absEState e) = .ok s' ∧
       ∃ e', (EthCLSpecs.Fulu.processEpoch (StateTransition := FuluRun)).run (pureState e) =
         .ok ((), pureState e') ∧ absEState e' = s' :=

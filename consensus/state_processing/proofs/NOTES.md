@@ -8,8 +8,9 @@ stages and are out of date. `README.md` states the current result and the truste
 - `formalhouse_gloas_epoch_final_mainnet` and `formalhouse_gloas_epoch_final_minimal`: on every Gloas epoch input of a run that starts in Fulu and crosses the Gloas fork, Lighthouse's epoch returns Ok and its state equals Etheorem's `processEpoch`.
 - `formalhouse_fulu_epoch_final_mainnet` and `formalhouse_fulu_epoch_final_minimal`: the same for every Fulu epoch input of a reachable Fulu run.
 - Both rest on the trusted base below: 9 Rust contracts, 24 glue facts, 4 cache build facts, 4 spec preconditions, 5 supply and time bounds, 3 probability facts, 2 Etheorem list limits, 3 Oracle items, 1 start state, and 6 tools and references.
-- `formalhouse_gloas_epoch_rust` and `formalhouse_fulu_epoch_rust` (and their `_mainnet`, `_minimal` versions): the same result about the composed Rust `Compose.epoch` and `Compose.epochFulu` instead of the model. They rest on the same base plus the 6 glue facts that the composition makes explicit (below).
+- `formalhouse_gloas_epoch_rust` and `formalhouse_fulu_epoch_rust` (and their `_mainnet`, `_minimal` versions): the same result about the composed Rust `Compose.epoch` and `Compose.epochFulu` instead of the model. They rest on the same base plus the 7 glue facts that the composition makes explicit (below).
 - Every `#print axioms` line in `EpochProofs/Axioms.lean` uses only `propext`, `Classical.choice` and `Quot.sound`.
+- 2026-10-27: the final theorems before this date were vacuous. `committees` quantified over every state `s` with `CommFrame (absEState e) s`, which admits the input with its validator lists emptied, so `CommPreconds.syncActive` failed and the hypothesis was false for every input. It is now `Spec.CommAt` / `Spec.CommAtFulu`, at the one state `epochToCommittees` returns. The same day, `DepositWritesContract.add_validator` got the `2^40` guard: without it the contract was unsatisfiable whenever a deposit exists (a `Usize` index one larger at each returned state), which made the `_rust` theorems vacuous on epochs with new validators. `EpochProofs/NonVacuity.lean` now witnesses `GloasAssumptions` and `FuluAssumptions` on a minimal-preset state (see README.md for what it does not cover).
 
 Goal: prove that Lighthouse's Gloas epoch processing equals the consensus spec for every state.
 
@@ -903,7 +904,8 @@ lists. The generic code that calls the trait is translated by Aeneas.
   `single_pass_step`, writes the changed fields back and changes no other row. A row read or
   write never fails.
 - `DepositWritesContract` (`EpochTail.lean`): the queue write, the pubkey lookup (first index),
-  `add_validator` (`add_validator_to_registry`) and the effective balance update of one validator.
+  `add_validator` (`add_validator_to_registry`, below `2^40` validators) and the effective
+  balance update of one validator.
 - `PaymentWritesContract` (`EpochTail.lean`): the builder payments read, the withdrawal append
   and the payments write.
 - `WindowContract` (`EpochTail.lean`): the PTC window front drop, append and write-back.
@@ -945,7 +947,7 @@ Glue that Aeneas does not translate. Each fact links one Rust expression or call
   onto each of the five lists (`lhApplyPendingDeposit`).
 - The field copies of the fork upgrades, and the write of the onboarding result.
 
-### Glue facts made explicit by the composition (6)
+### Glue facts made explicit by the composition (7)
 
 The `_rust` theorems take these as hypotheses (`Compose/`). Before, they were implicit in the
 reading of the step table.
@@ -961,6 +963,8 @@ reading of the step table.
 - `SinglePassLinks.depositPlan`: `PendingDepositsContext::new` hands `apply_deposit_writes` the
   plan of the model (`lhDepositPlan`).
 - `usize` has 64 bits (`usize64`).
+- `SinglePassLinks.registryRoom`: the new validators of the epoch fit under `2^40`, where the
+  milhouse validator list fails. A state fact, true on every real chain, not derived here.
 
 ### Cache build facts (4)
 
@@ -974,7 +978,8 @@ trust that the cache came from a state of this run.
 
 ### Spec preconditions (4)
 
-The pyspec itself raises when these fail, so they are not Lighthouse assumptions.
+The pyspec itself raises when these fail, so they are not Lighthouse assumptions. They are
+stated at the state that the epoch passes to the committee steps (`CommAt`, `CommAtFulu`).
 
 - F4 (Gloas): an unslashed active validator at `current + 2`.
 - F12 (Gloas): at least `SLOTS_PER_EPOCH` active validators at `current + 2`.

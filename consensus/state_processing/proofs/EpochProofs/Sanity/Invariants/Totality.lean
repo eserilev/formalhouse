@@ -802,13 +802,65 @@ def DepOk [PresetCfg] (o : Oracle) (t : BeaconState) : Prop :=
     OkWith (process_pending_deposits P tab (apply_pending_deposit P o) s)
       (TailFrame t)
 
-/-- The sync committee, proposer lookahead and PTC window steps succeed on every state with the
-facts that the earlier steps keep. `committeesOk_of` proves it. -/
+/-- The steps of `process_epoch` before the three committee steps. Its result is the state that
+`process_sync_committee_updates` reads. -/
+def epochToCommittees (p : Preset) (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
+  let state ← process_justification_and_finalization p state
+  let state ← process_inactivity_updates p state
+  let state ← process_rewards_and_penalties p (← get_total_active_balance p state) state
+  let state ← process_registry_updates p (← get_total_active_balance p state) state
+  let state ← process_slashings p (← get_total_active_balance p state) state
+  let state ← process_eth1_data_reset p state
+  let state ←
+    process_pending_deposits p (← get_total_active_balance p state) (apply_pending_deposit p o)
+      state
+  let state ← process_pending_consolidations p state
+  let state ← process_builder_pending_payments p (← get_total_active_balance p state) state
+  let state ← process_effective_balance_updates p state
+  let state ← process_slashings_reset p state
+  let state ← process_randao_mixes_reset p state
+  let state ← process_historical_summaries_update p o state
+  pure (process_participation_flag_updates state)
+
+/-- The three committee steps of `process_epoch`. -/
+def committeeSteps (p : Preset) (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
+  let state ← process_sync_committee_updates p o state
+  let state ← process_proposer_lookahead p o state
+  process_ptc_window p o state
+
+/-- `process_epoch` is `epochToCommittees`, then the committee steps. -/
+theorem process_epoch_committees (p : Preset) (o : Oracle) (s : BeaconState) :
+    process_epoch p o s = epochToCommittees p o s >>= committeeSteps p o := by
+  simp only [process_epoch, epochToCommittees, committeeSteps, bind_assoc, pure_bind]
+
+/-- The steps of `epochRest` before the committee steps. -/
+def epochRestToCommittees (p : Preset) (o : Oracle) (state : BeaconState) :
+    SpecM BeaconState := do
+  let state ← process_eth1_data_reset p state
+  let state ←
+    process_pending_deposits p (← get_total_active_balance p state) (apply_pending_deposit p o)
+      state
+  let state ← process_pending_consolidations p state
+  let state ← process_builder_pending_payments p (← get_total_active_balance p state) state
+  let state ← process_effective_balance_updates p state
+  let state ← process_slashings_reset p state
+  let state ← process_randao_mixes_reset p state
+  let state ← process_historical_summaries_update p o state
+  pure (process_participation_flag_updates state)
+
+/-- `epochToCommittees` in three parts, as `process_epoch_parts`. -/
+theorem epochToCommittees_parts (p : Preset) (o : Oracle) (s : BeaconState) :
+    epochToCommittees p o s = (do
+      let s1 ← process_justification_and_finalization p s
+      let s5 ← specFourSteps p s1
+      epochRestToCommittees p o s5) := by
+  simp only [epochToCommittees, specFourSteps, epochRestToCommittees, bind_assoc]
+
+/-- The sync committee, proposer lookahead and PTC window steps succeed on the state that
+`epochToCommittees` returns. `committeesOk_of` proves it. -/
 def CommitteesOk [PresetCfg] (o : Oracle) (t : BeaconState) : Prop :=
-  ∀ s, CommFrame t s → OkWith (do
-      let s ← process_sync_committee_updates P o s
-      let s ← process_proposer_lookahead P o s
-      process_ptc_window P o s) (fun _ => True)
+  ∀ s, epochToCommittees P o t = .ok s → CommFrame t s → OkWith (committeeSteps P o s)
+    (fun _ => True)
 
 theorem tot_cp [PresetCfg] [PresetCfg.Ok] {a b x : Nat} (hab : a ≤ b)
     (hb : b < x / P.SLOTS_PER_EPOCH ∨ b = 0) (hx : x < 2 ^ 64) :
@@ -840,18 +892,18 @@ theorem tot_tab_lt [PresetCfg] [PresetCfg.Ok] (s : BeaconState) (h : totalEffect
     (tot_current_epoch s) (Nat.lt_trans h (by decide))
   exact ⟨tab, ht, Nat.lt_of_le_of_lt hle (tot_max_lt64 h)⟩
 
-/-- The spec `process_epoch` succeeds on mainnet at the last slot of an epoch, from the
-reachable-state facts at its input and the open steps. -/
-theorem process_epoch_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
+/-- The steps before the committee steps succeed on mainnet at the last slot of an epoch, from
+the reachable-state facts at the epoch input and the open steps, and keep `CommFrame`. -/
+theorem epochToCommittees_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState)
+    (hrows : RowsOk t)
     (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % P.SLOTS_PER_EPOCH = 0)
     (hvec : t.VectorLengths P) (hffg : FfgInvariant P t)
-    (hsup : totalEffectiveBalance t < 2 ^ 60) (hmid : MidOk t) (hdep : DepOk o t)
-    (hcomm : CommitteesOk o t) :
-    ∃ s', process_epoch P o t = .ok s' := by
+    (hsup : totalEffectiveBalance t < 2 ^ 60) (hmid : MidOk t) (hdep : DepOk o t) :
+    ∃ s, epochToCommittees P o t = .ok s ∧ CommFrame t s := by
   have hslot64 : t.slot < 2 ^ 64 := Nat.lt_of_le_of_lt (Nat.le_add_right _ _) hslot
   obtain ⟨hbr, -, -, -, hbits, -⟩ := hvec
   have hcp := tot_cp hffg.1.2 hffg.2 hslot64
-  rw [process_epoch_parts]
+  rw [epochToCommittees_parts]
   obtain ⟨s1, h1, -⟩ := process_justification_and_finalization_total t hrows hslot hlast hbr hbits
     hcp hsup
   rw [h1, tot_bind_ok]
@@ -866,7 +918,7 @@ theorem process_epoch_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconS
   obtain ⟨s5, h5, f5, d5⟩ := hmid s1 (process_justification_and_finalization_shape _ t s1 h1)
     hfin0 hfin
   rw [h5, tot_bind_ok]
-  unfold epochRest
+  unfold epochRestToCommittees
   -- eth1 data reset
   obtain ⟨s6, h6, e6⟩ := process_eth1_data_reset_total s5 (f5.slot ▸ hslot64)
   have f6 : TailFrame t s6 ∧ DepFrame t s6 := by
@@ -926,10 +978,21 @@ theorem process_epoch_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconS
   rw [h13, tot_bind_ok]
   have k13 : RowsOk s13 ∧ s13.slot = t.slot ∧ s13.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR := by
     subst e13; exact k12
-  -- participation flags, then the committee steps
-  obtain ⟨s', hs', -⟩ := hcomm (process_participation_flag_updates s13)
+  -- participation flags
+  exact ⟨_, rfl,
     ⟨k13.2.1, ⟨k13.1.1, k13.1.2.1, k13.1.2.2.2, by simp [process_participation_flag_updates]⟩,
-      k13.2.2⟩
-  exact ⟨s', hs'⟩
+      k13.2.2⟩⟩
+
+/-- The spec `process_epoch` succeeds on mainnet at the last slot of an epoch, from the
+reachable-state facts at its input and the open steps. -/
+theorem process_epoch_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
+    (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % P.SLOTS_PER_EPOCH = 0)
+    (hvec : t.VectorLengths P) (hffg : FfgInvariant P t)
+    (hsup : totalEffectiveBalance t < 2 ^ 60) (hmid : MidOk t) (hdep : DepOk o t)
+    (hcomm : CommitteesOk o t) :
+    ∃ s', process_epoch P o t = .ok s' := by
+  obtain ⟨s, hs, hf⟩ := epochToCommittees_total o t hrows hslot hlast hvec hffg hsup hmid hdep
+  obtain ⟨s', hs', -⟩ := hcomm s hs hf
+  exact ⟨s', by rw [process_epoch_committees, hs, tot_bind_ok]; exact hs'⟩
 
 end EpochProofs.Spec

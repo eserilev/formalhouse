@@ -963,12 +963,22 @@ structure CommConds [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
   ptcLen : s.ptc_window.length = 3 * P.SLOTS_PER_EPOCH
   keys : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true
 
-/-- The committee steps succeed on every state that `process_epoch_total` reaches before them,
-from the state conditions and the pyspec preconditions there. -/
+/-- The committee conditions at the epoch input `t`: the state conditions and the pyspec
+preconditions hold at the state that the epoch passes to the committee steps
+(`epochToCommittees`). That state is a function of `t`, so this is one fact about one state.
+
+An earlier version stated them at every state `s` with `CommFrame t s`. `CommFrame` fixes only
+the slot, the list lengths and the RANDAO length, so it admits `t` with every validator list
+emptied, where `syncActive` fails: that hypothesis was false for every `t`. -/
+def CommAt [PresetCfg] (o : Oracle) (t : BeaconState) : Prop :=
+  ∀ s, epochToCommittees P o t = .ok s → CommConds o s ∧ CommPreconds o s
+
+/-- The committee steps succeed on the state that `epochToCommittees` returns, from the state
+conditions and the pyspec preconditions there. -/
 theorem committeesOk_of [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : Oracle) (t : BeaconState) (hslot : t.slot + 8192 < 2 ^ 64)
-    (h : ∀ s, CommFrame t s → CommConds o s ∧ CommPreconds o s) : CommitteesOk o t := by
-  intro s hf
-  obtain ⟨hc, hp⟩ := h s hf
+    (h : CommAt o t) : CommitteesOk o t := by
+  intro s hs hf
+  obtain ⟨hc, hp⟩ := h s hs
   exact committee_steps_total o s
     ⟨hf.slot ▸ hslot, hf.randao, hc.regLen, hc.ebMax, hc.lookahead, hc.ptcLen, hc.keys⟩ hp
 

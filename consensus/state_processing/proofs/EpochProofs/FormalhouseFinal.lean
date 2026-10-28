@@ -102,10 +102,12 @@ structure GloasAssumptions (o : Spec.Oracle) (init : Spec.FuluState) (e : EState
   slot : (absEState e).slot + 8192 < 2 ^ 64
   /-- Supply and time bounds (`RowBounds`, F5). The pyspec raises without them too. -/
   rows : Spec.RowBounds (absEState e)
-  /-- True pyspec preconditions and committee state facts: a sync candidate, a proposer
-  candidate (F4), at least `SLOTS_PER_EPOCH` active validators (F12), each selection ends within `2^64`
-  passes (a probability fact), the registry size and window lengths, valid keys. -/
-  committees : ∀ s, Spec.CommFrame (absEState e) s → Spec.CommConds o s ∧ Spec.CommPreconds o s
+  /-- At the state that the epoch passes to the committee steps (`Spec.epochToCommittees`, a
+  function of the input): true pyspec preconditions and committee state facts. A sync candidate,
+  a proposer candidate (F4), at least `SLOTS_PER_EPOCH` active validators (F12), each selection
+  ends within `2^64` passes (a probability fact), the registry size and window lengths, valid
+  keys. -/
+  committees : Spec.CommAt o (absEState e)
   /-- Probability fact about Etheorem (F3): its selections return all their items. -/
   selections : SelectionsFull e
   /-- Etheorem list limits from alpha.11: registry room for one epoch of deposits (F10) and
@@ -223,11 +225,11 @@ structure FuluAssumptions (o : Spec.Oracle) (fo : Spec.FuluOracle) (c : Spec.Ful
   vectors : (absEState e).FuluVectorLengths Spec.P
   /-- Supply and time bounds (`RowBounds`, F5). -/
   rows : Spec.RowBounds (absEState e)
-  /-- True pyspec preconditions and committee state facts: an active validator at the next
-  epoch and at `current + 2`, each selection ends within `2^64` passes. Fulu has no F4 and no
-  F12. -/
-  committees : ∀ s, Spec.CommFrame (absEState e) s →
-    Spec.FuluCommConds o s ∧ Spec.FuluCommPreconds o s
+  /-- At the state that the epoch passes to the committee steps
+  (`Spec.epochToCommitteesFulu`): true pyspec preconditions and committee state facts. An active
+  validator at the next epoch and at `current + 2`, each selection ends within `2^64` passes.
+  Fulu has no F4 and no F12. -/
+  committees : Spec.CommAtFulu o (absEState e)
   /-- The Etheorem Fulu bridge conditions: Etheorem's list limits from alpha.11 (F10, the
   historical summaries room), its selections return all their items (F3), and the Electra
   proposer loop ends before pass `2^64 - 1` (`ProposerFin`, a probability fact). -/

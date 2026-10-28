@@ -421,6 +421,13 @@ structure SinglePassLinks (G : SinglePassGlue σ E) (o : Spec.Oracle)
     (G.depositPlan st).dbtc.val = plan.deposit_balance_to_consume ∧
     (G.depositPlan st).postponed.map G.absDep = plan.postponed ∧
     (G.depositPlan st).news.val.map G.absDep = plan.new_validator_deposits
+  /-- A state fact, not a glue fact: the new validators of the epoch fit under
+  `VALIDATOR_REGISTRY_LIMIT = 2^40`, where the milhouse validator list fails and the spec does
+  not. It holds on every real chain (the registry is far below `2^40`). -/
+  registryRoom : ∀ tab cur plan, Spec.get_total_active_balance Spec.P (view st) = .ok tab →
+    Spec.get_current_epoch Spec.P (view st) = .ok cur →
+    Spec.lhDepositPlan (view st) (planTab tab) cur = .ok plan →
+    (view st).validators.length + plan.new_validator_deposits.length ≤ 2 ^ 40
   /-- `usize` has 64 bits. -/
   usize64 : Usize.max = U64.max
 
@@ -448,7 +455,8 @@ theorem afterLoop_spec (G : SinglePassGlue σ E) (o : Spec.Oracle) (view : σ �
     (hcur : Spec.get_current_epoch Spec.P (view st) = .ok cur) (plan : Spec.LhDepositPlan)
     (hplan : Spec.lhDepositPlan (view st) (planTab tab) cur = .ok plan) (st1 : σ)
     (x : (Spec.Epoch × Spec.Gwei) × List Spec.Row)
-    (hv1 : view st1 = (view st).withRowsChurn x.1 x.2) (s6 : Spec.BeaconState)
+    (hv1 : view st1 = (view st).withRowsChurn x.1 x.2)
+    (hxlen : x.2.length = (view st).validators.length) (s6 : Spec.BeaconState)
     (h : Spec.lhMidCore o (view st) plan ((view st).withRowsChurn x.1 x.2) = .ok s6) :
     ∃ st4, afterLoop G st st1 = ok (some st4) ∧ view st4 = s6 := by
   unfold Spec.lhMidCore at h
@@ -463,6 +471,10 @@ theorem afterLoop_spec (G : SinglePassGlue σ E) (o : Spec.Oracle) (view : σ �
     (G.depositBorrow st1 (G.depositPlan st).postponed)
     (by simp only [hdv, hv1]; rfl) (G.depositPlan st).next (G.depositPlan st).dbtc
     (G.depositPlan st).news hnext hdbtc (by rw [hdp, hpostp]) hnews
+    (by
+      simp only [hdv, hv1, Spec.BeaconState.withRowsChurn, Spec.BeaconState.withRows,
+        List.length_map, hxlen]
+      exact hL.registryRoom tab cur plan htab hcur hplan)
   obtain ⟨⟨rd, sd⟩, hrd, hdpost⟩ := spec_imp_exists hdep
   rw [hrd]
   simp only [bind_tc_ok, uncurry_apply_pair]
@@ -581,6 +593,8 @@ theorem singlePass_spec [Spec.PresetCfg.Ok] (G : SinglePassGlue σ E) (P : Payme
   obtain ⟨plan, hplan, hT⟩ := Spec.specM_bind_ok hT
   obtain ⟨⟨dn, up⟩, hh, hT⟩ := Spec.specM_bind_ok hT
   obtain ⟨x, hx, hT⟩ := Spec.specM_bind_ok hT
+  have hxlen : x.2.length = (view st).validators.length := by
+    rw [(Spec.passM_rows _ _ _ _ hx).1, Spec.rowsOf_length]
   simp only [Spec.lhMid_eq] at hT
   obtain ⟨s6, h6, h7⟩ := Spec.specM_bind_ok hT
   have htarget : cur + Spec.P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < Spec.UINT64_SIZE := by
@@ -608,7 +622,7 @@ theorem singlePass_spec [Spec.PresetCfg.Ok] (G : SinglePassGlue σ E) (P : Payme
   subst hxv
   -- The steps after the loop.
   obtain ⟨st4, ha, hv4⟩ := afterLoop_spec G o view st id hL tab cur htab hcur plan hplan
-    (G.rowsReturn st rows' ch) _ (hL.rowsReturn rows' ch) s6 h6
+    (G.rowsReturn st rows' ch) _ (hL.rowsReturn rows' ch) (by rw [← hxlen]) s6 h6
   -- The builder payments.
   have hk6 := Spec.lhMidCore_keep o (view st) plan _ s6 h6
   obtain ⟨st', hp, hv'⟩ := payments_spec P view st hPL tab htab st4
