@@ -8,6 +8,7 @@ import EpochProofs.CacheBridge.BuildPath
 import EpochProofs.Equiv.ConsolidationTable
 import EpochProofs.Equiv.Onboarding
 import EpochProofs.Equiv.EpochContexts
+import EpochProofs.Equiv.StepContext
 
 /-!
 # Formalhouse: the final epoch results
@@ -26,7 +27,8 @@ instantiate them for the two presets.
 Lighthouse's epoch is the model `process_epoch_lh_order` (Fulu: `process_epoch_lh_order_fulu`).
 Each step of the model is Lighthouse Rust that Aeneas translates, proved equal to the step:
 
-- the per-validator loop: `single_pass_rows_model`, under `RowsContract`;
+- the per-validator loop: `single_pass_rows_model_inputs`, under `RowsContract` and
+  `ContextInputsMatch` (the raw reads that `step_context` computes the step context from);
 - the deposit writes after the loop: `apply_deposit_writes_model`, under `DepositWritesContract`;
 - the builder payment writes: `apply_builder_pending_payments_equiv`, under
   `PaymentWritesContract`;

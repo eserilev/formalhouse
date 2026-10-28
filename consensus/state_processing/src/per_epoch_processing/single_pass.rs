@@ -168,12 +168,44 @@ pub fn process_epoch_single_pass<E: EthSpec>(
     let previous_epoch = state.previous_epoch();
     let current_epoch = state.current_epoch();
     let next_epoch = state.next_epoch()?;
-    let is_in_inactivity_leak = state.is_in_inactivity_leak(previous_epoch, spec)?;
     let total_active_balance = state.get_total_active_balance()?;
     let churn_limit = state.get_validator_churn_limit(spec)?;
     let activation_churn_limit = state.get_activation_churn_limit(spec)?;
     let finalized_checkpoint = state.finalized_checkpoint();
     let fork_name = state.fork_name_unchecked();
+
+    // The values that are the same for all validators, computed from raw reads.
+    let progressive_balances = state.progressive_balances_cache();
+    let step_ctxt = single_pass_step::step_context(&single_pass_step::ContextInputs {
+        current_epoch: current_epoch.as_u64(),
+        finalized_epoch: finalized_checkpoint.epoch.as_u64(),
+        genesis_epoch: E::genesis_epoch().as_u64(),
+        total_active_balance,
+        source_balance: progressive_balances
+            .previous_epoch_flag_attesting_balance(TIMELY_SOURCE_FLAG_INDEX)?,
+        target_balance: progressive_balances
+            .previous_epoch_flag_attesting_balance(TIMELY_TARGET_FLAG_INDEX)?,
+        head_balance: progressive_balances
+            .previous_epoch_flag_attesting_balance(TIMELY_HEAD_FLAG_INDEX)?,
+        sum_slashings: state.get_all_slashings().iter().copied().safe_sum()?,
+        min_epochs_to_inactivity_penalty: spec.min_epochs_to_inactivity_penalty,
+        inactivity_score_bias: spec.inactivity_score_bias,
+        inactivity_score_recovery_rate: spec.inactivity_score_recovery_rate,
+        inactivity_penalty_quotient: spec.inactivity_penalty_quotient_for_fork(fork_name),
+        proportional_slashing_multiplier: state.get_proportional_slashing_multiplier(spec),
+        epochs_per_slashings_vector: E::EpochsPerSlashingsVector::to_u64(),
+        effective_balance_increment: spec.effective_balance_increment,
+        hysteresis_quotient: spec.hysteresis_quotient,
+        hysteresis_downward_multiplier: spec.hysteresis_downward_multiplier,
+        hysteresis_upward_multiplier: spec.hysteresis_upward_multiplier,
+        inactivity_updates: conf.inactivity_updates,
+        rewards_and_penalties: conf.rewards_and_penalties,
+        registry_updates: conf.registry_updates,
+        slashings: conf.slashings,
+        pending_deposits: fork_name.electra_enabled() && conf.pending_deposits,
+        effective_balance_updates: conf.effective_balance_updates,
+    })?;
+    let is_in_inactivity_leak = step_ctxt.is_in_inactivity_leak;
 
     let state_ctxt = &StateContext {
         current_epoch,
@@ -185,7 +217,7 @@ pub fn process_epoch_single_pass<E: EthSpec>(
     };
 
     // Contexts that require immutable access to `state`.
-    let slashings_ctxt = &SlashingsContext::new(state, state_ctxt, spec)?;
+    let slashings_ctxt = &SlashingsContext::new(&step_ctxt);
     let mut next_epoch_cache = PreEpochCache::new_for_next_epoch(state)?;
 
     let pending_deposits_ctxt = if fork_name.electra_enabled() && conf.pending_deposits {
@@ -223,7 +255,7 @@ pub fn process_epoch_single_pass<E: EthSpec>(
     );
 
     // Compute shared values required for different parts of epoch processing.
-    let rewards_ctxt = &RewardsAndPenaltiesContext::new(progressive_balances, state_ctxt, spec)?;
+    let rewards_ctxt = &RewardsAndPenaltiesContext::new(&step_ctxt);
 
     let mut activation_queues = if !fork_name.electra_enabled() {
         let activation_queue = epoch_cache
@@ -237,38 +269,10 @@ pub fn process_epoch_single_pass<E: EthSpec>(
     } else {
         None
     };
-    let effective_balances_ctxt = &EffectiveBalancesContext::new(spec)?;
+    let effective_balances_ctxt = &EffectiveBalancesContext::new(&step_ctxt);
 
     // After Electra, `single_pass_step` runs the first four steps for each validator.
     let single_pass_step_ctxt = if fork_name.electra_enabled() {
-        let step_ctxt = single_pass_step::StepContext {
-            current_epoch: current_epoch.as_u64(),
-            previous_epoch: previous_epoch.as_u64(),
-            finalized_epoch: finalized_checkpoint.epoch.as_u64(),
-            is_in_inactivity_leak,
-            inactivity_score_bias: spec.inactivity_score_bias,
-            inactivity_score_recovery_rate: spec.inactivity_score_recovery_rate,
-            inactivity_penalty_quotient: spec.inactivity_penalty_quotient_for_fork(fork_name),
-            source_increments: rewards_ctxt.source_increments,
-            target_increments: rewards_ctxt.target_increments,
-            head_increments: rewards_ctxt.head_increments,
-            active_increments: rewards_ctxt.active_increments,
-            total_active_balance,
-            target_withdrawable_epoch: slashings_ctxt.target_withdrawable_epoch.as_u64(),
-            adjusted_total_slashing_balance: slashings_ctxt.adjusted_total_slashing_balance,
-            penalty_per_effective_balance_increment: slashings_ctxt
-                .penalty_per_effective_balance_increment,
-            effective_balance_increment: spec.effective_balance_increment,
-            downward_threshold: effective_balances_ctxt.downward_threshold,
-            upward_threshold: effective_balances_ctxt.upward_threshold,
-            after_genesis: current_epoch != E::genesis_epoch(),
-            inactivity_updates: conf.inactivity_updates,
-            rewards_and_penalties: conf.rewards_and_penalties,
-            registry_updates: conf.registry_updates,
-            slashings: conf.slashings,
-            pending_deposits: pending_deposits_ctxt.is_some(),
-            effective_balance_updates: conf.effective_balance_updates,
-        };
         Some((step_ctxt, registry_constants(fork_name, spec)))
     } else {
         None
@@ -768,29 +772,13 @@ fn process_single_reward_and_penalty(
 
 /// Get the weight for a `flag_index` from the constant list of all weights.
 impl RewardsAndPenaltiesContext {
-    fn new(
-        progressive_balances: &ProgressiveBalancesCache,
-        state_ctxt: &StateContext,
-        spec: &ChainSpec,
-    ) -> Result<Self, Error> {
-        let (source_increments, target_increments, head_increments, active_increments) =
-            rewards_penalties::participation_increments(
-                progressive_balances
-                    .previous_epoch_flag_attesting_balance(TIMELY_SOURCE_FLAG_INDEX)?,
-                progressive_balances
-                    .previous_epoch_flag_attesting_balance(TIMELY_TARGET_FLAG_INDEX)?,
-                progressive_balances
-                    .previous_epoch_flag_attesting_balance(TIMELY_HEAD_FLAG_INDEX)?,
-                state_ctxt.total_active_balance,
-                spec.effective_balance_increment,
-            )?;
-
-        Ok(Self {
-            source_increments,
-            target_increments,
-            head_increments,
-            active_increments,
-        })
+    fn new(step_ctxt: &single_pass_step::StepContext) -> Self {
+        Self {
+            source_increments: step_ctxt.source_increments,
+            target_increments: step_ctxt.target_increments,
+            head_increments: step_ctxt.head_increments,
+            active_increments: step_ctxt.active_increments,
+        }
     }
 
     fn get_unslashed_participating_increments(&self, flag_index: usize) -> Result<u64, Error> {
@@ -1294,30 +1282,13 @@ fn get_balance_churn_limit(state_ctxt: &StateContext, spec: &ChainSpec) -> Resul
 }
 
 impl SlashingsContext {
-    fn new<E: EthSpec>(
-        state: &BeaconState<E>,
-        state_ctxt: &StateContext,
-        spec: &ChainSpec,
-    ) -> Result<Self, Error> {
-        let sum_slashings = state.get_all_slashings().iter().copied().safe_sum()?;
-        let (
-            adjusted_total_slashing_balance,
-            target_withdrawable_epoch,
-            penalty_per_effective_balance_increment,
-        ) = slashings_penalty::slashings_context(
-            sum_slashings,
-            state.get_proportional_slashing_multiplier(spec),
-            state_ctxt.total_active_balance,
-            state_ctxt.current_epoch.as_u64(),
-            E::EpochsPerSlashingsVector::to_u64(),
-            spec.effective_balance_increment,
-        )?;
-
-        Ok(Self {
-            adjusted_total_slashing_balance,
-            target_withdrawable_epoch: Epoch::new(target_withdrawable_epoch),
-            penalty_per_effective_balance_increment,
-        })
+    fn new(step_ctxt: &single_pass_step::StepContext) -> Self {
+        Self {
+            adjusted_total_slashing_balance: step_ctxt.adjusted_total_slashing_balance,
+            target_withdrawable_epoch: Epoch::new(step_ctxt.target_withdrawable_epoch),
+            penalty_per_effective_balance_increment: step_ctxt
+                .penalty_per_effective_balance_increment,
+        }
     }
 }
 
@@ -1646,18 +1617,11 @@ fn update_effective_balance_at<E: EthSpec>(
 }
 
 impl EffectiveBalancesContext {
-    fn new(spec: &ChainSpec) -> Result<Self, Error> {
-        let (downward_threshold, upward_threshold) = effective_balance::hysteresis_thresholds(
-            spec.effective_balance_increment,
-            spec.hysteresis_quotient,
-            spec.hysteresis_downward_multiplier,
-            spec.hysteresis_upward_multiplier,
-        )?;
-
-        Ok(Self {
-            downward_threshold,
-            upward_threshold,
-        })
+    fn new(step_ctxt: &single_pass_step::StepContext) -> Self {
+        Self {
+            downward_threshold: step_ctxt.downward_threshold,
+            upward_threshold: step_ctxt.upward_threshold,
+        }
     }
 }
 

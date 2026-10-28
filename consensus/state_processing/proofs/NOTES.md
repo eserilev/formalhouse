@@ -7,7 +7,7 @@ stages and are out of date. `README.md` states the current result and the truste
 
 - `formalhouse_gloas_epoch_final_mainnet` and `formalhouse_gloas_epoch_final_minimal`: on every Gloas epoch input of a run that starts in Fulu and crosses the Gloas fork, Lighthouse's epoch returns Ok and its state equals Etheorem's `processEpoch`.
 - `formalhouse_fulu_epoch_final_mainnet` and `formalhouse_fulu_epoch_final_minimal`: the same for every Fulu epoch input of a reachable Fulu run.
-- Both rest on the trusted base below: 9 Rust contracts, 26 glue facts, 4 cache build facts, 4 spec preconditions, 5 supply and time bounds, 3 probability facts, 2 Etheorem list limits, 3 Oracle items, 1 start state, and 6 tools and references.
+- Both rest on the trusted base below: 9 Rust contracts, 24 glue facts, 4 cache build facts, 4 spec preconditions, 5 supply and time bounds, 3 probability facts, 2 Etheorem list limits, 3 Oracle items, 1 start state, and 6 tools and references.
 - Every `#print axioms` line in `EpochProofs/Axioms.lean` uses only `propext`, `Classical.choice` and `Quot.sound`.
 
 Goal: prove that Lighthouse's Gloas epoch processing equals the consensus spec for every state.
@@ -104,7 +104,7 @@ reads or writes milhouse lists:
 | Step (Lighthouse order) | Aeneas-checked Rust | Trusted contract or glue | Spec precondition |
 |---|---|---|---|
 | Justification and finalization | `justification.rs` | read the bits and roots, write the checkpoints (by review); progressive balances build fact | none |
-| Inactivity, rewards, registry, slashings, deposit top-up, effective balance (Gloas and Fulu) | `single_pass_step.rs`, the step modules, the loop `registry_rows.rs` (`single_pass_rows_model`) | `RowsContract`; epoch cache build fact | `RowBounds` |
+| Inactivity, rewards, registry, slashings, deposit top-up, effective balance (Gloas and Fulu) | `single_pass_step.rs`, the step modules, the loop `registry_rows.rs` (`single_pass_rows_model_inputs`, with `step_context_spec`) | `RowsContract`; epoch cache build fact | `RowBounds` |
 | Pending deposits | `pending_deposits.rs`, `deposit_balance.rs`, `deposit_writes.rs` (`apply_deposit_writes_model`) | `DepositWritesContract`; pubkey cache `Coherent`, `IndexMapLaws` | none |
 | Pending consolidations | `pending_consolidations.rs` (`process_on_table_spec`), `list_writes.rs` (`update_effective_balances_at_spec`) | `ConsolidationStateContract`, `BTreeSetIter`, `EffectiveBalanceContract` | none |
 | Builder pending payments (Gloas) | `builder_pending_payments.rs`, `list_writes.rs` (`apply_builder_pending_payments_equiv`) | `PaymentWritesContract` | none |
@@ -119,8 +119,8 @@ reads or writes milhouse lists:
 
 ### Error sites
 
-`single_pass.rs` has 171 `?` sites. 17 are proved, 53 sit inside trusted contracts, 13 need a
-cache build fact, 13 have a proved bound with a named Rust formula, 15 are named facts and 60 are
+`single_pass.rs` has 165 `?` sites. 12 are proved, 53 sit inside trusted contracts, 13 need a
+cache build fact, 13 have a proved bound with a named Rust formula, 14 are named facts and 60 are
 on the pre-Electra path. The section "Error sites in `single_pass.rs`" lists each one.
 
 ## The fork upgrades
@@ -895,12 +895,12 @@ lists. The generic code that calls the trait is translated by Aeneas.
 - `IndexMapLaws`: `HashTrieMap` is a finite map, and `update_pubkey_cache` inserts the new
   pubkeys in order.
 
-### Glue facts (26)
+### Glue facts (24)
 
 Glue that Aeneas does not translate. Each fact links one Rust expression or call to the model.
 
-- `EpochProofs/Trusted/EpochGlue.lean` (12): L1 to L7 have a proved bound, so only the formula is
-  trusted. N1 to N5 have no proved bound. The file lists the lines of `single_pass.rs` for each.
+- `EpochProofs/Trusted/EpochGlue.lean` (11): L1 to L7 have a proved bound, so only the formula is
+  trusted. N1 to N4 have no proved bound. The file lists the lines of `single_pass.rs` for each.
 - `SeedMixLink`: `get_seed_mix` reads the RANDAO mix that `get_seed` reads.
 - `EBLink`: `get_effective_balance` reads the registry.
 - `HashLink`: `Sha256Hash` computes SHA-256.
@@ -908,9 +908,10 @@ Glue that Aeneas does not translate. Each fact links one Rust expression or call
   validators for the proposers.
 - `CommitteesFromCache`: the loop in `process_ptc_window` that joins the committees of each slot.
 - The chain constants: `ConstantsMatch`, `SelectionConstantsMatch`, and the payment threshold 6/10.
-- The inputs that `single_pass.rs` passes to the translated functions: the flags of
-  `new_inactivity_score`, the rewards inputs, the registry inputs, the slashings sum and the
-  deposit views. Each equals its spec value.
+- The inputs that `single_pass.rs` passes to the translated functions: the raw reads of
+  `ContextInputs` (`ContextInputsMatch`), the registry inputs and the deposit views. Each equals
+  its spec value. `step_context` computes the `StepContext` from `ContextInputs`
+  (`step_context_spec`).
 - Justification: `weigh_justification_and_finalization.rs` reads the bits and roots and writes
   the checkpoints (`lhWeighJustificationAndFinalization`).
 - The reset and historical summary writes (`LighthouseResets.lean`). `HistoricalSummary::new`
@@ -920,8 +921,6 @@ Glue that Aeneas does not translate. Each fact links one Rust expression or call
 - `Validator::from_deposit` copies the inputs, and `add_validator_to_registry` pushes one entry
   onto each of the five lists (`lhApplyPendingDeposit`).
 - The field copies of the fork upgrades, and the write of the onboarding result.
-- Lighthouse computes the slashings target epoch and the hysteresis thresholds once per epoch.
-  The spec computes them once per validator. The values are the same.
 
 ### Cache build facts (4)
 
@@ -985,19 +984,19 @@ The pyspec itself raises when these fail, so they are not Lighthouse assumptions
 
 ## Error sites in `single_pass.rs`
 
-`single_pass.rs` has 171 `?` sites. The table gives the status of each one. A capstone holds only
+`single_pass.rs` has 165 `?` sites. The table gives the status of each one. A capstone holds only
 if no `?` returns an error where the spec succeeds.
 
 | Status | Meaning | Sites |
 |---|---|---|
-| P | Proved: an Aeneas-checked function whose errors equal spec errors, and the spec step is proved total | 17 |
+| P | Proved: an Aeneas-checked function whose errors equal spec errors, and the spec step is proved total | 12 |
 | C | Inside a trusted Rust contract implementation | 53 |
 | B | Fails only if a cache is not built; the capstones assume the cache build facts | 13 |
 | L | The bound that rules out the error is proved; the Rust formula is a link in `Trusted/EpochGlue.lean` | 13 |
-| N | A named fact in `Trusted/EpochGlue.lean` with no proved bound | 15 |
+| N | A named fact in `Trusted/EpochGlue.lean` with no proved bound | 14 |
 | E | Pre-Electra path only, never reached after Electra | 60 |
 
-No site fails on a reachable state where the spec succeeds. Line 564 has two sites, one for the
+No site fails on a reachable state where the spec succeeds. Line 568 has two sites, one for the
 field accessor (N2) and one for `Vector::new` (L5). Both count as L.
 
 | Line | Function | `?` | Status | Reason |
@@ -1010,159 +1009,153 @@ field accessor (N2) and one for `Vector::new` (L5). Both count as L.
 | 165 | `process_epoch_single_pass` | 1 | N | N1 `ShuffleSize` |
 | 166 | `process_epoch_single_pass` | 1 | B | pubkey cache `Coherent` (#70) |
 | 170 | `process_epoch_single_pass` | 1 | L | L1: next epoch fits u64 (`glue_epoch_add_fits`) |
-| 171 | `process_epoch_single_pass` | 1 | N | N4 `FinalityDelayLink`; spec subtraction proved total |
-| 172 | `process_epoch_single_pass` | 1 | B | total active balance read from the epoch cache built at line 161 |
-| 173 | `process_epoch_single_pass` | 1 | B | value for the pre-Electra path; reads the cached total, divides by constants |
-| 174 | `process_epoch_single_pass` | 1 | B | as line 173 |
-| 188 | `process_epoch_single_pass` | 1 | P | see lines 1302 and 1314 |
-| 189 | `process_epoch_single_pass` | 1 | N | next epoch: L1 (`glue_epoch_add_fits`); tree hash: N3 `TreeHashOk` |
-| 192 | `process_epoch_single_pass` | 1 | P | see lines 1356 to 1440 |
-| 211 | `process_epoch_single_pass` | 1 | N | N2 `ForkFields`: Altair+ state variant |
-| 226 | `process_epoch_single_pass` | 1 | P | see lines 779 to 786 |
-| 230 | `process_epoch_single_pass` | 1 | E | activation queue, pre-Electra only |
-| 240 | `process_epoch_single_pass` | 1 | P | see line 1654 |
-| 280 | `process_epoch_single_pass` | 1 | N | N2 `ForkFields`: Electra+ field, always present |
-| 283 | `process_epoch_single_pass` | 1 | N | N2 `ForkFields`: Electra+ field, always present |
-| 310 | `process_epoch_single_pass` | 1 | C | `single_pass_rows_eq_passM` (#89), `RowsContract` |
-| 326 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
-| 329 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
-| 332 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
-| 338 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
-| 341 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
-| 366 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
-| 378 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
-| 386 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
-| 395 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
-| 406 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
-| 415 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
-| 426 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
-| 438 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
-| 447 | `process_epoch_single_pass` | 1 | N | N2 `ForkFields`: set from the Electra+ field or by the loop |
-| 451 | `process_epoch_single_pass` | 1 | N | N2 `ForkFields`: as line 447 |
-| 475 | `process_epoch_single_pass` | 1 | C | `apply_deposit_writes_model` (#90), `DepositWritesContract` |
-| 489 | `process_epoch_single_pass` | 1 | P | `process_on_table_spec` (#95); see line 1520 |
-| 495 | `process_epoch_single_pass` | 1 | C | see line 645 |
-| 506 | `process_epoch_single_pass` | 1 | P | `into_epoch_cache` fails only in `base_rewards`; `base_rewards_ok_mainnet` |
-| 510 | `process_epoch_single_pass` | 1 | P | see lines 530 to 564 |
-| 514 | `process_epoch_single_pass` | 1 | P | see lines 594 to 627 |
-| 530 | `process_proposer_lookahead` | 1 | N | N2 `ForkFields`: Fulu+ field |
-| 534 | `process_proposer_lookahead` | 1 | L | L2: lookahead epoch fits u64 (`glue_epoch_add_fits`) |
-| 535 | `process_proposer_lookahead` | 1 | L | L2 (`glue_epoch_add_fits`) |
-| 549 | `process_proposer_lookahead` | 1 | L | L4: seed mix index in range (`glue_seed_mix_index`); the value is `SeedMixLink` |
-| 562 | `process_proposer_lookahead` | 1 | P | `next_proposer_lookahead_spec`; F4 is a spec precondition |
-| 564 | `process_proposer_lookahead` | 2 | L | field: N2 `ForkFields`; `Vector::new` length: L5 (`process_proposer_lookahead_length`) |
-| 594 | `process_ptc_window` | 1 | L | L2 (`glue_epoch_add_fits`) |
-| 595 | `process_ptc_window` | 1 | L | L2 (`glue_epoch_add_fits`) |
-| 599 | `process_ptc_window` | 1 | B | `CommitteeCacheBuilt` (#74) |
-| 603 | `process_ptc_window` | 1 | L | L3: lookahead slot fits u64 (`glue_lookahead_slot_fits`) |
-| 605 | `process_ptc_window` | 1 | B | `CommitteeCacheBuilt` (#74) |
-| 611 | `process_ptc_window` | 1 | L | L4 (`glue_seed_mix_index`); the value is `SeedMixLink` |
-| 622 | `process_ptc_window` | 1 | P | `ptc_for_epoch_spec`; F12 is a spec precondition |
-| 625 | `process_ptc_window` | 1 | N | N2 `ForkFields`: Gloas field |
-| 627 | `process_ptc_window` | 1 | C | `ptc_window_writes_spec` (#91), `WindowContract` |
-| 645 | `process_builder_pending_payments` | 1 | C | `apply_builder_pending_payments_equiv` (#91), `PaymentWritesContract` |
-| 667 | `payments` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 675 | `push_withdrawal` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 676 | `push_withdrawal` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 681 | `set_payments` | 2 | C | inside a trusted contract implementation (#89 to #91) |
-| 702 | `push` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 709 | `commit` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 710 | `commit` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 724 | `process_single_inactivity_update` | 1 | E | pre-Electra path only |
+| 171 | `process_epoch_single_pass` | 1 | B | total active balance read from the epoch cache built at line 161 |
+| 172 | `process_epoch_single_pass` | 1 | B | value for the pre-Electra path; reads the cached total, divides by constants |
+| 173 | `process_epoch_single_pass` | 1 | B | as line 172 |
+| 185 | `process_epoch_single_pass` | 1 | B | progressive balances `Coherent`, previous epoch flag total |
+| 187 | `process_epoch_single_pass` | 1 | B | as line 185 |
+| 189 | `process_epoch_single_pass` | 1 | B | as line 185 |
+| 190 | `process_epoch_single_pass` | 1 | N | N4 `SlashingsSumLink`; spec sum proved total (`slashingsPreamble_ok`) |
+| 207 | `process_epoch_single_pass` | 1 | P | `step_context_spec`: the finality delay, the increments, the slashings values and the thresholds |
+| 221 | `process_epoch_single_pass` | 1 | N | next epoch: L1 (`glue_epoch_add_fits`); tree hash: N3 `TreeHashOk` |
+| 224 | `process_epoch_single_pass` | 1 | P | see lines 1327 to 1411 |
+| 243 | `process_epoch_single_pass` | 1 | N | N2 `ForkFields`: Altair+ state variant |
+| 262 | `process_epoch_single_pass` | 1 | E | activation queue, pre-Electra only |
+| 284 | `process_epoch_single_pass` | 1 | N | N2 `ForkFields`: Electra+ field, always present |
+| 287 | `process_epoch_single_pass` | 1 | N | N2 `ForkFields`: Electra+ field, always present |
+| 314 | `process_epoch_single_pass` | 1 | C | `single_pass_rows_eq_passM` (#89), `RowsContract` |
+| 330 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 333 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 336 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 342 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 345 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 370 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 382 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 390 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 399 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 410 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 419 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 430 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 442 | `process_epoch_single_pass` | 1 | E | pre-Electra loop |
+| 451 | `process_epoch_single_pass` | 1 | N | N2 `ForkFields`: set from the Electra+ field or by the loop |
+| 455 | `process_epoch_single_pass` | 1 | N | N2 `ForkFields`: as line 451 |
+| 479 | `process_epoch_single_pass` | 1 | C | `apply_deposit_writes_model` (#90), `DepositWritesContract` |
+| 493 | `process_epoch_single_pass` | 1 | P | `process_on_table_spec` (#95); see line 1491 |
+| 499 | `process_epoch_single_pass` | 1 | C | see line 649 |
+| 510 | `process_epoch_single_pass` | 1 | P | `into_epoch_cache` fails only in `base_rewards`; `base_rewards_ok_mainnet` |
+| 514 | `process_epoch_single_pass` | 1 | P | see lines 534 to 568 |
+| 518 | `process_epoch_single_pass` | 1 | P | see lines 598 to 631 |
+| 534 | `process_proposer_lookahead` | 1 | N | N2 `ForkFields`: Fulu+ field |
+| 538 | `process_proposer_lookahead` | 1 | L | L2: lookahead epoch fits u64 (`glue_epoch_add_fits`) |
+| 539 | `process_proposer_lookahead` | 1 | L | L2 (`glue_epoch_add_fits`) |
+| 553 | `process_proposer_lookahead` | 1 | L | L4: seed mix index in range (`glue_seed_mix_index`); the value is `SeedMixLink` |
+| 566 | `process_proposer_lookahead` | 1 | P | `next_proposer_lookahead_spec`; F4 is a spec precondition |
+| 568 | `process_proposer_lookahead` | 2 | L | field: N2 `ForkFields`; `Vector::new` length: L5 (`process_proposer_lookahead_length`) |
+| 598 | `process_ptc_window` | 1 | L | L2 (`glue_epoch_add_fits`) |
+| 599 | `process_ptc_window` | 1 | L | L2 (`glue_epoch_add_fits`) |
+| 603 | `process_ptc_window` | 1 | B | `CommitteeCacheBuilt` (#74) |
+| 607 | `process_ptc_window` | 1 | L | L3: lookahead slot fits u64 (`glue_lookahead_slot_fits`) |
+| 609 | `process_ptc_window` | 1 | B | `CommitteeCacheBuilt` (#74) |
+| 615 | `process_ptc_window` | 1 | L | L4 (`glue_seed_mix_index`); the value is `SeedMixLink` |
+| 626 | `process_ptc_window` | 1 | P | `ptc_for_epoch_spec`; F12 is a spec precondition |
+| 629 | `process_ptc_window` | 1 | N | N2 `ForkFields`: Gloas field |
+| 631 | `process_ptc_window` | 1 | C | `ptc_window_writes_spec` (#91), `WindowContract` |
+| 649 | `process_builder_pending_payments` | 1 | C | `apply_builder_pending_payments_equiv` (#91), `PaymentWritesContract` |
+| 671 | `payments` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 679 | `push_withdrawal` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 680 | `push_withdrawal` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 685 | `set_payments` | 2 | C | inside a trusted contract implementation (#89 to #91) |
+| 706 | `push` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 713 | `commit` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 714 | `commit` | 1 | C | inside a trusted contract implementation (#89 to #91) |
 | 728 | `process_single_inactivity_update` | 1 | E | pre-Electra path only |
 | 732 | `process_single_inactivity_update` | 1 | E | pre-Electra path only |
-| 752 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
-| 753 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
-| 754 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
+| 736 | `process_single_inactivity_update` | 1 | E | pre-Electra path only |
 | 756 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
 | 757 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
 | 758 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
+| 760 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
+| 761 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
 | 762 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
-| 764 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
-| 779 | `new` | 1 | B | progressive balances `Coherent`, previous epoch flag total |
-| 781 | `new` | 1 | B | as line 779 |
-| 783 | `new` | 1 | B | as line 779 |
-| 786 | `new` | 1 | P | `participation_increments_ok` (new) |
-| 818 | `process_single_registry_update_pre_electra` | 2 | E | pre-Electra path only |
-| 823 | `process_single_registry_update_pre_electra` | 1 | E | pre-Electra path only |
-| 827 | `process_single_registry_update_pre_electra` | 1 | E | pre-Electra path only |
-| 828 | `process_single_registry_update_pre_electra` | 1 | E | pre-Electra path only |
-| 892 | `write_back_row` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 895 | `write_back_row` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 902 | `write_back_row` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 909 | `write_back_row` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 912 | `write_back_row` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 985 | `write_queue` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 986 | `write_queue` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 991 | `write_queue` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 992 | `write_queue` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 997 | `validator_index` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1005 | `balance` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1009 | `set_balance` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1029 | `add_validator` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1066 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1071 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1076 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1081 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1086 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1100 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1102 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1119 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1127 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1136 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1146 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1170 | `record_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1176 | `record_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1197 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
+| 766 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
+| 768 | `process_single_reward_and_penalty` | 1 | E | pre-Electra path only |
+| 806 | `process_single_registry_update_pre_electra` | 2 | E | pre-Electra path only |
+| 811 | `process_single_registry_update_pre_electra` | 1 | E | pre-Electra path only |
+| 815 | `process_single_registry_update_pre_electra` | 1 | E | pre-Electra path only |
+| 816 | `process_single_registry_update_pre_electra` | 1 | E | pre-Electra path only |
+| 880 | `write_back_row` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 883 | `write_back_row` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 890 | `write_back_row` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 897 | `write_back_row` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 900 | `write_back_row` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 973 | `write_queue` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 974 | `write_queue` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 979 | `write_queue` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 980 | `write_queue` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 985 | `validator_index` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 993 | `balance` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 997 | `set_balance` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1017 | `add_validator` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1054 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1059 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1064 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1069 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1074 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1088 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1090 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1107 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1115 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1124 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1134 | `apply_step` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1158 | `record_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1164 | `record_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1185 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
+| 1186 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
+| 1188 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
+| 1191 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
+| 1193 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
+| 1195 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
 | 1198 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
-| 1200 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
 | 1203 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
-| 1205 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
-| 1207 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
-| 1210 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
-| 1215 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
-| 1218 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
-| 1220 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
-| 1234 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
-| 1238 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
-| 1240 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
-| 1251 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
-| 1253 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
-| 1254 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
-| 1255 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
-| 1256 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
-| 1257 | `compute_exit_epoch_and_update_churn` | 2 | E | pre-Electra path only |
-| 1260 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
-| 1277 | `get_activation_exit_churn_limit` | 1 | E | pre-Electra path only |
-| 1290 | `get_balance_churn_limit` | 1 | E | pre-Electra path only |
-| 1293 | `get_balance_churn_limit` | 2 | E | pre-Electra path only |
-| 1302 | `new` | 1 | N | N5 `SlashingsSumLink`; spec sum proved total (`slashingsPreamble_ok`) |
-| 1314 | `new` | 1 | P | `slashings_context_equiv` with the spec preamble total |
-| 1342 | `process_single_slashing` | 1 | E | pre-Electra path only |
-| 1344 | `process_single_slashing` | 1 | E | pre-Electra path only |
-| 1356 | `new` | 1 | L | L1 (`glue_epoch_add_fits`) |
-| 1370 | `new` | 1 | N | N2 `ForkFields`: Electra+ field |
-| 1381 | `new` | 1 | N | N2 `ForkFields`: not evaluated from Fulu on (`!fulu_enabled` short-circuits) |
-| 1384 | `new` | 1 | B | index from the pubkey cache, `Coherent` (#70) |
-| 1416 | `new` | 1 | N | N2 `ForkFields`: Electra+ field |
-| 1418 | `new` | 1 | B | epoch cache built at line 161 |
-| 1420 | `new` | 1 | P | `exit_churn_limit` equivalence, total by the spec |
-| 1422 | `new` | 1 | P | `process_pending_deposits_equiv` with `depOk_of_rowBounds` |
-| 1433 | `new` | 1 | P | `process_pending_deposits_postponed_len` (new) |
-| 1440 | `new` | 1 | L | L7: per-validator deposit sum below 2^61 (`glue_validator_deposit_sum`) |
-| 1465 | `process_pending_deposits_for_validator` | 2 | E | pre-Electra path only |
-| 1520 | `process_pending_consolidations` | 1 | P | `process_on_table_spec` (#95) under `ConsolidationStateContract`: the table run fails only when the spec fails |
-| 1538 | `process_pending_consolidations` | 1 | C | `update_effective_balances_at_spec` (#91), `EffectiveBalanceContract` |
-| 1549 | `next_epoch` | 1 | C | inside `ConsolidationStateContract` (#95) |
-| 1555 | `pending` | 1 | C | inside `ConsolidationStateContract` (#95) |
-| 1588 | `pop_pending` | 2 | C | inside `ConsolidationStateContract` (#95) |
-| 1625 | `update_effective_balance_at` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1628 | `update_effective_balance_at` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1631 | `update_effective_balance_at` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1634 | `update_effective_balance_at` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1655 | `new` | 1 | P | `hysteresis_thresholds_ok_mainnet` (new) |
-| 1682 | `process_single_dummy_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1711 | `process_single_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1716 | `process_single_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1725 | `process_single_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89 to #91) |
-| 1733 | `process_single_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1206 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
+| 1208 | `initiate_validator_exit` | 1 | E | pre-Electra path only |
+| 1222 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
+| 1226 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
+| 1228 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
+| 1239 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
+| 1241 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
+| 1242 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
+| 1243 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
+| 1244 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
+| 1245 | `compute_exit_epoch_and_update_churn` | 2 | E | pre-Electra path only |
+| 1248 | `compute_exit_epoch_and_update_churn` | 1 | E | pre-Electra path only |
+| 1265 | `get_activation_exit_churn_limit` | 1 | E | pre-Electra path only |
+| 1278 | `get_balance_churn_limit` | 1 | E | pre-Electra path only |
+| 1281 | `get_balance_churn_limit` | 2 | E | pre-Electra path only |
+| 1313 | `process_single_slashing` | 1 | E | pre-Electra path only |
+| 1315 | `process_single_slashing` | 1 | E | pre-Electra path only |
+| 1327 | `new` | 1 | L | L1 (`glue_epoch_add_fits`) |
+| 1341 | `new` | 1 | N | N2 `ForkFields`: Electra+ field |
+| 1352 | `new` | 1 | N | N2 `ForkFields`: not evaluated from Fulu on (`!fulu_enabled` short-circuits) |
+| 1355 | `new` | 1 | B | index from the pubkey cache, `Coherent` (#70) |
+| 1387 | `new` | 1 | N | N2 `ForkFields`: Electra+ field |
+| 1389 | `new` | 1 | B | epoch cache built at line 161 |
+| 1391 | `new` | 1 | P | `exit_churn_limit` equivalence, total by the spec |
+| 1393 | `new` | 1 | P | `process_pending_deposits_equiv` with `depOk_of_rowBounds` |
+| 1404 | `new` | 1 | P | `process_pending_deposits_postponed_len` (new) |
+| 1411 | `new` | 1 | L | L7: per-validator deposit sum below 2^61 (`glue_validator_deposit_sum`) |
+| 1436 | `process_pending_deposits_for_validator` | 2 | E | pre-Electra path only |
+| 1491 | `process_pending_consolidations` | 1 | P | `process_on_table_spec` (#95) under `ConsolidationStateContract`: the table run fails only when the spec fails |
+| 1509 | `process_pending_consolidations` | 1 | C | `update_effective_balances_at_spec` (#91), `EffectiveBalanceContract` |
+| 1520 | `next_epoch` | 1 | C | inside `ConsolidationStateContract` (#95) |
+| 1526 | `pending` | 1 | C | inside `ConsolidationStateContract` (#95) |
+| 1559 | `pop_pending` | 2 | C | inside `ConsolidationStateContract` (#95) |
+| 1596 | `update_effective_balance_at` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1599 | `update_effective_balance_at` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1602 | `update_effective_balance_at` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1605 | `update_effective_balance_at` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1646 | `process_single_dummy_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1675 | `process_single_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1680 | `process_single_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1689 | `process_single_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89 to #91) |
+| 1697 | `process_single_effective_balance_update` | 1 | C | inside a trusted contract implementation (#89 to #91) |

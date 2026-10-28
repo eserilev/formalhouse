@@ -4,7 +4,7 @@ import EpochProofs.Equiv.EffectiveBalanceUpdates
 import EpochProofs.Sanity.Invariants.Totality
 
 /-!
-# The rewards context in `single_pass.rs` cannot fail
+# The context helpers of `single_pass.rs` cannot fail
 
 `participation_increments` divides the three flag balances and the total active balance by the
 effective balance increment. `participation_increments_ok` shows that it returns `Ok` with the
@@ -45,7 +45,7 @@ theorem participation_increments_ok_preset (p : Spec.Preset) (source target head
         ∧ d.val = total.val / inc.val ⦄ :=
   participation_increments_ok source target head total inc (by rw [hinc]; exact hp)
 
-/-- `EffectiveBalancesContext::new` cannot fail on mainnet: the thresholds are constants. -/
+/-- `hysteresis_thresholds` cannot fail on mainnet: the thresholds are constants. -/
 theorem hysteresis_thresholds_ok_mainnet [EpochProofs.Spec.PresetCfg] :
     ∃ d u : U64, per_epoch_processing.effective_balance.hysteresis_thresholds
         1000000000#u64 4#u64 1#u64 5#u64 = ok (.Ok (d, u))
