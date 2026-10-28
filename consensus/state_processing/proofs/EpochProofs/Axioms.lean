@@ -117,6 +117,8 @@ import EpochProofs.Equiv.Onboarding
 import EpochProofs.Sanity.GlueBounds
 import EpochProofs.FormalhouseRust
 import EpochProofs.NonVacuity
+import EpochProofs.HeadlinePresets
+import EpochProofs.NonVacuityReadable
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -912,3 +914,43 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Witness.fulu_oracle_witness
 #print axioms EpochProofs.Witness.gloasAssumptions_witness
 #print axioms EpochProofs.Witness.fuluAssumptions_witness
+#print axioms EpochProofs.Formalhouse.GloasEpochRun.invariants
+#print axioms EpochProofs.Formalhouse.GloasEpochRun.tailPre
+#print axioms EpochProofs.Formalhouse.FuluEpochRun.invariants
+#print axioms EpochProofs.Formalhouse.FuluEpochRun.tailPre
+#print axioms EpochProofs.Formalhouse.gloas_sameOk_of_invariants
+#print axioms EpochProofs.Formalhouse.gloas_sameOk_of_run
+#print axioms EpochProofs.Formalhouse.fulu_sameOk_of_run
+#print axioms EpochProofs.Formalhouse.rewards_overflow_example
+#print axioms EpochProofs.Formalhouse.gloasAssumptions_of
+#print axioms EpochProofs.Formalhouse.fuluAssumptions_of
+#print axioms EpochProofs.Formalhouse.ptc_committees_from_cache
+#print axioms EpochProofs.Formalhouse.gloas_epoch_readable
+#print axioms EpochProofs.Formalhouse.gloas_epoch_upkeep_readable
+#print axioms EpochProofs.Formalhouse.gloas_epoch_at_input_readable
+#print axioms EpochProofs.Formalhouse.gloas_epoch_rust_readable
+#print axioms EpochProofs.Formalhouse.fulu_epoch_readable
+#print axioms EpochProofs.Formalhouse.fulu_epoch_rust_readable
+#print axioms EpochProofs.Formalhouse.lighthouse_gloas_epoch
+#print axioms EpochProofs.Formalhouse.lighthouse_gloas_epoch_rust
+#print axioms EpochProofs.Formalhouse.lighthouse_fulu_epoch
+#print axioms EpochProofs.Formalhouse.lighthouse_fulu_epoch_rust
+#print axioms EpochProofs.Formalhouse.lighthouse_gloas_epoch_sameOk_spec
+#print axioms EpochProofs.Formalhouse.lighthouse_fulu_epoch_sameOk_spec
+#print axioms EpochProofs.Formalhouse.lighthouse_gloas_epoch_mainnet
+#print axioms EpochProofs.Formalhouse.lighthouse_gloas_epoch_rust_mainnet
+#print axioms EpochProofs.Formalhouse.lighthouse_fulu_epoch_mainnet
+#print axioms EpochProofs.Formalhouse.lighthouse_fulu_epoch_rust_mainnet
+#print axioms EpochProofs.Formalhouse.lighthouse_gloas_epoch_sameOk_spec_mainnet
+#print axioms EpochProofs.Formalhouse.lighthouse_fulu_epoch_sameOk_spec_mainnet
+#print axioms EpochProofs.Formalhouse.lighthouse_gloas_epoch_minimal
+#print axioms EpochProofs.Formalhouse.lighthouse_gloas_epoch_rust_minimal
+#print axioms EpochProofs.Formalhouse.lighthouse_fulu_epoch_minimal
+#print axioms EpochProofs.Formalhouse.lighthouse_fulu_epoch_rust_minimal
+#print axioms EpochProofs.Formalhouse.lighthouse_gloas_epoch_sameOk_spec_minimal
+#print axioms EpochProofs.Formalhouse.lighthouse_fulu_epoch_sameOk_spec_minimal
+#print axioms EpochProofs.Witness.sameOk_witness
+#print axioms EpochProofs.Witness.sameOk_witness_fulu
+#print axioms EpochProofs.Witness.sameOk_at_witness
+#print axioms EpochProofs.Witness.gloasChain_witness
+#print axioms EpochProofs.Witness.fuluChain_witness

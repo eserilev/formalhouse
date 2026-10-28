@@ -217,3 +217,7 @@ import EpochProofs.Compose.Epoch
 import EpochProofs.Compose.Fulu
 import EpochProofs.FormalhouseRust
 import EpochProofs.NonVacuity
+import EpochProofs.FormalhouseReadable
+import EpochProofs.Headline
+import EpochProofs.HeadlinePresets
+import EpochProofs.NonVacuityReadable

@@ -22,29 +22,56 @@ Take a chain that starts in Fulu and crosses the Gloas fork. At every epoch boun
    the [cache assumptions](#lighthouse-code-that-is-not-checked) below. The Fulu model reads
    the spec values directly, so for Fulu the cache reads are assumed, not proved.
 
-The theorems are in `EpochProofs/FormalhouseFinal.lean`:
+The statements are in `EpochProofs/Headline.lean`, and the mainnet and minimal versions
+(`_mainnet`, `_minimal`) in `HeadlinePresets.lean`. `FormalhouseReadable.lean` defines the names
+they use, each with a docstring, and proves them from the original theorems
+(`formalhouse_gloas_epoch_final`, `formalhouse_fulu_epoch_final`, `_upkeep`, `_at_input`,
+`_rust`), which keep their names and statements.
 
-| Theorem | Fork | Presets | Caches |
-|---|---|---|---|
-| `formalhouse_gloas_epoch_final` | Gloas, after the fork from Fulu | `_mainnet`, `_minimal` | includes the cache reads |
-| `formalhouse_fulu_epoch_final` | Fulu | `_mainnet`, `_minimal` | cache reads assumed |
-| `formalhouse_gloas_epoch_rust` | as `_final` | `_mainnet`, `_minimal` | as `_final`, state result only |
-| `formalhouse_fulu_epoch_rust` | as `_final` | `_mainnet`, `_minimal` | as `_final` |
+| Theorem | States | Assumes |
+|---|---|---|
+| `lighthouse_gloas_epoch` | `LighthouseEqualsEtheorem`, and the cache reads give the spec values (`GloasCacheReadsCorrect`) | `GloasEpochRun`, `GloasChainAssumptions`, `EtheoremFaithful`, `OracleMatchesEtheorem`, `GloasCacheFacts` |
+| `lighthouse_gloas_epoch_rust` | `RustEqualsEtheorem`: the same for the composed Rust | as above, and `RustEpoch` (the glue) |
+| `lighthouse_fulu_epoch` | `LighthouseEqualsEtheoremFulu`; the Fulu cache reads are assumed | `FuluEpochRun`, `FuluChainAssumptions`, `EtheoremFaithfulFulu`, `OracleMatchesEtheoremFulu` |
+| `lighthouse_fulu_epoch_rust` | `RustEqualsEtheoremFulu` | as above, and `RustEpochFulu` |
+| `lighthouse_gloas_epoch_sameOk_spec` | the model and the transcription's `process_epoch` give the same state, or both fail | `GloasEpochRun`, `HistRoom` |
+| `lighthouse_fulu_epoch_sameOk_spec` | the same for Fulu | `FuluEpochRun`, `HistRoom` |
 
-The `_rust` theorems (`EpochProofs/FormalhouseRust.lean`) take the hypotheses of the `_final`
-ones, plus the untranslated glue and its trusted facts, and state the result about the composed
-Rust `Compose.epoch` (Fulu: `Compose.epochFulu`) instead of the model: it returns `Ok`, and its
-state equals Etheorem's.
+`gloas_epoch_upkeep_readable` and `gloas_epoch_at_input_readable` restate the `_upkeep` and
+`_at_input` variants, which differ only in the cache facts. `ptc_committees_from_cache` is the
+committee cache fact of the PTC window step, which the original Gloas theorem carries as a
+conjunct but which does not depend on the epoch input.
 
-The Gloas theorem, without its hypotheses and cache conclusions:
+The headline Gloas statement:
 
 ```lean
-theorem formalhouse_gloas_epoch_final ...
-    (hin : GloasEpochInput o fo c uc init (absEState e)) (ha : GloasAssumptions o init e) ... :
-    ∃ s', Spec.process_epoch_lh_order o (absEState e) = .ok s' ∧
-      (∃ e', (EthCLSpecs.Gloas.processEpoch ...).run (pureState e) =
-        .ok ((), pureState e') ∧ absEState e' = s') ∧ ...
+theorem lighthouse_gloas_epoch (hpa : EpochPresetAgrees Spec.P)
+    (hhr : Spec.LH_HISTORICAL_ROOTS_LIMIT ≤ EthCLSpecs.Gloas.Const.historicalRootsLimit)
+    (run : GloasEpochRun o fo c uc init (absEState e))
+    (chain : GloasChainAssumptions o (absEState e)) (ef : EtheoremFaithful e)
+    (oracle : OracleMatchesEtheorem o)
+    (caches : GloasCacheFacts cache total inst m (absEState e)) :
+    LighthouseEqualsEtheorem o e ∧ GloasCacheReadsCorrect cache total inst m (absEState e)
 ```
+
+`LighthouseEqualsEtheorem o e` unfolds to:
+
+```lean
+∃ s', Spec.process_epoch_lh_order o (absEState e) = .ok s' ∧
+  ∃ e', (EthCLSpecs.Gloas.processEpoch ...).run (pureState e) = .ok ((), pureState e') ∧
+    absEState e' = s'
+```
+
+The hypothesis bundles follow the groups of [What is trusted](#what-is-trusted): the run with
+its supply bounds, the chain assumptions, what Etheorem needs because it differs from the pyspec
+(its alpha.11 list limits F6 and F10, and F3), the oracle, the cache provenance and, for `_rust`,
+the glue.
+
+The SameOk theorems compare with the hand-written transcription of the pyspec, not with
+Etheorem. The transcription is reviewed against the pyspec but not run against the EF vectors,
+so the Etheorem theorems remain the externally checked ones. In exchange, the SameOk theorems
+do not assume that the epoch succeeds: see
+[Assumptions about the chain](#assumptions-about-the-chain) for what they drop.
 
 Four terms in this statement need a precise meaning.
 
@@ -105,9 +132,14 @@ and for Fulu the run bounds (`supply`, `econ`) and `FuluEpochConds`. `gloas_spec
 hypotheses (`GloasEpochInput`, `FuluEpochInput`), the cache facts and the glue facts of the
 `_rust` theorems have no witness.
 
+`EpochProofs/NonVacuityReadable.lean` does the same for the bundles of the headline theorems at
+the same state: `gloasChain_witness` and `fuluChain_witness` for the chain, Etheorem and oracle
+bundles, and `sameOk_witness` for the state facts that the SameOk theorems use (the
+reachable-state invariants and `HistRoom`). The runs themselves have no witness there either.
+
 ### Axiom audit
 
-`EpochProofs/Axioms.lean` prints the axioms of 794 theorems, including all the final ones. Each
+`EpochProofs/Axioms.lean` prints the axioms of 834 theorems, including all the final ones. Each
 depends only on `propext`, `Classical.choice` and `Quot.sound`, so none rests on `sorry`
 (`sorryAx`) or `native_decide` (`Lean.ofReduceBool`). CI rebuilds the proofs on every change and
 fails if any audited theorem reports another axiom.
@@ -284,6 +316,20 @@ bits.
 These are hypotheses of the final theorems. When one fails, either the pyspec itself fails, or
 the chain is far outside anything physically possible.
 
+The SameOk theorems (`lighthouse_gloas_epoch_sameOk_spec`, `_fulu_`) keep only two of them:
+
+- the supply bounds that the run carries (`SupplyBound`, `EpochSupply`). The reachable-state
+  invariants are proved from them, and `EpochSupply` (each balance below `2^62`) is also needed
+  for agreement: Lighthouse adds all rewards before it subtracts the penalties, so near `2^64` it
+  overflows where the spec does not (`rewards_overflow_example`).
+- `HistRoom`: fewer than `2^24` historical summaries. Lighthouse's list returns an error when
+  full, and the transcription appends without a limit. The pyspec's SSZ list would raise at the
+  same length, but the transcription leaves the limit out.
+
+They drop the pyspec preconditions (where these fail, both sides fail), `RowBounds`,
+`slot + 8192 < 2^64`, the reachable-state facts below, the hash-output facts and everything
+about Etheorem and the oracle.
+
 **Pyspec halts.** The pyspec raises without these, so no implementation can agree with it.
 
 These and the committee state facts below are stated at the state that the epoch passes to the
@@ -303,13 +349,15 @@ committee steps (`Spec.CommAt`, `Spec.CommAtFulu`), which is a function of the e
   `effective_balance * inactivity_score` (F5). Scores grow by 4 per epoch of leak, so this takes
   about a million epochs. The same group bounds the effective balance sum, the funds, the exit
   fields and the validator count (`RowBounds`).
-- `slot + 8192 < 2^64`, and the epoch runs at the last slot of an epoch.
+- `slot + 8192 < 2^64`. That the epoch runs at the last slot of an epoch, and that the next slot
+  fits in `u64`, follow from the run.
 - `historical_summaries` holds fewer than `2^24` entries, Lighthouse's list limit.
 
 **Reachable-state facts not yet carried to the epoch.** These hold on every real chain. The
 invariant proofs cover most of the state, but not yet these fields:
 
-- validator pubkeys are unique, and each passes `KeyValidate`;
+- validator pubkeys pass `KeyValidate`. For Gloas, that they are unique follows from the run;
+  `formalhouse_gloas_epoch_final` still takes it, the headline theorems do not;
 - the SSZ vectors, `proposer_lookahead` and `ptc_window` have their lengths;
 - at most `2^40` validators, and each effective balance is at most 2048 ETH;
 - `_rust` only: the new validators of the epoch fit under `2^40`, where Lighthouse's validator
@@ -638,6 +686,8 @@ where the spec succeeds.
 | `EpochProofs/Etheorem/` | The transcription's epoch equals Etheorem's. |
 | `EpochProofs/CacheBridge/` | The cache reads equal the spec values. |
 | `EpochProofs/FormalhouseFinal.lean` | The final theorems. |
+| `EpochProofs/FormalhouseReadable.lean` | Named conclusions and hypothesis bundles, the restated theorems. |
+| `EpochProofs/Headline.lean` | The headline statements (`HeadlinePresets.lean`: mainnet and minimal). |
 | `EpochProofs/Axioms.lean` | The axiom audit. |
 
 ## Building
