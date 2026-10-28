@@ -8,11 +8,11 @@ The witness of `NonVacuity.lean` (`witnessState`, and the Etheorem states `witne
 `witnessEtheoremFulu` that map to it: minimal preset, last slot of epoch 0, eight active
 validators at 2048 ETH) also satisfies the bundles of `FormalhouseReadable.lean`.
 
-- `sameOk_hyps_at_witness`, `sameOk_hyps_at_witness_fulu`: the state hypotheses that the
-  `_agrees_pyspec` theorems use (`ReachableInvariants`, `AtEpochBoundary`, so also
+- `agrees_pyspec_hyps_at_witness`, `agrees_pyspec_hyps_at_witness_fulu`: the state hypotheses
+  that the `_agrees_pyspec` theorems use (`ReachableInvariants`, `AtEpochBoundary`, so also
   `HistoricalSummariesBelowLimit`) hold at `witnessState`, `witnessStateFulu`. The Gloas one then
-  applies there (`sameOk_at_witness`).
-- `gloas_bundles_at_witness`, `fulu_bundles_at_witness`: the chain, Etheorem divergence and
+  applies there (`lighthouse_model_gloas_epoch_agrees_pyspec_at_witness`).
+- `gloas_bundles_at_witness`, `fulu_bundles_at_witness`: the chain, Etheorem (Gloas divergence, Fulu bridge) and
   oracle bundles hold together at `witnessEtheorem` (`witnessEtheoremFulu`), given the facts that
   `NonVacuity.lean` also takes as they are (F3, the Fulu Etheorem conditions, SHA-256 output
   size).
@@ -33,24 +33,26 @@ local instance : @PresetCfg.Bounds minimalCfg := minimalCfg_bounds
 local instance : FuluCfg.Ok := ⟨fuluCompat_minimal⟩
 
 /-- The state hypotheses of the Gloas agreement theorem hold at `witnessState`. -/
-theorem sameOk_hyps_at_witness :
+theorem agrees_pyspec_hyps_at_witness :
     ReachableInvariants witnessState ∧ AtEpochBoundary witnessState ∧
       HistoricalSummariesBelowLimit witnessState :=
-  ⟨witnessState_epochInputOk, witnessState_tailPre, witnessState_tailPre.2.2⟩
+  ⟨witnessState_reachableInvariants, witnessState_atEpochBoundary,
+    witnessState_atEpochBoundary.2.2⟩
 
 /-- The state hypotheses of the Fulu agreement theorem hold at `witnessStateFulu`. -/
-theorem sameOk_hyps_at_witness_fulu :
+theorem agrees_pyspec_hyps_at_witness_fulu :
     ReachableInvariants witnessStateFulu ∧ AtEpochBoundary witnessStateFulu ∧
       HistoricalSummariesBelowLimit witnessStateFulu :=
-  ⟨witnessStateFulu_epochInputOk, witnessState_tailPre, witnessState_tailPre.2.2⟩
+  ⟨witnessStateFulu_reachableInvariants, witnessStateFulu_atEpochBoundary,
+    witnessStateFulu_atEpochBoundary.2.2⟩
 
 /-- At `witnessState`, the Lean model of Lighthouse's Gloas epoch and the transcription agree,
 for every oracle. -/
-theorem sameOk_at_witness (o : Oracle) :
+theorem lighthouse_model_gloas_epoch_agrees_pyspec_at_witness (o : Oracle) :
     SameResultOrBothFail (process_epoch_lighthouse o witnessState)
       (process_epoch P o witnessState) :=
-  lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants o witnessState_epochInputOk
-    witnessState_tailPre
+  lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants o witnessState_reachableInvariants
+    witnessState_atEpochBoundary
 
 end Minimal
 
@@ -96,14 +98,14 @@ theorem fulu_bundles_at_witness
     (hsha : ∀ b : ByteArray, (EthCLLib.Spec.sha b).size = 32) :
     ∃ o, Etheorem.Fulu.FuluEpochConds P o witnessEtheoremFulu →
       FuluChainAssumptions o (toSpecStateFulu witnessEtheoremFulu) ∧
-        FuluEtheoremDivergenceAssumptions o witnessEtheoremFulu ∧
+        FuluEtheoremBridgeConditions o witnessEtheoremFulu ∧
         FuluOracleMatchesEtheorem o := by
   obtain ⟨o, ho, hk⟩ := fulu_oracle_witness
   refine ⟨o, fun hconds => ⟨?_, ⟨hconds⟩, ⟨ho, hsha⟩⟩⟩
   rw [toSpecStateFulu, witnessEtheoremFulu_abs]
   have hc := witnessStateFulu_atCommitteeStepState o (fun v _ => hk _)
-  refine ⟨fun t h => ?_, fun t h => ?_, witnessStateFulu_rowBounds, by decide +kernel,
-    witnessState_tailPre.2.2, witnessStateFulu_fuluVectors, fun t h => (hc t h).1⟩
+  refine ⟨fun t h => ?_, fun t h => ?_, witnessStateFulu_physicalLimits, by decide +kernel,
+    witnessStateFulu_atEpochBoundary.2.2, witnessStateFulu_fuluVectors, fun t h => (hc t h).1⟩
   · have hp := (hc t h).2
     exact ⟨hp.syncActive, hp.proposers⟩
   · have hp := (hc t h).2

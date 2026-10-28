@@ -11,8 +11,8 @@ This file names the conclusions and bundles the hypotheses by the groups of the 
 "What is trusted", so that `Headline.lean` can state the results in a few lines. No proof of the
 final theorems is changed.
 
-Readable names: a few names of the rest of the project that the headline statements use get an
-alias here (`abbrev`, so each unfolds to the original): `EtheoremState`, `toSpecState`,
+Readable names: a few names of the rest of the project that the headline statements and
+bundles use get an alias here (`abbrev`, so each unfolds to the original): `EtheoremState`, `toSpecState`,
 `SameResultOrBothFail`, `process_epoch_lighthouse`, `HistoricalSummariesBelowLimit`,
 `PhysicalLimits`, `EpochBalanceBounds`, `ReachableInvariants`, `AtEpochBoundary`,
 `LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT`, `ProgressiveBalancesInner`, `PresetMatchesEtheorem`, and
@@ -20,10 +20,10 @@ the Fulu ones.
 
 Conclusions:
 
-- `GloasLighthouseEqualsEtheorem`: the Lean model of Lighthouse's epoch returns `ok`,
+- `GloasLighthouseModelEqualsEtheorem`: the Lean model of Lighthouse's epoch returns `ok`,
   Etheorem's `processEpoch` succeeds, and the two states are equal.
   `GloasRustEqualsEtheorem`: the same for the composed Aeneas translation of the Rust.
-  `FuluLighthouseEqualsEtheorem`, `FuluRustEqualsEtheorem`: the same for Fulu.
+  `FuluLighthouseModelEqualsEtheorem`, `FuluRustEqualsEtheorem`: the same for Fulu.
 - `GloasCacheReadsCorrect`: the progressive balances reads, the epoch cache total and the pubkey
   cache lookup give the spec values.
 
@@ -36,7 +36,8 @@ Hypotheses (each `Gloas` bundle has a `Fulu` counterpart, except the cache one):
   selections, the physical limits and the reachable-state facts not yet carried to the epoch
   (README, "Assumptions about the chain").
 - `GloasEtheoremDivergenceAssumptions`: what is needed only because Etheorem differs from the
-  pyspec (its alpha.11 list limits, F3).
+  pyspec (its alpha.11 list limits, F3). Fulu: `FuluEtheoremBridgeConditions`, the conditions of
+  the Etheorem Fulu bridge, not all about Etheorem.
 - `GloasOracleMatchesEtheorem`: the spec Oracle agrees with Etheorem.
 - `GloasRustGlueFacts`: the Rust state views as the epoch input, and the glue facts hold.
 
@@ -95,8 +96,8 @@ abbrev EpochBalanceBounds (s : Spec.BeaconState) : Prop := Spec.EpochSupply s
 abbrev ReachableInvariants [Spec.PresetCfg.Ok] (s : Spec.BeaconState) : Prop :=
   Spec.EpochInputOk'' Spec.EpochSupply s
 
-/-- The state is at the last slot of an epoch, the next slot fits in `u64`, and
-`HistoricalSummariesBelowLimit` (`TailPre`). -/
+/-- The state is at the last slot of an epoch, the next slot fits in `u64`, and (note) also
+`HistoricalSummariesBelowLimit`: fewer than `2^24` historical summaries (`TailPre`). -/
 abbrev AtEpochBoundary (s : Spec.BeaconState) : Prop := TailPre s
 
 /-- `Inner` of Lighthouse's `ProgressiveBalancesCache` (`LhCache`). -/
@@ -108,7 +109,8 @@ abbrev EtheoremState [EthCLSpecs.Gloas.Preset] : Type := EpochProofs.Etheorem.ES
 /-- An Etheorem Fulu state (`Etheorem.Fulu.EState`). -/
 abbrev EtheoremFuluState [EthCLSpecs.Fulu.Preset] : Type := EpochProofs.Etheorem.Fulu.EState
 
-/-- The state of the hand-written spec that an Etheorem Gloas state maps to. Every field maps
+/-- The state of the hand-written spec transcription (`EpochProofs/Spec/`) that an Etheorem Gloas
+state maps to. Every field maps
 (`Etheorem.absEState`). -/
 abbrev toSpecState [EthCLSpecs.Gloas.Preset] (e : EtheoremState) : Spec.BeaconState :=
   EpochProofs.Etheorem.absEState e
@@ -152,15 +154,16 @@ structure GloasEpochRun (o : Spec.Oracle) (fo : Spec.FuluOracle) (c : Spec.FuluB
   input : GloasEpochInput o fo c uc init s
 
 /-- `s` is an input of the Fulu `process_epoch` in a run of Fulu blocks from a state with the
-invariants of a genesis state, with the supply bounds of the run (`supply`, `econ`). -/
+invariants of a genesis state, with the supply bounds of the run (`activeBalanceBound`,
+`epochBalanceBounds`). -/
 structure FuluEpochRun (o : Spec.Oracle) (fo : Spec.FuluOracle) (c : Spec.FuluBlockConfig)
     (init : Spec.FuluState) (s : Spec.BeaconState) : Prop where
   /-- The Fulu start state has the invariants of a genesis state. -/
   start : Spec.FuluStartOk init.state
   /-- The total active balance is at most 139M ETH before each block (`SupplyBoundFulu`). -/
-  supply : Spec.SupplyBoundFulu o fo c init
+  activeBalanceBound : Spec.SupplyBoundFulu o fo c init
   /-- `EpochBalanceBounds` at each epoch input of the run. -/
-  econ : Spec.EpochEconFulu o fo c init Spec.EpochSupply
+  epochBalanceBounds : Spec.EpochEconFulu o fo c init Spec.EpochSupply
   /-- The run. -/
   input : FuluEpochInput o fo c init s
 
@@ -187,8 +190,8 @@ theorem GloasEpochRun.atEpochBoundary {o fo c uc init s} (h : GloasEpochRun o fo
 theorem FuluEpochRun.invariants {o fo c init s} (h : FuluEpochRun o fo c init s) :
     ReachableInvariants s := by
   obtain ⟨fs, t, t1, slot, hr, hslot64, hreach, hlt, ht, hz, rfl⟩ := h.input.reach
-  exact Spec.fulu_reachable_invariants o fo c init h.start h.supply _ h.econ fs t t1 slot hr
-    hslot64 hreach hlt ht hz
+  exact Spec.fulu_reachable_invariants o fo c init h.start h.activeBalanceBound _
+    h.epochBalanceBounds fs t t1 slot hr hslot64 hreach hlt ht hz
 
 omit [Spec.PresetCfg.Ok] [Spec.FuluCfg.Ok] in
 /-- A Fulu epoch input is the last slot of an epoch, and the next slot fits in `u64`. -/
@@ -239,7 +242,7 @@ abbrev curEpoch (s : Spec.BeaconState) : Nat := s.slot / Spec.P.SLOTS_PER_EPOCH
 
 /-- The Lean model of Lighthouse's Gloas epoch returns `ok s'`, Etheorem's Gloas `processEpoch`
 succeeds on the same state, and its result maps to `s'`. -/
-def GloasLighthouseEqualsEtheorem (o : Spec.Oracle) (e : EtheoremState) : Prop :=
+def GloasLighthouseModelEqualsEtheorem (o : Spec.Oracle) (e : EtheoremState) : Prop :=
   ∃ s', process_epoch_lighthouse o (toSpecState e) = .ok s' ∧
     ∃ e', (EthCLSpecs.Gloas.processEpoch
         (StateTransition := EthCLSpecs.Proofs.Gloas.GloasRun)).run (pureState e) =
@@ -274,12 +277,12 @@ def EpochCacheTotalCorrect (totalActiveBalance : U64) (s : Spec.BeaconState) : P
     ∃ r, types.state.total_active_balance.floor_total_active_balance totalActiveBalance inc =
       ok r ∧ Spec.get_total_active_balance Spec.P s = .ok r.val
 
-/-- The pubkey cache lookup (`pubkeyIndex.get_index pubkeyMap`) of every pubkey returns the first
+/-- The pubkey cache lookup (`pubkeyMapOps.get_index pubkeyMap`) of every pubkey returns the first
 validator with that pubkey, and `none` exactly when no validator has it. -/
 def PubkeyLookupCorrect {M : Type}
-    (pubkeyIndex : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
+    (pubkeyMapOps : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
     (s : Spec.BeaconState) : Prop :=
-  ∀ pk, ∃ r, pubkeyIndex.get_index pubkeyMap pk = ok r ∧
+  ∀ pk, ∃ r, pubkeyMapOps.get_index pubkeyMap pk = ok r ∧
     (r.map (·.val)).bind (fun i => s.validators[i]?) =
       s.validators[(s.validators.map (·.pubkey)).idxOf pk]? ∧
     (r.isSome ↔ pk ∈ s.validators.map (·.pubkey)) ∧
@@ -290,10 +293,10 @@ epoch cache total and the pubkey cache. The committee cache read of the PTC wind
 `ptc_committees_from_cache`, a separate theorem. -/
 def GloasCacheReadsCorrect {M : Type} (progressiveCache : ProgressiveBalancesInner)
     (totalActiveBalance : U64)
-    (pubkeyIndex : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
+    (pubkeyMapOps : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
     (s : Spec.BeaconState) : Prop :=
   ProgressiveBalancesReadsCorrect progressiveCache s ∧
-    EpochCacheTotalCorrect totalActiveBalance s ∧ PubkeyLookupCorrect pubkeyIndex pubkeyMap s
+    EpochCacheTotalCorrect totalActiveBalance s ∧ PubkeyLookupCorrect pubkeyMapOps pubkeyMap s
 
 /-! ### Cache provenance -/
 
@@ -323,31 +326,31 @@ def EpochCacheBuilt (totalActiveBalance : U64) (s : Spec.BeaconState) : Prop :=
 prefix of the input's, `PkPrefix`) and then completed by `update_pubkey_cache` (`insertAll`),
 over a map with the `IndexMapLaws`. -/
 def PubkeyCacheBuilt {M : Type}
-    (pubkeyIndex : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
+    (pubkeyMapOps : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
     (s : Spec.BeaconState) : Prop :=
-  ∃ view : M → Spec.BLSPubkey → Option Usize, CacheProofs.IndexMapLaws pubkeyIndex view ∧
+  ∃ view : M → Spec.BLSPubkey → Option Usize, CacheProofs.IndexMapLaws pubkeyMapOps view ∧
     ∃ (b' : Spec.BeaconState) (m0 : M) (len0 len : Usize), Spec.PkPrefix b' s ∧
       CacheProofs.Coherent view m0 len0 (b'.validators.map (·.pubkey)) ∧
-      CacheProofs.insertAll pubkeyIndex m0 len0 ((s.validators.map (·.pubkey)).drop len0.val) =
+      CacheProofs.insertAll pubkeyMapOps m0 len0 ((s.validators.map (·.pubkey)).drop len0.val) =
         ok (some (pubkeyMap, len))
 
 /-- Where each cache that the Gloas epoch reads came from (README, "The caches"). -/
 structure GloasCacheProvenance {M : Type} (progressiveCache : ProgressiveBalancesInner)
     (totalActiveBalance : U64)
-    (pubkeyIndex : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
+    (pubkeyMapOps : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
     (s : Spec.BeaconState) : Prop where
   /-- The progressive balances cache is coherent with the epoch input. -/
   progressive : ProgressiveCacheCoherent progressiveCache s
   /-- The epoch cache total was built at a state of the same epoch with the same active set. -/
   epochCache : EpochCacheBuilt totalActiveBalance s
   /-- The pubkey cache was built at an earlier state and completed by `update_pubkey_cache`. -/
-  pubkeyCache : PubkeyCacheBuilt pubkeyIndex pubkeyMap s
+  pubkeyCache : PubkeyCacheBuilt pubkeyMapOps pubkeyMap s
 
 /-- `GloasCacheProvenance` with the progressive balances cache kept up to date since a state of
 the epoch (`ProgressiveCacheKept`) instead of coherent at the input. -/
 structure GloasCacheProvenanceUpkeep {M : Type} (progressiveCache : ProgressiveBalancesInner)
     (totalActiveBalance : U64)
-    (pubkeyIndex : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
+    (pubkeyMapOps : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
     (s : Spec.BeaconState) : Prop where
   /-- The progressive balances cache was coherent at a state of the epoch, and every write since
   ran its cache hook. -/
@@ -355,13 +358,13 @@ structure GloasCacheProvenanceUpkeep {M : Type} (progressiveCache : ProgressiveB
   /-- As in `GloasCacheProvenance`. -/
   epochCache : EpochCacheBuilt totalActiveBalance s
   /-- As in `GloasCacheProvenance`. -/
-  pubkeyCache : PubkeyCacheBuilt pubkeyIndex pubkeyMap s
+  pubkeyCache : PubkeyCacheBuilt pubkeyMapOps pubkeyMap s
 
 /-- The cache facts stated at the epoch input itself: each cache is the one built from the
 input. -/
 structure GloasCacheProvenanceAtInput {M : Type} (progressiveCache : ProgressiveBalancesInner)
     (totalActiveBalance : U64)
-    (pubkeyIndex : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
+    (pubkeyMapOps : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
     (s : Spec.BeaconState) : Prop where
   /-- The progressive balances cache is coherent with the epoch input. -/
   progressive : ProgressiveCacheCoherent progressiveCache s
@@ -371,7 +374,7 @@ structure GloasCacheProvenanceAtInput {M : Type} (progressiveCache : Progressive
     (s.validators.map (·.effective_balance))
   /-- The pubkey cache is coherent with the pubkeys of the input. -/
   pubkeyCache : ∃ view : M → Spec.BLSPubkey → Option Usize,
-    CacheProofs.IndexMapLaws pubkeyIndex view ∧
+    CacheProofs.IndexMapLaws pubkeyMapOps view ∧
     ∃ len : Usize, CacheProofs.Coherent view pubkeyMap len (s.validators.map (·.pubkey))
 
 /-! ### Other hypotheses -/
@@ -383,21 +386,25 @@ structure GloasCommitteeStepPyspecPreconds (t : Spec.BeaconState) : Prop where
   syncActive : Spec.get_active_validator_indices t (t.slot / Spec.P.SLOTS_PER_EPOCH + 1) ≠ []
   /-- F4: an unslashed validator is active two epochs ahead: a proposer candidate. -/
   proposers : Spec.unslashedActive t (t.slot / Spec.P.SLOTS_PER_EPOCH + 2) ≠ []
-  /-- F12: at least `SLOTS_PER_EPOCH` validators are active two epochs ahead, or the PTC of the
-  first slot of that epoch is empty. -/
-  ptc32 : Spec.P.SLOTS_PER_EPOCH ≤
+  /-- F12: at least `SLOTS_PER_EPOCH` validators are active two epochs ahead. With fewer, the
+  first slot of that epoch has an empty PTC and `compute_ptc` asserts. -/
+  enoughActiveForPtc : Spec.P.SLOTS_PER_EPOCH ≤
     (Spec.get_active_validator_indices t (t.slot / Spec.P.SLOTS_PER_EPOCH + 2)).length
 
 /-- Hash-output facts of the Gloas committee steps, at the state `t` that the epoch passes to
 them: each spec balance-weighted selection (sync committee, proposers, PTC) accepts its
 candidates within `2^64` passes. The last three fields of `CommitteeStepPreconds`. -/
 structure GloasCommitteeStepSelectionsEnd (o : Spec.Oracle) (t : Spec.BeaconState) : Prop where
-  selSync : ∀ seed, Spec.SelFin Spec.P o t
+  /-- The sync committee selection ends within `2^64` passes. -/
+  syncSelectionEnds : ∀ seed, Spec.SelFin Spec.P o t
     (Spec.get_active_validator_indices t (t.slot / Spec.P.SLOTS_PER_EPOCH + 1))
     seed Spec.P.SYNC_COMMITTEE_SIZE true
-  selProp : ∀ seed, Spec.SelFin Spec.P o t
+  /-- The proposer selection ends within `2^64` passes. -/
+  proposerSelectionEnds : ∀ seed, Spec.SelFin Spec.P o t
     (Spec.unslashedActive t (t.slot / Spec.P.SLOTS_PER_EPOCH + 2)) seed 1 true
-  selPtc : ∀ slot, slot / Spec.P.SLOTS_PER_EPOCH = t.slot / Spec.P.SLOTS_PER_EPOCH + 2 → ∀ l,
+  /-- Each PTC selection of the epoch two ahead ends within `2^64` passes. -/
+  ptcSelectionEnds : ∀ slot,
+    slot / Spec.P.SLOTS_PER_EPOCH = t.slot / Spec.P.SLOTS_PER_EPOCH + 2 → ∀ l,
     Spec.ptcIndices Spec.P o t (slot / Spec.P.SLOTS_PER_EPOCH) slot = .ok l →
       ∀ seed, Spec.SelFin Spec.P o t l seed Spec.P.PTC_SIZE false
 
@@ -416,18 +423,19 @@ structure GloasChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop 
   validator count bounds. -/
   physicalLimits : PhysicalLimits s
   /-- Physical limit: the slot is `8192` below `2^64`. -/
-  slot : s.slot + 8192 < 2 ^ 64
+  slotFarFromOverflow : s.slot + 8192 < 2 ^ 64
   /-- Physical limit: fewer than `2^24` historical summaries, Lighthouse's list limit. -/
-  historicalSummaries : HistoricalSummariesBelowLimit s
+  historicalSummariesBelowLimit : HistoricalSummariesBelowLimit s
   /-- Reachable-state fact not yet carried to the epoch: the SSZ vectors have their lengths. -/
-  vectors : s.VectorLengths Spec.P
+  vectorLengths : s.VectorLengths Spec.P
   /-- Reachable-state facts not yet carried to the epoch, at `t`: at most `2^40` validators,
   effective balances at most 2048 ETH, the lookahead and PTC window lengths, valid pubkeys. -/
   committeeStepStateFacts : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →
     Spec.CommitteeStepFacts o t
 
 /-- Assumptions needed only because Etheorem diverges from the pyspec. Each one is about the
-Etheorem state `e`, not the oracle (compare `FuluEtheoremDivergenceAssumptions`). -/
+Etheorem state `e`, not the oracle. The Fulu counterpart is `FuluEtheoremBridgeConditions`, which
+also holds conditions that are not about Etheorem. -/
 structure GloasEtheoremDivergenceAssumptions (e : EtheoremState) : Prop where
   /-- F3: Etheorem's balance-weighted selections stop after `10^7` passes. They return all their
   items. -/
@@ -468,15 +476,16 @@ theorem gloasFinalHypotheses_of {o fo c uc init} {e : EtheoremState}
     GloasFinalHypotheses o init e where
   start := hrun.start
   pubkeys := hrun.invariants.1.2.1
-  vectors := hchain.vectors
-  boundary := hrun.atEpochBoundary hchain.historicalSummaries
-  slot := hchain.slot
+  vectors := hchain.vectorLengths
+  boundary := hrun.atEpochBoundary hchain.historicalSummariesBelowLimit
+  slot := hchain.slotFarFromOverflow
   rows := hchain.physicalLimits
   committees := fun t ht =>
     have hp := hchain.pyspecPreconditions t ht
     have hs := hchain.selectionsEnd t ht
     ⟨hchain.committeeStepStateFacts t ht,
-      ⟨hp.syncActive, hp.proposers, hp.ptc32, hs.selSync, hs.selProp, hs.selPtc⟩⟩
+      ⟨hp.syncActive, hp.proposers, hp.enoughActiveForPtc, hs.syncSelectionEnds,
+        hs.proposerSelectionEnds, hs.ptcSelectionEnds⟩⟩
   selections := hetheorem.selectionsFull
   etheoremRoom := hetheorem.listLimitRoom
   oracle := horacle.agrees
@@ -514,14 +523,14 @@ theorem lighthouse_model_gloas_epoch_eq_etheorem_upkeep (hpreset : PresetMatches
       EthCLSpecs.Gloas.Const.historicalRootsLimit)
     {o fo c uc init} {e : EtheoremState} {progressiveCache : ProgressiveBalancesInner}
     {totalActiveBalance : U64} {M : Type}
-    {pubkeyIndex : types.state.pubkey_index.IndexMap M Spec.BLSPubkey} {pubkeyMap : M}
+    {pubkeyMapOps : types.state.pubkey_index.IndexMap M Spec.BLSPubkey} {pubkeyMap : M}
     (hrun : GloasEpochRun o fo c uc init (toSpecState e))
     (hchain : GloasChainAssumptions o (toSpecState e))
     (hetheorem : GloasEtheoremDivergenceAssumptions e) (horacle : GloasOracleMatchesEtheorem o)
-    (hcaches : GloasCacheProvenanceUpkeep progressiveCache totalActiveBalance pubkeyIndex
+    (hcaches : GloasCacheProvenanceUpkeep progressiveCache totalActiveBalance pubkeyMapOps
       pubkeyMap (toSpecState e)) :
-    GloasLighthouseEqualsEtheorem o e ∧
-      GloasCacheReadsCorrect progressiveCache totalActiveBalance pubkeyIndex pubkeyMap
+    GloasLighthouseModelEqualsEtheorem o e ∧
+      GloasCacheReadsCorrect progressiveCache totalActiveBalance pubkeyMapOps pubkeyMap
         (toSpecState e) := by
   obtain ⟨start, cache0, hcoh0, hup⟩ := hcaches.progressive
   obtain ⟨b, hagree, htotal⟩ := hcaches.epochCache
@@ -540,14 +549,14 @@ theorem lighthouse_model_gloas_epoch_eq_etheorem_at_input
       EthCLSpecs.Gloas.Const.historicalRootsLimit)
     {o fo c uc init} {e : EtheoremState} {progressiveCache : ProgressiveBalancesInner}
     {totalActiveBalance : U64} {M : Type}
-    {pubkeyIndex : types.state.pubkey_index.IndexMap M Spec.BLSPubkey} {pubkeyMap : M}
+    {pubkeyMapOps : types.state.pubkey_index.IndexMap M Spec.BLSPubkey} {pubkeyMap : M}
     (hrun : GloasEpochRun o fo c uc init (toSpecState e))
     (hchain : GloasChainAssumptions o (toSpecState e))
     (hetheorem : GloasEtheoremDivergenceAssumptions e) (horacle : GloasOracleMatchesEtheorem o)
-    (hcaches : GloasCacheProvenanceAtInput progressiveCache totalActiveBalance pubkeyIndex
+    (hcaches : GloasCacheProvenanceAtInput progressiveCache totalActiveBalance pubkeyMapOps
       pubkeyMap (toSpecState e)) :
-    GloasLighthouseEqualsEtheorem o e ∧
-      GloasCacheReadsCorrect progressiveCache totalActiveBalance pubkeyIndex pubkeyMap
+    GloasLighthouseModelEqualsEtheorem o e ∧
+      GloasCacheReadsCorrect progressiveCache totalActiveBalance pubkeyMapOps pubkeyMap
         (toSpecState e) := by
   obtain ⟨view, laws, len, hpk⟩ := hcaches.pubkeyCache
   obtain ⟨s', h1, ⟨⟨he, hc1, hc2, hc3⟩, -⟩, hpk⟩ := formalhouse_gloas_epoch_at_input hpreset
@@ -570,7 +579,7 @@ variable [Spec.PresetCfg] [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds] [Spec.Fulu
 
 /-- The Lean model of Lighthouse's Fulu epoch returns `ok s'`, Etheorem's Fulu `processEpoch`
 succeeds on the same state, and its result maps to `s'`. -/
-def FuluLighthouseEqualsEtheorem (o : Spec.Oracle) (e : EtheoremFuluState) : Prop :=
+def FuluLighthouseModelEqualsEtheorem (o : Spec.Oracle) (e : EtheoremFuluState) : Prop :=
   ∃ s', process_epoch_lighthouse_fulu o (toSpecStateFulu e) = .ok s' ∧
     ∃ e', (EthCLSpecs.Fulu.processEpoch
         (StateTransition := EthCLSpecs.Proofs.Fulu.FuluRun)).run (pureState e) =
@@ -598,10 +607,12 @@ structure FuluCommitteeStepPyspecPreconds (t : Spec.BeaconState) : Prop where
 them: the sync committee and proposer selections accept their candidates within `2^64` passes.
 The last two fields of `FuluCommitteeStepPreconds`. -/
 structure FuluCommitteeStepSelectionsEnd (o : Spec.Oracle) (t : Spec.BeaconState) : Prop where
-  selSync : ∀ seed, Spec.SelFin Spec.P o t
+  /-- The sync committee selection ends within `2^64` passes. -/
+  syncSelectionEnds : ∀ seed, Spec.SelFin Spec.P o t
     (Spec.get_active_validator_indices t (t.slot / Spec.P.SLOTS_PER_EPOCH + 1))
     seed Spec.P.SYNC_COMMITTEE_SIZE true
-  selProp : ∀ seed, Spec.SelFin Spec.P o t
+  /-- The proposer selection ends within `2^64` passes. -/
+  proposerSelectionEnds : ∀ seed, Spec.SelFin Spec.P o t
     (Spec.get_active_validator_indices t (t.slot / Spec.P.SLOTS_PER_EPOCH + 2)) seed 1 true
 
 /-- The assumptions about the chain at a Fulu epoch input, beyond the run. `t` ranges over the
@@ -617,25 +628,28 @@ structure FuluChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop w
   /-- Physical limits (F5 and the supply, funds, exit and validator count bounds). -/
   physicalLimits : PhysicalLimits s
   /-- Physical limit: the slot is `8192` below `2^64`. -/
-  slot : s.slot + 8192 < 2 ^ 64
+  slotFarFromOverflow : s.slot + 8192 < 2 ^ 64
   /-- Physical limit: fewer than `2^24` historical summaries. -/
-  historicalSummaries : HistoricalSummariesBelowLimit s
+  historicalSummariesBelowLimit : HistoricalSummariesBelowLimit s
   /-- Reachable-state fact not yet carried: the Fulu SSZ vectors have their lengths. -/
-  vectors : s.FuluVectorLengths Spec.P
+  vectorLengths : s.FuluVectorLengths Spec.P
   /-- Reachable-state facts not yet carried, at `t`: registry size, effective balances,
   lookahead length, valid pubkeys. -/
   committeeStepStateFacts : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t →
     Spec.FuluCommitteeStepFacts o t
 
 /-- The conditions of the Etheorem Fulu bridge (`FuluEpochConds`), at the states before the
-steps that read them. Most are needed because Etheorem diverges from the pyspec: its alpha.11
-list limits (F10: `depositRoom`, `summariesRoom`) and its selections returning all their items
-(F3: `syncFull`, `proposersFull`). Some are not about Etheorem: facts about the intermediate
-states that the bridge reads (`finalized`: the finalized epoch is below `FAR_FUTURE_EPOCH`;
-`depositLens`, `consolidationLens`: list lengths agree), and a hash-output fact
-(`proposerFin`: the Electra proposer loop ends before its last pass). That last one mentions the
-spec oracle, so this bundle takes `o` where `GloasEtheoremDivergenceAssumptions` does not. -/
-structure FuluEtheoremDivergenceAssumptions (o : Spec.Oracle) (e : EtheoremFuluState) :
+steps that read them. Not all of them are about Etheorem:
+
+- because Etheorem diverges from the pyspec: its alpha.11 registry limit (F10, `depositRoom`) and
+  its selections returning all their items (F3, `syncFull`, `proposersFull`);
+- spec conditions: the historical summaries room (`summariesRoom`; beta.4 keeps that cap);
+- facts about the intermediate states that the bridge reads (`finalized`: the finalized epoch is
+  below `FAR_FUTURE_EPOCH`; `depositLens`, `consolidationLens`: list lengths agree);
+- a hash-output fact (`proposerFin`: the Electra proposer loop ends before its last pass). It
+  mentions the spec oracle, so this bundle takes `o`, where the Gloas
+  `GloasEtheoremDivergenceAssumptions` does not. -/
+structure FuluEtheoremBridgeConditions (o : Spec.Oracle) (e : EtheoremFuluState) :
     Prop where
   /-- `FuluEpochConds`. -/
   bridgeConds : FuluEpochConds Spec.P o e
@@ -661,19 +675,20 @@ structure FuluRustGlueFacts {σ E : Type} (G : Compose.EpochGlueFulu σ E) (o : 
 theorem fuluFinalHypotheses_of {o fo c init} {e : EtheoremFuluState}
     (hrun : FuluEpochRun o fo c init (toSpecStateFulu e))
     (hchain : FuluChainAssumptions o (toSpecStateFulu e))
-    (hetheorem : FuluEtheoremDivergenceAssumptions o e) (horacle : FuluOracleMatchesEtheorem o) :
+    (hetheorem : FuluEtheoremBridgeConditions o e) (horacle : FuluOracleMatchesEtheorem o) :
     FuluFinalHypotheses o fo c init e where
   start := hrun.start
-  supply := hrun.supply
-  econ := hrun.econ
-  boundary := hrun.atEpochBoundary hchain.historicalSummaries
-  slot := hchain.slot
-  vectors := hchain.vectors
+  supply := hrun.activeBalanceBound
+  econ := hrun.epochBalanceBounds
+  boundary := hrun.atEpochBoundary hchain.historicalSummariesBelowLimit
+  slot := hchain.slotFarFromOverflow
+  vectors := hchain.vectorLengths
   rows := hchain.physicalLimits
   committees := fun t ht =>
     have hp := hchain.pyspecPreconditions t ht
     have hs := hchain.selectionsEnd t ht
-    ⟨hchain.committeeStepStateFacts t ht, ⟨hp.syncActive, hp.proposers, hs.selSync, hs.selProp⟩⟩
+    ⟨hchain.committeeStepStateFacts t ht, ⟨hp.syncActive, hp.proposers, hs.syncSelectionEnds,
+      hs.proposerSelectionEnds⟩⟩
   etheorem := hetheorem.bridgeConds
   oracle := horacle.agrees
   sha := horacle.sha32

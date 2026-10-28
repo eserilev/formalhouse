@@ -906,6 +906,7 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Witness.witnessStateFulu_epochToCommitteesFulu
 #print axioms EpochProofs.Witness.witnessState_atCommitteeStepState
 #print axioms EpochProofs.Witness.witnessStateFulu_atCommitteeStepState
+#print axioms EpochProofs.Witness.witnessStateFulu_atEpochBoundary
 #print axioms EpochProofs.Witness.gloas_spec_witness
 #print axioms EpochProofs.Witness.fulu_spec_witness
 #print axioms EpochProofs.Witness.witnessEtheorem_abs
@@ -943,8 +944,8 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Formalhouse.lighthouse_rust_fulu_epoch_eq_etheorem_minimal
 #print axioms EpochProofs.Formalhouse.lighthouse_model_gloas_epoch_agrees_pyspec_minimal
 #print axioms EpochProofs.Formalhouse.lighthouse_model_fulu_epoch_agrees_pyspec_minimal
-#print axioms EpochProofs.Witness.sameOk_hyps_at_witness
-#print axioms EpochProofs.Witness.sameOk_hyps_at_witness_fulu
-#print axioms EpochProofs.Witness.sameOk_at_witness
+#print axioms EpochProofs.Witness.agrees_pyspec_hyps_at_witness
+#print axioms EpochProofs.Witness.agrees_pyspec_hyps_at_witness_fulu
+#print axioms EpochProofs.Witness.lighthouse_model_gloas_epoch_agrees_pyspec_at_witness
 #print axioms EpochProofs.Witness.gloas_bundles_at_witness
 #print axioms EpochProofs.Witness.fulu_bundles_at_witness

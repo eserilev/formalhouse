@@ -28,9 +28,10 @@ The conditions beyond `lighthouse_order_epoch_etheorem_reachable`:
 - `hvec`: the vector fields have their SSZ lengths. The Lean state holds them as lists.
 - `hrb`: the time and supply bounds of `RowBounds` (`TotalityRows.lean`): inactivity scores,
   supply, exit queue, registry size, and participation against the active balance.
-- `hcomm`: at the state that the epoch passes to the committee steps, the state conditions (`CommitteeStepFacts`) and the pyspec
-  preconditions (`CommitteeStepPreconds`: a sync candidate, a proposer candidate (F4), at least
-  `SLOTS_PER_EPOCH` active validators for the PTC (F12), and selections that end within `2^64` passes). -/
+- `hcomm`: at the state that the epoch passes to the committee steps, the state conditions
+  (`CommitteeStepFacts`) and the pyspec preconditions (`CommitteeStepPreconds`: a sync candidate, a
+  proposer candidate (F4), at least `SLOTS_PER_EPOCH` active validators for the PTC (F12), and
+  selections that end within `2^64` passes). -/
 theorem lighthouse_epoch_total_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds]
     (hpa : EpochPresetAgrees Spec.P)
     (hhr : Spec.LH_HISTORICAL_ROOTS_LIMIT ≤ EthCLSpecs.Gloas.Const.historicalRootsLimit)
