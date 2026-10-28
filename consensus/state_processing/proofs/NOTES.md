@@ -8,6 +8,7 @@ stages and are out of date. `README.md` states the current result and the truste
 - `formalhouse_gloas_epoch_final_mainnet` and `formalhouse_gloas_epoch_final_minimal`: on every Gloas epoch input of a run that starts in Fulu and crosses the Gloas fork, Lighthouse's epoch returns Ok and its state equals Etheorem's `processEpoch`.
 - `formalhouse_fulu_epoch_final_mainnet` and `formalhouse_fulu_epoch_final_minimal`: the same for every Fulu epoch input of a reachable Fulu run.
 - Both rest on the trusted base below: 9 Rust contracts, 24 glue facts, 4 cache build facts, 4 spec preconditions, 5 supply and time bounds, 3 probability facts, 2 Etheorem list limits, 3 Oracle items, 1 start state, and 6 tools and references.
+- `formalhouse_gloas_epoch_rust` and `formalhouse_fulu_epoch_rust` (and their `_mainnet`, `_minimal` versions): the same result about the composed Rust `Compose.epoch` and `Compose.epochFulu` instead of the model. They rest on the same base plus the 6 glue facts that the composition makes explicit (below).
 - Every `#print axioms` line in `EpochProofs/Axioms.lean` uses only `propext`, `Classical.choice` and `Quot.sound`.
 
 Goal: prove that Lighthouse's Gloas epoch processing equals the consensus spec for every state.
@@ -116,6 +117,28 @@ reads or writes milhouse lists:
 | Step order | not Rust | `LighthouseOrder*.lean` proves Lighthouse's order safe | none |
 | Genesis epoch | `single_pass_step.rs` with `after_genesis` false | as the other epochs | none |
 | Fork upgrades | `epoch_committees.rs` (`proposer_indices_for_epoch_spec_fulu`, `initialize_ptc_window_lh`), `upgrade/builder_onboarding.rs` (`onboard_spec`) | the field copies; `OnboardingContract` | none |
+
+### The composed Rust epoch
+
+`EpochProofs/Compose/` writes the epoch as calls of the translated functions, joined by the glue
+as parameters, and proves each part equal to its model part:
+
+| File | Composed function | Theorem | Model |
+|---|---|---|---|
+| `Justification.lean` | `justification`: `weigh_justification` | `justification_spec` | `lhJustificationAndFinalization` |
+| `SinglePass.lean` | `singlePass`: `step_context`, `single_pass_rows`, `afterLoop` (`apply_deposit_writes`, `process_on_table`, `update_effective_balances_at`), `payments` (`apply_builder_pending_payments`) | `singlePass_spec`, `afterLoop_spec`, `payments_spec` | `lhSinglePass` (`lhFullTailWith` up to `lhMid`) |
+| `Committees.lean` | `lookahead`: `next_proposer_lookahead`; `ptcWindow`: `ptc_for_epoch`, `shift_window` | `lookahead_spec`, `ptcWindow_spec` | `process_proposer_lookahead`, `process_ptc_window` |
+| `Tail.lean` | `resets`: the four checks of `tail_updates.rs`; `syncUpdate`: `next_sync_committee_indices` | `resets_spec`, `syncUpdate_spec`, `tail_spec` | `lhTailOrder` |
+| `Epoch.lean` | `epoch` (Gloas) | `epoch_spec` | `process_epoch_lh_order` |
+| `Fulu.lean` | `epochFulu`: `singlePassCore`, the Fulu step (`rowsContract_stepSpec_fulu`), the Fulu lookahead | `epochFulu_spec`, `singlePassFulu_spec`, `lookahead_spec_fulu` | `process_epoch_lh_order_fulu` |
+
+`EpochLinks` and `EpochLinksFulu` collect the trusted facts. The reads that `single_pass.rs`
+makes before its loop (`SinglePassLinks`) and N1 (`LookaheadN1`, `PtcN1`, `SyncN1`) are stated at
+the Rust states where Lighthouse makes them, Fulu's `ProposerFin` (`LookaheadFin`) at the
+lookahead input. The reads that only read the state they are given, and the writes, are stated
+for every state. Still linked by reading: the deposit plan (`PendingDepositsContext::new`,
+including the translated `process_pending_deposits`), and the cache builds, which write no field
+of the state.
 
 ### Error sites
 
@@ -921,6 +944,23 @@ Glue that Aeneas does not translate. Each fact links one Rust expression or call
 - `Validator::from_deposit` copies the inputs, and `add_validator_to_registry` pushes one entry
   onto each of the five lists (`lhApplyPendingDeposit`).
 - The field copies of the fork upgrades, and the write of the onboarding result.
+
+### Glue facts made explicit by the composition (6)
+
+The `_rust` theorems take these as hypotheses (`Compose/`). Before, they were implicit in the
+reading of the step table.
+
+- `SinglePassLinks.rowsBorrow`, `rowsReturn`: `StateRows` holds the rows of the state, and the end
+  of its borrow writes the rows and the exit churn that `single_pass_rows` returns
+  (`earliest_exit_epoch`, `exit_balance_to_consume`).
+- `SinglePassLinks.depositBorrow`: `StateDeposits` holds the state and the postponed deposits.
+- `PaymentsLinks.paymentsBorrow`, `paymentsReturn`: `StateBuilderPayments` holds the two builder
+  lists, and writes only them.
+- `PtcLinks.windowBorrow`, `windowReturn`: `PtcWindowWrites` holds the PTC window, and its commit
+  writes only `ptc_window`.
+- `SinglePassLinks.depositPlan`: `PendingDepositsContext::new` hands `apply_deposit_writes` the
+  plan of the model (`lhDepositPlan`).
+- `usize` has 64 bits (`usize64`).
 
 ### Cache build facts (4)
 
