@@ -42,9 +42,12 @@ theorem formalhouse_gloas_epoch_final ...
 Four terms in this statement need a precise meaning.
 
 **Lighthouse's epoch processing** is `process_epoch_lh_order`, a Lean model of
-`process_epoch_single_pass` and `altair.rs` in Lighthouse's own order. Each step of the model is
-the Aeneas translation of the Rust function, except where Aeneas cannot reach (see
-[Lighthouse code that is not checked](#lighthouse-code-that-is-not-checked)). The Rust is the
+`process_epoch_single_pass` and `altair.rs` in Lighthouse's own order. For each step, a separate
+theorem proves the model step equal to the Aeneas translation of the Rust, except where Aeneas
+cannot reach (see [Lighthouse code that is not checked](#lighthouse-code-that-is-not-checked)).
+Lean does not compose these step theorems into the final theorems: the final theorems are about
+the model, and that each model step is the one its step theorem covers is checked by reading.
+The step table in [How the proof is built](#how-the-proof-is-built) lists them. The Rust is the
 `formalhouse` branch, which is Lighthouse `unstable` with the epoch logic moved into modules that
 Aeneas accepts.
 

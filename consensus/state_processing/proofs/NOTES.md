@@ -104,7 +104,7 @@ reads or writes milhouse lists:
 | Step (Lighthouse order) | Aeneas-checked Rust | Trusted contract or glue | Spec precondition |
 |---|---|---|---|
 | Justification and finalization | `justification.rs` | read the bits and roots, write the checkpoints (by review); progressive balances build fact | none |
-| Inactivity, rewards, registry, slashings, deposit top-up, effective balance (Gloas and Fulu) | `single_pass_step.rs`, the step modules, the loop `registry_rows.rs` (`single_pass_rows_model`) | `RowsContract`; epoch cache build fact | `RowBounds` |
+| Inactivity, rewards, registry, slashings, deposit top-up, effective balance (Gloas and Fulu) | `single_pass_step.rs`, the step modules, the loop `registry_rows.rs` (`single_pass_rows_model_inputs`, with `step_context_spec`) | `RowsContract`; epoch cache build fact | `RowBounds` |
 | Pending deposits | `pending_deposits.rs`, `deposit_balance.rs`, `deposit_writes.rs` (`apply_deposit_writes_model`) | `DepositWritesContract`; pubkey cache `Coherent`, `IndexMapLaws` | none |
 | Pending consolidations | `pending_consolidations.rs` (`process_on_table_spec`), `list_writes.rs` (`update_effective_balances_at_spec`) | `ConsolidationStateContract`, `BTreeSetIter`, `EffectiveBalanceContract` | none |
 | Builder pending payments (Gloas) | `builder_pending_payments.rs`, `list_writes.rs` (`apply_builder_pending_payments_equiv`) | `PaymentWritesContract` | none |
