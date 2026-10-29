@@ -283,9 +283,9 @@ fields, so each fact still holds when its step reads it.
 
 - `depositRoom`: Etheorem's registry limit `2^40` has room for `MAX_PENDING_DEPOSITS_PER_EPOCH`
   new validators, the most that one epoch adds. Etheorem drops a new validator past this limit
-  (F10). Beta.2 has no registry limit. Lighthouse keeps the `2^40` limit.
+  (F10). Beta.4 has no registry limit. Lighthouse keeps the `2^40` limit.
 - `builderRoom`: the builder withdrawals have room for `SLOTS_PER_EPOCH` more items under
-  Etheorem's alpha.11 limit (F6). Beta.2 has no limit.
+  Etheorem's alpha.11 limit (F6). Beta.4 has no limit.
 
 The historical summaries room is not here: beta.4 keeps the `HISTORICAL_ROOTS_LIMIT` cap, so it
 is a spec condition. `process_epoch_etheorem_in` takes it as `hhist`. -/
@@ -480,7 +480,7 @@ of a reachable run, on mainnet.
 The conditions that remain:
 - `hcond`: room in the registry for the new validators of one epoch (F10), and room in the
   builder withdrawals (F6). Each is a fact about the epoch start state.
-- `hhist`: the historical summaries are below `HISTORICAL_ROOTS_LIMIT`. Beta.2 keeps this cap.
+- `hhist`: the historical summaries are below `HISTORICAL_ROOTS_LIMIT`. Beta.4 keeps this cap.
 - `ho`, `hsha`: the oracle is Etheorem's hash and BLS functions, and SHA-256 returns 32 bytes. -/
 theorem lighthouse_epoch_etheorem_reachable [Spec.PresetCfg] [Spec.PresetCfg.Ok]
     (hpa : EpochPresetAgrees Spec.P) (o : Spec.Oracle) (ho : OracleAgrees o)

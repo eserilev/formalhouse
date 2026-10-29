@@ -89,7 +89,7 @@ structure GloasEpochInput (o : Spec.Oracle) (fo : Spec.FuluOracle) (c : Spec.Ful
 
 /-- Every assumption of `formalhouse_gloas_epoch_final`, by kind (the cache build facts are
 separate arguments of the theorem). -/
-structure GloasAssumptions (o : Spec.Oracle) (init : Spec.FuluState) (e : EState) : Prop where
+structure GloasFinalHypotheses (o : Spec.Oracle) (init : Spec.FuluState) (e : EState) : Prop where
   /-- Start state: the Fulu start state has the invariants of a genesis state. -/
   start : Spec.FuluStartOk init.state
   /-- Reachable-state fact kept outside `EpochInputOk''`: no two validators share a pubkey. -/
@@ -107,7 +107,7 @@ structure GloasAssumptions (o : Spec.Oracle) (init : Spec.FuluState) (e : EState
   a proposer candidate (F4), at least `SLOTS_PER_EPOCH` active validators (F12), each selection
   ends within `2^64` passes (a probability fact), the registry size and window lengths, valid
   keys. -/
-  committees : Spec.CommAt o (absEState e)
+  committees : Spec.AtCommitteeStepState o (absEState e)
   /-- Etheorem list limits from alpha.11: registry room for one epoch of deposits (F10) and
   builder pending withdrawals room (F6). beta.4 has no limit on these lists. -/
   etheoremRoom : EpochCondsIn e
@@ -119,7 +119,7 @@ structure GloasAssumptions (o : Spec.Oracle) (init : Spec.FuluState) (e : EState
 /-- The conditions of `formalhouse_gloas_epoch`, from the run and the assumptions. -/
 theorem gloasEpochConds_of_run (o : Spec.Oracle) (fo : Spec.FuluOracle)
     (c : Spec.FuluBlockConfig) (uc : Spec.UpgradeConfig) (init : Spec.FuluState) (e : EState)
-    (hin : GloasEpochInput o fo c uc init (absEState e)) (ha : GloasAssumptions o init e) :
+    (hin : GloasEpochInput o fo c uc init (absEState e)) (ha : GloasFinalHypotheses o init e) :
     GloasEpochConds o e := by
   obtain ⟨fs, t, t1, s2, g, slot, mbp, gfe, s, u, slotG, hsupply, hr, hslot64, hreach, hlt, ht,
     hz, he, hup, hsupplyG, hecon, hrg, hslotG, hreachG, hltG, hu, hzG⟩ := hin.run
@@ -140,7 +140,7 @@ theorem formalhouse_gloas_epoch_at_input (hpa : EpochPresetAgrees Spec.P)
     (hhr : Spec.LH_HISTORICAL_ROOTS_LIMIT ≤ EthCLSpecs.Gloas.Const.historicalRootsLimit)
     (o : Spec.Oracle) (fo : Spec.FuluOracle)
     (c : Spec.FuluBlockConfig) (uc : Spec.UpgradeConfig) (init : Spec.FuluState) (e : EState)
-    (hin : GloasEpochInput o fo c uc init (absEState e)) (ha : GloasAssumptions o init e)
+    (hin : GloasEpochInput o fo c uc init (absEState e)) (ha : GloasFinalHypotheses o init e)
     (cache : LhCache)
     (hcoh : Coherent EpochProofs.Spec.P.EFFECTIVE_BALANCE_INCREMENT
       (pbState (absEState e)
@@ -209,7 +209,7 @@ variable [Spec.PresetCfg] [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds] [Spec.Fulu
 open EpochProofs.Etheorem.Fulu
 
 /-- Every assumption of `formalhouse_fulu_epoch_final`, by kind. -/
-structure FuluAssumptions (o : Spec.Oracle) (fo : Spec.FuluOracle) (c : Spec.FuluBlockConfig)
+structure FuluFinalHypotheses (o : Spec.Oracle) (fo : Spec.FuluOracle) (c : Spec.FuluBlockConfig)
     (init : Spec.FuluState) (e : EState) : Prop where
   /-- Start state: the Fulu start state has the invariants of a genesis state. -/
   start : Spec.FuluStartOk init.state
@@ -227,7 +227,7 @@ structure FuluAssumptions (o : Spec.Oracle) (fo : Spec.FuluOracle) (c : Spec.Ful
   (`Spec.epochToCommitteesFulu`): true pyspec preconditions and committee state facts. An active
   validator at the next epoch and at `current + 2`, each selection ends within `2^64` passes.
   Fulu has no F4 and no F12. -/
-  committees : Spec.CommAtFulu o (absEState e)
+  committees : Spec.FuluAtCommitteeStepState o (absEState e)
   /-- The Etheorem Fulu bridge conditions: Etheorem's list limits from alpha.11 (F10, the
   historical summaries room), and the Electra
   proposer loop ends before pass `2^64 - 1` (`ProposerFin`, a probability fact). -/
@@ -241,7 +241,7 @@ Fulu epoch returns `ok`, and its state equals Etheorem's Fulu `processEpoch`. -/
 theorem formalhouse_fulu_epoch_final (hpa : Fulu.EpochPresetAgrees Spec.P Spec.FC)
     (o : Spec.Oracle) (fo : Spec.FuluOracle)
     (c : Spec.FuluBlockConfig) (init : Spec.FuluState) (e : EState)
-    (hin : FuluEpochInput o fo c init (absEState e)) (ha : FuluAssumptions o fo c init e) :
+    (hin : FuluEpochInput o fo c init (absEState e)) (ha : FuluFinalHypotheses o fo c init e) :
     ∃ s', Spec.process_epoch_lh_order_fulu o (absEState e) = .ok s' ∧
       ∃ e', (EthCLSpecs.Fulu.processEpoch
           (StateTransition := EthCLSpecs.Proofs.Fulu.FuluRun)).run (pureState e) =
@@ -267,7 +267,7 @@ theorem formalhouse_gloas_epoch_final (hpa : EpochPresetAgrees Spec.P)
     (hhr : Spec.LH_HISTORICAL_ROOTS_LIMIT ≤ EthCLSpecs.Gloas.Const.historicalRootsLimit)
     (o : Spec.Oracle) (fo : Spec.FuluOracle)
     (c : Spec.FuluBlockConfig) (uc : Spec.UpgradeConfig) (init : Spec.FuluState) (e : EState)
-    (hin : GloasEpochInput o fo c uc init (absEState e)) (ha : GloasAssumptions o init e)
+    (hin : GloasEpochInput o fo c uc init (absEState e)) (ha : GloasFinalHypotheses o init e)
     (cache : LhCache)
     (hcoh : Coherent EpochProofs.Spec.P.EFFECTIVE_BALANCE_INCREMENT
       (pbState (absEState e)

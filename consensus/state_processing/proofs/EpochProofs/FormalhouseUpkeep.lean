@@ -30,7 +30,7 @@ theorem formalhouse_gloas_epoch_final_upkeep (hpa : EpochPresetAgrees Spec.P)
     (hhr : Spec.LH_HISTORICAL_ROOTS_LIMIT ≤ EthCLSpecs.Gloas.Const.historicalRootsLimit)
     (o : Spec.Oracle) (fo : Spec.FuluOracle)
     (c : Spec.FuluBlockConfig) (uc : Spec.UpgradeConfig) (init : Spec.FuluState) (e : EState)
-    (hin : GloasEpochInput o fo c uc init (absEState e)) (ha : GloasAssumptions o init e)
+    (hin : GloasEpochInput o fo c uc init (absEState e)) (ha : GloasFinalHypotheses o init e)
     (start : CacheProofs.Spec.BeaconState) (cache0 cache : LhCache)
     (hcoh0 : Coherent EpochProofs.Spec.P.EFFECTIVE_BALANCE_INCREMENT start cache0)
     (hup : CacheUpkeep EpochProofs.Spec.P.EFFECTIVE_BALANCE_INCREMENT start

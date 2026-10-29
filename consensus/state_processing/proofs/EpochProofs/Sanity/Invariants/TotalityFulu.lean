@@ -22,7 +22,7 @@ The differences:
   (`compute_proposer_indices_ok_fulu`).
 
 The pyspec preconditions of the Fulu committee steps are weaker than the Gloas ones
-(`FuluCommPreconds`): some validator is active at `current + 2`, slashed or not, and the PTC
+(`FuluCommitteeStepPreconds`): some validator is active at `current + 2`, slashed or not, and the PTC
 needs nothing, because Fulu has no PTC. So Fulu has no counterpart of F12: a Fulu chain with
 fewer than `SLOTS_PER_EPOCH` active validators does not halt at the epoch boundary.
 -/
@@ -167,8 +167,8 @@ theorem process_proposer_lookahead_fulu_total [PresetCfg] [PresetCfg.Ok] [Preset
   exact ⟨_, rfl⟩
 
 /-- State facts that the two Fulu committee steps read beyond `CommFrame`. They are the Gloas
-`CommConds` without the PTC window length. -/
-structure FuluCommConds [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
+`CommitteeStepFacts` without the PTC window length. -/
+structure FuluCommitteeStepFacts [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
   regLen : s.validators.length ≤ 2 ^ 40
   ebMax : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000
   lookahead : s.proposer_lookahead.length = 2 * P.SLOTS_PER_EPOCH
@@ -183,7 +183,7 @@ structure FuluCommConds [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
 - `selSync`, `selProp`: each selection accepts its candidates within `2^64` passes.
   This depends on the hash values. A candidate with effective balance `0` still passes when its
   random value is `0`, so the loop ends with probability 1. -/
-structure FuluCommPreconds [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
+structure FuluCommitteeStepPreconds [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
   syncActive : get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 1) ≠ []
   proposers : get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 2) ≠ []
   selSync : ∀ seed, SelFin P o s (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 1))
@@ -249,9 +249,9 @@ theorem epochToCommitteesFulu_parts [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Orac
     epochRestToCommitteesFulu, fuluTabM, bind_assoc]
 
 /-- The Fulu committee conditions at the epoch input `t`, at the state that the epoch passes to
-the committee steps (`epochToCommitteesFulu`). See `CommAt`. -/
-def CommAtFulu [PresetCfg] [FuluCfg] (o : Oracle) (t : BeaconState) : Prop :=
-  ∀ s, epochToCommitteesFulu P FC o t = .ok s → FuluCommConds o s ∧ FuluCommPreconds o s
+the committee steps (`epochToCommitteesFulu`). See `AtCommitteeStepState`. -/
+def FuluAtCommitteeStepState [PresetCfg] [FuluCfg] (o : Oracle) (t : BeaconState) : Prop :=
+  ∀ s, epochToCommitteesFulu P FC o t = .ok s → FuluCommitteeStepFacts o s ∧ FuluCommitteeStepPreconds o s
 
 /-- The Fulu sync committee update and proposer lookahead succeed on the state that
 `epochToCommitteesFulu` returns. -/
@@ -260,7 +260,7 @@ def CommitteesOkFulu [PresetCfg] [FuluCfg] (o : Oracle) (t : BeaconState) : Prop
     OkWith (committeeStepsFulu P o s) (fun _ => True)
 
 theorem committeesOkFulu_of [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] [FuluCfg] (o : Oracle) (t : BeaconState) (hslot : t.slot + 8192 < 2 ^ 64)
-    (h : CommAtFulu o t) :
+    (h : FuluAtCommitteeStepState o t) :
     CommitteesOkFulu o t := by
   intro s hs hf
   obtain ⟨hc, hp⟩ := h s hs

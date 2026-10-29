@@ -63,12 +63,11 @@ structure GloasEpochConds (o : Spec.Oracle) (e : EState) : Prop where
   one epoch and in the builder pending withdrawals. beta.4 has no limit on these lists. -/
   etheoremRoom : EpochCondsIn e
   /-- At the state that the epoch passes to the committee steps (`Spec.epochToCommittees`):
-  state facts (`CommConds`: registry size, effective balance cap,
-  lookahead and PTC window lengths, valid keys) and true pyspec preconditions (`CommPreconds`:
-  a sync candidate, a proposer candidate (F4), at least `SLOTS_PER_EPOCH` active validators
-  (F12), and each
-  balance weighted selection ends within `2^64` passes, a fact about the hash values). -/
-  committees : Spec.CommAt o (absEState e)
+  state facts (`CommitteeStepFacts`: registry size, effective balance cap, lookahead and PTC
+  window lengths, valid keys) and true pyspec preconditions (`CommitteeStepPreconds`: a sync
+  candidate, a proposer candidate (F4), at least `SLOTS_PER_EPOCH` active validators (F12), and
+  each balance weighted selection ends within `2^64` passes, a fact about the hash values). -/
+  committees : Spec.AtCommitteeStepState o (absEState e)
   /-- Oracle: the spec Oracle agrees with Etheorem's functions (SHA-256, the roots, the BLS
   key and signature checks). -/
   oracle : OracleAgrees o

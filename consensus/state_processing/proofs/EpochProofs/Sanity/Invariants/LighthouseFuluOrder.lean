@@ -192,8 +192,8 @@ theorem lhFullTailWithFulu_sameOk [PresetCfg] [FuluCfg]
   refine SameOk.bind (SameOk.refl _) fun _ _ => ?_
   exact h _ _ _
 
-/-- The Fulu `process_epoch` on mainnet as Lighthouse runs it, in the Lighthouse order and with
-the Lighthouse resets. The genesis epoch takes the same path. -/
+/-- The Fulu `process_epoch` as Lighthouse runs it, in the Lighthouse order and with the
+Lighthouse resets, for any preset (`PresetCfg`). The genesis epoch takes the same path. -/
 def process_epoch_lh_order_fulu [PresetCfg] [FuluCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
   let s1 ← lhJustificationAndFinalization P s
   lhFullTailWithFulu (lhAfterPassOrderFulu o) s1

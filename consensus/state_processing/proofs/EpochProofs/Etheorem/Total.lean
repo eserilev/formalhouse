@@ -28,9 +28,10 @@ The conditions beyond `lighthouse_order_epoch_etheorem_reachable`:
 - `hvec`: the vector fields have their SSZ lengths. The Lean state holds them as lists.
 - `hrb`: the time and supply bounds of `RowBounds` (`TotalityRows.lean`): inactivity scores,
   supply, exit queue, registry size, and participation against the active balance.
-- `hcomm`: at the state that the epoch passes to the committee steps, the state conditions (`CommConds`) and the pyspec
-  preconditions (`CommPreconds`: a sync candidate, a proposer candidate (F4), at least
-  `SLOTS_PER_EPOCH` active validators for the PTC (F12), and selections that end within `2^64` passes). -/
+- `hcomm`: at the state that the epoch passes to the committee steps, the state conditions
+  (`CommitteeStepFacts`) and the pyspec preconditions (`CommitteeStepPreconds`: a sync candidate, a
+  proposer candidate (F4), at least `SLOTS_PER_EPOCH` active validators for the PTC (F12), and
+  selections that end within `2^64` passes). -/
 theorem lighthouse_epoch_total_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds]
     (hpa : EpochPresetAgrees Spec.P)
     (hhr : Spec.LH_HISTORICAL_ROOTS_LIMIT ≤ EthCLSpecs.Gloas.Const.historicalRootsLimit)
@@ -41,7 +42,7 @@ theorem lighthouse_epoch_total_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok] [Sp
     (hslot : (absEState e).slot + 8192 < 2 ^ 64)
     (hvec : (absEState e).VectorLengths Spec.P)
     (hrb : Spec.RowBounds (absEState e))
-    (hcomm : Spec.CommAt o (absEState e)) :
+    (hcomm : Spec.AtCommitteeStepState o (absEState e)) :
     ∃ s', Spec.process_epoch_lh_order o (absEState e) = .ok s' ∧
       ∃ e', (EthCLSpecs.Gloas.processEpoch (StateTransition := GloasRun)).run (pureState e) =
         .ok ((), pureState e') ∧ absEState e' = s' := by

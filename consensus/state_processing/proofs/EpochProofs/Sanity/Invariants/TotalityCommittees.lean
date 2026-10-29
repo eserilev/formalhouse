@@ -11,9 +11,9 @@ import EpochProofs.Sanity.PtcIndices
 `process_proposer_lookahead` and `process_ptc_window` return `ok` on mainnet. It needs two
 kinds of facts about the state that the three steps read:
 
-- `CommConds`: the registry limit, `effective_balance ≤ MAX_EFFECTIVE_BALANCE_ELECTRA`, the two
+- `CommitteeStepFacts`: the registry limit, `effective_balance ≤ MAX_EFFECTIVE_BALANCE_ELECTRA`, the two
   vector lengths and valid public keys. These are invariants of reachable states.
-- `CommPreconds`: preconditions of the pyspec itself. Without them the pyspec raises.
+- `CommitteeStepPreconds`: preconditions of the pyspec itself. Without them the pyspec raises.
 
 Error sources and why they do not fire:
 - The shuffle (`compute_shuffled_permutation`): `0 < n ≤ 2^40` and `SHUFFLE_ROUND_COUNT ≤ 256`
@@ -595,7 +595,7 @@ structure CommFacts [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
 - `selSync`, `selProp`, `selPtc`: each selection accepts its candidates within `2^64`
   passes, so the `Uint64` counter does not overflow. This depends on the hash values. With
   effective balances of at least `16 ETH` each pass accepts with probability at least `1/128`. -/
-structure CommPreconds [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
+structure CommitteeStepPreconds [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
   syncActive : get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 1) ≠ []
   proposers : unslashedActive s (s.slot / P.SLOTS_PER_EPOCH + 2) ≠ []
   ptc32 : P.SLOTS_PER_EPOCH ≤ (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 2)).length
@@ -810,9 +810,9 @@ theorem ebsOf_congr {s1 s2 : BeaconState} (hv : s1.validators = s2.validators) :
   funext l
   simp only [ebsOf, hv]
 
-theorem CommPreconds.congr [PresetCfg] {o : Oracle} {s1 s2 : BeaconState} (hs : s1.slot = s2.slot)
+theorem CommitteeStepPreconds.congr [PresetCfg] {o : Oracle} {s1 s2 : BeaconState} (hs : s1.slot = s2.slot)
     (hv : s1.validators = s2.validators) (hr : s1.randao_mixes = s2.randao_mixes)
-    (h : CommPreconds o s2) : CommPreconds o s1 := by
+    (h : CommitteeStepPreconds o s2) : CommitteeStepPreconds o s1 := by
   obtain ⟨h1, h2, h3, h4, h5, h6⟩ := h
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [get_active_validator_indices_congr hv, hs]; exact h1
@@ -865,7 +865,7 @@ theorem process_sync_committee_updates_total [PresetCfg] [PresetCfg.Ok] [PresetC
 /-- The sync committee, proposer lookahead and PTC window steps succeed from the state facts and
 the pyspec preconditions. -/
 theorem committee_steps_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : Oracle) (s : BeaconState) (hf : CommFacts o s)
-    (hp : CommPreconds o s) :
+    (hp : CommitteeStepPreconds o s) :
     OkWith (do
       let s ← process_sync_committee_updates P o s
       let s ← process_proposer_lookahead P o s
@@ -873,12 +873,12 @@ theorem committee_steps_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o :
   obtain ⟨s1, h1, e1s, e1v, e1r, e1l, e1w⟩ := process_sync_committee_updates_total o s hf.slot
     hf.randao hf.regLen hf.ebMax hf.keys hp.syncActive hp.selSync
   have hf1 := CommFacts.congr e1s e1v e1r e1l e1w hf
-  have hp1 := CommPreconds.congr e1s e1v e1r hp
+  have hp1 := CommitteeStepPreconds.congr e1s e1v e1r hp
   rw [h1, tot_bind_ok]
   obtain ⟨s2, h2, e2s, e2v, e2r, e2w⟩ := process_proposer_lookahead_total o s1 hf1.slot hf1.randao
     hf1.regLen hf1.ebMax hf1.lookahead hp1.proposers hp1.selProp
   rw [h2, tot_bind_ok]
-  have hp2 := CommPreconds.congr e2s e2v e2r hp1
+  have hp2 := CommitteeStepPreconds.congr e2s e2v e2r hp1
   exact process_ptc_window_total o s2 (e2s ▸ hf1.slot) (e2r ▸ hf1.randao) (e2v ▸ hf1.regLen)
     (e2v ▸ hf1.ebMax) (e2w ▸ hf1.ptcLen) hp2.ptc32 hp2.selPtc
 
@@ -956,7 +956,7 @@ theorem process_ptc_window_few_active_error [PresetCfg] [PresetCfg.Ok] [PresetCf
 invariant of reachable states: the registry limit is `VALIDATOR_REGISTRY_LIMIT`, the effective
 balance bound is `EBOk`, the two lengths are SSZ vector lengths, and a deposit adds a validator
 only after its signature checks, which validates the key. -/
-structure CommConds [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
+structure CommitteeStepFacts [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
   regLen : s.validators.length ≤ 2 ^ 40
   ebMax : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000
   lookahead : s.proposer_lookahead.length = 2 * P.SLOTS_PER_EPOCH
@@ -970,13 +970,13 @@ preconditions hold at the state that the epoch passes to the committee steps
 An earlier version stated them at every state `s` with `CommFrame t s`. `CommFrame` fixes only
 the slot, the list lengths and the RANDAO length, so it admits `t` with every validator list
 emptied, where `syncActive` fails: that hypothesis was false for every `t`. -/
-def CommAt [PresetCfg] (o : Oracle) (t : BeaconState) : Prop :=
-  ∀ s, epochToCommittees P o t = .ok s → CommConds o s ∧ CommPreconds o s
+def AtCommitteeStepState [PresetCfg] (o : Oracle) (t : BeaconState) : Prop :=
+  ∀ s, epochToCommittees P o t = .ok s → CommitteeStepFacts o s ∧ CommitteeStepPreconds o s
 
 /-- The committee steps succeed on the state that `epochToCommittees` returns, from the state
 conditions and the pyspec preconditions there. -/
 theorem committeesOk_of [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : Oracle) (t : BeaconState) (hslot : t.slot + 8192 < 2 ^ 64)
-    (h : CommAt o t) : CommitteesOk o t := by
+    (h : AtCommitteeStepState o t) : CommitteesOk o t := by
   intro s hs hf
   obtain ⟨hc, hp⟩ := h s hs
   exact committee_steps_total o s

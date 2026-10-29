@@ -67,15 +67,16 @@ The conditions beyond `formalhouse_fulu_epoch`:
   `2^64`).
 - `hvec`: the Fulu vector fields have their SSZ lengths. The Lean state holds them as lists.
 - `hrb`: the time and supply bounds of `RowBounds`.
-- `hcomm`: at the state that the epoch passes to the committee steps, the state facts (`FuluCommConds`) and the Fulu pyspec
-  preconditions (`FuluCommPreconds`: an active validator at the next epoch and at `current + 2`,
-  and selections that end within `2^64` passes). -/
+- `hcomm`: at the state that the epoch passes to the committee steps, the state facts
+  (`FuluCommitteeStepFacts`) and the Fulu pyspec preconditions (`FuluCommitteeStepPreconds`: an
+  active validator at the next epoch and at `current + 2`, and selections that end within `2^64`
+  passes). -/
 theorem formalhouse_fulu_epoch_total [Spec.PresetCfg.Bounds] (hpa : EpochPresetAgrees Spec.P Spec.FC)
     (o : Spec.Oracle) (e : EState) (hc : FuluEpochCondsAll o e)
     (hslot : (absEState e).slot + 8192 < 2 ^ 64)
     (hvec : (absEState e).FuluVectorLengths Spec.P)
     (hrb : Spec.RowBounds (absEState e))
-    (hcomm : Spec.CommAtFulu o (absEState e)) :
+    (hcomm : Spec.FuluAtCommitteeStepState o (absEState e)) :
     ∃ s', Spec.process_epoch_lh_order_fulu o (absEState e) = .ok s' ∧
       ∃ e', (EthCLSpecs.Fulu.processEpoch (StateTransition := FuluRun)).run (pureState e) =
         .ok ((), pureState e') ∧ absEState e' = s' := by

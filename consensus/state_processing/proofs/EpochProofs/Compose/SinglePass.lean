@@ -424,7 +424,7 @@ structure SinglePassLinks (G : SinglePassGlue σ E) (o : Spec.Oracle)
   /-- A state fact, not a glue fact: the new validators of the epoch fit under
   `VALIDATOR_REGISTRY_LIMIT = 2^40`, where the milhouse validator list fails and the spec does
   not. It holds on every real chain (the registry is far below `2^40`). -/
-  registryRoom : ∀ tab cur plan, Spec.get_total_active_balance Spec.P (view st) = .ok tab →
+  depositRoom : ∀ tab cur plan, Spec.get_total_active_balance Spec.P (view st) = .ok tab →
     Spec.get_current_epoch Spec.P (view st) = .ok cur →
     Spec.lhDepositPlan (view st) (planTab tab) cur = .ok plan →
     (view st).validators.length + plan.new_validator_deposits.length ≤ 2 ^ 40
@@ -474,7 +474,7 @@ theorem afterLoop_spec (G : SinglePassGlue σ E) (o : Spec.Oracle) (view : σ �
     (by
       simp only [hdv, hv1, Spec.BeaconState.withRowsChurn, Spec.BeaconState.withRows,
         List.length_map, hxlen]
-      exact hL.registryRoom tab cur plan htab hcur hplan)
+      exact hL.depositRoom tab cur plan htab hcur hplan)
   obtain ⟨⟨rd, sd⟩, hrd, hdpost⟩ := spec_imp_exists hdep
   rw [hrd]
   simp only [bind_tc_ok, uncurry_apply_pair]
