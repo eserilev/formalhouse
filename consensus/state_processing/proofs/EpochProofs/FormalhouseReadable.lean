@@ -27,7 +27,7 @@ Hypotheses:
   limits and the reachable-state facts not yet carried to the epoch (README, "Assumptions about
   the chain").
 - `EtheoremFaithful`, `EtheoremFaithfulFulu`: what is needed only because Etheorem differs from
-  the pyspec (its alpha.11 list limits, F3).
+  the pyspec (its alpha.11 list limits).
 - `OracleMatchesEtheorem`, `OracleMatchesEtheoremFulu`: the spec Oracle agrees with Etheorem.
 - `RustEpoch`, `RustEpochFulu`: the Rust state views as the epoch input, and the glue facts hold.
 
@@ -295,9 +295,6 @@ structure GloasChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop 
 
 /-- Conditions needed only because Etheorem differs from the pyspec. -/
 structure EtheoremFaithful (e : EState) : Prop where
-  /-- F3: Etheorem's balance-weighted selections stop after `10^7` passes; they return all
-  their items. -/
-  selections : SelectionsFull e
   /-- F6, F10: Etheorem's alpha.11 list limits, which beta.4 removed: room in the registry for
   one epoch of deposits, and in `builder_pending_withdrawals`. -/
   room : EpochCondsIn e
@@ -331,7 +328,6 @@ theorem gloasAssumptions_of {o fo c uc init} {e : EState}
   slot := chain.slot
   rows := chain.rows
   committees := fun t ht => ⟨chain.committees t ht, chain.preconditions t ht⟩
-  selections := ef.selections
   etheoremRoom := ef.room
   oracle := orc.agrees
   sha := orc.sha32
@@ -477,8 +473,7 @@ structure FuluChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop w
     Spec.FuluCommConds o t
 
 /-- The conditions of the Etheorem Fulu bridge (`FuluEpochConds`): Etheorem's alpha.11 list
-limits (F10, the historical summaries room), its selections return all their items (F3), and
-the facts about intermediate states that the bridge reads (the finalized epoch is below
+limits (F10, the historical summaries room), and the facts about intermediate states that the bridge reads (the finalized epoch is below
 `FAR_FUTURE_EPOCH`, list lengths agree, the Electra proposer loop ends before its last pass). -/
 structure EtheoremFaithfulFulu (o : Spec.Oracle) (e : EState) : Prop where
   conds : FuluEpochConds Spec.P o e

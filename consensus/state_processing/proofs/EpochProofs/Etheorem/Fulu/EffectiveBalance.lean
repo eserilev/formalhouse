@@ -12,8 +12,9 @@ validators hold `ebNew`. The reference loop is a `mapM` of `effectiveBalanceStep
 (`process_effective_balance_updates_eq`). `effectiveBalanceStep_ok` shows that each step
 returns `ebNew` under the map.
 
-Etheorem's `balance + downward` wraps. The reference raises there, so the theorem has no extra
-hypothesis.
+Etheorem raises on a balance read past the end and on a threshold sum that overflows `uint64`,
+as the reference does. `effectiveBalanceStep_cond` reads these facts off a reference step that
+returns, so the theorem has no extra hypothesis.
 -/
 
 namespace EpochProofs.Etheorem.Fulu
@@ -66,21 +67,33 @@ theorem foldl_pureState {α : Type} (F : EthCLSpecs.Fulu.State → α → EthCLS
   | nil => intro s; rfl
   | cons a l ih => intro s; simp only [List.foldl_cons, hFG, ih]
 
-theorem processEffectiveBalanceUpdates_run (e : EState) :
-    (EthCLSpecs.Fulu.processEffectiveBalanceUpdates (StateTransition := FuluRun)).run
-        (pureState e) =
-      .ok ((), pureState ((List.range' 0 e.validators.val.size).foldl ebStepView e)) := by
-  unfold EthCLSpecs.Fulu.processEffectiveBalanceUpdates
-  simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range', pure_bind, bind_pure, ite_pure_yield,
-    List.forIn_pure_yield_eq_foldl, Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel,
-    Nat.div_one]
-  simp only [EthCLSpecs.Fulu.modifyState, modifyThe, MonadStateOf.modifyGet,
-    StateT.modifyGet, StateT.run, pure, Except.pure]
-  rw [foldl_pureState _ ebStepView]
-  · rfl
-  · intro s a
-    simp only [view_uncachedBox, ebStepView]
-    split <;> split <;> rename_i h1 h2 <;> first | rfl | exact absurd h1 h2 | exact absurd h2 h1
+/-- The reads and sums of step `i` of Etheorem's loop succeed: the balance exists, and neither
+threshold sum overflows `uint64`. The second sum runs only when the first comparison fails. -/
+def EbStepOk (e : EState) (i : Nat) : Prop :=
+  i < e.balances.val.size ∧ (e.balances[i]!).toNat + ebDown.toNat < 2 ^ 64 ∧
+    (¬ (e.balances[i]! + ebDown < (e.validators[i]!).effectiveBalance) →
+      (e.validators[i]!).effectiveBalance.toNat + ebUp.toNat < 2 ^ 64)
+
+/-- A loop over a list on the plain state, where step `k` runs as `G` on the state that the first
+`k` steps reach. -/
+theorem forIn_run_foldl {α : Type} (G : EState → α → EState)
+    (body : α → PUnit → FuluRun (ForInStep PUnit)) :
+    ∀ (l : List α) (v : EState),
+      (∀ k (hk : k < l.length), (body l[k] PUnit.unit).run (pureState ((l.take k).foldl G v)) =
+        .ok (.yield PUnit.unit, pureState (G ((l.take k).foldl G v) l[k]))) →
+      (forIn l PUnit.unit body).run (pureState v) = .ok (PUnit.unit, pureState (l.foldl G v)) := by
+  intro l
+  induction l with
+  | nil => intro v _; rfl
+  | cons a l ih =>
+    intro v hb
+    rw [List.forIn_cons, run_bind]
+    have h0 := hb 0 (by simp)
+    simp only [List.take_zero, List.foldl_nil, List.getElem_cons_zero] at h0
+    rw [h0, except_bind_ok]
+    exact ih (G v a) (fun k hk => by
+      have := hb (k + 1) (by simp; omega)
+      simpa using this)
 
 omit [HasherTag] in
 /-- `get_max_effective_balance` equals Etheorem's. -/
@@ -187,6 +200,74 @@ theorem ebFold (e : EState) (hn : e.validators.val.size < 2 ^ 64) :
         List.drop_eq_getElem_cons hklen, List.set_cons_zero, List.range_succ, List.map_append,
         List.append_assoc]
       simp [getElem!_pos e.validators.val k (by omega)]
+
+omit [HasherTag] in
+/-- After `k` steps, validator `k` and the balances are still those of `e`. -/
+theorem ebFold_at (e : EState) (hn : e.validators.val.size < 2 ^ 64) (k : Nat)
+    (hk : k < e.validators.val.size) :
+    ((List.range' 0 k).foldl ebStepView e).balances = e.balances ∧
+      ((List.range' 0 k).foldl ebStepView e).validators[k]! = e.validators[k]! := by
+  obtain ⟨V, hV, hVl⟩ := ebFold e hn k (Nat.le_of_lt hk)
+  rw [hV]
+  refine ⟨rfl, ?_⟩
+  have hP : ((List.range k).map (fun j => ebNew e.validators.val[j]! e.balances.val[j]!)).length = k := by
+    simp
+  show V[k]! = e.validators[k]!
+  rw [sszList_getElem!_val, sszList_getElem!_val]
+  have hsz : k < V.val.size := by
+    rw [← Array.length_toList, hVl]; simp; omega
+  rw [getElem!_pos V.val k hsz, getElem!_pos e.validators.val k hk, ← Array.getElem_toList,
+    ← Array.getElem_toList]
+  simp only [hVl]
+  rw [List.getElem_append_right (Nat.le_of_eq hP)]
+  simp [hP]
+
+theorem processEffectiveBalanceUpdates_run (e : EState) (hn : e.validators.val.size < 2 ^ 64)
+    (hok : ∀ i < e.validators.val.size, EbStepOk e i) :
+    (EthCLSpecs.Fulu.processEffectiveBalanceUpdates (StateTransition := FuluRun)).run
+        (pureState e) =
+      .ok ((), pureState ((List.range' 0 e.validators.val.size).foldl ebStepView e)) := by
+  unfold EthCLSpecs.Fulu.processEffectiveBalanceUpdates
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, Nat.sub_zero,
+    Nat.add_sub_cancel, Nat.div_one]
+  have hget : ∀ s : EthCLSpecs.Fulu.State,
+      (get : FuluRun EthCLSpecs.Fulu.State).run s = .ok (s, s) := fun _ => rfl
+  rw [run_bind, hget, except_bind_ok]
+  simp only [view_uncachedBox]
+  rw [run_bind, forIn_run_foldl ebStepView _ _ e, except_bind_ok]
+  · rfl
+  intro k hk
+  have hk' : k < e.validators.val.size := by simpa using hk
+  rw [List.take_range'_of_length_ge (by simpa using Nat.le_of_lt hk)]
+  simp only [List.getElem_range', Nat.zero_add, Nat.one_mul]
+  obtain ⟨hbal, hval⟩ := ebFold_at e hn k hk'
+  obtain ⟨hb1, hb2, hb3⟩ := hok k hk'
+  generalize (List.range' 0 k).foldl ebStepView e = w at hbal hval ⊢
+  rw [← hbal] at hb1 hb2 hb3
+  rw [← hval] at hb3
+  have hbk : w.balances.val[k]? = some w.balances[k]! := by
+    rw [sszList_getElem!_val, getElem!_pos w.balances.val k hb1]
+    exact Array.getElem?_eq_getElem hb1
+  rw [run_bind, hget, except_bind_ok]
+  simp only [view_uncachedBox]
+  rw [run_bind, run_sszGetIdx_some _ _ _ hbk, except_bind_ok]
+  rw [run_bind, checkedAdd_of_lt _ _ _ hb2, run_pure, except_bind_ok]
+  by_cases hlt : w.balances[k]! + ebDown < (w.validators[k]!).effectiveBalance
+  · rw [if_pos hlt]
+    simp only [ebStepView]
+    rw [if_pos (by simp [hlt])]
+    rfl
+  · rw [if_neg hlt]
+    rw [run_bind, checkedAdd_of_lt _ _ _ (hb3 hlt), run_pure, except_bind_ok]
+    by_cases hlt2 : w.validators[k]!.effectiveBalance + ebUp < w.balances[k]!
+    · simp only [hlt2, decide_true]
+      simp only [ebStepView]
+      rw [if_pos (by simp [hlt2])]
+      rfl
+    · simp only [hlt2, decide_false]
+      simp only [ebStepView]
+      rw [if_neg (by simp [hlt, hlt2])]
+      rfl
 
 section Thresholds
 
@@ -344,6 +425,61 @@ theorem effectiveBalanceStep_ok (e : EState) (v : EthCLSpecs.Fulu.Validator) (i 
   · cases h
 
 omit [HasherTag] in
+/-- A reference loop step that returns reads a balance and sums its thresholds without overflow.
+These are the reads and sums of Etheorem's step. -/
+theorem effectiveBalanceStep_cond (e : EState) (v : EthCLSpecs.Fulu.Validator) (i : Nat)
+    {w : Spec.Validator}
+    (h : Spec.effectiveBalanceStep p (e.balances.toList.map UInt64.toNat) (absValidator v, i) =
+      .ok w) :
+    i < e.balances.val.size ∧ (e.balances[i]!).toNat + ebDown.toNat < 2 ^ 64 ∧
+      (¬ (e.balances[i]! + ebDown < v.effectiveBalance) →
+        v.effectiveBalance.toNat + ebUp.toNat < 2 ^ 64) := by
+  unfold Spec.effectiveBalanceStep at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · rename_i b hb
+    simp only [pure, Except.pure] at h
+    rw [List.getElem?_eq_some_iff] at hb
+    obtain ⟨hi, rfl⟩ := hb
+    have hi' : i < e.balances.val.size := by simpa using hi
+    have hbv : (e.balances.toList.map UInt64.toNat)[i] = (e.balances[i]!).toNat := by
+      simp only [SSZList.toList, List.getElem_map, Array.getElem_toList]
+      rw [sszList_getElem!_val, getElem!_pos e.balances.val i hi']
+    rw [hbv] at h
+    cases hth : Spec.hysteresisThresholds p with
+    | error err => rw [hth] at h; cases h
+    | ok du =>
+      obtain ⟨d, u⟩ := du
+      rw [hth] at h
+      simp only at h
+      obtain ⟨hd, hu⟩ := hysteresisThresholds_ok hp ht hth
+      cases hn : Spec.newEffectiveBalance p d u (absValidator v) (e.balances[i]!).toNat with
+      | error err => rw [hn] at h; cases h
+      | ok eb =>
+        unfold Spec.newEffectiveBalance at hn
+        simp only [bind, Except.bind] at hn
+        cases hadd : Spec.uint64Add (e.balances[i]!).toNat d with
+        | error err => rw [hadd] at hn; cases hn
+        | ok below =>
+          rw [hadd] at hn
+          have hlt1 := uint64Add_lt hadd
+          have hbelow : (e.balances[i]! + ebDown).toNat = below := by
+            rw [uint64Add_val hadd, UInt64.toNat_add, hd,
+              Nat.mod_eq_of_lt (by simpa [UInt64.size] using hlt1)]
+          refine ⟨hi', hd ▸ hlt1, fun hnlt => ?_⟩
+          have hnlt' : ¬ below < (absValidator v).effective_balance := by
+            rw [← hbelow]
+            exact fun h' => hnlt (UInt64.lt_iff_toNat_lt.mpr h')
+          simp only [hnlt', ↓reduceIte] at hn
+          cases hadd2 : Spec.uint64Add (absValidator v).effective_balance u with
+          | error err => rw [hadd2] at hn; cases hn
+          | ok above =>
+            have := uint64Add_lt hadd2
+            rw [← hu] at this
+            exact this
+  · cases h
+
+omit [HasherTag] in
 /-- The reference loop returns `ebNew` for every validator. -/
 theorem mapM_effectiveBalanceStep_ok (e : EState) :
     ∀ (l : List Nat) (vs : List Spec.Validator),
@@ -379,8 +515,6 @@ theorem effective_balance_updates_etheorem (e : EState) {s' : Spec.BeaconState}
   have hn : e.validators.val.size < 2 ^ 64 :=
     Nat.lt_of_le_of_lt e.validators.property hp.validatorRegistryLimit
   obtain ⟨V, hV, hVl⟩ := ebFold e hn _ (Nat.le_refl _)
-  refine ⟨_, processEffectiveBalanceUpdates_run e, ?_⟩
-  rw [hV, absEState_set_validators]
   rw [Spec.process_effective_balance_updates_eq] at h
   cases hm : (absEState e).validators.zipIdx.mapM
       (Spec.effectiveBalanceStep p (absEState e).balances) with
@@ -391,6 +525,16 @@ theorem effective_balance_updates_etheorem (e : EState) {s' : Spec.BeaconState}
     rw [← h]
     simp only [absEState_validators, absEState_balances, SSZList.toList,
       zipIdx_map_eq e.validators.val absValidator] at hm
+    -- Each reference step returns, so each Etheorem read and sum succeeds.
+    have hok : ∀ i < e.validators.val.size, EbStepOk e i := by
+      intro i hi
+      obtain ⟨w, hw⟩ := mapM_ok_each _ _ hm (absValidator e.validators.val[i]!, i)
+        (List.mem_map.mpr ⟨i, List.mem_range.mpr hi, rfl⟩)
+      have := effectiveBalanceStep_cond hp ht e _ i hw
+      rw [← sszList_getElem!_val] at this
+      exact this
+    refine ⟨_, processEffectiveBalanceUpdates_run e hn hok, ?_⟩
+    rw [hV, absEState_set_validators]
     have hvs := mapM_effectiveBalanceStep_ok hp ht e _ _ hm
     rw [hvs, SSZList.toList, hVl, List.drop_eq_nil_of_le (by simp), List.append_nil, List.map_map]
     rfl

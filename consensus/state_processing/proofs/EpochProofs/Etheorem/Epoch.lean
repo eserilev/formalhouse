@@ -26,8 +26,7 @@ theorem after the other.
 Each step theorem has its own conditions. `EtheoremEpochConds e` collects them. A condition
 on a later step reads the Etheorem state right before that step: `Before k e e'` says that
 Etheorem runs the first `k` steps from `e` and reaches `e'`. Most conditions are facts about
-the state. Three are facts about Etheorem's own output: its balance weighted selections
-return `size` items (F3).
+the state.
 -/
 
 namespace EpochProofs.Etheorem
@@ -137,11 +136,7 @@ State facts:
 - `consolidationLens`: one balance for each validator before the pending consolidations.
 - `builderRoom`: the new builder withdrawals fit under Etheorem's list limit (F6).
 - `summariesRoom`: the historical summaries list has room for one more item. Beta.2 keeps
-  this `HISTORICAL_ROOTS_LIMIT` cap.
-
-Facts about Etheorem's output (F3):
-- `syncFull`, `proposersFull`, `ptcFull`: each balance weighted selection returns `size`
-  items. -/
+  this `HISTORICAL_ROOTS_LIMIT` cap. -/
 structure EtheoremEpochConds (e : EState) : Prop where
   finalized : ∀ e', Before 3 e e' →
     (absEState e').finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH
@@ -154,10 +149,6 @@ structure EtheoremEpochConds (e : EState) : Prop where
       EthCLSpecs.Gloas.Const.builderPendingWithdrawalsLimit
   summariesRoom : ∀ e', Before 12 e e' →
     e'.historicalSummaries.val.size < EthCLSpecs.Gloas.Const.historicalRootsLimit
-  syncFull : ∀ e', Before 14 e e' → SyncSelectionFull e'
-  proposersFull : ∀ e', Before 15 e e' → ProposerSelectionsFull e'
-    (EthCLSpecs.Gloas.currentEpochOf (pureState e') + EthCLSpecs.Gloas.Const.minSeedLookahead + 1)
-  ptcFull : ∀ e', Before 16 e e' → PtcSelectionsFull e'
 
 /-! ## The builder payment step in the form of the other steps -/
 
@@ -280,16 +271,15 @@ theorem process_epoch_etheorem (o : Spec.Oracle) (ho : OracleAgrees o)
   -- 15. sync committees
   obtain ⟨s15, h15, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e15, r15, rfl⟩ := process_sync_committee_updates_etheorem hb hp.committee o ho
-    hp.epochsPerSyncCommitteePeriodLt e14 (hc.syncFull e14 b14) h15
+    hp.epochsPerSyncCommitteePeriodLt e14 h15
   have b15 : StepsOk (epochSteps.take 15) e e15 := b14.snoc r15
   -- 16. proposer lookahead
   obtain ⟨s16, h16, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e16, r16, rfl⟩ := process_proposer_lookahead_etheorem hb hp.committee o ho.hash hsha
-    e15 (hc.proposersFull e15 b15) h16
+    e15 h16
   have b16 : StepsOk (epochSteps.take 16) e e16 := b15.snoc r16
   -- 17. PTC window
-  obtain ⟨e17, r17, rfl⟩ := process_ptc_window_etheorem hb hp.committee o ho.hash hsha e16
-    (hc.ptcFull e16 b16) h
+  obtain ⟨e17, r17, rfl⟩ := process_ptc_window_etheorem hb hp.committee o ho.hash hsha e16 h
   have b17 : StepsOk epochSteps e e17 := b16.snoc r17
   exact ⟨e17, by rw [processEpoch_eq]; exact b17.run_seq, rfl⟩
 

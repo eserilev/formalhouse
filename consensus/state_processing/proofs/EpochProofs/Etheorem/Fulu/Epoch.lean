@@ -139,10 +139,7 @@ State facts:
 
 Facts about the hash values:
 - `proposerFin`: each Electra proposer loop of the lookahead ends before its last pass
-  (`Spec.ProposerFin`). The last pass needs `2**64 - 1` rejected candidates before it.
-
-Facts about Etheorem's output (F3):
-- `syncFull`, `proposersFull`: each balance weighted selection returns `size` items. -/
+  (`Spec.ProposerFin`). The last pass needs `2**64 - 1` rejected candidates before it. -/
 structure FuluEpochConds (p : Spec.Preset) (o : Spec.Oracle) (e : EState) : Prop where
   finalized : ∀ e', Before 3 e e' →
     (absEState e').finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH
@@ -152,9 +149,6 @@ structure FuluEpochConds (p : Spec.Preset) (o : Spec.Oracle) (e : EState) : Prop
   consolidationLens : ∀ e', Before 7 e e' → e'.balances.val.size = e'.validators.val.size
   summariesRoom : ∀ e', Before 11 e e' →
     e'.historicalSummaries.val.size < EthCLSpecs.Fulu.Const.historicalRootsLimit
-  syncFull : ∀ e', Before 13 e e' → SyncSelectionFull e'
-  proposersFull : ∀ e', Before 14 e e' → ProposerSelectionsFull e'
-    (EthCLSpecs.Fulu.currentEpochOf (pureState e') + EthCLSpecs.Fulu.Const.minSeedLookahead + 1)
   proposerFin : ∀ e', Before 14 e e' → ∀ s, Spec.ProposerFin p o (absEState e')
     (Spec.get_active_validator_indices (absEState e')
       (EthCLSpecs.Fulu.currentEpochOf (pureState e') + EthCLSpecs.Fulu.Const.minSeedLookahead +
@@ -247,11 +241,11 @@ theorem process_epoch_fulu_etheorem (o : Spec.Oracle) (ho : OracleAgrees o)
   -- 14. sync committees, with the Electra loop
   obtain ⟨s14, h14, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e14, r14, rfl⟩ := process_sync_committee_updates_fulu_etheorem hb hp.committee o ho
-    hp.epochsPerSyncCommitteePeriodLt hp.syncCommitteeSizePos e13 (hc.syncFull e13 b13) h14
+    hp.epochsPerSyncCommitteePeriodLt hp.syncCommitteeSizePos e13 h14
   have b14 : StepsOk (epochSteps.take 14) e e14 := b13.snoc r14
   -- 15. proposer lookahead, with the Electra loop
   obtain ⟨e15, r15, rfl⟩ := process_proposer_lookahead_etheorem hb hp.committee o ho.hash hsha
-    e14 (hc.proposersFull e14 b14) (hc.proposerFin e14 b14) h
+    e14 (hc.proposerFin e14 b14) h
   have b15 : StepsOk epochSteps e e15 := b14.snoc r15
   exact ⟨e15, by rw [processEpoch_eq]; exact b15.run_seq, rfl⟩
 

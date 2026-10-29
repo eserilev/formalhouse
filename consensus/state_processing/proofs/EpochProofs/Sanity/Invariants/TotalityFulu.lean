@@ -180,7 +180,7 @@ structure FuluCommConds [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
   by zero otherwise).
 - `proposers`: some validator is active at `current + 2` (`compute_proposer_index` asserts
   `len(indices) > 0`). Unlike Gloas F4, a slashed active validator counts.
-- `selSync`, `selProp` (like F3): each selection accepts its candidates within `2^64` passes.
+- `selSync`, `selProp`: each selection accepts its candidates within `2^64` passes.
   This depends on the hash values. A candidate with effective balance `0` still passes when its
   random value is `0`, so the loop ends with probability 1. -/
 structure FuluCommPreconds [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where

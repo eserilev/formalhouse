@@ -218,6 +218,78 @@ theorem listGet_map_ok {α β : Type} [Inhabited α] (xs : Array α) (f : α →
     rw [hnone] at h
     cases h
 
+/-! ## Checked `uint64` arithmetic in Etheorem
+
+Etheorem's `checkedAdd` and `checkedMul` raise `.arithmetic` on overflow, as the spec's `uint64`
+does. Below `2^64` they return the plain sum and product. -/
+
+theorem checkedAdd_of_lt {m : Type → Type} {E : Type} [Monad m] [MonadExcept E m]
+    [EthCLLib.Spec.ErrorConv EthCLLib.Spec.StateTransitionError E] (a b : UInt64) (d : String)
+    (h : a.toNat + b.toNat < 2 ^ 64) :
+    (EthCLLib.Spec.checkedAdd a b d : m UInt64) = pure (a + b) := by
+  unfold EthCLLib.Spec.checkedAdd
+  rw [if_neg]
+  rw [UInt64.lt_iff_toNat_lt, UInt64.toNat_add, Nat.mod_eq_of_lt (by simpa [UInt64.size] using h)]
+  omega
+
+theorem checkedMul_of_lt {m : Type → Type} {E : Type} [Monad m] [MonadExcept E m]
+    [EthCLLib.Spec.ErrorConv EthCLLib.Spec.StateTransitionError E] (a b : UInt64) (d : String)
+    (h : a.toNat * b.toNat < 2 ^ 64) :
+    (EthCLLib.Spec.checkedMul a b d : m UInt64) = pure (a * b) := by
+  unfold EthCLLib.Spec.checkedMul
+  rw [if_neg]
+  intro hc
+  simp only [Bool.and_eq_true, bne_iff_ne, ne_eq] at hc
+  obtain ⟨ha, hne⟩ := hc
+  apply hne
+  have ha' : a.toNat ≠ 0 := fun h0 => ha (UInt64.toNat_inj.mp (by simpa using h0))
+  apply UInt64.toNat_inj.mp
+  rw [UInt64.toNat_div, UInt64.toNat_mul, Nat.mod_eq_of_lt (by simpa [UInt64.size] using h),
+    Nat.mul_div_cancel_left _ (Nat.pos_of_ne_zero ha')]
+
+/-- A spec `uint64Add` that returns has no overflow. -/
+theorem uint64Add_lt {a b s : Nat} (h : Spec.uint64Add a b = .ok s) : a + b < 2 ^ 64 := by
+  unfold Spec.uint64Add at h
+  split at h
+  · assumption
+  · cases h
+
+/-- A spec `uint64Mul` that returns has no overflow. -/
+theorem uint64Mul_lt {a b s : Nat} (h : Spec.uint64Mul a b = .ok s) : a * b < 2 ^ 64 := by
+  unfold Spec.uint64Mul at h
+  split at h
+  · assumption
+  · cases h
+
+/-- The value of a spec `uint64Add` that returns. -/
+theorem uint64Add_val {a b s : Nat} (h : Spec.uint64Add a b = .ok s) : s = a + b := by
+  unfold Spec.uint64Add at h
+  split at h
+  · cases h; rfl
+  · cases h
+
+/-- Every step of a successful `mapM` succeeds. -/
+theorem mapM_ok_each {ε α β : Type} (f : α → Except ε β) :
+    ∀ (l : List α) {vs : List β}, l.mapM f = .ok vs → ∀ a ∈ l, ∃ b, f a = .ok b := by
+  intro l
+  induction l with
+  | nil => intro _ _ a ha; simp at ha
+  | cons x l ih =>
+    intro vs h a ha
+    rw [List.mapM_cons] at h
+    simp only [bind, Except.bind] at h
+    cases hx : f x with
+    | error err => rw [hx] at h; cases h
+    | ok b =>
+      rw [hx] at h
+      simp only at h
+      cases hl : l.mapM f with
+      | error err => rw [hl] at h; cases h
+      | ok bs =>
+        rcases List.mem_cons.mp ha with rfl | ha
+        · exact ⟨b, hx⟩
+        · exact ih hl a ha
+
 section WithPreset
 
 variable [EthCLSpecs.Fulu.Preset] [EthCLSpecs.Fulu.Config]
