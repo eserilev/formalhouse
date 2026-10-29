@@ -13,7 +13,7 @@ stages and are out of date. `README.md` states the current result and the truste
 - 2026-10-27: the final theorems before this date were vacuous. `committees` quantified over every state `s` with `CommFrame (absEState e) s`, which admits the input with its validator lists emptied, so `CommitteeStepPreconds.syncActive` failed and the hypothesis was false for every input. It is now `Spec.AtCommitteeStepState` / `Spec.FuluAtCommitteeStepState`, at the one state `epochToCommittees` returns. The same day, `DepositWritesContract.add_validator` got the `2^40` guard: without it the contract was unsatisfiable whenever a deposit exists (a `Usize` index one larger at each returned state), which made the `_rust` theorems vacuous on epochs with new validators. `EpochProofs/NonVacuity.lean` now witnesses `GloasFinalHypotheses` and `FuluFinalHypotheses` on a minimal-preset state (see README.md for what it does not cover).
 - Readable restatement (`FormalhouseReadable.lean`, `Headline.lean`, `HeadlinePresets.lean`): `lighthouse_model_gloas_epoch_eq_etheorem`, `lighthouse_rust_gloas_epoch_eq_etheorem`, `lighthouse_model_fulu_epoch_eq_etheorem`, `lighthouse_rust_fulu_epoch_eq_etheorem` and their presets, proved from the `formalhouse_*` theorems by unfolding. Named conclusions (`GloasLighthouseModelEqualsEtheorem`, `GloasRustEqualsEtheorem`, `GloasCacheReadsCorrect` = `ProgressiveBalancesReadsCorrect` ∧ `EpochCacheTotalCorrect` ∧ `PubkeyLookupCorrect`) and hypothesis bundles (`GloasEpochRun`, `GloasCacheProvenance`, `GloasChainAssumptions`, `GloasEtheoremDivergenceAssumptions`, `GloasOracleMatchesEtheorem`, `GloasRustGlueFacts`, and the Fulu ones). Two old hypotheses are derived from the run: `PubkeysUnique` (Gloas) and the first two parts of `TailPre` (`GloasEpochRun.atEpochBoundary`, `FuluEpochRun.atEpochBoundary`). `ptc_committees_from_cache` is the PTC conjunct as its own theorem.
 - `lighthouse_model_gloas_epoch_agrees_pyspec`, `lighthouse_model_fulu_epoch_agrees_pyspec` (+ presets): `SameOk` of the model and the transcription's `process_epoch` on every epoch input of a run, assuming only the run and `HistRoom`. Built from `process_epoch_lh_order_sameOk` and `process_epoch_lh_full_sameOk'` (Fulu: `lighthouse_fulu_epoch_sameOk`). Kept: `EpochSupply` (in the run; `rewards_overflow_example` shows the balance bound is needed) and `HistRoom` (Lighthouse list limit, the transcription has none). Not attempted: dropping the effective balance sum and slashings parts of `EpochSupply`, which both sides likely fail on together but the row proofs use. `NonVacuityReadable.lean` witnesses the state hypotheses and the new bundles on `witnessState`/`witnessEtheorem`/`witnessEtheoremFulu`; the runs have no witness.
-- 2026-10-27, readable names: the headline theorems, bundles and witnesses were renamed so that a reader who knows Lighthouse and the consensus specs can guess them. Theorems: `lighthouse_gloas_epoch` → `lighthouse_model_gloas_epoch_eq_etheorem`, `lighthouse_gloas_epoch_rust` → `lighthouse_rust_gloas_epoch_eq_etheorem`, `lighthouse_gloas_epoch_sameOk_spec` → `lighthouse_model_gloas_epoch_agrees_pyspec` (Fulu alike, and the `_mainnet`/`_minimal` versions); the `*_readable` duplicates are gone, `gloas_epoch_upkeep_readable`/`_at_input_readable` are `lighthouse_model_gloas_epoch_eq_etheorem_upkeep`/`_at_input`. Bundles: `EtheoremFaithful` → `GloasEtheoremDivergenceAssumptions` (fields `selectionsFull`, `listLimitRoom`), `EtheoremFaithfulFulu` → `FuluEtheoremBridgeConditions` (field `bridgeConds`; not all its conditions are about Etheorem), `RustEpoch*` → `GloasRustGlueFacts`/`FuluRustGlueFacts` (fields `viewEq`, `glue`), `GloasCacheFacts*` → `GloasCacheProvenance*`, `OracleMatchesEtheorem*` gets a `Gloas`/`Fulu` prefix, and the conclusions are `GloasLighthouseModelEqualsEtheorem`, `GloasRustEqualsEtheorem` (Fulu alike). Chain bundle fields: `rows` → `physicalLimits`, `committees` → `committeeStepStateFacts`, `histRoom` → `historicalSummariesBelowLimit`, `slot` → `slotFarFromOverflow`, `vectors` → `vectorLengths`, and `preconditions` split into `pyspecPreconditions` (`syncActive`, `proposers`, `enoughActiveForPtc`) and `selectionsEnd` (the hash-output facts `syncSelectionEnds`, `proposerSelectionEnds`, `ptcSelectionEnds`). `FuluEpochRun.supply`/`econ` → `activeBalanceBound`/`epochBalanceBounds`. `GloasAssumptions`/`FuluAssumptions` → `GloasFinalHypotheses`/`FuluFinalHypotheses`. `CommAt`/`CommConds`/`CommPreconds` (+Fulu) → `AtCommitteeStepState`/`CommitteeStepFacts`/`CommitteeStepPreconds` (`FuluAtCommitteeStepState`, ...). Witnesses: `wt`, `wtf`, `we`, `wef`, `wv`, `ev`, `evf` → `witnessState`, `witnessStateFulu`, `witnessEtheorem`, `witnessEtheoremFulu`, `witnessValidator`, `witnessEtheoremValidator`, `witnessEtheoremValidatorFulu`, and their lemmas follow the aliases (`witnessState_atEpochBoundary`, `_reachableInvariants`, `_physicalLimits`); `sameOk_witness*`, `sameOk_at_witness`, `gloasChain_witness`, `fuluChain_witness` → `agrees_pyspec_hyps_at_witness*`, `lighthouse_model_gloas_epoch_agrees_pyspec_at_witness`, `gloas_bundles_at_witness`, `fulu_bundles_at_witness`. Headline binders: `hpreset`, `hhistLimit`, `hhistBelowLimit`, `hrun`, `hchain`, `hetheorem`, `horacle`, `hcaches`, `hrust`; `o fo c uc init` → `oracle fuluOracle blockConfig upgradeConfig fuluStart`; cache binders `progressiveCache totalActiveBalance pubkeyMapOps pubkeyMap`. Widely used names keep their name and get an `abbrev` in `FormalhouseReadable.lean` used in the headline statements: `EtheoremState`, `toSpecState` (`absEState`), `SameResultOrBothFail` (`SameOk`), `process_epoch_lighthouse` (`process_epoch_lh_order`), `HistoricalSummariesBelowLimit` (`HistRoom`), `PhysicalLimits` (`RowBounds`), `EpochBalanceBounds` (`EpochSupply`), `ReachableInvariants` (`EpochInputOk''`), `AtEpochBoundary` (`TailPre`), `LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT`, `ProgressiveBalancesInner` (`LhCache`), `PresetMatchesEtheorem` (`EpochPresetAgrees`), and the Fulu ones. No statement changed meaning.
+- 2026-10-27, readable names: the headline theorems, bundles and witnesses were renamed so that a reader who knows Lighthouse and the consensus specs can guess them. Theorems: `lighthouse_gloas_epoch` → `lighthouse_model_gloas_epoch_eq_etheorem`, `lighthouse_gloas_epoch_rust` → `lighthouse_rust_gloas_epoch_eq_etheorem`, `lighthouse_gloas_epoch_sameOk_spec` → `lighthouse_model_gloas_epoch_agrees_pyspec` (Fulu alike, and the `_mainnet`/`_minimal` versions); the `*_readable` duplicates are gone, `gloas_epoch_upkeep_readable`/`_at_input_readable` are `lighthouse_model_gloas_epoch_eq_etheorem_upkeep`/`_at_input`. Bundles: `EtheoremFaithful` → `GloasEtheoremDivergenceAssumptions` (field `listLimitRoom`), `EtheoremFaithfulFulu` → `FuluEtheoremBridgeConditions` (field `bridgeConds`; not all its conditions are about Etheorem), `RustEpoch*` → `GloasRustGlueFacts`/`FuluRustGlueFacts` (fields `viewEq`, `glue`), `GloasCacheFacts*` → `GloasCacheProvenance*`, `OracleMatchesEtheorem*` gets a `Gloas`/`Fulu` prefix, and the conclusions are `GloasLighthouseModelEqualsEtheorem`, `GloasRustEqualsEtheorem` (Fulu alike). Chain bundle fields: `rows` → `physicalLimits`, `committees` → `committeeStepStateFacts`, `histRoom` → `historicalSummariesBelowLimit`, `slot` → `slotFarFromOverflow`, `vectors` → `vectorLengths`, and `preconditions` split into `pyspecPreconditions` (`syncActive`, `proposers`, `enoughActiveForPtc`) and `selectionsEnd` (the hash-output facts `syncSelectionEnds`, `proposerSelectionEnds`, `ptcSelectionEnds`). `FuluEpochRun.supply`/`econ` → `activeBalanceBound`/`epochBalanceBounds`. `GloasAssumptions`/`FuluAssumptions` → `GloasFinalHypotheses`/`FuluFinalHypotheses`. `CommAt`/`CommConds`/`CommPreconds` (+Fulu) → `AtCommitteeStepState`/`CommitteeStepFacts`/`CommitteeStepPreconds` (`FuluAtCommitteeStepState`, ...). Witnesses: `wt`, `wtf`, `we`, `wef`, `wv`, `ev`, `evf` → `witnessState`, `witnessStateFulu`, `witnessEtheorem`, `witnessEtheoremFulu`, `witnessValidator`, `witnessEtheoremValidator`, `witnessEtheoremValidatorFulu`, and their lemmas follow the aliases (`witnessState_atEpochBoundary`, `_reachableInvariants`, `_physicalLimits`); `sameOk_witness*`, `sameOk_at_witness`, `gloasChain_witness`, `fuluChain_witness` → `agrees_pyspec_hyps_at_witness*`, `lighthouse_model_gloas_epoch_agrees_pyspec_at_witness`, `gloas_bundles_at_witness`, `fulu_bundles_at_witness`. Headline binders: `hpreset`, `hhistLimit`, `hhistBelowLimit`, `hrun`, `hchain`, `hetheorem`, `horacle`, `hcaches`, `hrust`; `o fo c uc init` → `oracle fuluOracle blockConfig upgradeConfig fuluStart`; cache binders `progressiveCache totalActiveBalance pubkeyMapOps pubkeyMap`. Widely used names keep their name and get an `abbrev` in `FormalhouseReadable.lean` used in the headline statements: `EtheoremState`, `toSpecState` (`absEState`), `SameResultOrBothFail` (`SameOk`), `process_epoch_lighthouse` (`process_epoch_lh_order`), `HistoricalSummariesBelowLimit` (`HistRoom`), `PhysicalLimits` (`RowBounds`), `EpochBalanceBounds` (`EpochSupply`), `ReachableInvariants` (`EpochInputOk''`), `AtEpochBoundary` (`TailPre`), `LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT`, `ProgressiveBalancesInner` (`LhCache`), `PresetMatchesEtheorem` (`EpochPresetAgrees`), and the Fulu ones. No statement changed meaning.
 
 Goal: prove that Lighthouse's Gloas epoch processing equals the consensus spec for every state.
 
@@ -94,7 +94,7 @@ chain below 8 active validators, not 32.
 | Supply and time bounds | the supply bounds of both runs and `EpochSupply` (in `GloasEpochInput`), `rows` (`RowBounds`, F5), `boundary`, `slot` | `supply`, `econ`, `rows`, `boundary`, `slot` |
 | Reachable-state facts kept outside `EpochInputOk''` | `pubkeys`, `vectors` | `vectors` |
 | True pyspec preconditions | in `committees`: a sync candidate, a proposer candidate (F4), at least 32 active validators (F12) | in `committees`: an active validator at the next epoch and at `current + 2` (no F4, no F12) |
-| Probability facts | in `committees`: each selection ends within `2^64` passes; `selections` (F3) | in `committees`; in `etheorem`: F3 and `ProposerFin` |
+| Probability facts | in `committees`: each selection ends within `2^64` passes | in `committees`; in `etheorem`: `ProposerFin` |
 | Etheorem list limits (alpha.11) | `etheoremRoom`: deposit room (F10), builder withdrawals room (F6) | in `etheorem`: deposit room (F10), historical summaries room |
 | Oracle | `oracle` (SHA-256, the roots, the BLS checks agree with Etheorem), `sha` | `oracle`, `sha` |
 | Cache build facts | arguments: progressive balances `Coherent`, the epoch cache total, `CommitteeCacheBuilt`, pubkey cache `Coherent` with `IndexMapLaws` | none (the Fulu model takes the spec values) |
@@ -506,7 +506,7 @@ at the state before them:
 - `CommitteeStepPreconds`: the pyspec raises without them. A validator is active at the next epoch (sync
   committee). An active validator at `current + 2` is not slashed (F4). At least
   `SLOTS_PER_EPOCH` validators are active at `current + 2`. Each balance weighted selection
-  ends within `2^64` passes (a fact about the hash values, like F3).
+  ends within `2^64` passes (a fact about the hash values).
 
 `process_ptc_window_few_active_error` proves the third one is a real pyspec halt: with fewer than
 `SLOTS_PER_EPOCH` validators active at `current + 2`, the first slot of that epoch has no
@@ -692,8 +692,8 @@ the deposits and the consolidations. Frame lemmas move two conditions to the epo
 in the registry for the `MAX_PENDING_DEPOSITS_PER_EPOCH` new validators of one epoch (F10), and
 room in the builder withdrawals under Etheorem's alpha.11 limit (F6). The historical summaries
 room is `HistRoom` in `TailPre`: beta.4 keeps the `HISTORICAL_ROOTS_LIMIT` cap, so it is a spec
-condition, not an Etheorem one. The F3 conditions are facts about Etheorem's own output and
-stay.
+condition, not an Etheorem one. The F3 conditions are gone: Etheorem's selection now counts its
+passes with the pyspec's `uint64` counter, so `SelFin` covers it.
 
 The 17 step theorems are in `Etheorem/<Step>.lean`. `etheorem/PLAN.md` lists the conditions of
 `process_epoch_etheorem` and the findings.
@@ -742,7 +742,7 @@ The shared parts:
   steps call, from epoch helpers to `initiate_validator_exit`.
 - `Etheorem/Oracle.lean`: `OracleAgrees`, the Oracle fields that equal Etheorem functions.
 
-The dependency is the fork `eserilev/etheorem`, branch `formalhouse-pin`, at the commit in
+The dependency is the fork `eserilev/etheorem`, branch `formalhouse-pin-cbws`, at the commit in
 `lakefile.toml`. The fork is upstream Etheorem plus these changes:
 
 - The v1.7.0-alpha.9 deposit change (F2): no eth1 bridge check in `process_pending_deposits`, no
@@ -750,6 +750,12 @@ The dependency is the fork `eserilev/etheorem`, branch `formalhouse-pin`, at the
   `process_operations`.
 - A port to Lean v4.31.0: four proof fixes, no `-march=native`, and a KZG lakefile fix that
   finds the BLS library when Etheorem is a dependency.
+- eserilev/etheorem#6: `compute_balance_weighted_selection` asserts `total > 0` and returns an
+  `Except`, and its callers pass the error on.
+- eserilev/etheorem#7: the selection loop counts passes with the pyspec's `uint64` counter and
+  raises at `2^64`, in place of the `10^7` pass limit (F3).
+- eserilev/etheorem#8: the epoch steps use checked `uint64` arithmetic and checked list reads,
+  as the pyspec does.
 
 `etheorem/setup.sh` fetches blst, c-kzg-4844 and ISA-L at Etheorem's pins. ISA-L needs `nasm`.
 
@@ -1002,9 +1008,8 @@ stated at the state that the epoch passes to the committee steps (`AtCommitteeSt
 - `EpochSupply` at each epoch input.
 - `HistRoom`: `historical_summaries` below the Lighthouse limit.
 
-### Probability facts (3)
+### Probability facts (2)
 
-- F3: each Etheorem selection returns all its items within `10^7` passes.
 - `SelFin`: each spec selection finishes within `2^64` passes.
 - `ProposerFin`: the Electra proposer loop ends before its last pass.
 

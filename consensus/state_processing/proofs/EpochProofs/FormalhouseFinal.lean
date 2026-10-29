@@ -108,8 +108,6 @@ structure GloasFinalHypotheses (o : Spec.Oracle) (init : Spec.FuluState) (e : ES
   ends within `2^64` passes (a probability fact), the registry size and window lengths, valid
   keys. -/
   committees : Spec.AtCommitteeStepState o (absEState e)
-  /-- Probability fact about Etheorem (F3): its selections return all their items. -/
-  selections : SelectionsFull e
   /-- Etheorem list limits from alpha.11: registry room for one epoch of deposits (F10) and
   builder pending withdrawals room (F6). beta.4 has no limit on these lists. -/
   etheoremRoom : EpochCondsIn e
@@ -129,7 +127,7 @@ theorem gloasEpochConds_of_run (o : Spec.Oracle) (fo : Spec.FuluOracle)
       slot hr hslot64 hreach hlt ht hz he hup mbp gfe hsupplyG Spec.EpochSupply hecon s u
       (absEState e) slotG hrg hslotG hreachG hltG hu hzG,
     ha.pubkeys, ha.vectors, ha.boundary, ha.slot, ha.rows, ha.etheoremRoom, ha.committees,
-    ha.selections, ha.oracle, ha.sha⟩
+    ha.oracle, ha.sha⟩
 
 open Aeneas Aeneas.Std Result in
 open CacheProofs.PB (LhCache Coherent lhPreviousEpochFlagAttestingBalance
@@ -231,7 +229,7 @@ structure FuluFinalHypotheses (o : Spec.Oracle) (fo : Spec.FuluOracle) (c : Spec
   Fulu has no F4 and no F12. -/
   committees : Spec.FuluAtCommitteeStepState o (absEState e)
   /-- The Etheorem Fulu bridge conditions: Etheorem's list limits from alpha.11 (F10, the
-  historical summaries room), its selections return all their items (F3), and the Electra
+  historical summaries room), and the Electra
   proposer loop ends before pass `2^64 - 1` (`ProposerFin`, a probability fact). -/
   etheorem : FuluEpochConds Spec.P o e
   /-- Oracle: the spec Oracle agrees with Etheorem, and SHA-256 returns 32 bytes. -/

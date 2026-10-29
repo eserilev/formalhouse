@@ -134,11 +134,16 @@ jobs:
           curl -sSfL https://elan.lean-lang.org/elan-init.sh | sh -s -- -y --default-toolchain none
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
-      - name: Cache mathlib build
+      # The key ends in a hash of the proof sources, so each new set of sources saves its build;
+      # restore-keys falls back to the latest build with the same dependencies, and Lake then
+      # rebuilds only the changed files and their dependents.
+      - name: Cache the Lake build
         uses: actions/cache@v4
         with:
           path: ${{ matrix.proofs }}/.lake
-          key: lake-${{ runner.os }}-${{ matrix.name }}-${{ hashFiles(format('{0}/lakefile.toml', matrix.proofs), format('{0}/lean-toolchain', matrix.proofs), format('{0}/etheorem/**', matrix.proofs)) }}
+          key: lake-${{ runner.os }}-${{ matrix.name }}-${{ hashFiles(format('{0}/lakefile.toml', matrix.proofs), format('{0}/lean-toolchain', matrix.proofs), format('{0}/etheorem/**', matrix.proofs)) }}-${{ hashFiles(format('{0}/**/*.lean', matrix.proofs)) }}
+          restore-keys: |
+            lake-${{ runner.os }}-${{ matrix.name }}-${{ hashFiles(format('{0}/lakefile.toml', matrix.proofs), format('{0}/lean-toolchain', matrix.proofs), format('{0}/etheorem/**', matrix.proofs)) }}-
 
       - name: Build the proofs
         working-directory: ${{ matrix.proofs }}

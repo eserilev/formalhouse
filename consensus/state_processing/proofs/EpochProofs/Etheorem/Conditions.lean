@@ -13,11 +13,9 @@ start of the epoch, on mainnet.
   before the pending deposits and the pending consolidations.
 - Moved to the epoch start by frame lemmas (`EpochCondsIn`): room for the pending deposits,
   room in the builder withdrawals and in the historical summaries (F6). The steps before each of these reads do not write the fields it reads.
-- Kept as they are (`SelectionsFull`): Etheorem's balance weighted selections return all their
-  items (F3). These are facts about Etheorem's own output.
 
 F2 is fixed on the Etheorem fork that this project requires (`eserilev/etheorem`, branch
-`formalhouse-pin`). That fork has no eth1 bridge check in `process_pending_deposits`, as in the
+`formalhouse-pin-cbws`). That fork has no eth1 bridge check in `process_pending_deposits`, as in the
 pyspec since v1.7.0-alpha.9, so no bridge condition is needed.
 -/
 
@@ -299,14 +297,6 @@ structure EpochCondsIn (e : EState) : Prop where
 
 variable [HasherTag] [CryptoBackend]
 
-/-- Etheorem's balance weighted selections return all their items (F3). Etheorem stops each
-selection after `10^7` passes. The pyspec has no such bound. -/
-structure SelectionsFull (e : EState) : Prop where
-  syncFull : ∀ e', Before 14 e e' → SyncSelectionFull e'
-  proposersFull : ∀ e', Before 15 e e' → ProposerSelectionsFull e'
-    (EthCLSpecs.Gloas.currentEpochOf (pureState e') + EthCLSpecs.Gloas.Const.minSeedLookahead + 1)
-  ptcFull : ∀ e', Before 16 e e' → PtcSelectionsFull e'
-
 theorem qualifyingBuilderWithdrawals_length (e : EState) :
     (qualifyingBuilderWithdrawals e).length ≤ EthCLSpecs.Gloas.Const.slotsPerEpoch := by
   unfold qualifyingBuilderWithdrawals
@@ -319,15 +309,13 @@ about the state at the epoch start.
 `hb0` and `hslot` hold at each epoch boundary of a reachable run (`EpochInputOk''`). They give
 the finalized epoch condition and the equal list lengths. `hin` holds the facts that frame
 lemmas carry to the step that reads them. `hhist`: the historical summaries are below
-`HISTORICAL_ROOTS_LIMIT`, a cap that beta.4 keeps. `hsel` holds the facts about Etheorem's
-output. -/
+`HISTORICAL_ROOTS_LIMIT`, a cap that beta.4 keeps. -/
 theorem process_epoch_etheorem_in [Spec.PresetCfg] [Spec.PresetCfg.Ok]
     (hpa : EpochPresetAgrees Spec.P) (o : Spec.Oracle) (ho : OracleAgrees o)
     (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState)
     (hb0 : Spec.BoundaryOk (absEState e)) (hslot : (absEState e).slot < 2 ^ 64)
     (hin : EpochCondsIn e)
     (hhist : (absEState e).historical_summaries.length < EthCLSpecs.Gloas.Const.historicalRootsLimit)
-    (hsel : SelectionsFull e)
     {s' : Spec.BeaconState} (h : Spec.process_epoch Spec.P o (absEState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processEpoch (StateTransition := GloasRun)).run (pureState e) =
       .ok ((), pureState e') ∧ absEState e' = s' := by
@@ -473,16 +461,15 @@ theorem process_epoch_etheorem_in [Spec.PresetCfg] [Spec.PresetCfg.Ok]
   -- 15. sync committees
   obtain ⟨s15, h15, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e15, r15, rfl⟩ := process_sync_committee_updates_etheorem hb hp.committee o ho
-    hp.epochsPerSyncCommitteePeriodLt e14 (hsel.syncFull e14 b14) h15
+    hp.epochsPerSyncCommitteePeriodLt e14 h15
   have b15 : StepsOk (epochSteps.take 15) e e15 := b14.snoc r15
   -- 16. proposer lookahead
   obtain ⟨s16, h16, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e16, r16, rfl⟩ := process_proposer_lookahead_etheorem hb hp.committee o ho.hash hsha
-    e15 (hsel.proposersFull e15 b15) h16
+    e15 h16
   have b16 : StepsOk (epochSteps.take 16) e e16 := b15.snoc r16
   -- 17. PTC window
-  obtain ⟨e17, r17, rfl⟩ := process_ptc_window_etheorem hb hp.committee o ho.hash hsha e16
-    (hsel.ptcFull e16 b16) h
+  obtain ⟨e17, r17, rfl⟩ := process_ptc_window_etheorem hb hp.committee o ho.hash hsha e16 h
   have b17 : StepsOk epochSteps e e17 := b16.snoc r17
   exact ⟨e17, by rw [processEpoch_eq]; exact b17.run_seq, rfl⟩
 
@@ -494,21 +481,19 @@ The conditions that remain:
 - `hcond`: room in the registry for the new validators of one epoch (F10), and room in the
   builder withdrawals (F6). Each is a fact about the epoch start state.
 - `hhist`: the historical summaries are below `HISTORICAL_ROOTS_LIMIT`. Beta.4 keeps this cap.
-- `hsel`: Etheorem's balance weighted selections return all their items (F3).
 - `ho`, `hsha`: the oracle is Etheorem's hash and BLS functions, and SHA-256 returns 32 bytes. -/
 theorem lighthouse_epoch_etheorem_reachable [Spec.PresetCfg] [Spec.PresetCfg.Ok]
     (hpa : EpochPresetAgrees Spec.P) (o : Spec.Oracle) (ho : OracleAgrees o)
     (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState)
     (hin : Spec.EpochInputOk'' Spec.EpochSupply (absEState e)) (hcond : EpochCondsIn e)
     (hhist : (absEState e).historical_summaries.length < EthCLSpecs.Gloas.Const.historicalRootsLimit)
-    (hsel : SelectionsFull e)
     {s' : Spec.BeaconState} (h : Spec.process_epoch_lh_full o (absEState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processEpoch (StateTransition := GloasRun)).run (pureState e) =
       .ok ((), pureState e') ∧ absEState e' = s' := by
   obtain ⟨⟨⟨hb, hslot, heb, hexit, hsup⟩, _, hcons⟩, _, hvalid⟩ := hin
   have hsame := Spec.process_epoch_lh_full_sameOk' o (absEState e) hb hslot heb hexit hsup hvalid
     hcons
-  exact process_epoch_etheorem_in hpa o ho hsha e hb hslot hcond hhist hsel ((hsame s').mp h)
+  exact process_epoch_etheorem_in hpa o ho hsha e hb hslot hcond hhist ((hsame s').mp h)
 
 end Generic
 

@@ -15,14 +15,13 @@ selections as the Gloas balance weighted selection.
   (`ProposerFin`, `compute_proposer_indices_fulu_ok`). The last pass needs `2**64 - 1` rejected
   candidates before it.
 
-Etheorem stops a selection after `10^7` passes (F3). So each theorem assumes that Etheorem's
-selections are full: `SyncSelectionFull` and `ProposerSelectionsFull`.
+Etheorem's selection counts passes with the spec's `uint64` counter and returns only once it has
+`size` items, as pyspec does. So when the reference returns, Etheorem returns the same items.
 
 `hsha` says that `sha` returns 32 bytes. `sha_size_pure` proves it for the pure SHA-256.
 
-The reference raises in two cases where Etheorem does not. `compute_balance_weighted_selection`
-asserts `total > 0`, and `eth_aggregate_pubkeys` asserts `KeyValidate`. Each theorem assumes that
-the reference succeeds, so these cases do not occur.
+The reference raises in one case where Etheorem does not: `eth_aggregate_pubkeys` asserts
+`KeyValidate`. Each theorem assumes that the reference succeeds, so this case does not occur.
 -/
 
 namespace EpochProofs.Etheorem.Fulu
@@ -73,27 +72,21 @@ def proposerSlotSeed (e : EState) (epoch : UInt64) (i : Nat) : ByteArray :=
       EthCLSpecs.Fulu.Const.domainBeaconProposer) ++
     uint64ToBytes (EthCLSpecs.Fulu.computeStartSlotAtEpoch epoch + UInt64.ofNat i))
 
-/-- Each proposer selection of `epoch` in Etheorem returns one proposer. -/
-def ProposerSelectionsFull (e : EState) (epoch : UInt64) : Prop :=
-  ∀ i < EthCLSpecs.Fulu.Const.slotsPerEpoch,
-    1 ≤ (EthCLSpecs.Fulu.computeBalanceWeightedSelection (pureState e) (proposerCandidates e epoch)
-      (proposerSlotSeed e epoch i) 1 true).size
-
 section Proposers
 
 variable {p : Spec.Preset} (hp : PresetAgrees p) (hc : CommitteePresetAgrees p)
 include hp hc
 
 /-- The Fulu `get_beacon_proposer_indices` equals Etheorem's when the Electra loops end before
-their last pass and Etheorem's selections are full. -/
+their last pass. -/
 theorem get_beacon_proposer_indices_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d)
     (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState) (epoch : UInt64)
     (hfin : ∀ s, Spec.ProposerFin p o (absEState e)
       (Spec.get_active_validator_indices (absEState e) epoch.toNat) s)
-    (hfull : ProposerSelectionsFull e epoch) {r : List Nat}
+    {r : List Nat}
     (h : Spec.get_beacon_proposer_indices_fulu p o (absEState e) epoch.toNat = .ok r) :
-    r = (EthCLSpecs.Fulu.getBeaconProposerIndices (pureState e) epoch).toList.map
-      UInt64.toNat := by
+    ∃ props, EthCLSpecs.Fulu.getBeaconProposerIndices (pureState e) epoch = .ok props ∧
+      r = props.toList.map UInt64.toNat := by
   unfold Spec.get_beacon_proposer_indices_fulu at h
   simp only [except_bind_eq_ok] at h
   obtain ⟨seed, hseed, h⟩ := h
@@ -135,50 +128,53 @@ theorem get_beacon_proposer_indices_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d =
     unfold proposerSlotSeed
     rfl
   subst hseeds'
-  have hr := mapM_ok_map _ (fun sd => ((EthCLSpecs.Fulu.computeBalanceWeightedSelection
-      (pureState e) (proposerCandidates e epoch) (vecToBytes sd) 1 true)[0]!).toNat) _ ?hf3 h
-  case hf3 =>
-    intro sd hsd v hv
-    simp only [List.mem_map, List.mem_range] at hsd
-    obtain ⟨i, hi, rfl⟩ := hsd
-    simp only [except_bind_eq_ok] at hv
-    obtain ⟨sel, hsel, hv⟩ := hv
-    have hfi := hfull i (by rw [hp.slotsPerEpoch]; exact hi)
-    rw [← vecToBytes_bytesToRoot (proposerSlotSeed e epoch i) (hsha _)] at hfi
-    rw [compute_balance_weighted_selection_ok p o ho hc e _ _ 1 true hfi hsel] at hv
-    obtain ⟨-, rfl⟩ := listGet_ok hv
-    rw [map_toNat_getElem!_all]
-  subst hr
+  -- The Etheorem step of slot `i`: select one proposer with the seed of slot `i`.
+  obtain ⟨cs, hcs, rfl⟩ := mapM_ok_rel _ (fun i => do
+      let sel ← EthCLSpecs.Fulu.computeBalanceWeightedSelection (pureState e)
+        (proposerCandidates e epoch) (proposerSlotSeed e epoch i) 1 true
+      return sel[0]!) UInt64.toNat (fun i => bytesToRoot (proposerSlotSeed e epoch i)) _
+    (by
+      intro i _ v hv
+      simp only [except_bind_eq_ok] at hv
+      obtain ⟨sel, hsel, hv⟩ := hv
+      obtain ⟨res, hres, rfl⟩ := compute_balance_weighted_selection_ok p o ho hc e _ _ 1 true hsel
+      rw [vecToBytes_bytesToRoot (proposerSlotSeed e epoch i) (hsha _)] at hres
+      refine ⟨res[0]!, by rw [hres]; rfl, ?_⟩
+      obtain ⟨-, rfl⟩ := listGet_ok hv
+      rw [map_toNat_getElem!_all]) h
+  refine ⟨cs.toArray, ?_, by simp⟩
   unfold EthCLSpecs.Fulu.getBeaconProposerIndices EthCLSpecs.Fulu.computeProposerIndices
-  simp only [List.map_map, Array.toList_map, Array.toList_range, hp.slotsPerEpoch]
-  apply List.map_congr_left
-  intro i _
-  simp only [Function.comp_apply, vecToBytes_bytesToRoot _ (hsha _), proposerSlotSeed,
-    proposerCandidates]
-  rfl
+  rw [Array.mapM_eq_mapM_toList, Array.toList_range, hp.slotsPerEpoch]
+  exact congrArg (fun x => List.toArray <$> x) hcs
 
 
-/-- The new proposer lookahead in Etheorem. -/
-def newLookahead (e : EState) : Vector UInt64 (2 * EthCLSpecs.Fulu.Const.slotsPerEpoch) :=
+/-- The new proposer lookahead in Etheorem, from the new proposers `props`. -/
+def newLookahead (e : EState) (props : Array UInt64) :
+    Vector UInt64 (2 * EthCLSpecs.Fulu.Const.slotsPerEpoch) :=
   Vector.ofFn fun i =>
     if i.val < EthCLSpecs.Fulu.Const.slotsPerEpoch then
       vget e.proposerLookahead (i.val + EthCLSpecs.Fulu.Const.slotsPerEpoch)
-    else (EthCLSpecs.Fulu.getBeaconProposerIndices (pureState e)
-      (EthCLSpecs.Fulu.currentEpochOf (pureState e) + EthCLSpecs.Fulu.Const.minSeedLookahead + 1))[
-        i.val - EthCLSpecs.Fulu.Const.slotsPerEpoch]!
+    else props[i.val - EthCLSpecs.Fulu.Const.slotsPerEpoch]!
 
 omit [EthCLSpecs.Fulu.Config] hp hc in
-theorem processProposerLookahead_run (e : EState) :
+theorem processProposerLookahead_run (e : EState) (props : Array UInt64)
+    (hprops : EthCLSpecs.Fulu.getBeaconProposerIndices (pureState e)
+      (EthCLSpecs.Fulu.currentEpochOf (pureState e) + EthCLSpecs.Fulu.Const.minSeedLookahead + 1)
+      = .ok props) :
     (EthCLSpecs.Fulu.processProposerLookahead (StateTransition := FuluRun)).run (pureState e) =
-      .ok ((), pureState { e with proposerLookahead := newLookahead e }) := rfl
+      .ok ((), pureState { e with proposerLookahead := newLookahead e props }) := by
+  unfold EthCLSpecs.Fulu.processProposerLookahead
+  rw [run_bind]
+  rw [show (get : FuluRun EthCLSpecs.Fulu.State).run (pureState e) =
+    .ok (pureState e, pureState e) from rfl, except_bind_ok]
+  simp only []
+  rw [run_bind, run_liftErr_of_ok _ _ (by rw [hprops]; rfl), except_bind_ok]
+  rfl
 
-/-- `process_proposer_lookahead` equals Etheorem's when Etheorem's proposer selections are
-full. -/
+/-- `process_proposer_lookahead` equals Etheorem's. -/
 theorem process_proposer_lookahead_etheorem (o : Spec.Oracle)
     (ho : ∀ d, o.hash d = etheoremHash d) (hsha : ∀ b : ByteArray, (sha b).size = 32)
     (e : EState)
-    (hfull : ProposerSelectionsFull e (EthCLSpecs.Fulu.currentEpochOf (pureState e) +
-      EthCLSpecs.Fulu.Const.minSeedLookahead + 1))
     (hfin : ∀ s, Spec.ProposerFin p o (absEState e)
       (Spec.get_active_validator_indices (absEState e)
         (EthCLSpecs.Fulu.currentEpochOf (pureState e) + EthCLSpecs.Fulu.Const.minSeedLookahead +
@@ -186,7 +182,6 @@ theorem process_proposer_lookahead_etheorem (o : Spec.Oracle)
     {s' : Spec.BeaconState} (h : Spec.process_proposer_lookahead_fulu p o (absEState e) = .ok s') :
     ∃ e', (EthCLSpecs.Fulu.processProposerLookahead (StateTransition := FuluRun)).run (pureState e) =
       .ok ((), pureState e') ∧ absEState e' = s' := by
-  refine ⟨_, processProposerLookahead_run e, ?_⟩
   unfold Spec.process_proposer_lookahead_fulu at h
   have hge : ∀ l, Spec.get_current_epoch p { absEState e with proposer_lookahead := l } =
       Spec.get_current_epoch p (absEState e) := fun _ => rfl
@@ -204,23 +199,23 @@ theorem process_proposer_lookahead_etheorem (o : Spec.Oracle)
   subst hep2'
   have hP' := uint64Add_ok (b := 1) hP
   subst hP'
-  have hprops' := get_beacon_proposer_indices_ok hp hc o ho hsha e _ hfin hfull hprops
-  subst hprops'
+  obtain ⟨props, hpe, rfl⟩ := get_beacon_proposer_indices_ok hp hc o ho hsha e _ hfin hprops
+  refine ⟨_, processProposerLookahead_run e props hpe, ?_⟩
   obtain ⟨hles', -⟩ := uint64Sub_eq hles
   subst hles'
   rw [absEState_set_proposerLookahead]
-  have hsize : (EthCLSpecs.Fulu.getBeaconProposerIndices (pureState e)
-      (EthCLSpecs.Fulu.currentEpochOf (pureState e) + EthCLSpecs.Fulu.Const.minSeedLookahead +
-        1)).size = EthCLSpecs.Fulu.Const.slotsPerEpoch := by
-    simp [EthCLSpecs.Fulu.getBeaconProposerIndices, EthCLSpecs.Fulu.computeProposerIndices]
-  have hlist : (newLookahead e).toList.map UInt64.toNat =
+  have hsize : props.size = EthCLSpecs.Fulu.Const.slotsPerEpoch := by
+    unfold EthCLSpecs.Fulu.getBeaconProposerIndices EthCLSpecs.Fulu.computeProposerIndices at hpe
+    rw [Array.mapM_eq_mapM_toList] at hpe
+    simp only [except_map_eq_ok] at hpe
+    obtain ⟨l, hl, rfl⟩ := hpe
+    simpa using mapM_length_eq hl
+  have hlist : (newLookahead e props).toList.map UInt64.toNat =
       List.take ((absEState e).proposer_lookahead.length - p.SLOTS_PER_EPOCH)
         (List.drop p.SLOTS_PER_EPOCH (absEState e).proposer_lookahead ++
           List.drop ((absEState e).proposer_lookahead.length - p.SLOTS_PER_EPOCH)
             (absEState e).proposer_lookahead) ++
-      List.map UInt64.toNat (EthCLSpecs.Fulu.getBeaconProposerIndices (pureState e)
-        (EthCLSpecs.Fulu.currentEpochOf (pureState e) + EthCLSpecs.Fulu.Const.minSeedLookahead +
-          1)).toList := by
+      List.map UInt64.toNat props.toList := by
     simp only [absEState_proposer_lookahead, List.length_map, Vector.length_toList,
       ← hp.slotsPerEpoch]
     have h2 : 2 * EthCLSpecs.Fulu.Const.slotsPerEpoch - EthCLSpecs.Fulu.Const.slotsPerEpoch =
@@ -248,49 +243,7 @@ theorem process_proposer_lookahead_etheorem (o : Spec.Oracle)
   rw [hlist]
 end Proposers
 
-/-! ## Selection size -/
-
-omit [EthCLSpecs.Fulu.Config] in
-/-- Etheorem's selection never holds more than `size` items. -/
-theorem cbwsAux_size_le (indices effBals : Array Nat) (perm : Array UInt64) (seed : ByteArray)
-    (total size : Nat) (shuffle : Bool) :
-    ∀ (fuel i : Nat) (rb : ByteArray) (sel : Array UInt64), sel.size ≤ size →
-      (EthCLSpecs.Fulu.cbwsAux indices effBals perm seed total size shuffle fuel i rb sel).size
-        ≤ size := by
-  intro fuel
-  induction fuel with
-  | zero => intro i rb sel h; simpa [EthCLSpecs.Fulu.cbwsAux] using h
-  | succ f ih =>
-    intro i rb sel h
-    unfold EthCLSpecs.Fulu.cbwsAux
-    split
-    · exact h
-    · rename_i hlt
-      apply ih
-      have hite : ∀ (c : Prop) [Decidable c] (x : UInt64),
-          (if c then sel.push x else sel).size ≤ sel.size + 1 := by
-        intro c _ x; split <;> simp
-      exact Nat.le_trans (hite _ _) (by omega)
-
-omit [EthCLSpecs.Fulu.Config] in
-theorem computeBalanceWeightedSelection_size_le (e : EState) (indices : Array UInt64)
-    (seed : ByteArray) (size : Nat) (shuffle : Bool) :
-    (EthCLSpecs.Fulu.computeBalanceWeightedSelection (pureState e) indices seed size shuffle).size
-      ≤ size :=
-  cbwsAux_size_le _ _ _ _ _ _ _ _ _ _ _ (by simp)
-
 /-! ## Sync committee -/
-
-/-- The selection of the next sync committee in Etheorem returns `SYNC_COMMITTEE_SIZE` items. -/
-def SyncSelectionFull (e : EState) : Prop :=
-  EthCLSpecs.Fulu.Const.syncCommitteeSize ≤
-    (EthCLSpecs.Fulu.computeBalanceWeightedSelection (pureState e)
-      (EthCLSpecs.Fulu.getActiveValidatorIndices (pureState e)
-        (EthCLSpecs.Fulu.currentEpochOf (pureState e) + 1))
-      (vecToBytes (EthCLSpecs.Fulu.getSeed (pureState e)
-        (EthCLSpecs.Fulu.currentEpochOf (pureState e) + 1)
-        EthCLSpecs.Fulu.Const.domainSyncCommittee))
-      EthCLSpecs.Fulu.Const.syncCommitteeSize true).size
 
 section Sync
 
@@ -298,9 +251,10 @@ variable [CryptoBackend] {p : Spec.Preset} (hp : PresetAgrees p) (hc : Committee
 include hp hc
 
 theorem get_next_sync_committee_ok (o : Spec.Oracle) (hoa : OracleAgrees o) (e : EState)
-    (hfull : SyncSelectionFull e) {c : Spec.SyncCommittee}
+    {c : Spec.SyncCommittee}
     (h : Spec.get_next_sync_committee p o (absEState e) = .ok c) :
-    c = absSyncCommittee (EthCLSpecs.Fulu.getNextSyncCommittee (pureState e)) := by
+    ∃ c', EthCLSpecs.Fulu.getNextSyncCommittee (pureState e) = .ok c' ∧
+      c = absSyncCommittee c' := by
   unfold Spec.get_next_sync_committee Spec.get_next_sync_committee_indices at h
   simp only [except_bind_eq_ok, get_current_epoch_eq hp] at h
   obtain ⟨sel, ⟨ep, hep, ep1, hep1, seed, hseed, hsel⟩, pks, hpks, agg, hagg, hc'⟩ := h
@@ -312,8 +266,8 @@ theorem get_next_sync_committee_ok (o : Spec.Oracle) (hoa : OracleAgrees o) (e :
     hseed
   subst hseed'
   rw [get_active_validator_indices_eq hp, ← hc.syncCommitteeSize] at hsel
-  have hsel' := compute_balance_weighted_selection_ok p o hoa.hash hc e _ _ _ true hfull hsel
-  subst hsel'
+  obtain ⟨res, hres, rfl⟩ := compute_balance_weighted_selection_ok p o hoa.hash hc e _ _ _ true hsel
+  have hsz := computeBalanceWeightedSelection_ok_size e _ _ _ true hres
   have hpks' := mapM_ok_map _ (fun idx => ((e.validators[idx]?).getD default).pubkey) _ ?hf hpks
   case hf =>
     intro idx _ b hb
@@ -335,18 +289,15 @@ theorem get_next_sync_committee_ok (o : Spec.Oracle) (hoa : OracleAgrees o) (e :
   subst hagg
   rw [except_pure_eq_ok] at hc'
   subst hc'
-  have hsz := Nat.le_antisymm (computeBalanceWeightedSelection_size_le e _ _ _ true) hfull
+  unfold EthCLSpecs.Fulu.getNextSyncCommittee
+  simp only [view_uncachedBox]
+  simp only [vecToBytes] at hres
+  rw [hres, except_bind_ok]
+  refine ⟨_, rfl, ?_⟩
   have hpk : (List.map (fun idx => ((e.validators[idx]?).getD default).pubkey)
-      (List.map UInt64.toNat (EthCLSpecs.Fulu.computeBalanceWeightedSelection (pureState e)
-        (EthCLSpecs.Fulu.getActiveValidatorIndices (pureState e)
-          (EthCLSpecs.Fulu.currentEpochOf (pureState e) + 1))
-        (vecToBytes (EthCLSpecs.Fulu.getSeed (pureState e)
-          (EthCLSpecs.Fulu.currentEpochOf (pureState e) + 1)
-          EthCLSpecs.Fulu.Const.domainSyncCommittee))
-        EthCLSpecs.Fulu.Const.syncCommitteeSize true).toList)) =
-      (EthCLSpecs.Fulu.getNextSyncCommittee (pureState e)).pubkeys.toList := by
-    unfold EthCLSpecs.Fulu.getNextSyncCommittee
-    simp only [view_uncachedBox, vecToBytes] at hsz ⊢
+      (List.map UInt64.toNat res.toList)) =
+      (Vector.ofFn fun i : Fin EthCLSpecs.Fulu.Const.syncCommitteeSize =>
+        ((e.validators[(res[i.val]!).toNat]?).getD default).pubkey).toList := by
     apply List.ext_getElem
     · simp [hsz]
     · intro i h1 h2
@@ -359,34 +310,45 @@ theorem get_next_sync_committee_ok (o : Spec.Oracle) (hoa : OracleAgrees o) (e :
 
 
 omit [EthCLSpecs.Fulu.Config] hp hc in
-theorem processSyncCommitteeUpdates_run (e : EState) :
+/-- Etheorem's `processSyncCommitteeUpdates` at a period boundary, when the next sync committee
+is `c'`. -/
+theorem processSyncCommitteeUpdates_run_update (e : EState) (c' : EthCLSpecs.Fulu.SyncCommittee)
+    (hz : ((EthCLSpecs.Fulu.currentEpochOf (pureState e) + 1) %
+      UInt64.ofNat EthCLSpecs.Fulu.Const.epochsPerSyncCommitteePeriod == 0) = true)
+    (hc' : EthCLSpecs.Fulu.getNextSyncCommittee (pureState e) = .ok c') :
     (EthCLSpecs.Fulu.processSyncCommitteeUpdates (StateTransition := FuluRun)).run
         (pureState e) =
-      .ok ((), pureState (if (EthCLSpecs.Fulu.currentEpochOf (pureState e) + 1) %
-          UInt64.ofNat EthCLSpecs.Fulu.Const.epochsPerSyncCommitteePeriod == 0 then
-        { e with currentSyncCommittee := e.nextSyncCommittee,
-                 nextSyncCommittee := EthCLSpecs.Fulu.getNextSyncCommittee (pureState e) }
-        else e)) := by
+      .ok ((), pureState { e with currentSyncCommittee := e.nextSyncCommittee,
+                                  nextSyncCommittee := c' }) := by
   unfold EthCLSpecs.Fulu.processSyncCommitteeUpdates
   have hget : ∀ s : EthCLSpecs.Fulu.State,
       (get : FuluRun EthCLSpecs.Fulu.State).run s = .ok (s, s) := fun _ => rfl
   rw [run_bind, hget, except_bind_ok]
-  cases hz : ((EthCLSpecs.Fulu.currentEpochOf (pureState e) + 1) %
-      UInt64.ofNat EthCLSpecs.Fulu.Const.epochsPerSyncCommitteePeriod == 0)
-  · simp only [Bool.false_eq_true, if_false]
-    rfl
-  · simp only [if_true]
-    rfl
+  simp only [hz, if_true]
+  rw [run_bind, run_liftErr_of_ok _ _ (by rw [hc']; rfl), except_bind_ok]
+  rfl
 
-/-- `process_sync_committee_updates` equals Etheorem's when Etheorem's sync committee selection
-is full. -/
+omit [EthCLSpecs.Fulu.Config] hp hc in
+/-- Etheorem's `processSyncCommitteeUpdates` away from a period boundary leaves the state. -/
+theorem processSyncCommitteeUpdates_run_skip (e : EState)
+    (hz : ((EthCLSpecs.Fulu.currentEpochOf (pureState e) + 1) %
+      UInt64.ofNat EthCLSpecs.Fulu.Const.epochsPerSyncCommitteePeriod == 0) = false) :
+    (EthCLSpecs.Fulu.processSyncCommitteeUpdates (StateTransition := FuluRun)).run
+        (pureState e) = .ok ((), pureState e) := by
+  unfold EthCLSpecs.Fulu.processSyncCommitteeUpdates
+  have hget : ∀ s : EthCLSpecs.Fulu.State,
+      (get : FuluRun EthCLSpecs.Fulu.State).run s = .ok (s, s) := fun _ => rfl
+  rw [run_bind, hget, except_bind_ok]
+  simp only [hz, Bool.false_eq_true, if_false]
+  rfl
+
+/-- `process_sync_committee_updates` equals Etheorem's. -/
 theorem process_sync_committee_updates_etheorem (o : Spec.Oracle) (hoa : OracleAgrees o)
     (hperiod : p.EPOCHS_PER_SYNC_COMMITTEE_PERIOD < 2 ^ 64) (e : EState)
-    (hfull : SyncSelectionFull e) {s' : Spec.BeaconState}
+    {s' : Spec.BeaconState}
     (h : Spec.process_sync_committee_updates p o (absEState e) = .ok s') :
     ∃ e', (EthCLSpecs.Fulu.processSyncCommitteeUpdates (StateTransition := FuluRun)).run (pureState e) =
       .ok ((), pureState e') ∧ absEState e' = s' := by
-  refine ⟨_, processSyncCommitteeUpdates_run e, ?_⟩
   unfold Spec.process_sync_committee_updates at h
   simp only [except_bind_eq_ok, get_current_epoch_eq hp] at h
   obtain ⟨ep, hep, ep1, hep1, m, hm, h⟩ := h
@@ -405,31 +367,29 @@ theorem process_sync_committee_updates_etheorem (o : Spec.Oracle) (hoa : OracleA
     simp only [beq_iff_eq]
     rw [← UInt64.toNat_inj, UInt64.toNat_mod, UInt64.toNat_ofNat_of_lt' hperiod]
     simp
-  rw [hcond]
   split at h
   · rename_i hz
-    rw [if_pos hz]
     have hgn : Spec.get_next_sync_committee p o { absEState e with
         current_sync_committee := (absEState e).next_sync_committee } =
         Spec.get_next_sync_committee p o (absEState e) := rfl
     simp only [hgn, except_bind_eq_ok, except_pure_eq_ok] at h
     obtain ⟨c, hcn, rfl⟩ := h
-    rw [get_next_sync_committee_ok hp hc o hoa e hfull hcn, absEState_set_syncCommittees]
+    obtain ⟨c', hc', rfl⟩ := get_next_sync_committee_ok hp hc o hoa e hcn
+    refine ⟨_, processSyncCommitteeUpdates_run_update e c' (by rw [hcond]; exact hz) hc', ?_⟩
+    rw [absEState_set_syncCommittees]
     rfl
   · rename_i hz
-    rw [if_neg hz]
     rw [except_pure_eq_ok] at h
-    exact h
-
-/-- The Fulu `process_sync_committee_updates`, with the Electra loop, equals Etheorem's when
-Etheorem's sync committee selection is full. -/
+    refine ⟨e, processSyncCommitteeUpdates_run_skip e
+      (by rw [hcond]; exact Bool.eq_false_iff.mpr hz), h⟩
+/-- The Fulu `process_sync_committee_updates`, with the Electra loop, equals Etheorem's. -/
 theorem process_sync_committee_updates_fulu_etheorem (o : Spec.Oracle) (hoa : OracleAgrees o)
     (hperiod : p.EPOCHS_PER_SYNC_COMMITTEE_PERIOD < 2 ^ 64) (hsize : 0 < p.SYNC_COMMITTEE_SIZE)
-    (e : EState) (hfull : SyncSelectionFull e) {s' : Spec.BeaconState}
+    (e : EState) {s' : Spec.BeaconState}
     (h : Spec.process_sync_committee_updates_fulu p o (absEState e) = .ok s') :
     ∃ e', (EthCLSpecs.Fulu.processSyncCommitteeUpdates (StateTransition := FuluRun)).run
         (pureState e) = .ok ((), pureState e') ∧ absEState e' = s' :=
-  process_sync_committee_updates_etheorem hp hc o hoa hperiod e hfull
+  process_sync_committee_updates_etheorem hp hc o hoa hperiod e
     ((Spec.process_sync_committee_updates_fulu_sameOk p o (absEState e) hsize s').mp h)
 end Sync
 

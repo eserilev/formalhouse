@@ -4,15 +4,15 @@ import EpochProofs.Etheorem.Shuffle
 # Sync committee, proposer lookahead and PTC window updates equal Etheorem's
 
 `process_sync_committee_updates`, `process_proposer_lookahead` and `process_ptc_window` each
-take a balance weighted selection. Etheorem stops a selection after `10^7` passes (F3). pyspec
-loops until it has `size` items. So each theorem assumes that Etheorem's selections are full:
-`SyncSelectionFull`, `ProposerSelectionsFull` and `PtcSelectionsFull`.
+take a balance weighted selection. Etheorem's selection counts passes with the spec's `uint64`
+counter and returns only once it has `size` items, as pyspec does. So when the reference
+returns, Etheorem returns the same items (`compute_balance_weighted_selection_ok`), and each
+selection has `size` items (`computeBalanceWeightedSelection_ok_size`).
 
 `hsha` says that `sha` returns 32 bytes. `sha_size_pure` proves it for the pure SHA-256.
 
-The reference raises in two cases where Etheorem does not. `compute_balance_weighted_selection`
-asserts `total > 0`, and `eth_aggregate_pubkeys` asserts `KeyValidate`. Each theorem assumes that
-the reference succeeds, so these cases do not occur.
+The reference raises in one case where Etheorem does not: `eth_aggregate_pubkeys` asserts
+`KeyValidate`. Each theorem assumes that the reference succeeds, so this case does not occur.
 -/
 
 namespace EpochProofs.Etheorem
@@ -63,23 +63,16 @@ def proposerSlotSeed (e : EState) (epoch : UInt64) (i : Nat) : ByteArray :=
       EthCLSpecs.Gloas.Const.domainBeaconProposer) ++
     uint64ToBytes (EthCLSpecs.Gloas.computeStartSlotAtEpoch epoch + UInt64.ofNat i))
 
-/-- Each proposer selection of `epoch` in Etheorem returns one proposer. -/
-def ProposerSelectionsFull (e : EState) (epoch : UInt64) : Prop :=
-  ∀ i < EthCLSpecs.Gloas.Const.slotsPerEpoch,
-    1 ≤ (EthCLSpecs.Gloas.computeBalanceWeightedSelection (pureState e) (proposerCandidates e epoch)
-      (proposerSlotSeed e epoch i) 1 true).size
-
 section Proposers
 
 variable {p : Spec.Preset} (hp : PresetAgrees p) (hc : CommitteePresetAgrees p)
 include hp hc
 
 theorem get_beacon_proposer_indices_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d)
-    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState) (epoch : UInt64)
-    (hfull : ProposerSelectionsFull e epoch) {r : List Nat}
+    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState) (epoch : UInt64) {r : List Nat}
     (h : Spec.get_beacon_proposer_indices p o (absEState e) epoch.toNat = .ok r) :
-    r = (EthCLSpecs.Gloas.getBeaconProposerIndices (pureState e) epoch).toList.map
-      UInt64.toNat := by
+    ∃ props, EthCLSpecs.Gloas.getBeaconProposerIndices (pureState e) epoch = .ok props ∧
+      r = props.toList.map UInt64.toNat := by
   unfold Spec.get_beacon_proposer_indices at h
   simp only [except_bind_eq_ok] at h
   obtain ⟨cands, hcands, seed, hseed, h⟩ := h
@@ -127,54 +120,57 @@ theorem get_beacon_proposer_indices_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d =
     unfold proposerSlotSeed
     rfl
   subst hseeds'
-  have hr := mapM_ok_map _ (fun sd => ((EthCLSpecs.Gloas.computeBalanceWeightedSelection
-      (pureState e) (proposerCandidates e epoch) (vecToBytes sd) 1 true)[0]!).toNat) _ ?hf3 h
-  case hf3 =>
-    intro sd hsd v hv
-    simp only [List.mem_map, List.mem_range] at hsd
-    obtain ⟨i, hi, rfl⟩ := hsd
-    simp only [except_bind_eq_ok] at hv
-    obtain ⟨sel, hsel, hv⟩ := hv
-    have hfi := hfull i (by rw [hp.slotsPerEpoch]; exact hi)
-    rw [← vecToBytes_bytesToRoot (proposerSlotSeed e epoch i) (hsha _)] at hfi
-    rw [compute_balance_weighted_selection_ok p o ho hc e _ _ 1 true hfi hsel] at hv
-    obtain ⟨-, rfl⟩ := listGet_ok hv
-    rw [map_toNat_getElem!_all]
-  subst hr
+  -- The Etheorem step of slot `i`: select one proposer with the seed of slot `i`.
+  obtain ⟨cs, hcs, rfl⟩ := mapM_ok_rel _ (fun i => do
+      let sel ← EthCLSpecs.Gloas.computeBalanceWeightedSelection (pureState e)
+        (proposerCandidates e epoch) (proposerSlotSeed e epoch i) 1 true
+      return sel[0]!) UInt64.toNat (fun i => bytesToRoot (proposerSlotSeed e epoch i)) _
+    (by
+      intro i _ v hv
+      simp only [except_bind_eq_ok] at hv
+      obtain ⟨sel, hsel, hv⟩ := hv
+      obtain ⟨res, hres, rfl⟩ := compute_balance_weighted_selection_ok p o ho hc e _ _ 1 true hsel
+      rw [vecToBytes_bytesToRoot (proposerSlotSeed e epoch i) (hsha _)] at hres
+      refine ⟨res[0]!, by rw [hres]; rfl, ?_⟩
+      obtain ⟨-, rfl⟩ := listGet_ok hv
+      rw [map_toNat_getElem!_all]) h
+  refine ⟨cs.toArray, ?_, by simp⟩
   unfold EthCLSpecs.Gloas.getBeaconProposerIndices EthCLSpecs.Gloas.computeProposerIndices
-  simp only [List.map_map, Array.toList_map, Array.toList_range, view_uncachedBox, hp.slotsPerEpoch]
-  apply List.map_congr_left
-  intro i _
-  simp only [Function.comp_apply, vecToBytes_bytesToRoot _ (hsha _), proposerSlotSeed,
-    proposerCandidates, sszList_getElem!_val]
-  rfl
+  simp only [view_uncachedBox]
+  rw [Array.mapM_eq_mapM_toList, Array.toList_range, hp.slotsPerEpoch]
+  exact congrArg (fun x => List.toArray <$> x) hcs
 
 
-/-- The new proposer lookahead in Etheorem. -/
-def newLookahead (e : EState) : Vector UInt64 (2 * EthCLSpecs.Gloas.Const.slotsPerEpoch) :=
+/-- The new proposer lookahead in Etheorem, from the new proposers `props`. -/
+def newLookahead (e : EState) (props : Array UInt64) :
+    Vector UInt64 (2 * EthCLSpecs.Gloas.Const.slotsPerEpoch) :=
   Vector.ofFn fun i =>
     if i.val < EthCLSpecs.Gloas.Const.slotsPerEpoch then
       vget e.proposerLookahead (i.val + EthCLSpecs.Gloas.Const.slotsPerEpoch)
-    else (EthCLSpecs.Gloas.getBeaconProposerIndices (pureState e)
-      (EthCLSpecs.Gloas.currentEpochOf (pureState e) + EthCLSpecs.Gloas.Const.minSeedLookahead + 1))[
-        i.val - EthCLSpecs.Gloas.Const.slotsPerEpoch]!
+    else props[i.val - EthCLSpecs.Gloas.Const.slotsPerEpoch]!
 
 omit [EthCLSpecs.Gloas.Config] hp hc in
-theorem processProposerLookahead_run (e : EState) :
+theorem processProposerLookahead_run (e : EState) (props : Array UInt64)
+    (hprops : EthCLSpecs.Gloas.getBeaconProposerIndices (pureState e)
+      (EthCLSpecs.Gloas.currentEpochOf (pureState e) + EthCLSpecs.Gloas.Const.minSeedLookahead + 1)
+      = .ok props) :
     (EthCLSpecs.Gloas.processProposerLookahead (StateTransition := GloasRun)).run (pureState e) =
-      .ok ((), pureState { e with proposerLookahead := newLookahead e }) := rfl
+      .ok ((), pureState { e with proposerLookahead := newLookahead e props }) := by
+  unfold EthCLSpecs.Gloas.processProposerLookahead
+  rw [run_bind]
+  rw [show (get : GloasRun EthCLSpecs.Gloas.State).run (pureState e) =
+    .ok (pureState e, pureState e) from rfl, except_bind_ok]
+  simp only []
+  rw [run_bind, run_liftErr_of_ok _ _ (by rw [hprops]; rfl), except_bind_ok]
+  rfl
 
-/-- `process_proposer_lookahead` equals Etheorem's when Etheorem's proposer selections are
-full. -/
+/-- `process_proposer_lookahead` equals Etheorem's. -/
 theorem process_proposer_lookahead_etheorem (o : Spec.Oracle)
     (ho : ∀ d, o.hash d = etheoremHash d) (hsha : ∀ b : ByteArray, (sha b).size = 32)
     (e : EState)
-    (hfull : ProposerSelectionsFull e (EthCLSpecs.Gloas.currentEpochOf (pureState e) +
-      EthCLSpecs.Gloas.Const.minSeedLookahead + 1))
     {s' : Spec.BeaconState} (h : Spec.process_proposer_lookahead p o (absEState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processProposerLookahead (StateTransition := GloasRun)).run (pureState e) =
       .ok ((), pureState e') ∧ absEState e' = s' := by
-  refine ⟨_, processProposerLookahead_run e, ?_⟩
   unfold Spec.process_proposer_lookahead at h
   have hge : ∀ l, Spec.get_current_epoch p { absEState e with proposer_lookahead := l } =
       Spec.get_current_epoch p (absEState e) := fun _ => rfl
@@ -192,23 +188,23 @@ theorem process_proposer_lookahead_etheorem (o : Spec.Oracle)
   subst hep2'
   have hP' := uint64Add_ok (b := 1) hP
   subst hP'
-  have hprops' := get_beacon_proposer_indices_ok hp hc o ho hsha e _ hfull hprops
-  subst hprops'
+  obtain ⟨props, hpe, rfl⟩ := get_beacon_proposer_indices_ok hp hc o ho hsha e _ hprops
+  refine ⟨_, processProposerLookahead_run e props hpe, ?_⟩
   obtain ⟨hles', -⟩ := uint64Sub_eq hles
   subst hles'
   rw [absEState_set_proposerLookahead]
-  have hsize : (EthCLSpecs.Gloas.getBeaconProposerIndices (pureState e)
-      (EthCLSpecs.Gloas.currentEpochOf (pureState e) + EthCLSpecs.Gloas.Const.minSeedLookahead +
-        1)).size = EthCLSpecs.Gloas.Const.slotsPerEpoch := by
-    simp [EthCLSpecs.Gloas.getBeaconProposerIndices, EthCLSpecs.Gloas.computeProposerIndices]
-  have hlist : (newLookahead e).toList.map UInt64.toNat =
+  have hsize : props.size = EthCLSpecs.Gloas.Const.slotsPerEpoch := by
+    unfold EthCLSpecs.Gloas.getBeaconProposerIndices EthCLSpecs.Gloas.computeProposerIndices at hpe
+    rw [Array.mapM_eq_mapM_toList] at hpe
+    simp only [except_map_eq_ok] at hpe
+    obtain ⟨l, hl, rfl⟩ := hpe
+    simpa using mapM_length_eq hl
+  have hlist : (newLookahead e props).toList.map UInt64.toNat =
       List.take ((absEState e).proposer_lookahead.length - p.SLOTS_PER_EPOCH)
         (List.drop p.SLOTS_PER_EPOCH (absEState e).proposer_lookahead ++
           List.drop ((absEState e).proposer_lookahead.length - p.SLOTS_PER_EPOCH)
             (absEState e).proposer_lookahead) ++
-      List.map UInt64.toNat (EthCLSpecs.Gloas.getBeaconProposerIndices (pureState e)
-        (EthCLSpecs.Gloas.currentEpochOf (pureState e) + EthCLSpecs.Gloas.Const.minSeedLookahead +
-          1)).toList := by
+      List.map UInt64.toNat props.toList := by
     simp only [absEState_proposer_lookahead, List.length_map, Vector.length_toList,
       ← hp.slotsPerEpoch]
     have h2 : 2 * EthCLSpecs.Gloas.Const.slotsPerEpoch - EthCLSpecs.Gloas.Const.slotsPerEpoch =
@@ -236,49 +232,7 @@ theorem process_proposer_lookahead_etheorem (o : Spec.Oracle)
   rw [hlist]
 end Proposers
 
-/-! ## Selection size -/
-
-omit [EthCLSpecs.Gloas.Config] in
-/-- Etheorem's selection never holds more than `size` items. -/
-theorem cbwsAux_size_le (indices effBals : Array Nat) (perm : Array UInt64) (seed : ByteArray)
-    (total size : Nat) (shuffle : Bool) :
-    ∀ (fuel i : Nat) (rb : ByteArray) (sel : Array UInt64), sel.size ≤ size →
-      (EthCLSpecs.Gloas.cbwsAux indices effBals perm seed total size shuffle fuel i rb sel).size
-        ≤ size := by
-  intro fuel
-  induction fuel with
-  | zero => intro i rb sel h; simpa [EthCLSpecs.Gloas.cbwsAux] using h
-  | succ f ih =>
-    intro i rb sel h
-    unfold EthCLSpecs.Gloas.cbwsAux
-    split
-    · exact h
-    · rename_i hlt
-      apply ih
-      have hite : ∀ (c : Prop) [Decidable c] (x : UInt64),
-          (if c then sel.push x else sel).size ≤ sel.size + 1 := by
-        intro c _ x; split <;> simp
-      exact Nat.le_trans (hite _ _) (by omega)
-
-omit [EthCLSpecs.Gloas.Config] in
-theorem computeBalanceWeightedSelection_size_le (e : EState) (indices : Array UInt64)
-    (seed : ByteArray) (size : Nat) (shuffle : Bool) :
-    (EthCLSpecs.Gloas.computeBalanceWeightedSelection (pureState e) indices seed size shuffle).size
-      ≤ size :=
-  cbwsAux_size_le _ _ _ _ _ _ _ _ _ _ _ (by simp)
-
 /-! ## Sync committee -/
-
-/-- The selection of the next sync committee in Etheorem returns `SYNC_COMMITTEE_SIZE` items. -/
-def SyncSelectionFull (e : EState) : Prop :=
-  EthCLSpecs.Gloas.Const.syncCommitteeSize ≤
-    (EthCLSpecs.Gloas.computeBalanceWeightedSelection (pureState e)
-      (EthCLSpecs.Gloas.getActiveValidatorIndices (pureState e)
-        (EthCLSpecs.Gloas.currentEpochOf (pureState e) + 1))
-      (vecToBytes (EthCLSpecs.Gloas.getSeed (pureState e)
-        (EthCLSpecs.Gloas.currentEpochOf (pureState e) + 1)
-        EthCLSpecs.Gloas.Const.domainSyncCommittee))
-      EthCLSpecs.Gloas.Const.syncCommitteeSize true).size
 
 section Sync
 
@@ -286,9 +240,10 @@ variable [CryptoBackend] {p : Spec.Preset} (hp : PresetAgrees p) (hc : Committee
 include hp hc
 
 theorem get_next_sync_committee_ok (o : Spec.Oracle) (hoa : OracleAgrees o) (e : EState)
-    (hfull : SyncSelectionFull e) {c : Spec.SyncCommittee}
+    {c : Spec.SyncCommittee}
     (h : Spec.get_next_sync_committee p o (absEState e) = .ok c) :
-    c = absSyncCommittee (EthCLSpecs.Gloas.getNextSyncCommittee (pureState e)) := by
+    ∃ c', EthCLSpecs.Gloas.getNextSyncCommittee (pureState e) = .ok c' ∧
+      c = absSyncCommittee c' := by
   unfold Spec.get_next_sync_committee Spec.get_next_sync_committee_indices at h
   simp only [except_bind_eq_ok, get_current_epoch_eq hp] at h
   obtain ⟨sel, ⟨ep, hep, ep1, hep1, seed, hseed, hsel⟩, pks, hpks, agg, hagg, hc'⟩ := h
@@ -300,8 +255,8 @@ theorem get_next_sync_committee_ok (o : Spec.Oracle) (hoa : OracleAgrees o) (e :
     hseed
   subst hseed'
   rw [get_active_validator_indices_eq hp, ← hc.syncCommitteeSize] at hsel
-  have hsel' := compute_balance_weighted_selection_ok p o hoa.hash hc e _ _ _ true hfull hsel
-  subst hsel'
+  obtain ⟨res, hres, rfl⟩ := compute_balance_weighted_selection_ok p o hoa.hash hc e _ _ _ true hsel
+  have hsz := computeBalanceWeightedSelection_ok_size e _ _ _ true hres
   have hpks' := mapM_ok_map _ (fun idx => ((e.validators[idx]?).getD default).pubkey) _ ?hf hpks
   case hf =>
     intro idx _ b hb
@@ -323,18 +278,15 @@ theorem get_next_sync_committee_ok (o : Spec.Oracle) (hoa : OracleAgrees o) (e :
   subst hagg
   rw [except_pure_eq_ok] at hc'
   subst hc'
-  have hsz := Nat.le_antisymm (computeBalanceWeightedSelection_size_le e _ _ _ true) hfull
+  unfold EthCLSpecs.Gloas.getNextSyncCommittee
+  simp only [view_uncachedBox]
+  simp only [vecToBytes] at hres
+  rw [hres, except_bind_ok]
+  refine ⟨_, rfl, ?_⟩
   have hpk : (List.map (fun idx => ((e.validators[idx]?).getD default).pubkey)
-      (List.map UInt64.toNat (EthCLSpecs.Gloas.computeBalanceWeightedSelection (pureState e)
-        (EthCLSpecs.Gloas.getActiveValidatorIndices (pureState e)
-          (EthCLSpecs.Gloas.currentEpochOf (pureState e) + 1))
-        (vecToBytes (EthCLSpecs.Gloas.getSeed (pureState e)
-          (EthCLSpecs.Gloas.currentEpochOf (pureState e) + 1)
-          EthCLSpecs.Gloas.Const.domainSyncCommittee))
-        EthCLSpecs.Gloas.Const.syncCommitteeSize true).toList)) =
-      (EthCLSpecs.Gloas.getNextSyncCommittee (pureState e)).pubkeys.toList := by
-    unfold EthCLSpecs.Gloas.getNextSyncCommittee
-    simp only [view_uncachedBox, vecToBytes] at hsz ⊢
+      (List.map UInt64.toNat res.toList)) =
+      (Vector.ofFn fun i : Fin EthCLSpecs.Gloas.Const.syncCommitteeSize =>
+        ((e.validators[(res[i.val]!).toNat]?).getD default).pubkey).toList := by
     apply List.ext_getElem
     · simp [hsz]
     · intro i h1 h2
@@ -347,34 +299,45 @@ theorem get_next_sync_committee_ok (o : Spec.Oracle) (hoa : OracleAgrees o) (e :
 
 
 omit [EthCLSpecs.Gloas.Config] hp hc in
-theorem processSyncCommitteeUpdates_run (e : EState) :
+/-- Etheorem's `processSyncCommitteeUpdates` at a period boundary, when the next sync committee
+is `c'`. -/
+theorem processSyncCommitteeUpdates_run_update (e : EState) (c' : EthCLSpecs.Gloas.SyncCommittee)
+    (hz : ((EthCLSpecs.Gloas.currentEpochOf (pureState e) + 1) %
+      UInt64.ofNat EthCLSpecs.Gloas.Const.epochsPerSyncCommitteePeriod == 0) = true)
+    (hc' : EthCLSpecs.Gloas.getNextSyncCommittee (pureState e) = .ok c') :
     (EthCLSpecs.Gloas.processSyncCommitteeUpdates (StateTransition := GloasRun)).run
         (pureState e) =
-      .ok ((), pureState (if (EthCLSpecs.Gloas.currentEpochOf (pureState e) + 1) %
-          UInt64.ofNat EthCLSpecs.Gloas.Const.epochsPerSyncCommitteePeriod == 0 then
-        { e with currentSyncCommittee := e.nextSyncCommittee,
-                 nextSyncCommittee := EthCLSpecs.Gloas.getNextSyncCommittee (pureState e) }
-        else e)) := by
+      .ok ((), pureState { e with currentSyncCommittee := e.nextSyncCommittee,
+                                  nextSyncCommittee := c' }) := by
   unfold EthCLSpecs.Gloas.processSyncCommitteeUpdates
   have hget : ∀ s : EthCLSpecs.Gloas.State,
       (get : GloasRun EthCLSpecs.Gloas.State).run s = .ok (s, s) := fun _ => rfl
   rw [run_bind, hget, except_bind_ok]
-  cases hz : ((EthCLSpecs.Gloas.currentEpochOf (pureState e) + 1) %
-      UInt64.ofNat EthCLSpecs.Gloas.Const.epochsPerSyncCommitteePeriod == 0)
-  · simp only [Bool.false_eq_true, if_false]
-    rfl
-  · simp only [if_true]
-    rfl
+  simp only [hz, if_true]
+  rw [run_bind, run_liftErr_of_ok _ _ (by rw [hc']; rfl), except_bind_ok]
+  rfl
 
-/-- `process_sync_committee_updates` equals Etheorem's when Etheorem's sync committee selection
-is full. -/
+omit [EthCLSpecs.Gloas.Config] hp hc in
+/-- Etheorem's `processSyncCommitteeUpdates` away from a period boundary leaves the state. -/
+theorem processSyncCommitteeUpdates_run_skip (e : EState)
+    (hz : ((EthCLSpecs.Gloas.currentEpochOf (pureState e) + 1) %
+      UInt64.ofNat EthCLSpecs.Gloas.Const.epochsPerSyncCommitteePeriod == 0) = false) :
+    (EthCLSpecs.Gloas.processSyncCommitteeUpdates (StateTransition := GloasRun)).run
+        (pureState e) = .ok ((), pureState e) := by
+  unfold EthCLSpecs.Gloas.processSyncCommitteeUpdates
+  have hget : ∀ s : EthCLSpecs.Gloas.State,
+      (get : GloasRun EthCLSpecs.Gloas.State).run s = .ok (s, s) := fun _ => rfl
+  rw [run_bind, hget, except_bind_ok]
+  simp only [hz, Bool.false_eq_true, if_false]
+  rfl
+
+/-- `process_sync_committee_updates` equals Etheorem's. -/
 theorem process_sync_committee_updates_etheorem (o : Spec.Oracle) (hoa : OracleAgrees o)
     (hperiod : p.EPOCHS_PER_SYNC_COMMITTEE_PERIOD < 2 ^ 64) (e : EState)
-    (hfull : SyncSelectionFull e) {s' : Spec.BeaconState}
+    {s' : Spec.BeaconState}
     (h : Spec.process_sync_committee_updates p o (absEState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processSyncCommitteeUpdates (StateTransition := GloasRun)).run (pureState e) =
       .ok ((), pureState e') ∧ absEState e' = s' := by
-  refine ⟨_, processSyncCommitteeUpdates_run e, ?_⟩
   unfold Spec.process_sync_committee_updates at h
   simp only [except_bind_eq_ok, get_current_epoch_eq hp] at h
   obtain ⟨ep, hep, ep1, hep1, m, hm, h⟩ := h
@@ -393,21 +356,21 @@ theorem process_sync_committee_updates_etheorem (o : Spec.Oracle) (hoa : OracleA
     simp only [beq_iff_eq]
     rw [← UInt64.toNat_inj, UInt64.toNat_mod, UInt64.toNat_ofNat_of_lt' hperiod]
     simp
-  rw [hcond]
   split at h
   · rename_i hz
-    rw [if_pos hz]
     have hgn : Spec.get_next_sync_committee p o { absEState e with
         current_sync_committee := (absEState e).next_sync_committee } =
         Spec.get_next_sync_committee p o (absEState e) := rfl
     simp only [hgn, except_bind_eq_ok, except_pure_eq_ok] at h
     obtain ⟨c, hcn, rfl⟩ := h
-    rw [get_next_sync_committee_ok hp hc o hoa e hfull hcn, absEState_set_syncCommittees]
+    obtain ⟨c', hc', rfl⟩ := get_next_sync_committee_ok hp hc o hoa e hcn
+    refine ⟨_, processSyncCommitteeUpdates_run_update e c' (by rw [hcond]; exact hz) hc', ?_⟩
+    rw [absEState_set_syncCommittees]
     rfl
   · rename_i hz
-    rw [if_neg hz]
     rw [except_pure_eq_ok] at h
-    exact h
+    refine ⟨e, processSyncCommitteeUpdates_run_skip e
+      (by rw [hcond]; exact Bool.eq_false_iff.mpr hz), h⟩
 end Sync
 
 /-! ## PTC window -/
@@ -423,22 +386,16 @@ def ptcSeed (e : EState) (slot : UInt64) : ByteArray :=
   sha (vecToBytes (EthCLSpecs.Gloas.getSeed (pureState e) (EthCLSpecs.Gloas.computeEpochAtSlot slot)
     EthCLSpecs.Gloas.Const.domainPtcAttester) ++ uint64ToBytes slot)
 
-/-- The PTC selection of `slot` in Etheorem returns `PTC_SIZE` items. -/
-def PtcSelectionFull (e : EState) (slot : UInt64) : Prop :=
-  EthCLSpecs.Gloas.Const.ptcSize ≤
-    (EthCLSpecs.Gloas.computeBalanceWeightedSelection (pureState e) (ptcCandidates e slot)
-      (ptcSeed e slot) EthCLSpecs.Gloas.Const.ptcSize false).size
-
 section Ptc
 
 variable {p : Spec.Preset} (hp : PresetAgrees p) (hc : CommitteePresetAgrees p)
 include hp hc
 
 theorem compute_ptc_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d)
-    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState) (slot : UInt64)
-    (hfull : PtcSelectionFull e slot) {r : List Nat}
+    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState) (slot : UInt64) {r : List Nat}
     (h : Spec.compute_ptc p o (absEState e) slot.toNat = .ok r) :
-    r = (EthCLSpecs.Gloas.computePtc (pureState e) slot).toList.map UInt64.toNat := by
+    ∃ v, EthCLSpecs.Gloas.computePtc (pureState e) slot = .ok v ∧
+      r = v.toList.map UInt64.toNat := by
   unfold Spec.compute_ptc at h
   rw [compute_epoch_at_slot_eq hp] at h
   simp only [except_bind_eq_ok] at h
@@ -475,19 +432,22 @@ theorem compute_ptc_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d)
     rw [hash_eq o ho, hba]
     rfl
   rw [hseed2, ← hc.ptcSize] at h
-  have hfull' := hfull
-  unfold PtcSelectionFull at hfull'
-  rw [← vecToBytes_bytesToRoot (ptcSeed e slot) (hsha _)] at hfull'
-  rw [compute_balance_weighted_selection_ok p o ho hc e _ _ _ false hfull' h,
-    vecToBytes_bytesToRoot (ptcSeed e slot) (hsha _)]
-  have hsz := Nat.le_antisymm (computeBalanceWeightedSelection_size_le e _ _ _ false) hfull
-  unfold EthCLSpecs.Gloas.computePtc
-  apply List.ext_getElem
-  · simp [hsz]
-  · intro i h1 h2
-    simp only [List.getElem_map, Array.getElem_toList, Vector.getElem_toList, Vector.getElem_ofFn]
-    rw [getElem!_pos _ i (by simpa [ptcCandidates, ptcSeed, vecToBytes] using h1)]
+  obtain ⟨res, hres, rfl⟩ := compute_balance_weighted_selection_ok p o ho hc e _ _ _ false h
+  rw [vecToBytes_bytesToRoot (ptcSeed e slot) (hsha _)] at hres
+  have hsz := computeBalanceWeightedSelection_ok_size e _ _ _ false hres
+  refine ⟨Vector.ofFn fun i : Fin EthCLSpecs.Gloas.Const.ptcSize => res[i.val]!, ?_, ?_⟩
+  · unfold EthCLSpecs.Gloas.computePtc
+    show (do
+      let sel ← EthCLSpecs.Gloas.computeBalanceWeightedSelection (pureState e)
+        (ptcCandidates e slot) (ptcSeed e slot) EthCLSpecs.Gloas.Const.ptcSize false
+      return Vector.ofFn fun i : Fin EthCLSpecs.Gloas.Const.ptcSize => sel[i.val]!) = _
+    rw [hres]
     rfl
+  · apply List.ext_getElem
+    · simp [hsz]
+    · intro i h1 h2
+      simp only [List.getElem_map, Array.getElem_toList, Vector.getElem_toList, Vector.getElem_ofFn]
+      rw [getElem!_pos _ i (by simpa using h1)]
 
 
 /-- The first slot of the epoch that `process_ptc_window` fills, in Etheorem. -/
@@ -495,30 +455,38 @@ def ptcStartSlot (e : EState) : UInt64 :=
   EthCLSpecs.Gloas.computeStartSlotAtEpoch (EthCLSpecs.Gloas.currentEpochOf (pureState e) +
     EthCLSpecs.Gloas.Const.minSeedLookahead + 1)
 
-/-- Each PTC selection of the epoch that `process_ptc_window` fills is full in Etheorem. -/
-def PtcSelectionsFull (e : EState) : Prop :=
-  ∀ i < EthCLSpecs.Gloas.Const.slotsPerEpoch, PtcSelectionFull e (ptcStartSlot e + UInt64.ofNat i)
-
-/-- The new PTC window in Etheorem. -/
-def newPtcWindow (e : EState) :
+/-- The new PTC window in Etheorem, from the PTCs `fresh` of the epoch that it fills. -/
+def newPtcWindow (e : EState) (fresh : Array (Vector UInt64 EthCLSpecs.Gloas.Const.ptcSize)) :
     Vector (Vector UInt64 EthCLSpecs.Gloas.Const.ptcSize) (3 * EthCLSpecs.Gloas.Const.slotsPerEpoch) :=
   shiftWindow e.ptcWindow EthCLSpecs.Gloas.Const.slotsPerEpoch
-    (2 * EthCLSpecs.Gloas.Const.slotsPerEpoch)
-    (fun k => ((Array.range EthCLSpecs.Gloas.Const.slotsPerEpoch).map
-      (fun i => EthCLSpecs.Gloas.computePtc (pureState e) (ptcStartSlot e + UInt64.ofNat i)))[k]!)
+    (2 * EthCLSpecs.Gloas.Const.slotsPerEpoch) (fun k => fresh[k]!)
 
 omit [EthCLSpecs.Gloas.Config] hp hc in
-theorem processPtcWindow_run (e : EState) :
+theorem processPtcWindow_run (e : EState) (fresh : Array (Vector UInt64 EthCLSpecs.Gloas.Const.ptcSize))
+    (hfresh : (Array.range EthCLSpecs.Gloas.Const.slotsPerEpoch).mapM
+      (fun i => EthCLSpecs.Gloas.computePtc (pureState e) (ptcStartSlot e + UInt64.ofNat i)) =
+        .ok fresh) :
     (EthCLSpecs.Gloas.processPtcWindow (StateTransition := GloasRun)).run (pureState e) =
-      .ok ((), pureState { e with ptcWindow := newPtcWindow e }) := rfl
+      .ok ((), pureState { e with ptcWindow := newPtcWindow e fresh }) := by
+  unfold EthCLSpecs.Gloas.processPtcWindow
+  rw [run_bind]
+  rw [show (get : GloasRun EthCLSpecs.Gloas.State).run (pureState e) =
+    .ok (pureState e, pureState e) from rfl, except_bind_ok]
+  simp only []
+  have hfresh' : (Array.range EthCLSpecs.Gloas.Const.slotsPerEpoch).mapM
+      (fun i => EthCLSpecs.Gloas.computePtc (pureState e)
+        (EthCLSpecs.Gloas.computeStartSlotAtEpoch (EthCLSpecs.Gloas.currentEpochOf (pureState e) +
+          EthCLSpecs.Gloas.Const.minSeedLookahead + 1) + UInt64.ofNat i)) = .ok fresh := hfresh
+  rw [run_bind, run_liftErr_of_ok _ _ (congrArg (Except.mapError ErrorConv.conv) hfresh'),
+    except_bind_ok]
+  rfl
 
-/-- `process_ptc_window` equals Etheorem's when Etheorem's PTC selections are full. -/
+/-- `process_ptc_window` equals Etheorem's. -/
 theorem process_ptc_window_etheorem (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d)
-    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState) (hfull : PtcSelectionsFull e)
+    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState)
     {s' : Spec.BeaconState} (h : Spec.process_ptc_window p o (absEState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processPtcWindow (StateTransition := GloasRun)).run (pureState e) =
       .ok ((), pureState e') ∧ absEState e' = s' := by
-  refine ⟨_, processPtcWindow_run e, ?_⟩
   unfold Spec.process_ptc_window at h
   have hge : ∀ l, Spec.get_current_epoch p { absEState e with ptc_window := l } =
       Spec.get_current_epoch p (absEState e) := fun _ => rfl
@@ -545,32 +513,29 @@ theorem process_ptc_window_etheorem (o : Spec.Oracle) (ho : ∀ d, o.hash d = et
   obtain ⟨hfs', -⟩ := uint64Sub_eq hfs
   subst hfs'
   have hslt := EthCLSpecs.Gloas.Const.slotsPerEpochLt
-  have hptcs' := mapM_ok_map _ (fun slot => (EthCLSpecs.Gloas.computePtc (pureState e)
-      (UInt64.ofNat slot)).toList.map UInt64.toNat) _ ?hf hptcs
-  case hf =>
-    intro slot hslot r hr
-    simp only [List.mem_range'_1] at hslot
-    obtain ⟨hs1, hs2⟩ := hslot
-    have hs1' : (ptcStartSlot e).toNat ≤ slot := hs1
-    have hs2' : slot < (ptcStartSlot e).toNat + ((ptcStartSlot e).toNat + p.SLOTS_PER_EPOCH -
-        (ptcStartSlot e).toNat) := hs2
-    have hen' : (ptcStartSlot e).toNat + p.SLOTS_PER_EPOCH < 2 ^ 64 := hen64
-    have hs64 : slot < 2 ^ 64 := by omega
-    rw [← UInt64.toNat_ofNat_of_lt' (n := slot) hs64] at hr
-    refine compute_ptc_ok hp hc o ho hsha e _ ?_ hr
-    have hi : slot - (ptcStartSlot e).toNat < EthCLSpecs.Gloas.Const.slotsPerEpoch := by
-      rw [hp.slotsPerEpoch]; omega
-    have := hfull _ hi
-    have heq : ptcStartSlot e + UInt64.ofNat (slot - (ptcStartSlot e).toNat) =
-        UInt64.ofNat slot := by
-      apply UInt64.toNat_inj.mp
-      rw [UInt64.toNat_add, UInt64.toNat_ofNat_of_lt' (by simp only [UInt64.size]; omega),
-        UInt64.toNat_ofNat_of_lt' hs64]
-      rw [Nat.mod_eq_of_lt (by omega)]
-      omega
-    rw [heq] at this
-    exact this
-  subst hptcs'
+  rw [Nat.add_sub_cancel_left, List.range'_eq_map_range] at hptcs
+  have hen' : (ptcStartSlot e).toNat + p.SLOTS_PER_EPOCH < 2 ^ 64 := hen64
+  -- The Etheorem step of slot `i` of the epoch: the PTC of `ptcStartSlot e + i`.
+  obtain ⟨cs, hcs, rfl⟩ := mapM_ok_rel (fun slot => Spec.compute_ptc p o (absEState e) slot)
+    (fun i => EthCLSpecs.Gloas.computePtc (pureState e) (ptcStartSlot e + UInt64.ofNat i))
+    (fun v => v.toList.map UInt64.toNat) _ _
+    (by
+      intro i hi r hr
+      simp only [List.mem_range] at hi
+      have heq : (ptcStartSlot e + UInt64.ofNat i).toNat = (ptcStartSlot e).toNat + i := by
+        rw [UInt64.toNat_add, UInt64.toNat_ofNat_of_lt' (by simp only [UInt64.size]; omega),
+          Nat.mod_eq_of_lt (by first | omega | (simp only [UInt64.size]; omega))]
+      have hr' : Spec.compute_ptc p o (absEState e) (ptcStartSlot e + UInt64.ofNat i).toNat =
+          .ok r := by rw [heq]; exact hr
+      exact compute_ptc_ok hp hc o ho hsha e _ hr') hptcs
+  have hlen : cs.length = EthCLSpecs.Gloas.Const.slotsPerEpoch := by
+    rw [mapM_length_eq hcs, List.length_range, hp.slotsPerEpoch]
+  have hfresh : (Array.range EthCLSpecs.Gloas.Const.slotsPerEpoch).mapM
+      (fun i => EthCLSpecs.Gloas.computePtc (pureState e) (ptcStartSlot e + UInt64.ofNat i)) =
+        .ok cs.toArray := by
+    rw [Array.mapM_eq_mapM_toList, Array.toList_range, hp.slotsPerEpoch, hcs]
+    rfl
+  refine ⟨_, processPtcWindow_run e cs.toArray hfresh, ?_⟩
   rw [absEState_set_ptcWindow]
   refine congrArg (fun l => { absEState e with ptc_window := l }) ?_
   simp only [absEState_ptc_window, List.length_map, Vector.length_toList, ← hp.slotsPerEpoch]
@@ -579,7 +544,7 @@ theorem process_ptc_window_etheorem (o : Spec.Oracle) (ho : ∀ d, o.hash d = et
   unfold ptcStartSlot at hen'
   have h3 : 3 * EthCLSpecs.Gloas.Const.slotsPerEpoch - EthCLSpecs.Gloas.Const.slotsPerEpoch =
       2 * EthCLSpecs.Gloas.Const.slotsPerEpoch := by omega
-  rw [h3, Nat.add_sub_cancel_left]
+  rw [h3]
   rw [List.take_append_of_le_length (by simp; omega), List.take_of_length_le (by simp; omega)]
   apply List.ext_getElem
   · simp [newPtcWindow]; omega
@@ -593,21 +558,13 @@ theorem process_ptc_window_etheorem (o : Spec.Oracle) (ho : ∀ d, o.hash d = et
         (by simp; omega), Nat.add_comm]
     · rename_i hj
       rw [List.getElem_append_right (by simp; omega)]
-      simp only [List.length_drop, List.length_map, Vector.length_toList, List.getElem_map,
-        List.getElem_range']
+      simp only [List.length_drop, List.length_map, Vector.length_toList, List.getElem_map]
       have hk : j - (3 * EthCLSpecs.Gloas.Const.slotsPerEpoch -
           EthCLSpecs.Gloas.Const.slotsPerEpoch) = j - 2 * EthCLSpecs.Gloas.Const.slotsPerEpoch := by
         omega
       simp only [hk]
       rw [getElem!_pos _ _ (by simp at h1 ⊢; omega)]
-      simp only [Array.getElem_map, Array.getElem_range, ptcStartSlot]
-      congr 3
-      apply UInt64.toNat_inj.mp
-      simp at h1
-      rw [UInt64.toNat_add, UInt64.toNat_ofNat_of_lt' (by simp only [UInt64.size]; omega),
-        UInt64.toNat_ofNat_of_lt' (by simp only [UInt64.size]; omega),
-        Nat.mod_eq_of_lt (by omega)]
-      omega
+      simp
 end Ptc
 end EpochProofs.Etheorem
 

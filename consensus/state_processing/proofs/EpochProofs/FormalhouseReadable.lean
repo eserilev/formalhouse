@@ -36,7 +36,7 @@ Hypotheses (each `Gloas` bundle has a `Fulu` counterpart, except the cache one):
   selections, the physical limits and the reachable-state facts not yet carried to the epoch
   (README, "Assumptions about the chain").
 - `GloasEtheoremDivergenceAssumptions`: what is needed only because Etheorem differs from the
-  pyspec (its alpha.11 list limits, F3). Fulu: `FuluEtheoremBridgeConditions`, the conditions of
+  pyspec (its alpha.11 list limits). Fulu: `FuluEtheoremBridgeConditions`, the conditions of
   the Etheorem Fulu bridge, not all about Etheorem.
 - `GloasOracleMatchesEtheorem`: the spec Oracle agrees with Etheorem.
 - `GloasRustGlueFacts`: the Rust state views as the epoch input, and the glue facts hold.
@@ -437,9 +437,6 @@ structure GloasChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop 
 Etheorem state `e`, not the oracle. The Fulu counterpart is `FuluEtheoremBridgeConditions`, which
 also holds conditions that are not about Etheorem. -/
 structure GloasEtheoremDivergenceAssumptions (e : EtheoremState) : Prop where
-  /-- F3: Etheorem's balance-weighted selections stop after `10^7` passes. They return all their
-  items. -/
-  selectionsFull : SelectionsFull e
   /-- F6, F10: room under Etheorem's alpha.11 list limits, which beta.4 removed: in the registry
   for one epoch of deposits (`depositRoom`), and in `builder_pending_withdrawals`
   (`builderRoom`). -/
@@ -486,7 +483,6 @@ theorem gloasFinalHypotheses_of {o fo c uc init} {e : EtheoremState}
     ⟨hchain.committeeStepStateFacts t ht,
       ⟨hp.syncActive, hp.proposers, hp.enoughActiveForPtc, hs.syncSelectionEnds,
         hs.proposerSelectionEnds, hs.ptcSelectionEnds⟩⟩
-  selections := hetheorem.selectionsFull
   etheoremRoom := hetheorem.listLimitRoom
   oracle := horacle.agrees
   sha := horacle.sha32
@@ -641,8 +637,7 @@ structure FuluChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop w
 /-- The conditions of the Etheorem Fulu bridge (`FuluEpochConds`), at the states before the
 steps that read them. Not all of them are about Etheorem:
 
-- because Etheorem diverges from the pyspec: its alpha.11 registry limit (F10, `depositRoom`) and
-  its selections returning all their items (F3, `syncFull`, `proposersFull`);
+- because Etheorem diverges from the pyspec: its alpha.11 registry limit (F10, `depositRoom`);
 - spec conditions: the historical summaries room (`summariesRoom`; beta.4 keeps that cap);
 - facts about the intermediate states that the bridge reads (`finalized`: the finalized epoch is
   below `FAR_FUTURE_EPOCH`; `depositLens`, `consolidationLens`: list lengths agree);

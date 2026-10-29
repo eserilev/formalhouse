@@ -16,8 +16,8 @@ the same state without the Gloas fields; and `witnessEtheorem`, `witnessEtheorem
 Etheorem states that map to them. Lean computes the epoch steps on it.
 
 - `gloasFinalHypotheses_witness`: every field of `GloasFinalHypotheses` holds at
-  `witnessEtheorem`, with an oracle that agrees with Etheorem, given
-  `SelectionsFull witnessEtheorem` (F3) and that SHA-256 returns 32 bytes.
+  `witnessEtheorem`, with an oracle that agrees with Etheorem, given that SHA-256 returns 32
+  bytes.
 - `fuluFinalHypotheses_witness`: the same for `FuluFinalHypotheses` at `witnessEtheoremFulu`,
   given also the run bounds (`supply`, `econ`) and `FuluEpochConds`.
 - `gloas_spec_witness`, `fulu_spec_witness`: at the same state, the start-state facts
@@ -28,7 +28,7 @@ Etheorem states that map to them. Lean computes the epoch steps on it.
   candidate has the maximum effective balance.
 
 Not covered: the run hypotheses (`GloasEpochInput`, `FuluEpochInput`, the supply and economic
-bounds over all runs), the facts about Etheorem's output (`SelectionsFull`, `FuluEpochConds`),
+bounds over all runs), the Fulu Etheorem conditions (`FuluEpochConds`),
 the hash backend (`sha`), the cache facts and the Rust glue (`EpochLinks`).
 -/
 
@@ -399,9 +399,8 @@ theorem oracle_witness : ∃ o, Etheorem.OracleAgrees o ∧ ∀ pk, o.bls_KeyVal
   ⟨Etheorem.etheoremOracle keyOracle, Etheorem.etheoremOracle_agrees _, fun _ => rfl⟩
 
 /-- Every field of `GloasFinalHypotheses` holds at `witnessEtheorem` on the minimal preset, given
-the two facts about the hash backend that the structure takes as they are: Etheorem's selections
-return all their items (`SelectionsFull`, F3) and SHA-256 returns 32 bytes. -/
-theorem gloasFinalHypotheses_witness (hsel : Etheorem.SelectionsFull witnessEtheorem)
+the fact about the hash backend that the structure takes as it is: SHA-256 returns 32 bytes. -/
+theorem gloasFinalHypotheses_witness
     (hsha : ∀ b : ByteArray, (EthCLLib.Spec.sha b).size = 32) :
     ∃ o, Formalhouse.GloasFinalHypotheses o { state := witnessState } witnessEtheorem := by
   obtain ⟨o, ho, hk⟩ := oracle_witness
@@ -413,7 +412,6 @@ theorem gloasFinalHypotheses_witness (hsel : Etheorem.SelectionsFull witnessEthe
     slot := by rw [witnessEtheorem_abs]; decide +kernel
     rows := witnessEtheorem_abs ▸ witnessState_physicalLimits
     committees := witnessEtheorem_abs ▸ witnessState_atCommitteeStepState o (fun v _ => hk _)
-    selections := hsel
     etheoremRoom := ⟨by rw [witnessEtheorem_abs]; decide +kernel, by decide +kernel⟩
     oracle := ho
     sha := hsha }⟩

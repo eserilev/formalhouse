@@ -23,7 +23,7 @@ Error sources and why they do not fire:
 - `compute_balance_weighted_selection`: `assert total > 0` needs a candidate.
   `effective_balance * (2^16 - 1)` fits a `Uint64` because the effective balance is at most
   `2048 ETH`. The counter `i` is a `Uint64`, so the loop must accept its candidates within `2^64`
-  passes (`SelFin`). That depends on the hash values, like F3.
+  passes (`SelFin`). That depends on the hash values.
 - `eth_aggregate_pubkeys` asserts `KeyValidate` on each key.
 - The two `len(...) - SLOTS_PER_EPOCH` need the SSZ vector lengths.
 
@@ -592,7 +592,7 @@ structure CommFacts [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
   selection asserts `total > 0`).
 - `ptc32` (F12): at least `SLOTS_PER_EPOCH` validators are active at `current + 2`. With fewer,
   the first slot of that epoch has no committee members, and `compute_ptc` asserts `total > 0`.
-- `selSync`, `selProp`, `selPtc` (like F3): each selection accepts its candidates within `2^64`
+- `selSync`, `selProp`, `selPtc`: each selection accepts its candidates within `2^64`
   passes, so the `Uint64` counter does not overflow. This depends on the hash values. With
   effective balances of at least `16 ETH` each pass accepts with probability at least `1/128`. -/
 structure CommitteeStepPreconds [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where

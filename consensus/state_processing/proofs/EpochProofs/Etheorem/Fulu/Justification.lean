@@ -9,7 +9,9 @@ run gives it.
 
 The reference keeps `justification_bits` as a list of four booleans. Etheorem keeps a `BitVec 4`
 and shifts it. `absBits_shift` and `absBits_bitSet` relate the two. Etheorem's `epoch + k`
-compares wrap only where the reference raises.
+compares wrap only where the reference raises. Etheorem raises on an overflow of the balance
+products `* 3` and `* 2`, as the reference does, and `weigh_etheorem` reads the bounds off a
+reference run that returns.
 -/
 
 namespace EpochProofs.Etheorem.Fulu
@@ -95,6 +97,7 @@ local macro "finish_weigh" : tactic => `(tactic| (
   all_goals first | rfl | contradiction))
 
 theorem weigh_run (e : EState) (tot pt ct : UInt64) (pr cr : EthCLSpecs.Fulu.Root)
+    (hov : tot.toNat * 2 < 2 ^ 64 ∧ pt.toNat * 3 < 2 ^ 64 ∧ ct.toNat * 3 < 2 ^ 64)
     (hpr : pt.toNat * 3 ≥ tot.toNat * 2 →
       (EthCLSpecs.Fulu.getBlockRoot (StateTransition := FuluRun) (pureState e)
         (EthCLSpecs.Fulu.previousEpochOf (pureState e))).run (pureState e) = .ok (pr, pureState e))
@@ -109,17 +112,34 @@ theorem weigh_run (e : EState) (tot pt ct : UInt64) (pr cr : EthCLSpecs.Fulu.Roo
   rw [run_bind, show (get : FuluRun _).run (pureState e) = .ok (pureState e, pureState e) from rfl,
     except_bind_ok]
   dsimp only
+  obtain ⟨h2, h3p, h3c⟩ := hov
+  rw [run_bind, checkedMul_of_lt _ _ _ (by simpa using h2), run_pure, except_bind_ok,
+    run_bind, checkedMul_of_lt _ _ _ (by simpa using h3p), run_pure, except_bind_ok,
+    run_bind, checkedMul_of_lt _ _ _ (by simpa using h3c), run_pure, except_bind_ok]
+  -- Below `2^64` the `uint64` products compare as the plain products.
+  have hcmp : ∀ x : UInt64, x.toNat * 3 < 2 ^ 64 →
+      (x * 3 ≥ tot * 2 ↔ x.toNat * 3 ≥ tot.toNat * 2) := by
+    intro x hx
+    rw [ge_iff_le, UInt64.le_iff_toNat_le, UInt64.toNat_mul, UInt64.toNat_mul,
+      Nat.mod_eq_of_lt (by simpa [UInt64.size] using h2),
+      Nat.mod_eq_of_lt (by simpa [UInt64.size] using hx)]
+    simp
+  simp only [hcmp pt h3p, hcmp ct h3c]
   by_cases hp : pt.toNat * 3 ≥ tot.toNat * 2 <;> by_cases hc : ct.toNat * 3 ≥ tot.toNat * 2
-  · rw [if_pos hp, run_bind, hpr hp, except_bind_ok, if_pos hc, run_bind, hcr hc, except_bind_ok]
+  · rw [if_pos hp, run_bind, hpr hp, except_bind_ok,
+      if_pos hc, run_bind, hcr hc, except_bind_ok]
     simp only [hp, hc, decide_true]
     finish_weigh
-  · rw [if_pos hp, run_bind, hpr hp, except_bind_ok, if_neg hc, run_bind, run_pure, except_bind_ok]
+  · rw [if_pos hp, run_bind, hpr hp, except_bind_ok,
+      if_neg hc, run_bind, run_pure, except_bind_ok]
     simp only [hp, hc, decide_true, decide_false]
     finish_weigh
-  · rw [if_neg hp, run_bind, run_pure, except_bind_ok, if_pos hc, run_bind, hcr hc, except_bind_ok]
+  · rw [if_neg hp, run_bind, run_pure, except_bind_ok,
+      if_pos hc, run_bind, hcr hc, except_bind_ok]
     simp only [hp, hc, decide_true, decide_false]
     finish_weigh
-  · rw [if_neg hp, run_bind, run_pure, except_bind_ok, if_neg hc, run_bind, run_pure, except_bind_ok]
+  · rw [if_neg hp, run_bind, run_pure, except_bind_ok,
+      if_neg hc, run_bind, run_pure, except_bind_ok]
     simp only [hp, hc, decide_false]
     finish_weigh
 
@@ -254,16 +274,18 @@ theorem just_step (w : EState) (tot x epoch : UInt64) (bit : Nat) (hbit : bit < 
           current_justified_checkpoint := { epoch := epoch.toNat, root := r },
           justification_bits := b }
       else pure (absEState w) : Spec.SpecM Spec.BeaconState) = .ok s4) :
-    ∃ r, (x.toNat * 3 ≥ tot.toNat * 2 → Spec.get_block_root p (absEState w) epoch.toNat = .ok r) ∧
+    ∃ r, (x.toNat * 3 < 2 ^ 64 ∧ tot.toNat * 2 < 2 ^ 64) ∧
+      (x.toNat * 3 ≥ tot.toNat * 2 → Spec.get_block_root p (absEState w) epoch.toNat = .ok r) ∧
       s4 = absEState (jfJustify w (decide (x.toNat * 3 ≥ tot.toNat * 2)) epoch r bit) := by
   obtain ⟨m1, hm1, h⟩ := bind_ok_inv h
   obtain ⟨m2, hm2, h⟩ := bind_ok_inv h
+  have hov : x.toNat * 3 < 2 ^ 64 ∧ tot.toNat * 2 < 2 ^ 64 := ⟨uint64Mul_lt hm1, uint64Mul_lt hm2⟩
   rw [uint64Mul_ok_val hm1, uint64Mul_ok_val hm2] at h
   by_cases hj : x.toNat * 3 ≥ tot.toNat * 2
   · rw [if_pos hj] at h
     obtain ⟨r, hr, h⟩ := bind_ok_inv h
     obtain ⟨b, hb, h⟩ := bind_ok_inv h
-    refine ⟨r, fun _ => hr, ?_⟩
+    refine ⟨r, hov, fun _ => hr, ?_⟩
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
     have hlen : bit < (absEState w).justification_bits.length := by
@@ -276,12 +298,13 @@ theorem just_step (w : EState) (tot x epoch : UInt64) (bit : Nat) (hbit : bit < 
   · rw [if_neg hj] at h
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
-    exact ⟨default, fun h' => absurd h' hj, by simp [jfJustify, hj]⟩
+    exact ⟨default, hov, fun h' => absurd h' hj, by simp [jfJustify, hj]⟩
 
 theorem weigh_etheorem (e : EState) (tot pt ct : UInt64) {s' : Spec.BeaconState}
     (h : Spec.weigh_justification_and_finalization p (absEState e) tot.toNat pt.toNat ct.toNat =
       .ok s') :
     ∃ pr cr : EthCLSpecs.Fulu.Root,
+      (tot.toNat * 2 < 2 ^ 64 ∧ pt.toNat * 3 < 2 ^ 64 ∧ ct.toNat * 3 < 2 ^ 64) ∧
       (pt.toNat * 3 ≥ tot.toNat * 2 → Spec.get_block_root p (absEState e)
         (EthCLSpecs.Fulu.previousEpochOf (pureState e)).toNat = .ok pr) ∧
       (ct.toNat * 3 ≥ tot.toNat * 2 → Spec.get_block_root p (absEState e)
@@ -301,16 +324,16 @@ theorem weigh_etheorem (e : EState) (tot pt ct : UInt64) {s' : Spec.BeaconState}
   rw [hl0] at h
   simp only [ok_bind] at h
   obtain ⟨s4, h4, h⟩ := bind_ok_inv h
-  obtain ⟨pr, hpr, rfl⟩ := just_step (jfShift e) tot pt
+  obtain ⟨pr, ⟨hp3, h2⟩, hpr, rfl⟩ := just_step (jfShift e) tot pt
     (EthCLSpecs.Fulu.previousEpochOf (pureState e)) 1 (by decide) h4
   obtain ⟨s5, h5, h⟩ := bind_ok_inv h
-  obtain ⟨cr, hcr, rfl⟩ := just_step _ tot ct
+  obtain ⟨cr, ⟨hc3, -⟩, hcr, rfl⟩ := just_step _ tot ct
     (EthCLSpecs.Fulu.currentEpochOf (pureState e)) 0 (by decide) h5
   have hw4 : ∀ c r, (jfJustify (jfShift e) c (EthCLSpecs.Fulu.previousEpochOf (pureState e)) r 1).slot
       = e.slot ∧ (jfJustify (jfShift e) c (EthCLSpecs.Fulu.previousEpochOf (pureState e)) r 1).blockRoots
       = e.blockRoots := by
     intro c r; unfold jfJustify jfShift; split <;> exact ⟨rfl, rfl⟩
-  refine ⟨pr, cr, hpr, fun hc => by
+  refine ⟨pr, cr, ⟨h2, hp3, hc3⟩, hpr, fun hc => by
     rw [← get_block_root_absEState_congr _ _ (hw4 _ _).1 (hw4 _ _).2]; exact hcr hc, ?_⟩
   generalize hW : jfJustify (jfJustify (jfShift e) (decide (pt.toNat * 3 ≥ tot.toNat * 2))
     (EthCLSpecs.Fulu.previousEpochOf (pureState e)) pr 1) (decide (ct.toNat * 3 ≥ tot.toNat * 2))
@@ -368,16 +391,18 @@ theorem justification_etheorem (e : EState) {s' : Spec.BeaconState}
     obtain ⟨tab, htab, h⟩ := bind_ok_inv h
     obtain ⟨ptb, hptb, h⟩ := bind_ok_inv h
     obtain ⟨ctb, hctb, h⟩ := bind_ok_inv h
-    have hpi' := get_unslashed_participating_indices_ok hp e 1 (by decide) _ hpi
-    have hci' := get_unslashed_participating_indices_ok hp e 1 (by decide) _ hci
+    obtain ⟨hpiE, hpi'⟩ := get_unslashed_participating_indices_ok hp e 1 (by decide) _ hpi
+    obtain ⟨hciE, hci'⟩ := get_unslashed_participating_indices_ok hp e 1 (by decide) _ hci
     rw [hpi'] at hptb
     rw [hci'] at hctb
     have htab' := get_total_active_balance_ok hp e htab
     have hptb' := get_total_balance_ok hp e _ hptb
     have hctb' := get_total_balance_ok hp e _ hctb
     rw [← htab', ← hptb', ← hctb'] at h
-    obtain ⟨pr, cr, hpr, hcr, rfl⟩ := weigh_etheorem hpp e _ _ _ h
-    refine ⟨_, weigh_run e _ _ _ pr cr
+    obtain ⟨pr, cr, hov, hpr, hcr, rfl⟩ := weigh_etheorem hpp e _ _ _ h
+    rw [run_bind, run_liftErr_of_ok _ _ (by rw [hpiE]; rfl), except_bind_ok,
+      run_bind, run_liftErr_of_ok _ _ (by rw [hciE]; rfl), except_bind_ok]
+    refine ⟨_, weigh_run e _ _ _ pr cr hov
       (fun hc => get_block_root_etheorem hpp e (pureState e) _ (hpr hc))
       (fun hc => get_block_root_etheorem hpp e (pureState e) _ (hcr hc)), rfl⟩
 

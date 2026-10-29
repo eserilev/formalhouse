@@ -14,7 +14,7 @@ validators at 2048 ETH) also satisfies the bundles of `FormalhouseReadable.lean`
   applies there (`lighthouse_model_gloas_epoch_agrees_pyspec_at_witness`).
 - `gloas_bundles_at_witness`, `fulu_bundles_at_witness`: the chain, Etheorem (Gloas divergence, Fulu bridge) and
   oracle bundles hold together at `witnessEtheorem` (`witnessEtheoremFulu`), given the facts that
-  `NonVacuity.lean` also takes as they are (F3, the Fulu Etheorem conditions, SHA-256 output
+  `NonVacuity.lean` also takes as they are (the Fulu Etheorem conditions, SHA-256 output
   size).
 
 Not covered, as in `NonVacuity.lean`: the runs (`GloasEpochRun`, `FuluEpochRun`, whose supply
@@ -68,13 +68,13 @@ variable [EthCLLib.Spec.HasherTag] [EthCLLib.Spec.CryptoBackend]
 
 /-- The Gloas chain, Etheorem divergence and oracle bundles hold together at
 `witnessEtheorem`. -/
-theorem gloas_bundles_at_witness (hsel : Etheorem.SelectionsFull witnessEtheorem)
+theorem gloas_bundles_at_witness
     (hsha : ∀ b : ByteArray, (EthCLLib.Spec.sha b).size = 32) :
     ∃ o, GloasChainAssumptions o (toSpecState witnessEtheorem) ∧
       GloasEtheoremDivergenceAssumptions witnessEtheorem ∧ GloasOracleMatchesEtheorem o := by
-  obtain ⟨o, ha⟩ := gloasFinalHypotheses_witness hsel hsha
+  obtain ⟨o, ha⟩ := gloasFinalHypotheses_witness hsha
   refine ⟨o, ⟨fun t h => ?_, fun t h => ?_, ha.rows, ha.slot, ha.boundary.2.2, ha.vectors,
-    fun t h => (ha.committees t h).1⟩, ⟨ha.selections, ha.etheoremRoom⟩, ⟨ha.oracle, ha.sha⟩⟩
+    fun t h => (ha.committees t h).1⟩, ⟨ha.etheoremRoom⟩, ⟨ha.oracle, ha.sha⟩⟩
   · have hp := (ha.committees t h).2
     exact ⟨hp.syncActive, hp.proposers, hp.ptc32⟩
   · have hp := (ha.committees t h).2

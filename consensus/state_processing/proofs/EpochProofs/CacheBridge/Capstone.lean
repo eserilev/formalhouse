@@ -146,7 +146,7 @@ theorem lighthouse_order_epoch_etheorem_reachable_cached [EpochProofs.Spec.Prese
     (hsha : ∀ b : ByteArray, (EthCLLib.Spec.sha b).size = 32) (e : EpochProofs.Etheorem.EState)
     (hin : Spec.EpochInputOk'' Spec.EpochSupply (EpochProofs.Etheorem.absEState e))
     (hpre : Spec.TailPre (EpochProofs.Etheorem.absEState e))
-    (hcond : EpochProofs.Etheorem.EpochCondsIn e) (hsel : EpochProofs.Etheorem.SelectionsFull e)
+    (hcond : EpochProofs.Etheorem.EpochCondsIn e)
     {s' : Spec.BeaconState}
     (h : Spec.process_epoch_lh_order o (EpochProofs.Etheorem.absEState e) = .ok s')
     (c : LhCache)
@@ -180,8 +180,7 @@ theorem lighthouse_order_epoch_etheorem_reachable_cached [EpochProofs.Spec.Prese
         EpochProofs.Spec.get_total_active_balance EpochProofs.Spec.P s =
           .ok r.val) :=
   ⟨EpochProofs.Etheorem.lighthouse_order_epoch_etheorem_reachable hpa hhr o ho hsha e hin hpre
-    hcond hsel
-    h,
+    hcond h,
    lh_cache_reads_mainnet _ hin.1.1.1.2.1 hin.1.1.2.2.2.2 c hc total htotal⟩
 
 end Generic

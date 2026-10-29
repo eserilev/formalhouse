@@ -263,6 +263,16 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Etheorem.compute_shuffled_permutation_ok
 #print axioms EpochProofs.Etheorem.compute_shuffled_index_ok
 #print axioms EpochProofs.Etheorem.compute_balance_weighted_selection_ok
+#print axioms EpochProofs.Etheorem.cbwsAux_ok_size
+#print axioms EpochProofs.Etheorem.computeBalanceWeightedSelection_ok_size
+#print axioms EpochProofs.Etheorem.Fulu.compute_balance_weighted_selection_ok
+#print axioms EpochProofs.Etheorem.Fulu.cbwsAux_ok_size
+#print axioms EpochProofs.Etheorem.Fulu.computeBalanceWeightedSelection_ok_size
+#print axioms EpochProofs.Etheorem.getUnslashedParticipatingIndices_ok
+#print axioms EpochProofs.Etheorem.processEffectiveBalanceUpdates_run
+#print axioms EpochProofs.Etheorem.effectiveBalanceStep_cond
+#print axioms EpochProofs.Etheorem.slashingsPreamble_bounds
+#print axioms EpochProofs.Etheorem.get_base_reward_small
 #print axioms EpochProofs.Etheorem.get_seed_ok
 #print axioms EpochProofs.Etheorem.get_committee_count_per_slot_ok
 #print axioms EpochProofs.Etheorem.compute_committee_ok
@@ -285,7 +295,8 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Etheorem.weigh_run
 #print axioms EpochProofs.Etheorem.weigh_etheorem
 #print axioms EpochProofs.Etheorem.justification_etheorem
-#print axioms EpochProofs.Etheorem.processInactivityUpdates_run
+#print axioms EpochProofs.Etheorem.processInactivityUpdates_run_genesis
+#print axioms EpochProofs.Etheorem.inactivity_step_facts
 #print axioms EpochProofs.Etheorem.inactivity_updates_etheorem
 #print axioms EpochProofs.Etheorem.processSlashings_run
 #print axioms EpochProofs.Etheorem.slashings_etheorem
