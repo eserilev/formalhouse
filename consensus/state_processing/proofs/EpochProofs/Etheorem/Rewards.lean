@@ -16,7 +16,8 @@ products. Etheorem also computes `base_reward * weight` for an index where the r
 increment and base reward factor.
 -/
 
-namespace EpochProofs.Etheorem
+forkproof EpochEtheorem
+
 open EthCLLib.Spec EthCLLib.Proofs SizzLean.Repr SizzLean.Proofs EthCLSpecs.Proofs.Gloas
 
 /-- A reference loop that succeeds simulates a fold. `Rel` sees the indices still to run. -/
@@ -476,8 +477,6 @@ theorem flag_deltas_etheorem (e : EState) (f : Nat) (hf : f < 3) {R P : List Nat
     · rw [hel']
       exact eligible_nodup hpp e
 
-
-
 omit hpp in
 /-- One iteration of Etheorem's `get_inactivity_penalty_deltas` loop. -/
 def inactPenStepE (e : EState) (acc : Array UInt64) (vi : UInt64) : Array UInt64 :=
@@ -818,7 +817,6 @@ theorem applyDeltas_run (s0 : EthCLSpecs.Gloas.State) (w0 : EState) (rew pen : A
     unfold applyStepE
     rfl
 
-
 omit hpp [EthCLSpecs.Gloas.Preset] [HasherTag] [EthCLSpecs.Gloas.Config] in
 theorem inner_body_spec (rew pen : Array UInt64) (i : Nat) (B : List Nat) (s : ForInStep (List Nat))
     (h : (do
@@ -1005,4 +1003,5 @@ theorem rewards_etheorem (e : EState) {s' : Spec.BeaconState}
         absEState_set_balances]
       rfl
 
-end EpochProofs.Etheorem
+end forkproof
+

@@ -13,7 +13,8 @@ products, at the same operations as the reference. `slashingsPreamble_bounds` an
 `slashing_fold` read the bounds off a reference run that returns.
 -/
 
-namespace EpochProofs.Etheorem
+forkproof EpochEtheorem
+
 open EthCLLib.Spec EthCLLib.Proofs SizzLean.Repr SizzLean.Proofs EthCLSpecs.Proofs.Gloas
 
 variable [EthCLSpecs.Gloas.Preset] [HasherTag]
@@ -420,4 +421,5 @@ theorem slashings_etheorem (e : EState) {s' : Spec.BeaconState}
 
 end Slashings
 
-end EpochProofs.Etheorem
+end forkproof
+

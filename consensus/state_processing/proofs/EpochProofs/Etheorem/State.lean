@@ -1,5 +1,7 @@
 import EpochProofs.Spec.Block.Types
 import EthCLSpecs.Proofs.Gloas.Run
+import EpochProofs.Etheorem.Forks
+import EthCLSpecs.Proofs.Fulu.Run
 
 /-!
 # The map from an Etheorem state to a reference state
@@ -8,11 +10,19 @@ Etheorem (https://github.com/etheorem/etheorem) stores numbers as `UInt64` and l
 `Vector`, `SSZList` and `Bitvector`. The reference stores numbers as `Nat` and lists as `List`.
 `absEState` reads an Etheorem `BeaconState` as a reference `BeaconState`. It keeps every field.
 
+Fulu's `absEState` keeps every Fulu field. The reference fields that Gloas adds (builders,
+builder payments and withdrawals, the bid, the payload withdrawals, the PTC window) read as
+empty, and `latest_block_hash` reads the block hash of the latest execution payload header. No
+Fulu epoch step reads or writes them.
+
 Each step proof states that the two runs agree through `absEState`. The `@[simp]` lemmas here
 read and write one field through the map.
+
+Each proof here holds for Gloas and for Fulu. `forkproof EpochEtheorem` (see `Forks.lean`)
+elaborates the shared text once per fork, and `forkonly` holds the parts that differ.
 -/
 
-namespace EpochProofs.Etheorem
+forkproof EpochEtheorem
 
 open EthCLLib.Spec SizzLean.Repr
 
@@ -56,9 +66,15 @@ theorem absBits_getElem? {n : Nat} (b : Bitvector n) (i : Nat) (hi : i < n) :
 
 variable [EthCLSpecs.Gloas.Preset]
 
+forkonly Gloas
 abbrev EState := EthCLSpecs.Gloas.BeaconState
 abbrev EWithdrawal := EthCLSpecs.Gloas.BuilderPendingWithdrawal
 abbrev EPayment := EthCLSpecs.Gloas.BuilderPendingPayment
+end forkonly
+
+forkonly Fulu
+abbrev EState := EthCLSpecs.Fulu.BeaconState
+end forkonly
 
 def absValidator (v : EthCLSpecs.Gloas.Validator) : Spec.Validator :=
   { pubkey := v.pubkey
@@ -115,6 +131,7 @@ def absHistoricalSummary (h : EthCLSpecs.Gloas.HistoricalSummary) : Spec.Histori
   { block_summary_root := h.blockSummaryRoot
     state_summary_root := h.stateSummaryRoot }
 
+forkonly Gloas
 def absBuilder (b : EthCLSpecs.Gloas.Builder) : Spec.Builder :=
   { pubkey := b.pubkey
     version := b.version
@@ -202,6 +219,58 @@ def absEState (e : EState) : Spec.BeaconState :=
     latest_execution_payload_bid := absBid e.latestExecutionPayloadBid
     payload_expected_withdrawals := e.payloadExpectedWithdrawals.toList.map absPayloadWithdrawal
     ptc_window := e.ptcWindow.toList.map fun ptc => ptc.toList.map UInt64.toNat }
+end forkonly
+
+forkonly Fulu
+/-- An Etheorem state as a reference state. Every field maps. -/
+def absEState (e : EState) : Spec.BeaconState :=
+  { genesis_time := e.genesisTime.toNat
+    genesis_validators_root := e.genesisValidatorsRoot
+    slot := e.slot.toNat
+    «fork» := absFork e.forkData
+    latest_block_header := absHeader e.latestBlockHeader
+    block_roots := e.blockRoots.toList
+    state_roots := e.stateRoots.toList
+    historical_roots := e.historicalRoots.toList
+    eth1_data := absEth1Data e.eth1Data
+    eth1_data_votes := e.eth1DataVotes.toList.map absEth1Data
+    eth1_deposit_index := e.eth1DepositIndex.toNat
+    validators := e.validators.toList.map absValidator
+    balances := e.balances.toList.map UInt64.toNat
+    randao_mixes := e.randaoMixes.toList
+    slashings := e.slashings.toList.map UInt64.toNat
+    previous_epoch_participation := e.previousEpochParticipation.toList
+    current_epoch_participation := e.currentEpochParticipation.toList
+    justification_bits := absBits e.justificationBits
+    previous_justified_checkpoint := absCheckpoint e.previousJustifiedCheckpoint
+    current_justified_checkpoint := absCheckpoint e.currentJustifiedCheckpoint
+    finalized_checkpoint := absCheckpoint e.finalizedCheckpoint
+    inactivity_scores := e.inactivityScores.toList.map UInt64.toNat
+    current_sync_committee := absSyncCommittee e.currentSyncCommittee
+    next_sync_committee := absSyncCommittee e.nextSyncCommittee
+    latest_block_hash := e.latestExecutionPayloadHeader.blockHash
+    next_withdrawal_index := e.nextWithdrawalIndex.toNat
+    next_withdrawal_validator_index := e.nextWithdrawalValidatorIndex.toNat
+    historical_summaries := e.historicalSummaries.toList.map absHistoricalSummary
+    deposit_requests_start_index := e.depositRequestsStartIndex.toNat
+    deposit_balance_to_consume := e.depositBalanceToConsume.toNat
+    exit_balance_to_consume := e.exitBalanceToConsume.toNat
+    earliest_exit_epoch := e.earliestExitEpoch.toNat
+    consolidation_balance_to_consume := e.consolidationBalanceToConsume.toNat
+    earliest_consolidation_epoch := e.earliestConsolidationEpoch.toNat
+    pending_deposits := e.pendingDeposits.toList.map absPendingDeposit
+    pending_partial_withdrawals := e.pendingPartialWithdrawals.toList.map absPendingPartialWithdrawal
+    pending_consolidations := e.pendingConsolidations.toList.map absPendingConsolidation
+    proposer_lookahead := e.proposerLookahead.toList.map UInt64.toNat
+    builders := []
+    next_withdrawal_builder_index := 0
+    execution_payload_availability := []
+    builder_pending_payments := []
+    builder_pending_withdrawals := []
+    latest_execution_payload_bid := {}
+    payload_expected_withdrawals := []
+    ptc_window := [] }
+end forkonly
 
 /-! ## Reading one field -/
 
@@ -209,6 +278,7 @@ section Read
 
 variable (e : EState)
 
+forkonly Gloas
 @[simp] theorem absEState_slot : (absEState e).slot = e.slot.toNat := rfl
 @[simp] theorem absEState_validators :
     (absEState e).validators = e.validators.toList.map absValidator := rfl
@@ -274,6 +344,67 @@ variable (e : EState)
       e.builderPendingWithdrawals.toList.map absWithdrawal := rfl
 @[simp] theorem absEState_ptc_window :
     (absEState e).ptc_window = e.ptcWindow.toList.map fun ptc => ptc.toList.map UInt64.toNat := rfl
+end forkonly
+
+forkonly Fulu
+@[simp] theorem absEState_slot : (absEState e).slot = e.slot.toNat := rfl
+@[simp] theorem absEState_validators :
+    (absEState e).validators = e.validators.toList.map absValidator := rfl
+@[simp] theorem absEState_balances :
+    (absEState e).balances = e.balances.toList.map UInt64.toNat := rfl
+@[simp] theorem absEState_randao_mixes : (absEState e).randao_mixes = e.randaoMixes.toList := rfl
+@[simp] theorem absEState_slashings :
+    (absEState e).slashings = e.slashings.toList.map UInt64.toNat := rfl
+@[simp] theorem absEState_previous_epoch_participation :
+    (absEState e).previous_epoch_participation = e.previousEpochParticipation.toList := rfl
+@[simp] theorem absEState_current_epoch_participation :
+    (absEState e).current_epoch_participation = e.currentEpochParticipation.toList := rfl
+@[simp] theorem absEState_justification_bits :
+    (absEState e).justification_bits = absBits e.justificationBits := rfl
+@[simp] theorem absEState_previous_justified_checkpoint :
+    (absEState e).previous_justified_checkpoint = absCheckpoint e.previousJustifiedCheckpoint := rfl
+@[simp] theorem absEState_current_justified_checkpoint :
+    (absEState e).current_justified_checkpoint = absCheckpoint e.currentJustifiedCheckpoint := rfl
+@[simp] theorem absEState_finalized_checkpoint :
+    (absEState e).finalized_checkpoint = absCheckpoint e.finalizedCheckpoint := rfl
+@[simp] theorem absEState_inactivity_scores :
+    (absEState e).inactivity_scores = e.inactivityScores.toList.map UInt64.toNat := rfl
+@[simp] theorem absEState_current_sync_committee :
+    (absEState e).current_sync_committee = absSyncCommittee e.currentSyncCommittee := rfl
+@[simp] theorem absEState_next_sync_committee :
+    (absEState e).next_sync_committee = absSyncCommittee e.nextSyncCommittee := rfl
+@[simp] theorem absEState_eth1_data_votes :
+    (absEState e).eth1_data_votes = e.eth1DataVotes.toList.map absEth1Data := rfl
+@[simp] theorem absEState_block_roots : (absEState e).block_roots = e.blockRoots.toList := rfl
+@[simp] theorem absEState_state_roots : (absEState e).state_roots = e.stateRoots.toList := rfl
+@[simp] theorem absEState_historical_summaries :
+    (absEState e).historical_summaries = e.historicalSummaries.toList.map absHistoricalSummary :=
+  rfl
+@[simp] theorem absEState_eth1_deposit_index :
+    (absEState e).eth1_deposit_index = e.eth1DepositIndex.toNat := rfl
+@[simp] theorem absEState_deposit_requests_start_index :
+    (absEState e).deposit_requests_start_index = e.depositRequestsStartIndex.toNat := rfl
+@[simp] theorem absEState_deposit_balance_to_consume :
+    (absEState e).deposit_balance_to_consume = e.depositBalanceToConsume.toNat := rfl
+@[simp] theorem absEState_exit_balance_to_consume :
+    (absEState e).exit_balance_to_consume = e.exitBalanceToConsume.toNat := rfl
+@[simp] theorem absEState_earliest_exit_epoch :
+    (absEState e).earliest_exit_epoch = e.earliestExitEpoch.toNat := rfl
+@[simp] theorem absEState_consolidation_balance_to_consume :
+    (absEState e).consolidation_balance_to_consume = e.consolidationBalanceToConsume.toNat := rfl
+@[simp] theorem absEState_earliest_consolidation_epoch :
+    (absEState e).earliest_consolidation_epoch = e.earliestConsolidationEpoch.toNat := rfl
+@[simp] theorem absEState_pending_deposits :
+    (absEState e).pending_deposits = e.pendingDeposits.toList.map absPendingDeposit := rfl
+@[simp] theorem absEState_pending_partial_withdrawals :
+    (absEState e).pending_partial_withdrawals =
+      e.pendingPartialWithdrawals.toList.map absPendingPartialWithdrawal := rfl
+@[simp] theorem absEState_pending_consolidations :
+    (absEState e).pending_consolidations =
+      e.pendingConsolidations.toList.map absPendingConsolidation := rfl
+@[simp] theorem absEState_proposer_lookahead :
+    (absEState e).proposer_lookahead = e.proposerLookahead.toList.map UInt64.toNat := rfl
+end forkonly
 
 end Read
 
@@ -336,10 +467,12 @@ theorem absEState_set_proposerLookahead (l : Vector EthCLSpecs.Gloas.ValidatorIn
     absEState { e with proposerLookahead := l } =
       { absEState e with proposer_lookahead := l.toList.map UInt64.toNat } := rfl
 
+forkonly Gloas
 theorem absEState_set_ptcWindow (w : Vector (Vector EthCLSpecs.Gloas.ValidatorIndex
       EthCLSpecs.Gloas.Const.ptcSize) (3 * EthCLSpecs.Gloas.Const.slotsPerEpoch)) :
     absEState { e with ptcWindow := w } =
       { absEState e with ptc_window := w.toList.map fun ptc => ptc.toList.map UInt64.toNat } := rfl
+end forkonly
 
 theorem absEState_set_pendingDeposits (d : SSZList EthCLSpecs.Gloas.PendingDeposit
       EthCLSpecs.Gloas.Const.pendingDepositsLimit) :
@@ -372,12 +505,15 @@ theorem absEState_set_churn (dbtc ebtc ebc : EthCLSpecs.Gloas.Gwei)
                          consolidation_balance_to_consume := ebc.toNat,
                          earliest_consolidation_epoch := ece.toNat } := rfl
 
+forkonly Gloas
 theorem absEState_set_builderPayments (pay : Vector EPayment (2 * EthCLSpecs.Gloas.Const.slotsPerEpoch))
     (wd : SSZList EWithdrawal EthCLSpecs.Gloas.Const.builderPendingWithdrawalsLimit) :
     absEState { e with builderPendingPayments := pay, builderPendingWithdrawals := wd } =
       { absEState e with builder_pending_payments := pay.toList.map absPayment,
                          builder_pending_withdrawals := wd.toList.map absWithdrawal } := rfl
+end forkonly
 
 end Write
 
-end EpochProofs.Etheorem
+end forkproof
+

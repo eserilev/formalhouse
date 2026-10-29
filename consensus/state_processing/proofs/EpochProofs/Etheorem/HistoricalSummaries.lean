@@ -12,7 +12,7 @@ Past the limit Etheorem's `SSZList.push` drops the new summary. In beta.4 the li
 So the theorem assumes that the list is below the limit (finding F6).
 -/
 
-namespace EpochProofs.Etheorem
+forkproof EpochEtheorem
 
 open EthCLLib.Spec EthCLLib.Proofs SizzLean.Repr SizzLean.Proofs
 open EthCLSpecs.Proofs.Gloas (GloasRun)
@@ -109,4 +109,5 @@ theorem historical_summaries_update_etheorem {p : Spec.Preset} (hp : PresetAgree
           simp only [beq_iff_eq, h0, if_false, Except.ok.injEq] at h
           exact h
 
-end EpochProofs.Etheorem
+end forkproof
+

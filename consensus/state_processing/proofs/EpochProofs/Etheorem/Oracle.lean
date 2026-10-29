@@ -17,7 +17,7 @@ With `pureHasherTag`, SHA-256 is the pure Lean `Sha256Spec` and adds no axiom. B
 parameter. The `CryptoBackend.ffi` instance calls blst through the FFI.
 -/
 
-namespace EpochProofs.Etheorem
+forkproof EpochEtheorem
 
 open EthCLLib.Spec
 
@@ -84,4 +84,5 @@ theorem etheoremOracle_agrees (base : Spec.Oracle) : OracleAgrees (etheoremOracl
   ⟨fun _ => rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl,
     fun _ _ _ => rfl, fun _ => rfl⟩
 
-end EpochProofs.Etheorem
+end forkproof
+

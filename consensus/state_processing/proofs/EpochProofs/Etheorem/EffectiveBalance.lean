@@ -17,7 +17,7 @@ as the reference does. `effectiveBalanceStep_cond` reads these facts off a refer
 returns, so the theorem has no extra hypothesis.
 -/
 
-namespace EpochProofs.Etheorem
+forkproof EpochEtheorem
 
 open EthCLLib.Spec EthCLLib.Proofs SizzLean.Repr SizzLean.Proofs
 open EthCLSpecs.Proofs.Gloas (GloasRun)
@@ -541,5 +541,5 @@ theorem effective_balance_updates_etheorem (e : EState) {s' : Spec.BeaconState}
 
 end Thresholds
 
+end forkproof
 
-end EpochProofs.Etheorem

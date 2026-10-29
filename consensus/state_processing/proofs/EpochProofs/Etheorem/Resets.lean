@@ -11,7 +11,7 @@ reference returns `s'`, then Etheorem's run succeeds and its result maps to `s'`
 the historical summaries read, and that `PresetAgrees` does not hold.
 -/
 
-namespace EpochProofs.Etheorem
+forkproof EpochEtheorem
 
 open EthCLLib.Spec EthCLLib.Proofs SizzLean.Repr SizzLean.Proofs
 open EthCLSpecs.Proofs.Gloas (GloasRun)
@@ -274,9 +274,9 @@ end Steps
 
 end WithPreset
 
-end EpochProofs.Etheorem
+end forkproof
 
-namespace EpochProofs.Etheorem
+forkproof EpochEtheorem
 
 section
 attribute [local instance] EthCLSpecs.Gloas.mainnet EthCLSpecs.Gloas.mainnetConfig
@@ -290,4 +290,5 @@ theorem tailPresetAgrees_minimal : TailPresetAgrees Spec.Preset.minimal := by
   constructor <;> first | rfl | decide
 end
 
-end EpochProofs.Etheorem
+end forkproof
+

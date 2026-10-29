@@ -13,7 +13,7 @@ The theorem needs one condition: the state has one balance for each validator. A
 state has this property.
 -/
 
-namespace EpochProofs.Etheorem
+forkproof EpochEtheorem
 
 open EthCLLib.Spec EthCLLib.Proofs SizzLean.Repr SizzLean.Proofs
 open EthCLSpecs.Proofs.Gloas (GloasRun)
@@ -41,7 +41,6 @@ def pcStep (cons : Array EthCLSpecs.Gloas.PendingConsolidation) (nextEpoch : UIn
 theorem pcLoop_eq (cons : Array EthCLSpecs.Gloas.PendingConsolidation) (ne : UInt64) :
     EthCLSpecs.Gloas.pcLoop (StateTransition := GloasRun) cons ne =
       fuelLoop (cons.size + 1) 0 cons.size (pcStep cons ne) := rfl
-
 
 /-- One step of the queue. Our step and Etheorem's step move the same balance, and they stop
 at the same consolidation. -/
@@ -262,4 +261,5 @@ theorem process_pending_consolidations_etheorem (e : EState) {s' : Spec.BeaconSt
 
 end Main
 
-end EpochProofs.Etheorem
+end forkproof
+

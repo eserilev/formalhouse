@@ -16,7 +16,7 @@ counter and raises at `2^64`, as pyspec does. So `compute_balance_weighted_selec
 condition on Etheorem's result: when the reference returns, Etheorem returns the same items.
 -/
 
-namespace EpochProofs.Etheorem
+forkproof EpochEtheorem
 
 open EthCLLib.Spec EthCLLib.Proofs SizzLean.Proofs
 
@@ -230,7 +230,6 @@ theorem forIn_ok_rel {ε α β γ : Type} (R : β → γ → Prop) (step : γ �
     obtain ⟨b', rfl, hR'⟩ := hf a b c r hR hr
     exact ih b' _ res hR' h
 
-
 theorem throw_bind_ne_ok {ε α β : Type} {e : ε} {f : α → Except ε β} {b : β} :
     ((throw e : Except ε α) >>= f) ≠ .ok b := fun h => nomatch h
 
@@ -288,7 +287,6 @@ theorem uint64Div_eq {a b s : Nat} (h : Spec.uint64Div a b = .ok s) : s = a / b 
   split at h
   · cases h
   · cases h; exact ⟨rfl, ‹_›⟩
-
 
 variable [EthCLSpecs.Gloas.Preset] [HasherTag]
 
@@ -368,7 +366,6 @@ theorem inner_body_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d)
       push_data_toList, vecToBytes_toList, List.append_assoc]
   rw [hba, shuffle_bit_eq _ _ (Nat.mod_lt _ (by decide)), hc]
   rfl
-
 
 omit [EthCLSpecs.Gloas.Preset] [HasherTag] in
 theorem foldl_set_range (g : Nat → Nat) (L : List Nat) :
@@ -557,7 +554,6 @@ theorem compute_shuffled_permutation_ok (p : Spec.Preset) (o : Spec.Oracle)
   · simp only [beq_iff_eq, h0, if_false]
     exact hres
 
-
 /-- `compute_shuffled_index` reads Etheorem's permutation. -/
 theorem compute_shuffled_index_ok (p : Spec.Preset) (o : Spec.Oracle)
     (ho : ∀ d, o.hash d = etheoremHash d)
@@ -664,6 +660,7 @@ theorem map_toNat_getElem!_all (A : Array UInt64) (k : Nat) :
   · rw [getElem!_neg _ k (by simpa using hk), getElem!_neg A k hk]
     rfl
 
+forkonly Gloas
 open EthCLSpecs.Gloas in
 /-- The Etheorem preset holds the committee values of `p`. -/
 structure CommitteePresetAgrees (p : Spec.Preset) : Prop where
@@ -675,7 +672,20 @@ structure CommitteePresetAgrees (p : Spec.Preset) : Prop where
   ptcSize : Const.ptcSize = p.PTC_SIZE
   epochsPerSyncCommitteePeriod : Const.epochsPerSyncCommitteePeriod = p.EPOCHS_PER_SYNC_COMMITTEE_PERIOD
   maxEffectiveBalanceElectra : Const.maxEffectiveBalanceElectra = p.MAX_EFFECTIVE_BALANCE_ELECTRA
+end forkonly
 
+forkonly Fulu
+open EthCLSpecs.Fulu in
+/-- The Etheorem preset holds the committee values of `p`. -/
+structure CommitteePresetAgrees (p : Spec.Preset) : Prop where
+  shuffleRoundCount : Const.shuffleRoundCount = p.SHUFFLE_ROUND_COUNT
+  shuffleRoundCountPos : 0 < p.SHUFFLE_ROUND_COUNT
+  targetCommitteeSize : Const.targetCommitteeSize = p.TARGET_COMMITTEE_SIZE
+  maxCommitteesPerSlot : Const.maxCommitteesPerSlot = p.MAX_COMMITTEES_PER_SLOT
+  syncCommitteeSize : Const.syncCommitteeSize = p.SYNC_COMMITTEE_SIZE
+  epochsPerSyncCommitteePeriod : Const.epochsPerSyncCommitteePeriod = p.EPOCHS_PER_SYNC_COMMITTEE_PERIOD
+  maxEffectiveBalanceElectra : Const.maxEffectiveBalanceElectra = p.MAX_EFFECTIVE_BALANCE_ELECTRA
+end forkonly
 
 /-! ## The balance weighted selection -/
 
@@ -944,7 +954,6 @@ theorem get_seed_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d) (e
   rw [getElem!_pos _ _ (by simpa using hk)]
   simp
 
-
 /-- `get_committee_count_per_slot` equals Etheorem's. -/
 theorem get_committee_count_per_slot_ok (hc : CommitteePresetAgrees p) (e : EState)
     (epoch : UInt64) {c : Nat}
@@ -1022,4 +1031,5 @@ theorem get_beacon_committee_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheor
   rw [UInt64.toNat_mod, UInt64.toNat_ofNat_of_lt' hlt, hp.slotsPerEpoch]
 end Seeds
 
-end EpochProofs.Etheorem
+end forkproof
+
