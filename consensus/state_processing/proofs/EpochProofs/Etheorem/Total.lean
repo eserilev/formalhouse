@@ -37,7 +37,7 @@ theorem lighthouse_epoch_total_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok] [Sp
     (o : Spec.Oracle) (ho : OracleAgrees o)
     (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState)
     (hin : Spec.EpochInputOk'' Spec.EpochSupply (absEState e))
-    (hpre : Spec.TailPre (absEState e)) (hcond : EpochCondsIn e) (hsel : SelectionsFull e)
+    (hpre : Spec.TailPre (absEState e)) (hcond : EpochCondsIn e)
     (hslot : (absEState e).slot + 8192 < 2 ^ 64)
     (hvec : (absEState e).VectorLengths Spec.P)
     (hrb : Spec.RowBounds (absEState e))
@@ -52,7 +52,7 @@ theorem lighthouse_epoch_total_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok] [Sp
   have hfull := (Spec.process_epoch_lh_full_sameOk' o (absEState e) hb hslot64 heb hexit hsup
     hvalid hcons s').mpr hs'
   have hlh := (Spec.process_epoch_lh_order_sameOk o (absEState e) hpre s').mpr hfull
-  exact ⟨s', hlh, lighthouse_order_epoch_etheorem_reachable hpa hhr o ho hsha e hin hpre hcond hsel
+  exact ⟨s', hlh, lighthouse_order_epoch_etheorem_reachable hpa hhr o ho hsha e hin hpre hcond
     hlh⟩
 
 end Generic

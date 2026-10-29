@@ -39,9 +39,8 @@ structure FuluEpochCondsAll (o : Spec.Oracle) (e : EState) : Prop where
   /-- The epoch boundary: the last slot of an epoch, the next slot fits in `u64`, and fewer than
   `2^24` historical summaries. -/
   boundary : Spec.TailPre (absEState e)
-  /-- The conditions of the Etheorem Fulu bridge: state facts before some steps, the Electra
-  proposer loop ends before its last pass, and Etheorem's selections return all their items
-  (F3). -/
+  /-- The conditions of the Etheorem Fulu bridge: state facts before some steps, and the
+  Electra proposer loop ends before its last pass. -/
   etheorem : FuluEpochConds Spec.P o e
   /-- Oracle: the spec Oracle agrees with Etheorem's functions, and `sha` returns 32 bytes. -/
   oracle : OracleAgrees o

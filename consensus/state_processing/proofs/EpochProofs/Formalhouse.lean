@@ -69,9 +69,6 @@ structure GloasEpochConds (o : Spec.Oracle) (e : EState) : Prop where
   (F12), and each
   balance weighted selection ends within `2^64` passes, a fact about the hash values). -/
   committees : Spec.CommAt o (absEState e)
-  /-- A fact about Etheorem's output (F3): its selections return all their items. Etheorem
-  stops after `10^7` passes. -/
-  selections : SelectionsFull e
   /-- Oracle: the spec Oracle agrees with Etheorem's functions (SHA-256, the roots, the BLS
   key and signature checks). -/
   oracle : OracleAgrees o
@@ -141,9 +138,9 @@ theorem formalhouse_gloas_epoch (hpa : EpochPresetAgrees Spec.P)
       (r.isSome ↔ pk ∈ (absEState e).validators.map (·.pubkey)) ∧
       ∀ i, r.map (·.val) = some i → i = ((absEState e).validators.map (·.pubkey)).idxOf pk := by
   obtain ⟨s', hs', -⟩ := lighthouse_epoch_total_etheorem hpa hhr o hc.oracle hc.sha e hc.reachable
-    hc.boundary hc.etheoremRoom hc.selections hc.slot hc.vectors hc.rows hc.committees
+    hc.boundary hc.etheoremRoom hc.slot hc.vectors hc.rows hc.committees
   exact ⟨s', hs', lighthouse_order_epoch_etheorem_reachable_cached_ptc hpa hhr o hc.oracle hc.sha e
-    hc.reachable hc.boundary hc.etheoremRoom hc.selections hs' c hcoh total htotal,
+    hc.reachable hc.boundary hc.etheoremRoom hs' c hcoh total htotal,
     fun pk => Spec.pubkey_cache_deposit_lookup laws (absEState e) hpk hc.pubkeys pk⟩
 
 end Generic

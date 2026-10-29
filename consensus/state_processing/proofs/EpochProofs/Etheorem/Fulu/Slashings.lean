@@ -8,8 +8,9 @@ The main theorem is `slashings_etheorem`. `slashingsE` is Etheorem's step on a p
 
 The reference computes `epoch + EPOCHS_PER_SLASHINGS_VECTOR // 2` only for a slashed validator.
 `slashings_target_lt` shows that this sum always fits in a `uint64`, because the epoch is at most
-half of the slot. Etheorem's slashings sum and penalty products wrap only where the reference
-raises.
+half of the slot. Etheorem raises on an overflow of the slashings sum and of the penalty
+products, at the same operations as the reference. `slashingsPreamble_bounds` and
+`slashing_fold` read the bounds off a reference run that returns.
 -/
 
 namespace EpochProofs.Etheorem.Fulu
@@ -48,18 +49,48 @@ def slashingsE (e : EState) : EState :=
     (slashStepE (EthCLSpecs.Fulu.currentEpochOf (pureState e)) (slashPpiE e)) e
 
 omit [EthCLSpecs.Fulu.Config] in
+/-- Etheorem's checked sum of a list runs as the plain sum while the total stays below `2^64`. -/
+theorem foldlM_checkedAdd_run (d : String) (s : EthCLSpecs.Fulu.State) :
+    ∀ (l : List UInt64) (acc : UInt64), acc.toNat + (l.map UInt64.toNat).sum < 2 ^ 64 →
+      (l.foldlM (fun a x => checkedAdd a x d) acc : FuluRun UInt64).run s =
+        .ok (l.foldl (· + ·) acc, s) := by
+  intro l
+  induction l with
+  | nil => intro acc _; rfl
+  | cons x l ih =>
+    intro acc h
+    simp only [List.map_cons, List.sum_cons] at h
+    rw [List.foldlM_cons, run_bind, checkedAdd_of_lt _ _ _ (by omega), run_pure, except_bind_ok,
+      List.foldl_cons]
+    apply ih
+    rw [UInt64.toNat_add, Nat.mod_eq_of_lt (by first | omega | (simp only [UInt64.size]; omega))]
+    omega
+
+omit [EthCLSpecs.Fulu.Config] in
 theorem processSlashings_run (e : EState)
+    (hsum : (e.slashings.toList.map UInt64.toNat).sum < 2 ^ 64)
+    (hmul : (e.slashings.toArray.foldl (· + ·) 0).toNat *
+      (UInt64.ofNat EthCLSpecs.Fulu.Const.proportionalSlashingMultiplierBellatrix).toNat < 2 ^ 64)
     (hidx : ∀ i < e.validators.val.size,
       slashCondE (EthCLSpecs.Fulu.currentEpochOf (pureState e)) e.validators[i]! →
-        (UInt64.ofNat i).toNat < e.balances.val.size) :
+        (UInt64.ofNat i).toNat < e.balances.val.size ∧
+          (slashPpiE e).toNat * (e.validators[i]!.effectiveBalance /
+            EthCLSpecs.Fulu.Const.effectiveBalanceIncrementG).toNat < 2 ^ 64) :
     (EthCLSpecs.Fulu.processSlashings (StateTransition := FuluRun)).run (pureState e) =
       .ok ((), pureState (slashingsE e)) := by
   unfold EthCLSpecs.Fulu.processSlashings
   rw [run_bind, show (get : FuluRun _).run (pureState e) = .ok (pureState e, pureState e) from rfl,
     except_bind_ok]
   dsimp only
+  simp only [view_uncachedBox]
+  rw [run_bind, ← Array.foldlM_toList, foldlM_checkedAdd_run _ _ _ _ (by simp only [UInt64.toNat_zero, Nat.zero_add]; exact hsum),
+    except_bind_ok]
+  dsimp only
+  rw [Array.foldl_toList] 
+  rw [run_bind, checkedMul_of_lt _ _ _ hmul, run_pure, except_bind_ok]
+  dsimp only
   rw [run_bind, Std.Legacy.Range.forIn_eq_forIn_range']
-  simp only [view_uncachedBox, Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
+  simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
   rw [forIn_run_pureState (pureState e)
     (fun i w => slashStepE (EthCLSpecs.Fulu.currentEpochOf (pureState e)) (slashPpiE e) w i)
     (fun w => w.validators = e.validators ∧ w.balances.val.size = e.balances.val.size)]
@@ -79,11 +110,15 @@ theorem processSlashings_run (e : EState)
       unfold slashCondE at hc'
       rw [if_pos hc']
       rw [hv] at hc
-      have hlt := hidx i hi' hc
+      obtain ⟨hlt, hmulI⟩ := hidx i hi' hc
       rw [← hb] at hlt
+      rw [← hv] at hmulI
       have hsome : w.balances.val[(UInt64.ofNat i).toNat]? =
           some w.balances.val[(UInt64.ofNat i).toNat]! := by
         rw [getElem!_pos w.balances.val _ hlt]; exact Array.getElem?_eq_getElem hlt
+      rw [run_bind]
+      erw [checkedMul_of_lt _ _ _ hmulI]
+      rw [run_pure, except_bind_ok]
       rw [run_bind]
       unfold EthCLSpecs.Fulu.decreaseBalance
       rw [run_bind, view_uncachedBox, run_sszGetIdx_some _ _ _ hsome, except_bind_ok]
@@ -121,7 +156,9 @@ theorem slashing_fold (e : EState) (epoch ppi : UInt64) {target per : Nat}
       (l.map fun i => (absValidator e.validators.val[i]!, i)).foldlM
         (Spec.slashingLoopStep p target per) (w.balances.toList.map UInt64.toNat) = .ok R →
       R = (l.foldl (slashStepE epoch ppi) w).balances.toList.map UInt64.toNat ∧
-        ∀ i ∈ l, slashCondE epoch e.validators[i]! → (UInt64.ofNat i).toNat < w.balances.val.size := by
+        ∀ i ∈ l, slashCondE epoch e.validators[i]! → (UInt64.ofNat i).toNat < w.balances.val.size ∧
+          ppi.toNat * (e.validators[i]!.effectiveBalance /
+            EthCLSpecs.Fulu.Const.effectiveBalanceIncrementG).toNat < 2 ^ 64 := by
   have hsize : e.validators.val.size < 2 ^ 64 :=
     Nat.lt_of_le_of_lt e.validators.property hpp.validatorRegistryLimit
   intro l
@@ -151,7 +188,9 @@ theorem slashing_fold (e : EState) (epoch ppi : UInt64) {target per : Nat}
     have hcondw : slashCondE epoch w.validators[i]! = slashCondE epoch e.validators[i]! := by rw [hv]
     -- One step.
     have key : B = (slashStepE epoch ppi w i).balances.toList.map UInt64.toNat ∧
-        (slashCondE epoch e.validators[i]! → (UInt64.ofNat i).toNat < w.balances.val.size) := by
+        (slashCondE epoch e.validators[i]! → (UInt64.ofNat i).toNat < w.balances.val.size ∧
+          ppi.toNat * (e.validators[i]!.effectiveBalance /
+            EthCLSpecs.Fulu.Const.effectiveBalanceIncrementG).toNat < 2 ^ 64) := by
       unfold Spec.slashingLoopStep at hstep
       unfold slashStepE
       rw [hcondw]
@@ -182,12 +221,13 @@ theorem slashing_fold (e : EState) (epoch ppi : UInt64) {target per : Nat}
               EthCLSpecs.Fulu.Const.effectiveBalanceIncrementG)).toNat = .ok B := by
           rw [hiN, hpen]; exact hstep
         obtain ⟨-, hB⟩ := decrease_balance_etheorem w w (UInt64.ofNat i) _ hstep'
-        refine ⟨?_, fun _ => ?_⟩
+        refine ⟨?_, fun _ => ⟨?_, ?_⟩⟩
         · rw [hB, sszList_getElem!_val, hv]; rfl
         · unfold Spec.decrease_balance at hstep'
           cases hg : Spec.listGet (w.balances.toList.map UInt64.toNat) (UInt64.ofNat i).toNat with
           | error err => rw [hg] at hstep'; cases hstep'
           | ok b => exact (listGet_map_ok _ _ _ hg).1
+        · rw [sszList_getElem!_val]; exact uint64Mul_lt hm
       · rename_i hc
         rw [← hcond] at hc
         rw [if_neg hc]
@@ -203,11 +243,12 @@ theorem slashing_fold (e : EState) (epoch ppi : UInt64) {target per : Nat}
     intro j hj hc
     rcases List.mem_cons.mp hj with rfl | hj
     · exact hidx hc
-    · have := hidx' j hj hc
-      unfold slashStepE at this
-      split at this
-      · simpa using this
-      · exact this
+    · obtain ⟨h1, h2⟩ := hidx' j hj hc
+      refine ⟨?_, h2⟩
+      unfold slashStepE at h1
+      split at h1
+      · simpa using h1
+      · exact h1
 
 omit [HasherTag] in
 theorem slashings_target_lt (slot : UInt64) :
@@ -294,6 +335,49 @@ theorem slashPpiE_toNat (e : EState) {adj per : Nat}
   rw [← hd1', ← hm', ← umin_toNat] at hd2
   exact uint64Div_ok hd2
 
+/-- A preamble that returns has no overflow in the slashings sum or in its product with
+`PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX`. Etheorem checks the same two operations. -/
+theorem slashingsPreamble_bounds (e : EState) {adj per : Nat}
+    (h : Spec.slashingsPreamble p (etheoremTotalActiveBalance e) (absEState e).slashings =
+      .ok (adj, per)) :
+    (e.slashings.toList.map UInt64.toNat).sum < 2 ^ 64 ∧
+      (e.slashings.toArray.foldl (· + ·) 0).toNat *
+        (UInt64.ofNat EthCLSpecs.Fulu.Const.proportionalSlashingMultiplierBellatrix).toNat <
+          2 ^ 64 := by
+  unfold Spec.slashingsPreamble at h
+  simp only [bind, Except.bind] at h
+  cases hs : Spec.uint64Sum (absEState e).slashings with
+  | error err => rw [hs] at h; cases h
+  | ok total =>
+  rw [hs] at h
+  dsimp only at h
+  have hsum : total = (e.slashings.toList.map UInt64.toNat).sum ∧
+      (e.slashings.toList.map UInt64.toNat).sum < 2 ^ 64 := by
+    unfold Spec.uint64Sum at hs
+    simp only [absEState_slashings] at hs
+    split at hs
+    · cases hs; exact ⟨rfl, by simpa [Spec.UINT64_SIZE] using ‹_›⟩
+    · cases hs
+  obtain ⟨rfl, hlt⟩ := hsum
+  refine ⟨hlt, ?_⟩
+  have hm : @LT.lt Nat _ p.PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX (2 ^ 64) :=
+    hpp.proportionalSlashingMultiplierLt
+  have hmul : EthCLSpecs.Fulu.Const.proportionalSlashingMultiplierBellatrix < 2 ^ 64 := by
+    rw [hpp.proportionalSlashingMultiplierBellatrix]; exact hm
+  have hsumE : (e.slashings.toArray.foldl (· + ·) 0).toNat =
+      (e.slashings.toList.map UInt64.toNat).sum := by
+    have hf : e.slashings.toArray.foldl (· + ·) (0 : UInt64) =
+        e.slashings.toList.foldl (fun acc i => acc + (fun x : UInt64 => x) i) 0 := by
+      rw [Vector.toList, Array.foldl_toList]
+    rw [hf, foldl_add_toNat (fun x : UInt64 => x) _ 0 (by simpa using hlt)]
+    simp
+  cases hmu : Spec.uint64Mul (e.slashings.toList.map UInt64.toNat).sum
+      p.PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX with
+  | error err => rw [hmu] at h; cases h
+  | ok m =>
+  rw [hsumE, UInt64.toNat_ofNat_of_lt' hmul, hpp.proportionalSlashingMultiplierBellatrix]
+  exact uint64Mul_lt hmu
+
 /-- `process_slashings` equals Etheorem's. -/
 theorem slashings_etheorem (e : EState) {s' : Spec.BeaconState}
     (h : Spec.process_slashings p (etheoremTotalActiveBalance e) (absEState e) = .ok s') :
@@ -327,7 +411,8 @@ theorem slashings_etheorem (e : EState) {s' : Spec.BeaconState}
   obtain ⟨hR, hidx⟩ := slashing_fold hpp e (EthCLSpecs.Fulu.currentEpochOf (pureState e)) (slashPpiE e)
     (slashings_target_toNat hpp _ htgt) hppi (List.range' 0 e.validators.val.size) e rfl
     (fun i hi => by simpa using hi) hf
-  refine ⟨processSlashings_run e (fun i hi hc => hidx i (by simpa using hi) hc), ?_⟩
+  obtain ⟨hsum, hmul⟩ := slashingsPreamble_bounds hpp e hpre
+  refine ⟨processSlashings_run e hsum hmul (fun i hi hc => hidx i (by simpa using hi) hc), ?_⟩
   have hE : slashingsE e = { e with balances := (slashingsE e).balances } :=
     foldl_slashStepE_validators _ _ _ _
   rw [hE, absEState_set_balances, hR]

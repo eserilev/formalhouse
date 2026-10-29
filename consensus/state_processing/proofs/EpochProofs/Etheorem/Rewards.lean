@@ -9,9 +9,11 @@ deltas. `applyDeltas_run` runs one round of Etheorem's `applyDeltas` against the
 
 Etheorem computes rewards and penalties in `Nat` and writes `UInt64.ofNat` of the result. It sets
 each entry, where the reference adds to a zero entry. The two agree because each eligible index
-occurs once. Etheorem never raises on an overflow in the deltas, so F5 (the
-`effective_balance * inactivity_score` product) is covered by the reference: the theorem assumes
-that the reference succeeds.
+occurs once. Etheorem raises on an overflow of the products in the deltas, F5 (the
+`effective_balance * inactivity_score` product) among them, and the reference raises on the same
+products. Etheorem also computes `base_reward * weight` for an index where the reference does not.
+`get_base_reward_small` shows that this product fits in `uint64` with the mainnet and minimal
+increment and base reward factor.
 -/
 
 namespace EpochProofs.Etheorem
@@ -94,8 +96,7 @@ def baseRewardE (e : EState) (vi : UInt64) : Nat :=
 `(penalties, rewards)`, the order Etheorem keeps. -/
 def flagStepE (e : EState) (f : Nat) (acc : MProd (Array UInt64) (Array UInt64)) (vi : UInt64) :
     MProd (Array UInt64) (Array UInt64) :=
-  let unslashed := EthCLSpecs.Gloas.getUnslashedParticipatingIndices (pureState e) f
-    (EthCLSpecs.Gloas.previousEpochOf (pureState e))
+  let unslashed := eUnslashed e f (EthCLSpecs.Gloas.previousEpochOf (pureState e))
   let weight := EthCLSpecs.Gloas.Const.participationFlagWeights[f]!
   let usi := (EthCLSpecs.Gloas.getTotalBalance (pureState e) unslashed).toNat /
     EthCLSpecs.Gloas.Const.effectiveBalanceIncrement
@@ -157,8 +158,7 @@ theorem get_base_reward_eq (e : EState) (a : Nat) (ha : a < e.validators.val.siz
 omit hpp in
 /-- Etheorem's unslashed participating indices of flag `f` at the previous epoch. -/
 abbrev Eus (f : Nat) (e : EState) : Array UInt64 :=
-  EthCLSpecs.Gloas.getUnslashedParticipatingIndices (pureState e) f
-    (EthCLSpecs.Gloas.previousEpochOf (pureState e))
+  eUnslashed e f (EthCLSpecs.Gloas.previousEpochOf (pureState e))
 
 theorem eligible_nodup (e : EState) :
     ((EthCLSpecs.Gloas.getEligibleValidatorIndices (pureState e)).toList.map UInt64.toNat).Nodup := by
@@ -173,30 +173,108 @@ theorem eligible_nodup (e : EState) :
   rw [List.map_id]
   exact List.Pairwise.filter _ List.nodup_range
 
-theorem getFlagIndexDeltas_eq (e : EState) (f : Nat) :
+omit hpp in
+/-- Etheorem's `unslashed_participating_increments` for flag `f`. -/
+abbrev usiE (f : Nat) (e : EState) : Nat :=
+  (EthCLSpecs.Gloas.getTotalBalance (pureState e) (Eus f e)).toNat /
+    EthCLSpecs.Gloas.Const.effectiveBalanceIncrement
+
+/-- Etheorem's `get_flag_index_deltas` returns `flagDeltasE` when its products fit in `uint64`.
+Etheorem computes `base_reward * weight` for every eligible index, and
+`base_reward * weight * unslashed_participating_increments` where the reference does. -/
+theorem getFlagIndexDeltas_eq (e : EState) (f : Nat)
+    (hus : EthCLSpecs.Gloas.getUnslashedParticipatingIndices (pureState e) f
+      (EthCLSpecs.Gloas.previousEpochOf (pureState e)) = .ok (Eus f e))
+    (hw : EthCLSpecs.Gloas.Const.participationFlagWeights[f]! < 2 ^ 64)
+    (hb : ∀ vi ∈ (EthCLSpecs.Gloas.getEligibleValidatorIndices (pureState e)).toList,
+      baseRewardE e vi < 2 ^ 64 ∧
+      baseRewardE e vi * EthCLSpecs.Gloas.Const.participationFlagWeights[f]! < 2 ^ 64 ∧
+      ((Eus f e).contains vi = true → (!EthCLSpecs.Gloas.isInInactivityLeak (pureState e)) = true →
+        baseRewardE e vi * EthCLSpecs.Gloas.Const.participationFlagWeights[f]! * usiE f e <
+          2 ^ 64)) :
     EthCLSpecs.Gloas.getFlagIndexDeltas (pureState e) f = .ok (flagDeltasE e f) := by
   unfold EthCLSpecs.Gloas.getFlagIndexDeltas
   simp only [view_uncachedBox]
-  rw [← Array.forIn_toList, forIn_except_ok _ (fun vi acc => flagStepE e f acc vi)]
+  rw [hus, ok_bind, ← Array.forIn_toList, forIn_except_ok _ (fun vi acc => flagStepE e f acc vi)]
   · rfl
   · intro vi hvi acc
     have hlt := eligible_lt hpp e vi hvi
+    obtain ⟨hbr, hbw, hbwu⟩ := hb vi hvi
     have hsome : e.validators.val[vi.toNat]? = some e.validators.val[vi.toNat]! := by
       rw [getElem!_pos e.validators.val _ hlt]; exact Array.getElem?_eq_getElem hlt
-    unfold EthCLSpecs.Gloas.getBaseReward
-    simp only [view_uncachedBox, sszGetIdx, hsome]
-    unfold flagStepE baseRewardE
+    have hgb : (liftErr (EthCLSpecs.Gloas.getBaseReward (pureState e) vi) :
+        Except StateTransitionError Nat) = .ok (baseRewardE e vi) := by
+      unfold EthCLSpecs.Gloas.getBaseReward
+      simp only [view_uncachedBox, sszGetIdx, hsome, liftErr, MonadExcept.ofExcept,
+        Except.mapError]
+      rfl
+    have hwN := UInt64.toNat_ofNat_of_lt' hw
+    have hbrN := UInt64.toNat_ofNat_of_lt' hbr
+    have hweighted : (UInt64.ofNat (baseRewardE e vi) *
+        UInt64.ofNat EthCLSpecs.Gloas.Const.participationFlagWeights[f]!).toNat =
+        baseRewardE e vi * EthCLSpecs.Gloas.Const.participationFlagWeights[f]! := by
+      rw [UInt64.toNat_mul, hwN, hbrN, Nat.mod_eq_of_lt (by simpa [UInt64.size] using hbw)]
+    rw [hgb, ok_bind, checkedMul_of_lt _ _ _ (by rw [hbrN, hwN]; exact hbw)]
+    simp only [pure, Except.pure, ok_bind]
+    unfold flagStepE
     split
-    · split
-      · rename_i h1 h2; simp only [h1, if_true]; rfl
-      · rename_i h1 h2; simp only [h1, if_true]; rfl
-    · split
-      · rename_i h1 h2; simp only [h1, if_false, Bool.false_eq_true]; rfl
-      · rename_i h1 h2; simp only [h1, if_false, Bool.false_eq_true]; rfl
+    · rename_i hin
+      split
+      · rename_i hl
+        have husi : usiE f e < 2 ^ 64 := Nat.lt_of_le_of_lt (Nat.div_le_self _ _) (UInt64.toNat_lt _)
+        have hprod := hbwu hin hl
+        rw [checkedMul_of_lt _ _ _ (by
+          rw [hweighted, UInt64.toNat_ofNat_of_lt' husi]; exact hprod)]
+        simp only [pure, Except.pure, ok_bind, hin, if_true]
+        have hnum : (UInt64.ofNat (baseRewardE e vi) *
+            UInt64.ofNat EthCLSpecs.Gloas.Const.participationFlagWeights[f]! *
+            UInt64.ofNat (usiE f e)).toNat =
+            baseRewardE e vi * EthCLSpecs.Gloas.Const.participationFlagWeights[f]! * usiE f e := by
+          rw [UInt64.toNat_mul, hweighted, UInt64.toNat_ofNat_of_lt' husi,
+            Nat.mod_eq_of_lt (by simpa [UInt64.size] using hprod)]
+        rw [hnum]
+      · simp only [hin, if_true]
+    · rename_i hin
+      split
+      · simp only [hin, Bool.false_eq_true, if_false]
+        rw [hweighted]
+      · rename_i hh
+        simp only [hin, Bool.false_eq_true, if_false]
+
+/-- Etheorem's total active balance is at least one increment. -/
+theorem inc_le_etheoremTotalActiveBalance (e : EState) :
+    p.EFFECTIVE_BALANCE_INCREMENT ≤ etheoremTotalActiveBalance e := by
+  have hp := hpp.toPresetAgrees
+  unfold etheoremTotalActiveBalance EthCLSpecs.Gloas.getTotalActiveBalance
+    EthCLSpecs.Gloas.getTotalBalance
+  simp only [view_uncachedBox]
+  rw [umax_toNat, hp.effectiveBalanceIncrementG]
+  exact Nat.le_max_right _ _
+
+/-- A reference base reward is at most `1 / 256` of the effective balance, so it fits in `uint64`
+even after a multiplication by a flag weight. -/
+theorem get_base_reward_small (e : EState) (a : Nat) {br : Nat}
+    (h : Spec.get_base_reward p (etheoremTotalActiveBalance e) (absEState e) a = .ok br) :
+    br * 26 < 2 ^ 64 := by
+  unfold Spec.get_base_reward at h
+  obtain ⟨v, hv, h⟩ := bind_ok_inv h
+  rw [absEState_validators] at hv
+  obtain ⟨-, rfl⟩ := listGet_map_ok e.validators.val absValidator a hv
+  have h256 := Spec.rewardsBaseReward_bound p _ _ br hpp.effectiveBalanceIncrementEq
+    hpp.baseRewardFactorEq (inc_le_etheoremTotalActiveBalance hpp e) h
+  change 256 * br ≤ (e.validators.val[a]!).effectiveBalance.toNat at h256
+  have heb := UInt64.toNat_lt (e.validators.val[a]!).effectiveBalance
+  omega
+
+omit hpp [EthCLSpecs.Gloas.Preset] [HasherTag] [EthCLSpecs.Gloas.Config] in
+theorem participationFlagWeights_le (f : Nat) (hf : f < 3) :
+    EthCLSpecs.Gloas.Const.participationFlagWeights[f]! ≤ 26 := by
+  rcases (show f = 0 ∨ f = 1 ∨ f = 2 by omega) with rfl | rfl | rfl <;> decide
 
 /-- `get_flag_index_deltas` equals Etheorem's. -/
 theorem flag_deltas_etheorem (e : EState) (f : Nat) (hf : f < 3) {R P : List Nat}
     (h : Spec.get_flag_index_deltas p (etheoremTotalActiveBalance e) (absEState e) f = .ok (R, P)) :
+    EthCLSpecs.Gloas.getFlagIndexDeltas (pureState e) f = .ok (flagDeltasE e f) ∧
     R = (flagDeltasE e f).1.toList.map UInt64.toNat ∧
       P = (flagDeltasE e f).2.toList.map UInt64.toNat := by
   have hp := hpp.toPresetAgrees
@@ -216,7 +294,7 @@ theorem flag_deltas_etheorem (e : EState) (f : Nat) (hf : f < 3) {R P : List Nat
     Nat.lt_of_le_of_lt e.validators.property hp.validatorRegistryLimit
   -- The values the loop reads.
   have hel' := get_eligible_validator_indices_ok hp e hel
-  have husp' := get_unslashed_participating_indices_ok hp e f hf _ husp
+  obtain ⟨huspE, husp'⟩ := get_unslashed_participating_indices_ok hp e f hf _ husp
   rw [husp'] at husb
   have husb' := get_total_balance_ok hp e _ husb
   have hw' := weight_eq f hf hw
@@ -226,13 +304,60 @@ theorem flag_deltas_etheorem (e : EState) (f : Nat) (hf : f < 3) {R P : List Nat
   let Rel : List Nat → MProd (List Nat) (List Nat) → MProd (Array UInt64) (Array UInt64) → Prop :=
     fun rest b c => b.fst = c.fst.toList.map UInt64.toNat ∧ b.snd = c.snd.toList.map UInt64.toNat ∧
       (∀ j ∈ rest, c.fst[j]! = 0 ∧ c.snd[j]! = 0 ∧ j < e.validators.val.size) ∧ rest.Nodup
-  have hsim := forIn_sim_spec _ (fun (i : Nat) c => flagStepE e f c (UInt64.ofNat i)) Rel ?_ el _
+  -- The products that Etheorem checks, read off the reference step of index `a`.
+  let Good : Nat → Prop := fun a =>
+    baseRewardE e (UInt64.ofNat a) * 26 < 2 ^ 64 ∧
+    ((Eus f e).contains (UInt64.ofNat a) = true →
+      (!EthCLSpecs.Gloas.isInInactivityLeak (pureState e)) = true →
+      baseRewardE e (UInt64.ofNat a) * EthCLSpecs.Gloas.Const.participationFlagWeights[f]! *
+        usiE f e < 2 ^ 64)
+  let Rel' : List Nat → MProd (List Nat) (List Nat) → MProd (Array UInt64) (Array UInt64) →
+      Prop := fun rest b c => Rel rest b c ∧ ∀ j ∈ el, j ∉ rest → Good j
+  have hsim := forIn_sim_spec _ (fun (i : Nat) c => flagStepE e f c (UInt64.ofNat i)) Rel' ?_ el _
     ⟨Array.replicate e.validators.val.size 0, Array.replicate e.validators.val.size 0⟩ r ?_ hr
-  · obtain ⟨h1, h2, -, -⟩ := hsim
+  · obtain ⟨⟨h1, h2, -, -⟩, hgood⟩ := hsim
     rw [hel', List.foldl_map] at h1 h2
     simp only [UInt64.ofNat_toNat] at h1 h2
-    exact ⟨h2, h1⟩
-  · intro a rest b c st hrel hbody
+    refine ⟨?_, h2, h1⟩
+    have hw64 : EthCLSpecs.Gloas.Const.participationFlagWeights[f]! < 2 ^ 64 :=
+      Nat.lt_of_le_of_lt (participationFlagWeights_le f hf) (by decide)
+    refine getFlagIndexDeltas_eq hpp e f huspE hw64 (fun vi hvi => ?_)
+    have hG := hgood vi.toNat (by rw [hel']; exact List.mem_map_of_mem hvi) (by simp)
+    simp only [Good, UInt64.ofNat_toNat] at hG
+    obtain ⟨h26, hG2⟩ := hG
+    have hwle := participationFlagWeights_le f hf
+    refine ⟨by omega, Nat.lt_of_le_of_lt (Nat.mul_le_mul_left _ hwle) h26, hG2⟩
+  · intro a rest b c st hrel' hbody
+    obtain ⟨hrel, hga⟩ := hrel'
+    have hG : Good a := by
+      obtain ⟨br, hbr, hbody⟩ := bind_ok_inv hbody
+      have ha := (hrel.2.2.1 a (by simp)).2.2
+      have hbr' := get_base_reward_eq hpp e a ha hbr
+      have hsmall := get_base_reward_small hpp e a hbr
+      rw [hbr'] at hsmall
+      refine ⟨hsmall, fun hin hl => ?_⟩
+      have haN : (UInt64.ofNat a).toNat = a := UInt64.toNat_ofNat_of_lt'
+        (Nat.lt_trans ha (Nat.lt_of_le_of_lt e.validators.property hp.validatorRegistryLimit))
+      have hin' : a ∈ usp := by
+        rw [husp']
+        have := (mem_map_toNat_iff _ _).mpr hin
+        rwa [haN] at this
+      rw [if_pos hin'] at hbody
+      obtain ⟨lk, hlk, hbody⟩ := bind_ok_inv hbody
+      have hlk' := is_in_inactivity_leak_ok hpp e hlk
+      rw [if_pos (by rw [hlk']; exact hl)] at hbody
+      obtain ⟨m1, hm1, hbody⟩ := bind_ok_inv hbody
+      obtain ⟨rn, hrn, -⟩ := bind_ok_inv hbody
+      obtain ⟨hm1v, -⟩ := uint64Mul_ok_lt hm1
+      obtain ⟨-, hrnlt⟩ := uint64Mul_ok_lt hrn
+      rw [hm1v, husi', hbr', hw', ← husb'] at hrnlt
+      simpa [usiE, hp.effectiveBalanceIncrement] using hrnlt
+    suffices H : ∃ b', st = .yield b' ∧ Rel rest b' (flagStepE e f c (UInt64.ofNat a)) by
+      obtain ⟨b', h1, h2⟩ := H
+      refine ⟨b', h1, h2, fun j hj hjr => ?_⟩
+      by_cases hja : j = a
+      · subst hja; exact hG
+      · exact hga j hj (by simp [hja, hjr])
     obtain ⟨hb1, hb2, hz, hnd⟩ := hrel
     obtain ⟨hza1, hza2, ha⟩ := hz a (by simp)
     have haN : (UInt64.ofNat a).toNat = a := UInt64.toNat_ofNat_of_lt' (Nat.lt_trans ha hsize)
@@ -342,7 +467,8 @@ theorem flag_deltas_etheorem (e : EState) (f : Nat) (hf : f < 3) {R P : List Nat
         refine ⟨_, rfl, ?_⟩
         simp only [hin', Bool.false_eq_true, if_false, ← hhead, hh]
         exact ⟨hb1, hb2, fun j hj => hz j (by simp [hj]), hnd'⟩
-  · refine ⟨by simp [absEState_validators], by simp [absEState_validators], ?_, ?_⟩
+  · refine ⟨⟨by simp [absEState_validators], by simp [absEState_validators], ?_, ?_⟩,
+      fun j hj hjr => absurd hj hjr⟩
     · intro j hj
       rw [hel'] at hj
       obtain ⟨vi, hvi, rfl⟩ := List.mem_map.mp hj
@@ -369,26 +495,44 @@ def inactPenE (e : EState) : Array UInt64 :=
     (Array.replicate e.validators.val.size 0)
 
 omit hpp in
-theorem getInactivityPenaltyDeltas_eq (e : EState) :
-    EthCLSpecs.Gloas.getInactivityPenaltyDeltas (pureState e) = inactPenE e := by
+/-- Etheorem's `get_inactivity_penalty_deltas` returns `inactPenE` when each score it reads is in
+bounds and each product `effective_balance * inactivity_scores[index]` fits in `uint64`. -/
+theorem getInactivityPenaltyDeltas_eq (e : EState)
+    (hmt : EthCLSpecs.Gloas.getUnslashedParticipatingIndices (pureState e)
+      EthCLSpecs.Gloas.Const.timelyTargetFlagIndex (EthCLSpecs.Gloas.previousEpochOf (pureState e)) =
+        .ok (Eus EthCLSpecs.Gloas.Const.timelyTargetFlagIndex e))
+    (hb : ∀ vi ∈ (EthCLSpecs.Gloas.getEligibleValidatorIndices (pureState e)).toList,
+      (Eus EthCLSpecs.Gloas.Const.timelyTargetFlagIndex e).contains vi = false →
+        vi.toNat < e.inactivityScores.val.size ∧
+          e.validators[vi.toNat]!.effectiveBalance.toNat * e.inactivityScores[vi.toNat]!.toNat <
+            2 ^ 64) :
+    EthCLSpecs.Gloas.getInactivityPenaltyDeltas (pureState e) = .ok (inactPenE e) := by
   unfold EthCLSpecs.Gloas.getInactivityPenaltyDeltas inactPenE
-  simp only [Id.run, view_uncachedBox]
-  rw [← Array.forIn_toList]
-  have hbody : (fun (vi : UInt64) (r : Array UInt64) =>
-      if (!(Eus EthCLSpecs.Gloas.Const.timelyTargetFlagIndex e).contains vi) = true then
-        (do pure PUnit.unit; pure (ForInStep.yield (r.set! vi.toNat (UInt64.ofNat
-          (e.validators[vi.toNat]!.effectiveBalance.toNat * e.inactivityScores[vi.toNat]!.toNat /
-            (EthCLSpecs.Gloas.Const.inactivityScoreBias.toNat *
-              EthCLSpecs.Gloas.Const.inactivityPenaltyQuotientBellatrix))))) : Id _)
-      else (do pure PUnit.unit; pure (ForInStep.yield r))) =
-      fun vi r => pure (ForInStep.yield (inactPenStepE e r vi)) := by
-    funext vi r; unfold inactPenStepE; split <;> rfl
-  rw [hbody, List.forIn_pure_yield_eq_foldl]
-  rfl
+  simp only [view_uncachedBox]
+  rw [hmt, ok_bind, ← Array.forIn_toList, forIn_except_ok _ (fun vi acc => inactPenStepE e acc vi)]
+  · rfl
+  · intro vi hvi acc
+    unfold inactPenStepE
+    by_cases hin : (Eus EthCLSpecs.Gloas.Const.timelyTargetFlagIndex e).contains vi = true
+    · simp only [hin, Bool.not_true, Bool.false_eq_true, if_false]
+      rfl
+    · have hin' : (Eus EthCLSpecs.Gloas.Const.timelyTargetFlagIndex e).contains vi = false := by
+        simpa using hin
+      obtain ⟨hlt, hmul⟩ := hb vi hvi hin'
+      have hq : e.inactivityScores.val[vi.toNat]? = some e.inactivityScores[vi.toNat]! := by
+        rw [sszList_getElem!_val, getElem!_pos e.inactivityScores.val _ hlt]
+        exact Array.getElem?_eq_getElem hlt
+      simp only [hin', Bool.not_false, if_true]
+      simp only [sszGetIdx, hq, liftErr, MonadExcept.ofExcept, Except.mapError]
+      simp only [pure, Except.pure, ok_bind]
+      rw [checkedMul_of_lt _ _ _ hmul]
+      simp only [pure, Except.pure, ok_bind]
+      rw [UInt64.toNat_mul, Nat.mod_eq_of_lt (by simpa [UInt64.size] using hmul)]
 
 /-- `get_inactivity_penalty_deltas` equals Etheorem's. -/
 theorem inact_deltas_etheorem (e : EState) {R P : List Nat}
     (h : Spec.get_inactivity_penalty_deltas p (absEState e) = .ok (R, P)) :
+    EthCLSpecs.Gloas.getInactivityPenaltyDeltas (pureState e) = .ok (inactPenE e) ∧
     R = List.replicate e.validators.val.size 0 ∧ P = (inactPenE e).toList.map UInt64.toNat := by
   have hp := hpp.toPresetAgrees
   have hsize : e.validators.val.size < 2 ^ 64 :=
@@ -401,19 +545,59 @@ theorem inact_deltas_etheorem (e : EState) {R P : List Nat}
   obtain ⟨r, hr, h⟩ := bind_ok_inv h
   simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
   obtain ⟨rfl, rfl⟩ := h
-  refine ⟨by simp [absEState_validators], ?_⟩
   have hel' := get_eligible_validator_indices_ok hp e hel
-  have hmt' := get_unslashed_participating_indices_ok hp e 1 (by decide) _ hmt
+  obtain ⟨hmtE, hmt'⟩ := get_unslashed_participating_indices_ok hp e 1 (by decide) _ hmt
   let Rel : List Nat → List Nat → Array UInt64 → Prop :=
     fun rest b c => b = c.toList.map UInt64.toNat ∧
       (∀ j ∈ rest, c[j]! = 0 ∧ j < e.validators.val.size) ∧ rest.Nodup
-  have hsim := forIn_sim_spec _ (fun (i : Nat) c => inactPenStepE e c (UInt64.ofNat i)) Rel ?_ el _
+  -- The score read and the product that Etheorem checks, read off the reference step of `a`.
+  let Good : Nat → Prop := fun a =>
+    (Eus 1 e).contains (UInt64.ofNat a) = false →
+      (UInt64.ofNat a).toNat < e.inactivityScores.val.size ∧
+        e.validators[(UInt64.ofNat a).toNat]!.effectiveBalance.toNat *
+          e.inactivityScores[(UInt64.ofNat a).toNat]!.toNat < 2 ^ 64
+  let Rel' : List Nat → List Nat → Array UInt64 → Prop :=
+    fun rest b c => Rel rest b c ∧ ∀ j ∈ el, j ∉ rest → Good j
+  have hsim := forIn_sim_spec _ (fun (i : Nat) c => inactPenStepE e c (UInt64.ofNat i)) Rel' ?_ el _
     (Array.replicate e.validators.val.size 0) r ?_ hr
-  · obtain ⟨h1, -, -⟩ := hsim
+  · obtain ⟨⟨h1, -, -⟩, hgood⟩ := hsim
     rw [hel', List.foldl_map] at h1
     simp only [UInt64.ofNat_toNat] at h1
-    exact h1
-  · intro a rest b c st hrel hbody
+    refine ⟨getInactivityPenaltyDeltas_eq e hmtE (fun vi hvi hin => ?_), by simp [absEState_validators], h1⟩
+    have hG := hgood vi.toNat (by rw [hel']; exact List.mem_map_of_mem hvi) (by simp)
+    simp only [Good, UInt64.ofNat_toNat] at hG
+    exact hG hin
+  · intro a rest b c st hrel' hbody
+    obtain ⟨hrel, hga⟩ := hrel'
+    have hG : Good a := by
+      intro hin
+      have ha := (hrel.2.1 a (by simp)).2
+      have haN : (UInt64.ofNat a).toNat = a := UInt64.toNat_ofNat_of_lt' (Nat.lt_trans ha hsize)
+      rw [haN]
+      have hin' : a ∉ mt := by
+        rw [hmt']
+        intro hm
+        have := (mem_map_toNat_iff _ _).mp (by rwa [← haN] at hm)
+        rw [this] at hin
+        cases hin
+      rw [if_pos hin'] at hbody
+      obtain ⟨v, hv, hbody⟩ := bind_ok_inv hbody
+      rw [absEState_validators] at hv
+      obtain ⟨-, rfl⟩ := listGet_map_ok e.validators.val absValidator a hv
+      obtain ⟨sc, hsc, hbody⟩ := bind_ok_inv hbody
+      rw [absEState_inactivity_scores] at hsc
+      obtain ⟨hlt, rfl⟩ := listGet_map_ok e.inactivityScores.val UInt64.toNat a hsc
+      obtain ⟨num, hnum, -⟩ := bind_ok_inv hbody
+      obtain ⟨-, hnumlt⟩ := uint64Mul_ok_lt hnum
+      refine ⟨hlt, ?_⟩
+      rw [sszList_getElem!_val, sszList_getElem!_val]
+      exact hnumlt
+    suffices H : ∃ b', st = .yield b' ∧ Rel rest b' (inactPenStepE e c (UInt64.ofNat a)) by
+      obtain ⟨b', h1, h2⟩ := H
+      refine ⟨b', h1, h2, fun j hj hjr => ?_⟩
+      by_cases hja : j = a
+      · subst hja; exact hG
+      · exact hga j hj (by simp [hja, hjr])
     obtain ⟨hb, hz, hnd⟩ := hrel
     obtain ⟨hza, ha⟩ := hz a (by simp)
     have haN : (UInt64.ofNat a).toNat = a := UInt64.toNat_ofNat_of_lt' (Nat.lt_trans ha hsize)
@@ -477,7 +661,7 @@ theorem inact_deltas_etheorem (e : EState) {R P : List Nat}
         obtain ⟨z, hj'⟩ := hz j (by simp [hj])
         refine ⟨?_, hj'⟩
         rw [haN, getElem!_set!_ne _ _ _ _ (hrest j hj)]; exact z
-  · refine ⟨by simp [absEState_validators], ?_, ?_⟩
+  · refine ⟨⟨by simp [absEState_validators], ?_, ?_⟩, fun j hj hjr => absurd hj hjr⟩
     · intro j hj
       rw [hel'] at hj
       obtain ⟨vi, hvi, rfl⟩ := List.mem_map.mp hj
@@ -734,10 +918,10 @@ theorem rewards_etheorem (e : EState) {s' : Spec.BeaconState}
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
     obtain ⟨d0, d1, d2, h0, h1, h2, rfl⟩ := mapM_three _ hfd
-    obtain ⟨hd0r, hd0p⟩ := flag_deltas_etheorem hpp e 0 (by decide) (R := d0.1) (P := d0.2) h0
-    obtain ⟨hd1r, hd1p⟩ := flag_deltas_etheorem hpp e 1 (by decide) (R := d1.1) (P := d1.2) h1
-    obtain ⟨hd2r, hd2p⟩ := flag_deltas_etheorem hpp e 2 (by decide) (R := d2.1) (P := d2.2) h2
-    obtain ⟨hdir, hdip⟩ := inact_deltas_etheorem hpp e (R := idl.1) (P := idl.2) hid
+    obtain ⟨hE0, hd0r, hd0p⟩ := flag_deltas_etheorem hpp e 0 (by decide) (R := d0.1) (P := d0.2) h0
+    obtain ⟨hE1, hd1r, hd1p⟩ := flag_deltas_etheorem hpp e 1 (by decide) (R := d1.1) (P := d1.2) h1
+    obtain ⟨hE2, hd2r, hd2p⟩ := flag_deltas_etheorem hpp e 2 (by decide) (R := d2.1) (P := d2.2) h2
+    obtain ⟨hEi, hdir, hdip⟩ := inact_deltas_etheorem hpp e (R := idl.1) (P := idl.2) hid
     simp only [List.cons_append, List.nil_append, List.forIn_cons, List.forIn_nil] at hr
     have hlen : (absEState e).validators.length = e.validators.val.size := by simp
     rw [hlen] at hr
@@ -800,15 +984,17 @@ theorem rewards_etheorem (e : EState) {s' : Spec.BeaconState}
     · have hmap : (List.range 3).mapM (fun f => EthCLSpecs.Gloas.getFlagIndexDeltas (pureState e) f) =
           .ok [flagDeltasE e 0, flagDeltasE e 1, flagDeltasE e 2] := by
         simp only [show List.range 3 = [0, 1, 2] from rfl, List.mapM_cons, List.mapM_nil,
-          getFlagIndexDeltas_eq hpp]
+          hE0, hE1, hE2]
         rfl
       have hget : ∀ w : EState, (get : GloasRun _).run (pureState w) = .ok (pureState w, pureState w) :=
         fun _ => rfl
       have hset : ∀ (x y : EthCLSpecs.Gloas.State), (set x : GloasRun PUnit).run y = .ok ((), x) :=
         fun _ _ => rfl
       rw [run_bind, run_liftErr_of_ok _ _ (by rw [hmap]; rfl), except_bind_ok]
+      dsimp only
+      rw [run_bind, run_liftErr_of_ok _ _ (by rw [hEi]; rfl), except_bind_ok]
       simp only [List.forIn_cons, List.forIn_nil, run_bind, hget, except_bind_ok, hrun0, hrun1, hrun2,
-        hset, run_pure, view_uncachedBox, getInactivityPenaltyDeltas_eq]
+        hset, run_pure, view_uncachedBox]
       rw [show e.validators.size = e.validators.val.size from rfl, hrun3]
       rfl
     · have h4 : W4 = { W3 with balances := W4.balances } := by rw [← hW4]; exact foldl_applyStepE _ _ _ _

@@ -62,6 +62,19 @@ theorem foldl_push_filter {α : Type} (c : α → Bool) : ∀ (l : List α) (acc
   | nil => intro acc; simp
   | cons i l ih => intro acc; by_cases hc : c i <;> simp [hc, ih]
 
+/-- A loop in `Except` whose every step yields `step b a` runs as the fold of `step`. -/
+theorem forIn_except_yield {ε α β : Type} (step : β → α → β) :
+    ∀ (l : List α) (body : α → β → Except ε (ForInStep β)) (init : β),
+      (∀ a ∈ l, ∀ b, body a b = .ok (.yield (step b a))) →
+      forIn l init body = .ok (l.foldl step init) := by
+  intro l
+  induction l with
+  | nil => intro body init _; rfl
+  | cons a l ih =>
+    intro body init hb
+    rw [List.forIn_cons, hb a (by simp) init]
+    exact ih body _ (fun a' ha' b => hb a' (by simp [ha']) b)
+
 /-! ## `Except` binds -/
 
 @[simp] theorem ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) :
@@ -112,6 +125,11 @@ structure PassesPresetAgrees [EthCLSpecs.Fulu.Config] (p : Spec.Preset) : Prop
   slotsPerEpochTwo : 2 ≤ p.SLOTS_PER_EPOCH
   epochsPerSlashingsVectorLt : p.EPOCHS_PER_SLASHINGS_VECTOR < 2 ^ 63
   proportionalSlashingMultiplierLt : p.PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX < 2 ^ 64
+  /-- The increment and the base reward factor of mainnet and minimal. With them the base reward is
+  at most `1 / 256` of the effective balance (`rewardsBaseReward_bound`), so Etheorem's product
+  `base_reward * weight` fits in `uint64`. -/
+  effectiveBalanceIncrementEq : p.EFFECTIVE_BALANCE_INCREMENT = 1000000000
+  baseRewardFactorEq : p.BASE_REWARD_FACTOR = 64
 
 /-- A loop that writes a plain state on each step runs as a fold over plain states. -/
 theorem forIn_pureState {α : Type} (G : α → EState → EState)
@@ -149,26 +167,54 @@ def eParticipation (e : EState) (epoch : UInt64) :
   if epoch == EthCLSpecs.Fulu.computeEpochAtSlot e.slot then e.currentEpochParticipation
   else e.previousEpochParticipation
 
-theorem getUnslashedParticipatingIndices_toList (e : EState) (flag : Nat) (epoch : UInt64) :
-    (EthCLSpecs.Fulu.getUnslashedParticipatingIndices (pureState e) flag epoch).toList =
-      (EthCLSpecs.Fulu.getActiveValidatorIndices (pureState e) epoch).toList.filter
-        (fun i => hasFlag (eParticipation e epoch)[i.toNat]! flag &&
-          !(e.validators[i.toNat]!).slashed) := by
+/-- The participating indices of `flag` that Etheorem returns, when every participation read is
+in bounds. -/
+def eUnslashed (e : EState) (flag : Nat) (epoch : UInt64) : Array UInt64 :=
+  (EthCLSpecs.Fulu.getActiveValidatorIndices (pureState e) epoch).filter
+    (fun i => hasFlag (eParticipation e epoch)[i.toNat]! flag && !(e.validators[i.toNat]!).slashed)
+
+/-- Etheorem's `getUnslashedParticipatingIndices` returns `eUnslashed` when the participation
+list covers every active index. Etheorem reads `epoch_participation[i]` with `sszGetIdx`, which
+rejects past the end, as the spec's `IndexError` does. -/
+theorem getUnslashedParticipatingIndices_ok (e : EState) (flag : Nat) (epoch : UInt64)
+    (hlt : ∀ i ∈ (EthCLSpecs.Fulu.getActiveValidatorIndices (pureState e) epoch).toList,
+      i.toNat < (eParticipation e epoch).val.size) :
+    EthCLSpecs.Fulu.getUnslashedParticipatingIndices (pureState e) flag epoch =
+      .ok (eUnslashed e flag epoch) := by
   unfold EthCLSpecs.Fulu.getUnslashedParticipatingIndices
-  simp only [Id.run, view_uncachedBox]
+  simp only [view_uncachedBox]
   rw [← Array.forIn_toList]
-  have hbody : ∀ (part : SSZList EthCLSpecs.Fulu.ParticipationFlags
-      EthCLSpecs.Fulu.Const.validatorRegistryLimit),
-      (fun (i : UInt64) (r : Array UInt64) =>
-        if (hasFlag part[i.toNat]! flag && !(e.validators[i.toNat]!).slashed) = true then
-          (do pure PUnit.unit; pure (ForInStep.yield (r.push i)) : Id _)
-        else (do pure PUnit.unit; pure (ForInStep.yield r))) =
-      fun i r => pure (ForInStep.yield
-        (if (hasFlag part[i.toNat]! flag && !(e.validators[i.toNat]!).slashed) = true then r.push i
-         else r)) := by
-    intro part; funext i r; split <;> rfl
-  rw [hbody, List.forIn_pure_yield_eq_foldl]
-  exact (foldl_push_filter _ _ #[]).trans (by simp [eParticipation])
+  have hpart : (if (epoch == EthCLSpecs.Fulu.computeEpochAtSlot e.slot) = true then
+      e.currentEpochParticipation else e.previousEpochParticipation) = eParticipation e epoch := rfl
+  rw [hpart, forIn_except_yield (fun r i => if (hasFlag (eParticipation e epoch)[i.toNat]! flag &&
+      !(e.validators[i.toNat]!).slashed) = true then r.push i else r)]
+  · show Except.ok _ = _
+    congr 1
+    apply Array.toList_inj.mp
+    rw [foldl_push_filter, eUnslashed, Array.toList_filter]
+    simp
+  · intro i hi r
+    have hget : (sszGetIdx (eParticipation e epoch) i.toNat :
+        Except StateTransitionError EthCLSpecs.Fulu.ParticipationFlags) =
+        .ok (eParticipation e epoch)[i.toNat]! := by
+      have hl := hlt i hi
+      simp [sszGetIdx, liftErr, MonadExcept.ofExcept, Except.mapError, hl]
+      rfl
+    rw [hget, ok_bind]
+    split <;> rfl
+
+/-- Every validator active in the previous epoch is eligible. -/
+theorem active_prev_mem_eligible (e : EState) (i : UInt64)
+    (hi : i ∈ (EthCLSpecs.Fulu.getActiveValidatorIndices (pureState e)
+      (EthCLSpecs.Fulu.previousEpochOf (pureState e))).toList) :
+    i ∈ (EthCLSpecs.Fulu.getEligibleValidatorIndices (pureState e)).toList := by
+  unfold EthCLSpecs.Fulu.getActiveValidatorIndices at hi
+  unfold EthCLSpecs.Fulu.getEligibleValidatorIndices
+  rw [indicesWhere_toList] at hi ⊢
+  obtain ⟨j, hj, rfl⟩ := List.mem_map.mp hi
+  refine List.mem_map.mpr ⟨j, ?_, rfl⟩
+  rw [List.mem_filter] at hj ⊢
+  exact ⟨hj.1, by simp only [Bool.or_eq_true]; exact Or.inl hj.2⟩
 
 variable [EthCLSpecs.Fulu.Config] {p : Spec.Preset} (hp : PresetAgrees p)
 include hp
@@ -192,9 +238,9 @@ epoch is not the previous or the current one. Etheorem has no such assert. -/
 theorem get_unslashed_participating_indices_ok (e : EState) (flag : Nat) (hflag : flag < 3)
     (epoch : UInt64) {l : List Nat}
     (h : Spec.get_unslashed_participating_indices p (absEState e) flag epoch.toNat = .ok l) :
-    l = (EthCLSpecs.Fulu.getUnslashedParticipatingIndices (pureState e) flag epoch).toList.map
-      UInt64.toNat := by
-  rw [getUnslashedParticipatingIndices_toList]
+    EthCLSpecs.Fulu.getUnslashedParticipatingIndices (pureState e) flag epoch =
+      .ok (eUnslashed e flag epoch) ∧
+    l = (eUnslashed e flag epoch).toList.map UInt64.toNat := by
   unfold Spec.get_unslashed_participating_indices at h
   rw [get_previous_epoch_eq hp, get_current_epoch_eq hp] at h
   simp only [bind, Except.bind] at h
@@ -250,6 +296,15 @@ theorem get_unslashed_participating_indices_ok (e : EState) (flag : Nat) (hflag 
   subst hpart'
   obtain ⟨hQ1, rfl⟩ := foldlM_filterStep_inv _ _ _ _ _ h1
   obtain ⟨-, rfl⟩ := foldlM_filterStep_inv _ _ _ _ _ h2
+  refine ⟨getUnslashedParticipatingIndices_ok e flag epoch ?_, ?_⟩
+  · -- Each participation read of the reference succeeds, so it is in bounds.
+    intro i hi
+    have hP1 := hQ1 i.toNat (List.mem_map_of_mem hi)
+    simp only [bind, Except.bind] at hP1
+    cases hg : Spec.listGet (eParticipation e epoch).val.toList i.toNat with
+    | error err => rw [hg] at hP1; cases hP1
+    | ok f => exact (listGet_map_ok _ id _ (by simpa using hg)).1
+  rw [eUnslashed, Array.toList_filter]
   simp only [List.nil_append, List.map_id, List.filter_filter, List.filter_map]
   congr 1
   apply List.filter_congr
@@ -369,6 +424,8 @@ theorem passesPresetAgrees_mainnet : PassesPresetAgrees Spec.Preset.mainnet wher
   slotsPerEpochTwo := by decide
   epochsPerSlashingsVectorLt := by decide
   proportionalSlashingMultiplierLt := by decide
+  effectiveBalanceIncrementEq := rfl
+  baseRewardFactorEq := rfl
 end
 
 section
@@ -385,6 +442,8 @@ theorem passesPresetAgrees_minimal : PassesPresetAgrees Spec.Preset.minimal wher
   slotsPerEpochTwo := by decide
   epochsPerSlashingsVectorLt := by decide
   proportionalSlashingMultiplierLt := by decide
+  effectiveBalanceIncrementEq := rfl
+  baseRewardFactorEq := rfl
 end
 
 end EpochProofs.Etheorem.Fulu

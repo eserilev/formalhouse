@@ -11,9 +11,9 @@ the same `get!` read.
 
 Each lemma has the form "if the reference returns `r`, then Etheorem's value reads as `r`".
 
-Etheorem's `compute_balance_weighted_selection` stops after `10^7` passes. pyspec loops until
-it has `size` items. So `compute_balance_weighted_selection_ok` assumes that Etheorem's result
-has `size` items.
+Etheorem's `compute_balance_weighted_selection` counts its passes with the spec's `uint64`
+counter and raises at `2^64`, as pyspec does. So `compute_balance_weighted_selection_ok` needs no
+condition on Etheorem's result: when the reference returns, Etheorem returns the same items.
 -/
 
 namespace EpochProofs.Etheorem
@@ -599,6 +599,56 @@ theorem mapM_ok_map {ε α β : Type} (f : α → Except ε β) (g : α → β) 
     rfl
 
 omit [EthCLSpecs.Gloas.Preset] [HasherTag] in
+/-- `mapM_ok_map` for a second fallible map. The reference maps `f` over `l.map φ`. If each
+reference step that returns `b` has an Etheorem step `g` that returns `c` with `b = k c`, then `g`
+returns on all of `l`, and `k` maps its result to the reference's. -/
+theorem mapM_ok_rel {ε ε' α β γ δ : Type} (f : γ → Except ε β) (g : α → Except ε' δ)
+    (k : δ → β) (φ : α → γ) (l : List α) {r : List β}
+    (hf : ∀ a ∈ l, ∀ b, f (φ a) = .ok b → ∃ c, g a = .ok c ∧ b = k c)
+    (h : (l.map φ).mapM f = .ok r) : ∃ cs, l.mapM g = .ok cs ∧ r = cs.map k := by
+  induction l generalizing r with
+  | nil =>
+    simp only [List.map_nil, List.mapM_nil, pure, Except.pure, Except.ok.injEq] at h
+    exact ⟨[], rfl, by simp [← h]⟩
+  | cons a l ih =>
+    rw [List.map_cons, List.mapM_cons, except_bind_eq_ok] at h
+    obtain ⟨b, hb, h⟩ := h
+    rw [except_bind_eq_ok] at h
+    obtain ⟨bs, hbs, h⟩ := h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    obtain ⟨c, hc, rfl⟩ := hf a (by simp) b hb
+    obtain ⟨cs, hcs, rfl⟩ := ih (fun a ha b hb => hf a (by simp [ha]) b hb) hbs
+    refine ⟨c :: cs, ?_, rfl⟩
+    rw [List.mapM_cons, hc, except_bind_ok, hcs, except_bind_ok]
+    rfl
+
+omit [EthCLSpecs.Gloas.Preset] [HasherTag] in
+theorem except_map_eq_ok {ε α β : Type} {f : α → β} {x : Except ε α} {b : β} :
+    (f <$> x) = .ok b ↔ ∃ a, x = .ok a ∧ f a = b := by
+  cases x <;> simp [Functor.map, Except.map]
+
+omit [EthCLSpecs.Gloas.Preset] [HasherTag] in
+/-- A successful `mapM` keeps the length of the list. -/
+theorem mapM_length_eq {ε α β : Type} {f : α → Except ε β} :
+    ∀ {l : List α} {r : List β}, l.mapM f = .ok r → r.length = l.length := by
+  intro l
+  induction l with
+  | nil =>
+    intro r h
+    simp only [List.mapM_nil, pure, Except.pure, Except.ok.injEq] at h
+    simp [← h]
+  | cons a l ih =>
+    intro r h
+    rw [List.mapM_cons, except_bind_eq_ok] at h
+    obtain ⟨b, -, h⟩ := h
+    rw [except_bind_eq_ok] at h
+    obtain ⟨bs, hbs, h⟩ := h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    simp [ih hbs]
+
+omit [EthCLSpecs.Gloas.Preset] [HasherTag] in
 /-- An array read through the `toNat` map. -/
 theorem map_toNat_getElem! (A : Array UInt64) (k : Nat) (hk : k < A.size) :
     (A.toList.map UInt64.toNat)[k]! = (A[k]!).toNat := by
@@ -629,48 +679,41 @@ structure CommitteePresetAgrees (p : Spec.Preset) : Prop where
 
 /-! ## The balance weighted selection -/
 
-/-- The selection loop equals Etheorem's `cbwsAux`, one pass at a time. `fuel` is Etheorem's
-pass limit and `ourFuel` the reference's. The two agree when Etheorem's result has `size`
-items. -/
+omit [EthCLSpecs.Gloas.Preset] [HasherTag] in
+/-- The reference's `uint64` counter is below `UInt64.size`, so Etheorem's overflow guard at the
+top of `cbwsAux` does not fire. -/
+theorem cbws_counter_lt {i : Nat} (hi : i < 2 ^ 64) : ¬ UInt64.size ≤ i := by
+  simp only [UInt64.size]; omega
+
+/-- The selection loop equals Etheorem's `cbwsAux`, one pass at a time. `ourFuel` is the
+reference's pass limit. Both loops count passes with the same `uint64` counter `i`, so when the
+reference returns, Etheorem returns the same items. -/
 theorem selection_loop_lockstep (p : Spec.Preset) (o : Spec.Oracle)
     (ho : ∀ d, o.hash d = etheoremHash d) (hc : CommitteePresetAgrees p)
     (idxArr : Array UInt64) (seed : Spec.Bytes32) (size : Nat) (shuffle : Bool)
     (effBals : Array Nat) :
-    ∀ (fuel ourFuel : Nat) (sel : Array UInt64) (i : Nat) (rb : Spec.Bytes32) (erb : ByteArray)
+    ∀ (ourFuel : Nat) (sel : Array UInt64) (i : Nat) (rb : Spec.Bytes32) (erb : ByteArray)
       (r : List Nat), i < 2 ^ 64 → (i % 16 = 0 ∨ rb = bytesToRoot erb) →
       Spec.compute_balance_weighted_selection_loop p o (idxArr.toList.map UInt64.toNat) seed size
         shuffle idxArr.size effBals.toList ourFuel (sel.toList.map UInt64.toNat) i rb = .ok r →
-      size ≤ (EthCLSpecs.Gloas.cbwsAux (idxArr.map UInt64.toNat) effBals
+      ∃ res, EthCLSpecs.Gloas.cbwsAux (idxArr.map UInt64.toNat) effBals
         (if shuffle then EthCLSpecs.Gloas.computeShuffledPermutation idxArr.size (vecToBytes seed)
           else #[])
-        (vecToBytes seed) idxArr.size size shuffle fuel i erb sel).size →
-      r = (EthCLSpecs.Gloas.cbwsAux (idxArr.map UInt64.toNat) effBals
-        (if shuffle then EthCLSpecs.Gloas.computeShuffledPermutation idxArr.size (vecToBytes seed)
-          else #[])
-        (vecToBytes seed) idxArr.size size shuffle fuel i erb sel).toList.map UInt64.toNat := by
-  intro fuel
-  induction fuel with
+        (vecToBytes seed) idxArr.size size shuffle i erb sel = .ok res ∧
+      r = res.toList.map UInt64.toNat := by
+  intro ourFuel
+  induction ourFuel with
   | zero =>
-    intro ourFuel sel i rb erb r _ _ h hfull
-    simp only [EthCLSpecs.Gloas.cbwsAux] at hfull ⊢
-    cases ourFuel with
-    | zero => exact absurd h (by simp [Spec.compute_balance_weighted_selection_loop])
-    | succ g =>
-      unfold Spec.compute_balance_weighted_selection_loop at h
-      rw [if_neg (by simp; omega)] at h
-      simp only [pure, Except.pure, Except.ok.injEq] at h
-      exact h.symm
-  | succ f ih =>
-    intro ourFuel sel i rb erb r hi hinv h hfull
-    cases ourFuel with
-    | zero => exact absurd h (by simp [Spec.compute_balance_weighted_selection_loop])
-    | succ g =>
+    intro sel i rb erb r _ _ h
+    exact absurd h (by simp [Spec.compute_balance_weighted_selection_loop])
+  | succ g ih =>
+    intro sel i rb erb r hi hinv h
     unfold Spec.compute_balance_weighted_selection_loop at h
-    unfold EthCLSpecs.Gloas.cbwsAux at hfull ⊢
+    rw [EthCLSpecs.Gloas.cbwsAux, if_neg (cbws_counter_lt hi)]
     split at h
     · rename_i hlt
       simp only [List.length_map, Array.length_toList] at hlt
-      rw [if_neg (by omega)] at hfull ⊢
+      rw [if_neg (by omega)]
       simp only [except_bind_eq_ok, pure_bind] at h
       obtain ⟨a, ha, off, hoff, ni, hni, h⟩ := h
       obtain ⟨hh, -⟩ := uint64Mod_eq ha; subst hh
@@ -692,13 +735,13 @@ theorem selection_loop_lockstep (p : Spec.Preset) (o : Spec.Oracle)
           · exfalso; simp at h0; omega
           · exact h1
       rw [hrb] at h
-      simp only [] at hfull ⊢
+      simp only []
       generalize (if (i % 16 * 2 == 0) = true then
-            sha (vecToBytes seed ++ uint64ToBytes (UInt64.ofNat (i / 16))) else erb) = E at h hfull ⊢
+            sha (vecToBytes seed ++ uint64ToBytes (UInt64.ofNat (i / 16))) else erb) = E at h ⊢
       have hoff : i % 16 * 2 + 2 ≤ 32 := by omega
       have hmr : (2 : Nat) ^ 16 - 1 = EthCLSpecs.Gloas.Const.maxRandomValue := rfl
       cases shuffle
-      · simp only [Bool.false_eq_true, if_false] at h hfull ⊢
+      · simp only [Bool.false_eq_true, if_false] at h ⊢
         simp only [except_bind_eq_ok] at h
         obtain ⟨ef, hef, w, hw, rv, hrv, th, hth, h⟩ := h
         obtain ⟨hnx, hef⟩ := listGet_ok hef
@@ -710,9 +753,9 @@ theorem selection_loop_lockstep (p : Spec.Preset) (o : Spec.Oracle)
         subst hef
         rw [getElem!_pos effBals.toList _ (by simpa using hnx)] at h
         simp only [Array.getElem_toList] at h
-        rw [← hmr, hc.maxEffectiveBalanceElectra, getElem!_pos effBals _ hnx] at hfull ⊢
+        rw [← hmr, hc.maxEffectiveBalanceElectra, getElem!_pos effBals _ hnx]
         split at h <;> rename_i hge
-        · rw [if_pos hge] at hfull ⊢
+        · rw [if_pos hge]
           simp only [except_bind_eq_ok] at h
           obtain ⟨x, hx, i1, hi1, h⟩ := h
           obtain ⟨hidx, rfl⟩ := listGet_ok hx
@@ -725,13 +768,13 @@ theorem selection_loop_lockstep (p : Spec.Preset) (o : Spec.Oracle)
               getElem!_pos (idxArr.map UInt64.toNat) _ (by simpa using hidx)]
             simp
           rw [hsel] at h
-          exact ih _ _ _ _ _ _ hi1' (Or.inr rfl) h hfull
-        · rw [if_neg hge] at hfull ⊢
+          exact ih _ _ _ _ _ hi1' (Or.inr rfl) h
+        · rw [if_neg hge]
           simp only [except_bind_eq_ok] at h
           obtain ⟨i1, hi1, h⟩ := h
           obtain ⟨hh, hi1'⟩ := uint64Add_eq hi1; subst hh
-          exact ih _ _ _ _ _ _ hi1' (Or.inr rfl) h hfull
-      · simp only [if_true] at h hfull ⊢
+          exact ih _ _ _ _ _ hi1' (Or.inr rfl) h
+      · simp only [if_true] at h ⊢
         simp only [except_bind_eq_ok] at h
         obtain ⟨nx, hnx, ef, hef, w, hw, rv, hrv, th, hth, h⟩ := h
         obtain ⟨-, hnx⟩ := compute_shuffled_index_ok p o ho hc.shuffleRoundCount
@@ -746,16 +789,16 @@ theorem selection_loop_lockstep (p : Spec.Preset) (o : Spec.Oracle)
         subst hef
         rw [getElem!_pos effBals.toList _ (by simpa using hnx)] at h
         simp only [Array.getElem_toList] at h
-        rw [← hmr, hc.maxEffectiveBalanceElectra, getElem!_pos effBals _ hnx] at hfull ⊢
+        rw [← hmr, hc.maxEffectiveBalanceElectra, getElem!_pos effBals _ hnx]
         split at h <;> rename_i hge
-        · rw [if_pos hge] at hfull ⊢
+        · rw [if_pos hge]
           simp only [except_bind_eq_ok] at h
           obtain ⟨x, hx, i1, hi1, h⟩ := h
           obtain ⟨hidx, rfl⟩ := listGet_ok hx
           obtain ⟨hh, hi1'⟩ := uint64Add_eq hi1; subst hh
           simp only [List.length_map, Array.length_toList] at hidx
           generalize ((EthCLSpecs.Gloas.computeShuffledPermutation idxArr.size (vecToBytes seed))[
-            i % idxArr.size]!).toNat = k at h hidx hfull ⊢
+            i % idxArr.size]!).toNat = k at h hidx ⊢
           have hsel : sel.toList.map UInt64.toNat ++ [(idxArr.toList.map UInt64.toNat)[k]!] =
               (sel.push (UInt64.ofNat ((idxArr.map UInt64.toNat)[k]!))).toList.map
                 UInt64.toNat := by
@@ -763,35 +806,32 @@ theorem selection_loop_lockstep (p : Spec.Preset) (o : Spec.Oracle)
               getElem!_pos (idxArr.map UInt64.toNat) _ (by simpa using hidx)]
             simp
           rw [hsel] at h
-          exact ih _ _ _ _ _ _ hi1' (Or.inr rfl) h hfull
-        · rw [if_neg hge] at hfull ⊢
+          exact ih _ _ _ _ _ hi1' (Or.inr rfl) h
+        · rw [if_neg hge]
           simp only [except_bind_eq_ok] at h
           obtain ⟨i1, hi1, h⟩ := h
           obtain ⟨hh, hi1'⟩ := uint64Add_eq hi1; subst hh
-          exact ih _ _ _ _ _ _ hi1' (Or.inr rfl) h hfull
+          exact ih _ _ _ _ _ hi1' (Or.inr rfl) h
     · rename_i hlt
       simp only [List.length_map, Array.length_toList] at hlt
       rw [if_pos (by omega)]
       simp only [pure, Except.pure, Except.ok.injEq] at h
-      exact h.symm
+      exact ⟨sel, rfl, h.symm⟩
 
-/-- `compute_balance_weighted_selection` equals Etheorem's when Etheorem's result is full.
-
-Etheorem stops after `10^7` passes. pyspec loops until it has `size` items. So the two agree
-when Etheorem's result has `size` items. -/
+/-- `compute_balance_weighted_selection` equals Etheorem's. If the reference returns `r`, Etheorem
+returns the same items. Both loops stop at the same `uint64` counter bound. -/
 theorem compute_balance_weighted_selection_ok (p : Spec.Preset) (o : Spec.Oracle)
     (ho : ∀ d, o.hash d = etheoremHash d) (hc : CommitteePresetAgrees p) (e : EState)
     (idxArr : Array UInt64) (seed : Spec.Bytes32) (size : Nat) (shuffle : Bool) {r : List Nat}
-    (hfull : size ≤ (EthCLSpecs.Gloas.computeBalanceWeightedSelection (pureState e) idxArr
-      (vecToBytes seed) size shuffle).size)
     (h : Spec.compute_balance_weighted_selection p o (absEState e) (idxArr.toList.map UInt64.toNat)
       seed size shuffle = .ok r) :
-    r = (EthCLSpecs.Gloas.computeBalanceWeightedSelection (pureState e) idxArr (vecToBytes seed)
-      size shuffle).toList.map UInt64.toNat := by
+    ∃ res, EthCLSpecs.Gloas.computeBalanceWeightedSelection (pureState e) idxArr (vecToBytes seed)
+      size shuffle = .ok res ∧ r = res.toList.map UInt64.toNat := by
   unfold Spec.compute_balance_weighted_selection at h
   simp only [] at h
   split at h
   · exact absurd h throw_bind_ne_ok
+  rename_i htot
   simp only [pure_bind, except_bind_eq_ok] at h
   obtain ⟨effs, heffs, h⟩ := h
   have heffs' := mapM_ok_map _
@@ -804,16 +844,59 @@ theorem compute_balance_weighted_selection_ok (p : Spec.Preset) (o : Spec.Oracle
     obtain ⟨-, rfl⟩ := listGet_map_ok e.validators.val absValidator v hval
     rfl
   subst heffs'
-  unfold EthCLSpecs.Gloas.computeBalanceWeightedSelection at hfull ⊢
-  simp only [view_uncachedBox] at hfull ⊢
+  have htot' : idxArr.size > 0 := Array.size_pos_iff.mpr (by simpa using htot)
+  unfold EthCLSpecs.Gloas.computeBalanceWeightedSelection
+  simp only [view_uncachedBox, if_pos htot', pure_bind]
   have heff : (idxArr.toList.map UInt64.toNat).map
       (fun v => (e.validators.val[v]!).effectiveBalance.toNat) =
       (idxArr.map (fun vi => (e.validators[vi.toNat]!).effectiveBalance.toNat)).toList := by
     simp [sszList_getElem!_val]
   rw [heff] at h
   simp only [List.length_map, Array.length_toList] at h
-  exact selection_loop_lockstep p o ho hc idxArr seed size shuffle _ _ _ #[] 0 _ _ r
-    (by decide) (Or.inl rfl) h hfull
+  exact selection_loop_lockstep p o ho hc idxArr seed size shuffle _ _ #[] 0 _ _ r
+    (by decide) (Or.inl rfl) h
+
+/-- An `.ok` result of Etheorem's `cbwsAux` holds exactly `size` items, from a start with at most
+`size` items. The loop only returns once `size` items are selected, and each pass adds at most one
+item. `cbwsAux` recurses on `UInt64.size - i`, so the proof inducts on that measure and unfolds
+one pass through the equation lemma. -/
+theorem cbwsAux_ok_size (indices effBals : Array Nat) (perm : Array UInt64) (seed : ByteArray)
+    (total size : Nat) (shuffle : Bool) :
+    ∀ (n i : Nat) (rb : ByteArray) (sel res : Array UInt64), UInt64.size - i = n →
+      sel.size ≤ size →
+      EthCLSpecs.Gloas.cbwsAux indices effBals perm seed total size shuffle i rb sel = .ok res →
+      res.size = size := by
+  intro n
+  induction n with
+  | zero =>
+    intro i rb sel res hn _ h
+    rw [EthCLSpecs.Gloas.cbwsAux, if_pos (by omega)] at h
+    exact absurd h (by simp [throwArithmetic, liftErr, MonadExcept.ofExcept, Except.mapError])
+  | succ m ih =>
+    intro i rb sel res hn hsel h
+    rw [EthCLSpecs.Gloas.cbwsAux, if_neg (by omega)] at h
+    split at h
+    · rename_i hge
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      omega
+    · rename_i hlt
+      refine ih (i + 1) _ _ res (by omega) ?_ h
+      have hite : ∀ (c : Prop) [Decidable c] (x : UInt64),
+          (if c then sel.push x else sel).size ≤ sel.size + 1 := by
+        intro c _ x; split <;> simp
+      exact Nat.le_trans (hite _ _) (by omega)
+
+/-- An `.ok` result of Etheorem's `computeBalanceWeightedSelection` holds exactly `size` items. -/
+theorem computeBalanceWeightedSelection_ok_size (e : EState) (indices : Array UInt64)
+    (seed : ByteArray) (size : Nat) (shuffle : Bool) {res : Array UInt64}
+    (h : EthCLSpecs.Gloas.computeBalanceWeightedSelection (pureState e) indices seed size shuffle =
+      .ok res) : res.size = size := by
+  unfold EthCLSpecs.Gloas.computeBalanceWeightedSelection at h
+  simp only [view_uncachedBox] at h
+  split at h
+  · exact cbwsAux_ok_size _ _ _ _ _ _ _ _ 0 _ #[] res rfl (by simp) h
+  · exact absurd h throw_bind_ne_ok
 /-! ## Seeds and committees -/
 
 section Seeds

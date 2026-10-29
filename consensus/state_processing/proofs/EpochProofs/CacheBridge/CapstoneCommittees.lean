@@ -42,7 +42,7 @@ theorem lighthouse_order_epoch_etheorem_reachable_cached_ptc [EpochProofs.Spec.P
     (hsha : ∀ b : ByteArray, (EthCLLib.Spec.sha b).size = 32) (e : EpochProofs.Etheorem.EState)
     (hin : Spec.EpochInputOk'' Spec.EpochSupply (EpochProofs.Etheorem.absEState e))
     (hpre : Spec.TailPre (EpochProofs.Etheorem.absEState e))
-    (hcond : EpochProofs.Etheorem.EpochCondsIn e) (hsel : EpochProofs.Etheorem.SelectionsFull e)
+    (hcond : EpochProofs.Etheorem.EpochCondsIn e)
     {s' : Spec.BeaconState}
     (h : Spec.process_epoch_lh_order o (EpochProofs.Etheorem.absEState e) = .ok s')
     (c : LhCache)
@@ -91,7 +91,7 @@ theorem lighthouse_order_epoch_etheorem_reachable_cached_ptc [EpochProofs.Spec.P
       ∀ k (hk : k < committees.val.length) l,
         Spec.ptcIndices Spec.P o st epoch (start + k) = .ok l →
           (committees.val[k]).val.map (·.val) = l) :=
-  ⟨lighthouse_order_epoch_etheorem_reachable_cached hpa hhr o ho hsha e hin hpre hcond hsel h c hc total
+  ⟨lighthouse_order_epoch_etheorem_reachable_cached hpa hhr o ho hsha e hin hpre hcond h c hc total
     htotal,
    fun st epoch seed hseed shuffling cps spe hbuilt hspe hn hn24 hfit start hstart committees
       hclen hglue =>

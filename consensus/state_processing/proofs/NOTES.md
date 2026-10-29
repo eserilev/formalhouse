@@ -93,7 +93,7 @@ chain below 8 active validators, not 32.
 | Supply and time bounds | the supply bounds of both runs and `EpochSupply` (in `GloasEpochInput`), `rows` (`RowBounds`, F5), `boundary`, `slot` | `supply`, `econ`, `rows`, `boundary`, `slot` |
 | Reachable-state facts kept outside `EpochInputOk''` | `pubkeys`, `vectors` | `vectors` |
 | True pyspec preconditions | in `committees`: a sync candidate, a proposer candidate (F4), at least 32 active validators (F12) | in `committees`: an active validator at the next epoch and at `current + 2` (no F4, no F12) |
-| Probability facts | in `committees`: each selection ends within `2^64` passes; `selections` (F3) | in `committees`; in `etheorem`: F3 and `ProposerFin` |
+| Probability facts | in `committees`: each selection ends within `2^64` passes | in `committees`; in `etheorem`: `ProposerFin` |
 | Etheorem list limits (alpha.11) | `etheoremRoom`: deposit room (F10), builder withdrawals room (F6) | in `etheorem`: deposit room (F10), historical summaries room |
 | Oracle | `oracle` (SHA-256, the roots, the BLS checks agree with Etheorem), `sha` | `oracle`, `sha` |
 | Cache build facts | arguments: progressive balances `Coherent`, the epoch cache total, `CommitteeCacheBuilt`, pubkey cache `Coherent` with `IndexMapLaws` | none (the Fulu model takes the spec values) |
@@ -505,7 +505,7 @@ at the state before them:
 - `CommPreconds`: the pyspec raises without them. A validator is active at the next epoch (sync
   committee). An active validator at `current + 2` is not slashed (F4). At least
   `SLOTS_PER_EPOCH` validators are active at `current + 2`. Each balance weighted selection
-  ends within `2^64` passes (a fact about the hash values, like F3).
+  ends within `2^64` passes (a fact about the hash values).
 
 `process_ptc_window_few_active_error` proves the third one is a real pyspec halt: with fewer than
 `SLOTS_PER_EPOCH` validators active at `current + 2`, the first slot of that epoch has no
@@ -691,8 +691,8 @@ the deposits and the consolidations. Frame lemmas move two conditions to the epo
 in the registry for the `MAX_PENDING_DEPOSITS_PER_EPOCH` new validators of one epoch (F10), and
 room in the builder withdrawals under Etheorem's alpha.11 limit (F6). The historical summaries
 room is `HistRoom` in `TailPre`: beta.4 keeps the `HISTORICAL_ROOTS_LIMIT` cap, so it is a spec
-condition, not an Etheorem one. The F3 conditions are facts about Etheorem's own output and
-stay.
+condition, not an Etheorem one. The F3 conditions are gone: Etheorem's selection now counts its
+passes with the pyspec's `uint64` counter, so `SelFin` covers it.
 
 The 17 step theorems are in `Etheorem/<Step>.lean`. `etheorem/PLAN.md` lists the conditions of
 `process_epoch_etheorem` and the findings.
@@ -741,7 +741,7 @@ The shared parts:
   steps call, from epoch helpers to `initiate_validator_exit`.
 - `Etheorem/Oracle.lean`: `OracleAgrees`, the Oracle fields that equal Etheorem functions.
 
-The dependency is the fork `eserilev/etheorem`, branch `formalhouse-pin`, at the commit in
+The dependency is the fork `eserilev/etheorem`, branch `formalhouse-pin-cbws`, at the commit in
 `lakefile.toml`. The fork is upstream Etheorem plus these changes:
 
 - The v1.7.0-alpha.9 deposit change (F2): no eth1 bridge check in `process_pending_deposits`, no
@@ -749,6 +749,12 @@ The dependency is the fork `eserilev/etheorem`, branch `formalhouse-pin`, at the
   `process_operations`.
 - A port to Lean v4.31.0: four proof fixes, no `-march=native`, and a KZG lakefile fix that
   finds the BLS library when Etheorem is a dependency.
+- eserilev/etheorem#6: `compute_balance_weighted_selection` asserts `total > 0` and returns an
+  `Except`, and its callers pass the error on.
+- eserilev/etheorem#7: the selection loop counts passes with the pyspec's `uint64` counter and
+  raises at `2^64`, in place of the `10^7` pass limit (F3).
+- eserilev/etheorem#8: the epoch steps use checked `uint64` arithmetic and checked list reads,
+  as the pyspec does.
 
 `etheorem/setup.sh` fetches blst, c-kzg-4844 and ISA-L at Etheorem's pins. ISA-L needs `nasm`.
 
@@ -996,9 +1002,8 @@ stated at the state that the epoch passes to the committee steps (`CommAt`, `Com
 - `EpochSupply` at each epoch input.
 - `HistRoom`: `historical_summaries` below the Lighthouse limit.
 
-### Probability facts (3)
+### Probability facts (2)
 
-- F3: each Etheorem selection returns all its items within `10^7` passes.
 - `SelFin`: each spec selection finishes within `2^64` passes.
 - `ProposerFin`: the Electra proposer loop ends before its last pass.
 

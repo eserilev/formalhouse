@@ -12,7 +12,7 @@ active validators at 2048 ETH) also satisfies the bundles of `FormalhouseReadabl
   theorems then apply there (`sameOk_at_witness`).
 - `gloasChain_witness`, `fuluChain_witness`: `GloasChainAssumptions` (`FuluChainAssumptions`),
   `EtheoremFaithful` and `OracleMatchesEtheorem` hold at `we` (`wef`), given the facts that
-  `NonVacuity.lean` also takes as they are (F3, the Fulu Etheorem conditions, SHA-256 output
+  `NonVacuity.lean` also takes as they are (the Fulu Etheorem conditions, SHA-256 output
   size).
 
 Not covered, as in `NonVacuity.lean`: the runs (`GloasEpochRun`, `FuluEpochRun`, whose supply
@@ -56,13 +56,13 @@ local instance : FuluCfg.Ok := ⟨fuluCompat_minimal⟩
 variable [EthCLLib.Spec.HasherTag] [EthCLLib.Spec.CryptoBackend]
 
 /-- The Gloas chain, Etheorem and oracle bundles hold together at `we`. -/
-theorem gloasChain_witness (hsel : Etheorem.SelectionsFull we)
+theorem gloasChain_witness
     (hsha : ∀ b : ByteArray, (EthCLLib.Spec.sha b).size = 32) :
     ∃ o, GloasChainAssumptions o (Etheorem.absEState we) ∧ EtheoremFaithful we ∧
       OracleMatchesEtheorem o := by
-  obtain ⟨o, ha⟩ := gloasAssumptions_witness hsel hsha
+  obtain ⟨o, ha⟩ := gloasAssumptions_witness hsha
   exact ⟨o, ⟨fun t h => (ha.committees t h).2, ha.rows, ha.slot, ha.boundary.2.2, ha.vectors,
-    fun t h => (ha.committees t h).1⟩, ⟨ha.selections, ha.etheoremRoom⟩, ⟨ha.oracle, ha.sha⟩⟩
+    fun t h => (ha.committees t h).1⟩, ⟨ha.etheoremRoom⟩, ⟨ha.oracle, ha.sha⟩⟩
 
 end GloasEState
 

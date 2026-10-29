@@ -72,8 +72,6 @@ that `processEpoch` is the 17 steps in sequence.
     validators (deposits), one balance for each validator (consolidations), the builder
     withdrawals fit (F6), the historical summaries fit (`HISTORICAL_ROOTS_LIMIT`, kept in
     beta.4).
-  - Facts about Etheorem's own output (F3): its sync committee, proposer and PTC selections
-    return `size` items.
 
 `lighthouse_epoch_etheorem` adds `EpochInputOk'' EpochSupply`, the condition that
 `reachable_state_transition_sameOk'''` proves at each epoch boundary of a reachable state.
@@ -104,7 +102,9 @@ the steps before it.
 - F3 (b). Etheorem's `compute_balance_weighted_selection` stops after 10^7 passes. pyspec loops
   until it has `size` items. Example: every candidate has effective balance 0. A pass selects
   only when `random_value = 0`, one time in 65536. A sync committee then needs about 33.5M
-  passes. Etheorem fills the rest with validator 0.
+  passes. Etheorem fills the rest with validator 0. Fixed on the pin
+  (`formalhouse-pin-cbws`, eserilev/etheorem#7): the loop counts its passes with the pyspec's
+  `uint64` counter, so the selection proofs need no F3 condition.
 - F4 (b and c). Etheorem has no `assert total > 0`. With no candidates it returns validator 0.
   In pyspec the assert raises. Gloas (EIP-8045) drops slashed validators from the proposer
   candidates (gloas:1302). A slashed validator stays active until its exit epoch, `N + 5` or

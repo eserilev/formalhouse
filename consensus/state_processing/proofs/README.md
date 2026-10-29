@@ -64,7 +64,7 @@ theorem lighthouse_gloas_epoch (hpa : EpochPresetAgrees Spec.P)
 
 The hypothesis bundles follow the groups of [What is trusted](#what-is-trusted): the run with
 its supply bounds, the chain assumptions, what Etheorem needs because it differs from the pyspec
-(its alpha.11 list limits F6 and F10, and F3), the oracle, the cache provenance and, for `_rust`,
+(its alpha.11 list limits F6 and F10), the oracle, the cache provenance and, for `_rust`,
 the glue.
 
 The SameOk theorems compare with the hand-written transcription of the pyspec, not with
@@ -104,9 +104,11 @@ processing spec and the fork upgrades (`EpochProofs/Spec/`), not by Etheorem. So
 transcription is trusted for which states count as reachable, though not for the epoch function
 itself.
 
-**Etheorem** is the fork `eserilev/etheorem`, branch `formalhouse-pin`, at the commit in
-`lakefile.toml`. It pins spec v1.7.0-alpha.11, plus the Fulu deposit change of alpha.9 and a
-port to Lean v4.31.0. The transcription follows v1.7.0-beta.4. The Gloas epoch functions have
+**Etheorem** is the fork `eserilev/etheorem`, branch `formalhouse-pin-cbws`, at the commit in
+`lakefile.toml`. It pins spec v1.7.0-alpha.11, plus the Fulu deposit change of alpha.9, a port
+to Lean v4.31.0, and three fixes that make Etheorem raise where the pyspec raises: the
+`assert total > 0` of `compute_balance_weighted_selection`, its `uint64` pass counter, and the
+checked `uint64` arithmetic and list reads of the epoch steps. The transcription follows v1.7.0-beta.4. The Gloas epoch functions have
 the same meaning in both versions. Only the list limits differ, and they are assumptions below.
 
 **Equal** means `absEState`, the map from an Etheorem state to the transcription's state, sends
@@ -125,7 +127,7 @@ stated at the one state that the epoch passes to the committee steps (`Spec.Comm
 epoch 0 with eight active validators at 2048 ETH. Lean computes the epoch on it.
 `gloasAssumptions_witness` and `fuluAssumptions_witness` build `GloasAssumptions` and
 `FuluAssumptions` there, with an oracle that agrees with Etheorem. They take as given only the
-fields that no small witness can settle: Etheorem's selections (F3), SHA-256 returning 32 bytes,
+fields that no small witness can settle: SHA-256 returning 32 bytes,
 and for Fulu the run bounds (`supply`, `econ`) and `FuluEpochConds`. `gloas_spec_witness` and
 `fulu_spec_witness` add the start-state and reachable-state invariants (`FuluStartOk`,
 `EpochInputOk''`) at the same state and show that the spec epoch returns `ok` there. The run
@@ -139,7 +141,7 @@ reachable-state invariants and `HistRoom`). The runs themselves have no witness 
 
 ### Axiom audit
 
-`EpochProofs/Axioms.lean` prints the axioms of 834 theorems, including all the final ones. Each
+`EpochProofs/Axioms.lean` prints the axioms of 845 theorems, including all the final ones. Each
 depends only on `propext`, `Classical.choice` and `Quot.sound`, so none rests on `sorry`
 (`sorryAx`) or `native_decide` (`Lean.ofReduceBool`). CI rebuilds the proofs on every change and
 fails if any audited theorem reports another axiom.
@@ -368,8 +370,8 @@ invariant proofs cover most of the state, but not yet these fields:
 **Hash outputs.** These are facts about hash values. They hold with overwhelming probability,
 and no proof can establish them.
 
-- Each Etheorem balance-weighted selection returns all its items within `10^7` passes (F3).
-- Each spec selection ends within `2^64` passes.
+- Each spec selection ends within `2^64` passes. Etheorem's selection counts its passes with
+  the same `uint64` counter, so this also covers Etheorem (F3 is gone).
 - The Electra proposer loop ends before its last pass.
 
 **Start state.** The Electra state before the Fulu fork satisfies the genesis invariants
@@ -655,8 +657,12 @@ each bid is slow, so a real fix likely caches the advanced state for each parent
 - Etheorem kept the eth1 bridge deposit path in Fulu, which the spec removed in alpha.9 (F2).
   Fixed on the pin and proposed upstream in
   [etheorem#144](https://github.com/etheorem/etheorem/pull/144).
-- Etheorem's balance-weighted selection gives up after `10^7` passes (F3), and several Etheorem
-  functions wrap or return 0 where the pyspec raises. None of these is reachable on a real chain.
+- Etheorem's balance-weighted selection gave up after `10^7` passes (F3). The pin now counts
+  its passes with the pyspec's `uint64` counter, so F3 is no longer a condition.
+- Etheorem's `get_flag_index_deltas` computes `base_reward * weight` for every eligible index,
+  where the pyspec computes it only when it adds a reward or a penalty. The product fits in
+  `uint64` with the mainnet and minimal increment and base reward factor
+  (`get_base_reward_small`), so this changes no result.
 
 ## Error sites
 
