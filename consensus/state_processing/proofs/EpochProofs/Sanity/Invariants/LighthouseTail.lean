@@ -160,14 +160,14 @@ theorem consolidationIndices_lt (s : BeaconState) (hcons : ConsolidationsInRange
   · rcases List.mem_singleton.mp hic with rfl
     exact (hcons c hc).2
 
-/-- `process_epoch_lh_full_sameOk'` at the genesis epoch. Justification and finalization return
+/-- `process_epoch_lh_full_sameResultOrBothFail'` at the genesis epoch. Justification and finalization return
 the state, the spec skips the inactivity and rewards steps, and the single pass skips them
 through `after_genesis`. -/
 theorem process_epoch_lh_full_genesis [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
-    (hexitb : ExitBounds t) (hsupply_t : EpochSupply t) (hvalid : WithdrawableValid t)
+    (hexitb : ExitBounds t) (hsupply_t : EpochBalanceBounds t) (hvalid : WithdrawableValid t)
     (hcons : ConsolidationsInRange t)
     (hgen : t.slot / P.SLOTS_PER_EPOCH = GENESIS_EPOCH) :
-    SameOk (process_epoch_lh_full o t) (process_epoch P o t) := by
+    SameResultOrBothFail (process_epoch_lh_full o t) (process_epoch P o t) := by
   obtain ⟨hinv, hrows, -⟩ := hb
   obtain ⟨hbalance, hsupply, hslashings⟩ := hsupply_t
   have hcurrent : get_current_epoch P t = .ok GENESIS_EPOCH := by
@@ -176,8 +176,8 @@ theorem process_epoch_lh_full_genesis [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t
       Except.pure]
   unfold process_epoch_lh_full
   rw [process_epoch_parts]
-  refine SameOk.bind (lhJustificationAndFinalization_sameOk _ _) (fun s1 h1 => ?_)
-  replace h1 := (lhJustificationAndFinalization_sameOk _ _ s1).mp h1
+  refine SameResultOrBothFail.bind (lhJustificationAndFinalization_sameResultOrBothFail _ _) (fun s1 h1 => ?_)
+  replace h1 := (lhJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1
   have hs1 : s1 = t := by
     unfold process_justification_and_finalization at h1
     simp [hcurrent, GENESIS_EPOCH, bind, Except.bind, pure, Except.pure] at h1
@@ -201,21 +201,21 @@ theorem process_epoch_lh_full_genesis [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t
     fun i h => hexitb _ (List.getElem_mem h)
   have hcfar : GENESIS_EPOCH < FAR_FUTURE_EPOCH := by decide
   -- The four spec steps equal the first Lighthouse pass.
-  have hfour := SameOk.trans (specFourSteps_sameOk P s1 tab htab hrows
+  have hfour := SameResultOrBothFail.trans (specFourSteps_sameResultOrBothFail P s1 tab htab hrows
     GENESIS_EPOCH _ hcurrent hactivation hcfar)
     (lighthouse_single_pass_eq_spec_genesis tab s1 hrows hcurrent rctx hprevr hexit1 _
       hactivation adj per hpre (Nat.le_of_eq hfin0) (lhBaseReward tab))
   -- The Lighthouse tail reaches `tailNF`.
-  refine SameOk.trans (lhFullTail_nf o s1 GENESIS_EPOCH tab rctx adj per _ _ hcurrent htab hctx
+  refine SameResultOrBothFail.trans (lhFullTail_nf o s1 GENESIS_EPOCH tab rctx adj per _ _ hcurrent htab hctx
     hpre hysteresisThresholds_mainnet hrows) ?_
   -- The spec tail reaches `tailNF`.
-  refine SameOk.flip ?_
-  refine SameOk.trans (SameOk.bind hfour (fun _ _ => SameOk.refl _)) ?_
+  refine SameResultOrBothFail.flip ?_
+  refine SameResultOrBothFail.trans (SameResultOrBothFail.bind hfour (fun _ _ => SameResultOrBothFail.refl _)) ?_
   rw [map_bind']
-  refine SameOk.bind (SameOk.refl _) (fun x hx => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun x hx => ?_)
   have hspec := (hfour (s1.withRowsChurn x.1 x.2)).mpr (by rw [hx]; rfl)
   have htab4 := fourSteps_total s1 tab htab hrows GENESIS_EPOCH _ hcurrent hactivation hcfar _
-    ((specFourSteps_sameOk P s1 tab htab hrows GENESIS_EPOCH _ hcurrent hactivation
+    ((specFourSteps_sameResultOrBothFail P s1 tab htab hrows GENESIS_EPOCH _ hcurrent hactivation
       hcfar _).mp hspec)
   exact epochRest_nf o s1 GENESIS_EPOCH tab _ _ x.1 x.2 _ hx rfl rfl hcurrent
     (Nat.le_of_eq hfin0) (by decide) hactivation hexit1 hvalid htab4
@@ -225,14 +225,14 @@ theorem process_epoch_lh_full_genesis [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t
 
 /-- On mainnet, at a state that `process_epoch` starts from, the Lighthouse epoch with the
 deposits and effective balance updates in the single pass gives the same `ok` results as the
-spec epoch. Beyond the hypotheses of `process_epoch_lh_sameOk'` it needs `WithdrawableValid`,
+spec epoch. Beyond the hypotheses of `process_epoch_lh_sameResultOrBothFail'` it needs `WithdrawableValid`,
 for the deposit statuses that Lighthouse predicts, and `ConsolidationsInRange`, so that the
 validators that consolidations name are existing validators. -/
-theorem process_epoch_lh_full_sameOk' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
+theorem process_epoch_lh_full_sameResultOrBothFail' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
     (hslot : t.slot < 2 ^ 64) (heb : EBOk P t) (hexitb : ExitBounds t)
-    (hsupply_t : EpochSupply t) (hvalid : WithdrawableValid t)
+    (hsupply_t : EpochBalanceBounds t) (hvalid : WithdrawableValid t)
     (hcons : ConsolidationsInRange t) :
-    SameOk (process_epoch_lh_full o t) (process_epoch P o t) := by
+    SameResultOrBothFail (process_epoch_lh_full o t) (process_epoch P o t) := by
   obtain ⟨hinv, hrows, heffective⟩ := hb
   obtain ⟨hbalance, hsupply, hslashings⟩ := hsupply_t
   by_cases hgen : t.slot / P.SLOTS_PER_EPOCH = GENESIS_EPOCH
@@ -250,8 +250,8 @@ theorem process_epoch_lh_full_sameOk' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t
   rw [hce] at hcurrent hepoch hgen heffective
   have h32 : @LT.lt Nat _ (current_epoch + 32) (2 ^ 64) := P_target_bound hepoch
   rw [process_epoch_parts]
-  refine SameOk.bind (lhJustificationAndFinalization_sameOk _ _) (fun s1 h1 => ?_)
-  replace h1 := (lhJustificationAndFinalization_sameOk _ _ s1).mp h1
+  refine SameResultOrBothFail.bind (lhJustificationAndFinalization_sameResultOrBothFail _ _) (fun s1 h1 => ?_)
+  replace h1 := (lhJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1
   obtain ⟨_, _, _, _, hs1⟩ := process_justification_and_finalization_shape _ _ _ h1
   have hcur1 : get_current_epoch P s1 = .ok current_epoch := by
     rw [hs1]; exact hcurrent
@@ -338,7 +338,7 @@ theorem process_epoch_lh_full_sameOk' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t
   have hcfar : current_epoch < FAR_FUTURE_EPOCH := (P_target_far hepoch).1
   have hnext : current_epoch + 1 < FAR_FUTURE_EPOCH := (P_target_far hepoch).2
   -- The four spec steps equal the first Lighthouse pass.
-  have hfour := SameOk.trans (specFourSteps_sameOk P s1 tab htab hrows1
+  have hfour := SameResultOrBothFail.trans (specFourSteps_sameResultOrBothFail P s1 tab htab hrows1
     current_epoch _ hcur1 hactivation hcfar)
     (lighthouse_single_pass_eq_spec_supply tab s1 hrows1 current_epoch hcur1
     (by simpa [GENESIS_EPOCH] using hgen) rctx hctx (hpe ▸ heff1) hexit1 hmax1 hbal1 _
@@ -351,16 +351,16 @@ theorem process_epoch_lh_full_sameOk' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t
         (hmax1 _ (by rw [← rowsOf_map_validator]; exact List.mem_map_of_mem hr))
       unfold lhBaseReward; rw [hb]))
   -- The Lighthouse tail reaches `tailNF`.
-  refine SameOk.trans (lhFullTail_nf o s1 current_epoch tab rctx adj per _ _ hcur1 htab hctx
+  refine SameResultOrBothFail.trans (lhFullTail_nf o s1 current_epoch tab rctx adj per _ _ hcur1 htab hctx
     hpre hysteresisThresholds_mainnet hrows1) ?_
   -- The spec tail reaches `tailNF`.
-  refine SameOk.flip ?_
-  refine SameOk.trans (SameOk.bind hfour (fun _ _ => SameOk.refl _)) ?_
+  refine SameResultOrBothFail.flip ?_
+  refine SameResultOrBothFail.trans (SameResultOrBothFail.bind hfour (fun _ _ => SameResultOrBothFail.refl _)) ?_
   rw [map_bind']
-  refine SameOk.bind (SameOk.refl _) (fun x hx => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun x hx => ?_)
   have hspec := (hfour (s1.withRowsChurn x.1 x.2)).mpr (by rw [hx]; rfl)
   have htab4 := fourSteps_total s1 tab htab hrows1 current_epoch _ hcur1 hactivation hcfar _
-    ((specFourSteps_sameOk P s1 tab htab hrows1 current_epoch _ hcur1 hactivation
+    ((specFourSteps_sameResultOrBothFail P s1 tab htab hrows1 current_epoch _ hcur1 hactivation
       hcfar _).mp hspec)
   exact epochRest_nf o s1 current_epoch tab _ _ x.1 x.2 _ hx rfl rfl hcur1
     (Nat.le_of_succ_le hfin) hnext hactivation hexit1 hvalid1 htab4
@@ -368,12 +368,12 @@ theorem process_epoch_lh_full_sameOk' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t
       (fun i h => Nat.lt_trans (hbal1 i h) (by decide)) hx) hnamed
 
 
-/-- `process_epoch_lh_full_sameOk'` in the form of the `hf` hypothesis of
-`reachable_state_transition_sameOk'''`, with `EpochSupply` as the epoch condition. -/
+/-- `process_epoch_lh_full_sameResultOrBothFail'` in the form of the `hf` hypothesis of
+`reachable_state_transition_sameResultOrBothFail'''`, with `EpochBalanceBounds` as the epoch condition. -/
 theorem process_epoch_lh_full_hf [PresetCfg] [PresetCfg.Ok] (o : Oracle) :
-    ∀ t, EpochInputOk'' EpochSupply t →
-      SameOk (process_epoch_lh_full o t) (process_epoch P o t) :=
+    ∀ t, ReachableInvariants t →
+      SameResultOrBothFail (process_epoch_lh_full o t) (process_epoch P o t) :=
   fun t ⟨⟨⟨hb, hslot, heb, hexit, hsupply⟩, _, hcons⟩, _, hvalid⟩ =>
-    process_epoch_lh_full_sameOk' o t hb hslot heb hexit hsupply hvalid hcons
+    process_epoch_lh_full_sameResultOrBothFail' o t hb hslot heb hexit hsupply hvalid hcons
 
 end EpochProofs.Spec

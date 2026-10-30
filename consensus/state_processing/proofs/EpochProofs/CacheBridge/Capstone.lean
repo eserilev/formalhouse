@@ -78,7 +78,7 @@ The caches satisfy their build invariants: the progressive balances cache is `Co
 the state, and the epoch cache total is the sum of the effective balances of the validators
 active in the current epoch. -/
 theorem lh_cache_reads_mainnet [EpochProofs.Spec.PresetCfg] [EpochProofs.Spec.PresetCfg.Ok] (s : EpochProofs.Spec.BeaconState)
-    (hrows : EpochProofs.Spec.RowsOk s) (hsupply : EpochProofs.Spec.EpochSupply s)
+    (hrows : EpochProofs.Spec.RowsOk s) (hsupply : EpochProofs.Spec.EpochBalanceBounds s)
     (c : LhCache)
     (hc : Coherent EpochProofs.Spec.P.EFFECTIVE_BALANCE_INCREMENT
       (pbState s (s.slot / EpochProofs.Spec.P.SLOTS_PER_EPOCH)) c)
@@ -139,32 +139,32 @@ a reachable run, on mainnet (`lighthouse_order_epoch_etheorem_reachable`), and t
 that it makes equal the spec values of the model (`lh_cache_reads_mainnet`). The caches satisfy
 their build invariants at the epoch start state. -/
 theorem lighthouse_order_epoch_etheorem_reachable_cached [EpochProofs.Spec.PresetCfg]
-    [EpochProofs.Spec.PresetCfg.Ok] (hpa : EpochProofs.Etheorem.EpochPresetAgrees Spec.P)
-    (hhr : Spec.LH_HISTORICAL_ROOTS_LIMIT ≤ EthCLSpecs.Gloas.Const.historicalRootsLimit)
+    [EpochProofs.Spec.PresetCfg.Ok] (hpa : EpochProofs.Etheorem.PresetMatchesEtheorem Spec.P)
+    (hhr : Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT ≤ EthCLSpecs.Gloas.Const.historicalRootsLimit)
     (o : Spec.Oracle)
     (ho : EpochProofs.Etheorem.OracleAgrees o)
-    (hsha : ∀ b : ByteArray, (EthCLLib.Spec.sha b).size = 32) (e : EpochProofs.Etheorem.EState)
-    (hin : Spec.EpochInputOk'' Spec.EpochSupply (EpochProofs.Etheorem.absEState e))
-    (hpre : Spec.TailPre (EpochProofs.Etheorem.absEState e))
-    (hcond : EpochProofs.Etheorem.EpochCondsIn e)
+    (hsha : ∀ b : ByteArray, (EthCLLib.Spec.sha b).size = 32) (e : EpochProofs.Etheorem.EtheoremState)
+    (hin : Spec.ReachableInvariants (EpochProofs.Etheorem.toSpecState e))
+    (hpre : Spec.AtEpochBoundary (EpochProofs.Etheorem.toSpecState e))
+    (hcond : EpochProofs.Etheorem.GloasEtheoremDivergenceAssumptions e)
     {s' : Spec.BeaconState}
-    (h : Spec.process_epoch_lh_order o (EpochProofs.Etheorem.absEState e) = .ok s')
+    (h : Spec.process_epoch_lighthouse o (EpochProofs.Etheorem.toSpecState e) = .ok s')
     (c : LhCache)
     (hc : Coherent EpochProofs.Spec.P.EFFECTIVE_BALANCE_INCREMENT
-      (pbState (EpochProofs.Etheorem.absEState e)
-        ((EpochProofs.Etheorem.absEState e).slot /
+      (pbState (EpochProofs.Etheorem.toSpecState e)
+        ((EpochProofs.Etheorem.toSpecState e).slot /
           EpochProofs.Spec.P.SLOTS_PER_EPOCH)) c)
     (total : U64)
     (htotal : total.val = CacheProofs.EpochCache.activeSum
       (CacheProofs.EpochCache.activeAt
-        ((EpochProofs.Etheorem.absEState e).validators.map ecValidator)
-        ((EpochProofs.Etheorem.absEState e).slot /
+        ((EpochProofs.Etheorem.toSpecState e).validators.map ecValidator)
+        ((EpochProofs.Etheorem.toSpecState e).slot /
           EpochProofs.Spec.P.SLOTS_PER_EPOCH))
-      ((EpochProofs.Etheorem.absEState e).validators.map (·.effective_balance))) :
+      ((EpochProofs.Etheorem.toSpecState e).validators.map (·.effective_balance))) :
     (∃ e', (EthCLSpecs.Gloas.processEpoch
         (StateTransition := GloasRun)).run (EthCLLib.Proofs.pureState e) =
-      .ok ((), EthCLLib.Proofs.pureState e') ∧ EpochProofs.Etheorem.absEState e' = s') ∧
-    let s := EpochProofs.Etheorem.absEState e
+      .ok ((), EthCLLib.Proofs.pureState e') ∧ EpochProofs.Etheorem.toSpecState e' = s') ∧
+    let s := EpochProofs.Etheorem.toSpecState e
     let cur := s.slot / EpochProofs.Spec.P.SLOTS_PER_EPOCH
     (∀ f : Usize, f.val < 3 → ∃ x : U64, lhCurrentEpochFlagAttestingBalance c f = ok (.Ok x) ∧
       (EpochProofs.Spec.get_unslashed_participating_indices EpochProofs.Spec.P s

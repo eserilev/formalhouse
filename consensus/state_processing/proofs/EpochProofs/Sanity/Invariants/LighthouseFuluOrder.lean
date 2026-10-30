@@ -7,7 +7,7 @@ import EpochProofs.Sanity.Invariants.FuluOrder
 /-!
 # The Lighthouse Fulu epoch in the Lighthouse order
 
-`process_epoch_lh_order_fulu` runs the Fulu steps as `altair.rs` and `single_pass.rs` do:
+`process_epoch_lighthouse_fulu` runs the Fulu steps as `altair.rs` and `single_pass.rs` do:
 
 1. the single pass, the deposits and the consolidations,
 2. the Fulu proposer lookahead (inside `process_epoch_single_pass`),
@@ -15,9 +15,9 @@ import EpochProofs.Sanity.Invariants.FuluOrder
    `tail_updates.rs`,
 4. the participation rotation and the sync committee update.
 
-`process_epoch_lh_order_fulu_sameOk` shows that it gives the same `ok` results as
+`process_epoch_lighthouse_fulu_sameResultOrBothFail` shows that it gives the same `ok` results as
 `process_epoch_lh_full_fulu`, at the last slot of an epoch, when the next slot fits in a `u64`
-and `historical_summaries` is below the Lighthouse limit (`TailPre`). It is the Gloas proof
+and `historical_summaries` is below the Lighthouse limit (`AtEpochBoundary`). It is the Gloas proof
 without the builder payments and the PTC window, with the Fulu swaps of `FuluOrder.lean`.
 -/
 
@@ -76,7 +76,7 @@ def lhRestOrderFulu [PresetCfg] (o : Oracle) (t : BeaconState) : SpecM BeaconSta
   let t := process_participation_flag_updates t
   process_sync_committee_updates P o t
 
-theorem runSteps_lhOrderFulu_eq [PresetCfg] [PresetCfg.Ok] (o : Oracle) (T : BeaconState) (hT : TailPre T) :
+theorem runSteps_lhOrderFulu_eq [PresetCfg] [PresetCfg.Ok] (o : Oracle) (T : BeaconState) (hT : AtEpochBoundary T) :
     runSteps (lhOrderFulu o) T = lhRestOrderFulu o T := by
   obtain ⟨halign, hslot, hroom⟩ := hT
   have kpl : StepKeeps (SameSH T) (process_proposer_lookahead_fulu P o) :=
@@ -116,36 +116,36 @@ theorem runSteps_specOrderFulu_eq [PresetCfg] (o : Oracle) (T : BeaconState) :
 
 /-- The Fulu steps after the consolidations: the Lighthouse order with the Lighthouse resets
 gives the same `ok` results as the eth1 reset followed by the spec order. -/
-theorem lhRestOrderFulu_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (T : BeaconState) (hT : TailPre T) :
-    SameOk (lhRestOrderFulu o T) (process_eth1_data_reset P T >>= epochRest2Fulu o) := by
+theorem lhRestOrderFulu_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] (o : Oracle) (T : BeaconState) (hT : AtEpochBoundary T) :
+    SameResultOrBothFail (lhRestOrderFulu o T) (process_eth1_data_reset P T >>= epochRest2Fulu o) := by
   have hroom : SlotRoom T := P_slot_room hT.2.1
   rw [← runSteps_lhOrderFulu_eq o T hT, ← runSteps_specOrderFulu_eq o T]
-  exact SameOk.flip (specOrderFulu_lhOrderFulu o T hroom)
+  exact SameResultOrBothFail.flip (specOrderFulu_lhOrderFulu o T hroom)
 
 /-- The steps after the single pass in the Lighthouse Fulu order. -/
 def lhAfterPassOrderFulu [PresetCfg] (o : Oracle) (s : BeaconState) (_total_active_balance : Gwei)
     (plan : LhDepositPlan) (x : (Epoch × Gwei) × List Row) : SpecM BeaconState :=
   lhMidFulu o s plan (s.withRowsChurn x.1 x.2) >>= lhRestOrderFulu o
 
-theorem lhAfterPassOrderFulu_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (tab : Gwei)
-    (plan : LhDepositPlan) (x : (Epoch × Gwei) × List Row) (hs : TailPre s) :
-    SameOk (lhAfterPassOrderFulu o s tab plan x) (lhAfterPassG o (epochRest2Fulu o) s plan x) := by
+theorem lhAfterPassOrderFulu_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (tab : Gwei)
+    (plan : LhDepositPlan) (x : (Epoch × Gwei) × List Row) (hs : AtEpochBoundary s) :
+    SameResultOrBothFail (lhAfterPassOrderFulu o s tab plan x) (lhAfterPassG o (epochRest2Fulu o) s plan x) := by
   rw [lhAfterPassFulu_eq]
   let W := s.withRowsChurn x.1 x.2
-  have hW : TailPre W := hs
+  have hW : AtEpochBoundary W := hs
   have hcomm := eth1_comm (lhMidFulu o s plan) W
     (fun t h => (lhMidFulu_slotKeep o s plan W t h).1) (lhMidFulu_votesBlind o s plan W)
-  have hspec : SameOk
+  have hspec : SameResultOrBothFail
       (process_eth1_data_reset P W >>= fun s1 =>
         lhMidFulu o s plan s1 >>= epochRest2Fulu o)
       (lhMidFulu o s plan W >>= fun t => process_eth1_data_reset P t >>=
         epochRest2Fulu o) := by
     rw [← bind_assoc, ← bind_assoc]
-    exact sameOk_cont hcomm (epochRest2Fulu o)
-  refine SameOk.trans ?_ (SameOk.flip hspec)
-  refine SameOk.bind (SameOk.refl _) (fun t ht => ?_)
+    exact sameResultOrBothFail_cont hcomm (epochRest2Fulu o)
+  refine SameResultOrBothFail.trans ?_ (SameResultOrBothFail.flip hspec)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t ht => ?_)
   obtain ⟨h1, h2⟩ := lhMidFulu_slotKeep o s plan W t ht
-  exact lhRestOrderFulu_sameOk o t ⟨by rw [h1]; exact hW.1, by rw [h1]; exact hW.2.1,
+  exact lhRestOrderFulu_sameResultOrBothFail o t ⟨by rw [h1]; exact hW.1, by rw [h1]; exact hW.2.1,
     by rw [h2]; exact hW.2.2⟩
 
 /-! ## The whole Lighthouse Fulu epoch in the Lighthouse order -/
@@ -175,50 +175,50 @@ theorem lhFullTailFulu_eq_with [PresetCfg] [FuluCfg] (o : Oracle) (s : BeaconSta
   unfold lhFullTailFulu lhFullTailG lhFullTailWithFulu lhAfterPassG
   rfl
 
-theorem lhFullTailWithFulu_sameOk [PresetCfg] [FuluCfg]
+theorem lhFullTailWithFulu_sameResultOrBothFail [PresetCfg] [FuluCfg]
     (a1 a2 : BeaconState → Gwei → LhDepositPlan → (Epoch × Gwei) × List Row →
       SpecM BeaconState) (s : BeaconState)
-    (h : ∀ tab plan x, SameOk (a1 s tab plan x) (a2 s tab plan x)) :
-    SameOk (lhFullTailWithFulu a1 s) (lhFullTailWithFulu a2 s) := by
+    (h : ∀ tab plan x, SameResultOrBothFail (a1 s tab plan x) (a2 s tab plan x)) :
+    SameResultOrBothFail (lhFullTailWithFulu a1 s) (lhFullTailWithFulu a2 s) := by
   unfold lhFullTailWithFulu
-  refine SameOk.bind (SameOk.refl _) fun _ _ => ?_
-  refine SameOk.bind (SameOk.refl _) fun _ _ => ?_
-  refine SameOk.bind (SameOk.refl _) fun _ _ => ?_
-  refine SameOk.bind (SameOk.refl _) fun ap _ => ?_
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun _ _ => ?_
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun _ _ => ?_
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun _ _ => ?_
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun ap _ => ?_
   obtain ⟨_, _⟩ := ap
-  refine SameOk.bind (SameOk.refl _) fun _ _ => ?_
-  refine SameOk.bind (SameOk.refl _) fun du _ => ?_
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun _ _ => ?_
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun du _ => ?_
   obtain ⟨_, _⟩ := du
-  refine SameOk.bind (SameOk.refl _) fun _ _ => ?_
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun _ _ => ?_
   exact h _ _ _
 
 /-- The Fulu `process_epoch` as Lighthouse runs it, in the Lighthouse order and with the
 Lighthouse resets, for any preset (`PresetCfg`). The genesis epoch takes the same path. -/
-def process_epoch_lh_order_fulu [PresetCfg] [FuluCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
+def process_epoch_lighthouse_fulu [PresetCfg] [FuluCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
   let s1 ← lhJustificationAndFinalization P s
   lhFullTailWithFulu (lhAfterPassOrderFulu o) s1
 
-/-- Under `TailPre`, the Lighthouse Fulu order gives the same `ok` results as
+/-- Under `AtEpochBoundary`, the Lighthouse Fulu order gives the same `ok` results as
 `process_epoch_lh_full_fulu`. -/
-theorem process_epoch_lh_order_fulu_sameOk [PresetCfg] [PresetCfg.Ok] [FuluCfg] (o : Oracle) (s : BeaconState) (hs : TailPre s) :
-    SameOk (process_epoch_lh_order_fulu o s) (process_epoch_lh_full_fulu o s) := by
-  unfold process_epoch_lh_order_fulu process_epoch_lh_full_fulu
-  refine SameOk.bind (SameOk.refl _) fun s1 h1 => ?_
+theorem process_epoch_lighthouse_fulu_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] [FuluCfg] (o : Oracle) (s : BeaconState) (hs : AtEpochBoundary s) :
+    SameResultOrBothFail (process_epoch_lighthouse_fulu o s) (process_epoch_lh_full_fulu o s) := by
+  unfold process_epoch_lighthouse_fulu process_epoch_lh_full_fulu
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun s1 h1 => ?_
   obtain ⟨_, _, _, _, rfl⟩ := process_justification_and_finalization_shape _ _ _
-    ((lhJustificationAndFinalization_sameOk _ _ s1).mp h1)
+    ((lhJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1)
   rw [lhFullTailFulu_eq_with]
-  exact lhFullTailWithFulu_sameOk _ _ _ fun tab plan x =>
-    lhAfterPassOrderFulu_sameOk o _ tab plan x hs
+  exact lhFullTailWithFulu_sameResultOrBothFail _ _ _ fun tab plan x =>
+    lhAfterPassOrderFulu_sameResultOrBothFail o _ tab plan x hs
 
 /-- The Lighthouse Fulu epoch in the Lighthouse order gives the same `ok` results as the Fulu
 `process_epoch` on mainnet, at an epoch boundary state with the invariants that reachable Gloas
-states have (`EpochInputOk''`) and `TailPre`. -/
-theorem lighthouse_fulu_epoch_sameOk [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (t : BeaconState)
-    (hin : EpochInputOk'' EpochSupply t) (hpre : TailPre t) :
-    SameOk (process_epoch_lh_order_fulu o t)
+states have (`EpochInputOk''`) and `AtEpochBoundary`. -/
+theorem lighthouse_fulu_epoch_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (t : BeaconState)
+    (hin : ReachableInvariants t) (hpre : AtEpochBoundary t) :
+    SameResultOrBothFail (process_epoch_lighthouse_fulu o t)
       (process_epoch_fulu P FC o t) := by
   obtain ⟨⟨⟨hb, hslot, heb, hexit, hsupply⟩, _, hcons⟩, _, hvalid⟩ := hin
-  exact SameOk.trans (process_epoch_lh_order_fulu_sameOk o t hpre)
-    (process_epoch_lh_full_fulu_sameOk' o t hb hslot heb hexit hsupply hvalid hcons)
+  exact SameResultOrBothFail.trans (process_epoch_lighthouse_fulu_sameResultOrBothFail o t hpre)
+    (process_epoch_lh_full_fulu_sameResultOrBothFail' o t hb hslot heb hexit hsupply hvalid hcons)
 
 end EpochProofs.Spec

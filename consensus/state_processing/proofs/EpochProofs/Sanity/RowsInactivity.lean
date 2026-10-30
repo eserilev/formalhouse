@@ -7,7 +7,7 @@ import EpochProofs.Sanity.InactivityUpdates
 `inactivityRowStep` updates the inactivity score of one row. It reads only that row.
 `process_inactivity_updates_rows` shows that the spec gives the same `ok` values as a `passM` of
 this step over all rows. The spec fails before its loop when `get_eligible_validator_indices`
-fails. The pass fails on the first bad row instead, so the theorem states `SameOk`.
+fails. The pass fails on the first bad row instead, so the theorem states `SameResultOrBothFail`.
 -/
 
 namespace EpochProofs.Spec
@@ -349,7 +349,7 @@ theorem process_inactivity_updates_rows (p : Preset) (state : BeaconState)
     (hgenesis : current_epoch ≠ GENESIS_EPOCH)
     (hprevious : get_previous_epoch p state = .ok previous_epoch)
     (hleak : is_in_inactivity_leak p state = .ok in_leak) :
-    SameOk (process_inactivity_updates p state)
+    SameResultOrBothFail (process_inactivity_updates p state)
       ((fun x => state.withRows x.2) <$>
         passM (inactivityRowStep p previous_epoch in_leak) () (rowsOf state)) := by
   have hne : (previous_epoch == current_epoch) = false := by
@@ -373,7 +373,7 @@ theorem process_inactivity_updates_rows (p : Preset) (state : BeaconState)
         obtain ⟨r, hr, e, he⟩ := hbad
         exact ⟨r, hr, e, by simp [inactivityRowStep, he, bind, Except.bind]⟩)
     rw [hspec, he2]
-    exact SameOk.errors
+    exact SameResultOrBothFail.errors
   · let Ev : Validator → Bool := fun v => match validatorEligible previous_epoch v with
       | .ok b => b
       | .error _ => false
@@ -392,7 +392,7 @@ theorem process_inactivity_updates_rows (p : Preset) (state : BeaconState)
       (fun r hr => mem_participating_rows state previous_epoch hr)
     simp only [List.nil_append, List.append_nil, rowsOf_map_inactivity_score state hrows.2.1] at h
     rw [h]
-    apply SameOk.of_eq
+    apply SameResultOrBothFail.of_eq
     cases hpass : passM (inactivityRowStep p previous_epoch in_leak) () (rowsOf state) with
     | error e => rfl
     | ok x =>

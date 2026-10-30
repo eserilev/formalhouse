@@ -105,7 +105,7 @@ theorem lighthouse_single_pass_eq_spec [PresetCfg] (total_active_balance : Gwei)
     (base_reward : Row → Gwei)
     (hbase : ∀ r ∈ rowsOf state, rewardsEligible rctx.previous_epoch r.validator = .ok true →
       rewardsBaseReward P total_active_balance r.validator = .ok (base_reward r)) :
-    SameOk (do
+    SameResultOrBothFail (do
       let s1 ← process_inactivity_updates P state
       let s2 ← process_rewards_and_penalties P total_active_balance s1
       let s3 ← process_registry_updates P total_active_balance s2
@@ -116,9 +116,9 @@ theorem lighthouse_single_pass_eq_spec [PresetCfg] (total_active_balance : Gwei)
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
   obtain ⟨hprevious, -, -, -, -, hleak, htab⟩ :=
     rewardsContextOf_ok P total_active_balance state rctx hctx
-  refine SameOk.trans (separate_passes_eq_single_pass P total_active_balance state
+  refine SameResultOrBothFail.trans (separate_passes_eq_single_pass P total_active_balance state
     hrows current_epoch rctx.previous_epoch rctx.in_leak hcurrent hgenesis hprevious hleak rctx
-    hctx activation_epoch hactivation htarget adjusted per hpre) (SameOk.of_eq ?_)
+    hctx activation_epoch hactivation htarget adjusted per hpre) (SameResultOrBothFail.of_eq ?_)
   have hstep : ∀ churn r, r ∈ rowsOf state →
       lhRowStep P (lhContextOf state total_active_balance current_epoch rctx per)
         (base_reward r) churn r =

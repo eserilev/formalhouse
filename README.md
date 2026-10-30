@@ -1,8 +1,8 @@
 # Formalhouse
 
 Formalhouse is Lighthouse with machine-checked proofs (Aeneas + Lean). Parts of the Rust code are
-proved equal to the consensus spec. For epoch processing, `formalhouse_gloas_epoch_final` and
-`formalhouse_fulu_epoch_final` show that on every reachable Fulu and Gloas state, on mainnet and
+proved equal to the consensus spec. For epoch processing, `lighthouse_model_gloas_epoch_eq_etheorem` and
+`lighthouse_model_fulu_epoch_eq_etheorem` show that on every reachable Fulu and Gloas state, on mainnet and
 minimal, Lighthouse's epoch processing returns Ok and gives the same state as Etheorem, an
 independent Lean spec.
 

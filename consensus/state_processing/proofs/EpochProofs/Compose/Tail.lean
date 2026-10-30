@@ -204,7 +204,7 @@ structure TailLinks (G : TailGlue σ) (o : Spec.Oracle) (view : σ → Spec.Beac
   slotsPerEpoch : G.slotsPerEpoch.val = Spec.P.SLOTS_PER_EPOCH
   /-- The push succeeds below the Lighthouse limit, and `HistoricalSummary::new` hashes the
   roots as `hash_tree_root` does. -/
-  pushSummary : ∀ t, (view t).historical_summaries.length < Spec.LH_HISTORICAL_ROOTS_LIMIT →
+  pushSummary : ∀ t, (view t).historical_summaries.length < Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT →
     ∃ t', G.pushSummary t = some t' ∧ view t' = { view t with
       historical_summaries := (view t).historical_summaries ++
         [{ block_summary_root := o.hash_tree_root_BlockRoots (view t).block_roots

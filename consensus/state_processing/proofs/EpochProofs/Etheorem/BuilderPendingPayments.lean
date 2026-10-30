@@ -21,19 +21,19 @@ open EthCLLib.Spec EthCLLib.Proofs EthCLSpecs.Proofs.Gloas
 variable [EthCLSpecs.Gloas.Preset] [HasherTag]
 
 /-- The builder payment fields of the two states agree. -/
-def Agrees (e : EState) (s : Spec.BeaconState) : Prop :=
+def Agrees (e : EtheoremState) (s : Spec.BeaconState) : Prop :=
   s.builder_pending_payments = e.builderPendingPayments.toList.map absPayment ∧
     s.builder_pending_withdrawals = e.builderPendingWithdrawals.val.toList.map absWithdrawal
 
 /-- `get_total_active_balance` in Etheorem. -/
-def totalActiveBalance (e : EState) : Nat :=
+def totalActiveBalance (e : EtheoremState) : Nat :=
   (EthCLSpecs.Gloas.getTotalActiveBalance (pureState e)).toNat
 
 omit [HasherTag] in
 theorem absPayment_default : absPayment (default : EPayment) = Spec.BuilderPendingPayment.empty :=
   rfl
 
-theorem quorum_toNat (e : EState) (hslots : 6 ≤ EthCLSpecs.Gloas.Const.slotsPerEpoch) :
+theorem quorum_toNat (e : EtheoremState) (hslots : 6 ≤ EthCLSpecs.Gloas.Const.slotsPerEpoch) :
     (builderPaymentQuorum e).toNat =
       totalActiveBalance e / EthCLSpecs.Gloas.Const.slotsPerEpoch * 6 / 10 := by
   have hlt := EthCLSpecs.Gloas.Const.slotsPerEpochLt
@@ -51,7 +51,7 @@ theorem quorum_toNat (e : EState) (hslots : 6 ≤ EthCLSpecs.Gloas.Const.slotsPe
   have h10 : EthCLSpecs.Gloas.Const.builderPaymentThresholdDenominator.toNat = 10 := rfl
   rw [h6, h10, Nat.mod_eq_of_lt hmul]
 
-theorem window_toList (e : EState) :
+theorem window_toList (e : EtheoremState) :
     (expectedPaymentWindow e).toList =
       e.builderPendingPayments.toList.drop EthCLSpecs.Gloas.Const.slotsPerEpoch ++
         List.replicate EthCLSpecs.Gloas.Const.slotsPerEpoch default := by
@@ -74,7 +74,7 @@ theorem window_toList (e : EState) :
       rw [this, List.getElem_append_right (by simp; omega)]
       simp
 
-theorem qualifying_eq (e : EState) (q : Nat) (hq : (builderPaymentQuorum e).toNat = q) :
+theorem qualifying_eq (e : EtheoremState) (q : Nat) (hq : (builderPaymentQuorum e).toNat = q) :
     (qualifyingBuilderWithdrawals e).map absWithdrawal =
       (((e.builderPendingPayments.toList.map absPayment).take
           EthCLSpecs.Gloas.Const.slotsPerEpoch).filter (·.weight ≥ q)).map (·.withdrawal) := by
@@ -104,7 +104,7 @@ error. -/
 theorem builder_pending_payments_etheorem (p : Spec.Preset)
     (hslots : EthCLSpecs.Gloas.Const.slotsPerEpoch = p.SLOTS_PER_EPOCH)
     (hslots6 : 6 ≤ p.SLOTS_PER_EPOCH)
-    (e : EState) (s : Spec.BeaconState) (hagree : Agrees e s)
+    (e : EtheoremState) (s : Spec.BeaconState) (hagree : Agrees e s)
     (hfits : e.builderPendingWithdrawals.val.size + (qualifyingBuilderWithdrawals e).length ≤
       EthCLSpecs.Gloas.Const.builderPendingWithdrawalsLimit) :
     ∃ e' s',
@@ -150,7 +150,7 @@ theorem lighthouse_builder_pending_payments_etheorem (p : Spec.Preset)
     (total_active_balance slots_per_epoch : U64) (spe : Usize)
     (hslots_lh : slots_per_epoch.val = p.SLOTS_PER_EPOCH) (hspe : spe.val = p.SLOTS_PER_EPOCH)
     (payments : Slice LhPayment) (withdrawals : List LhWithdrawal)
-    (e : EState) (hagree : Agrees e (absState (withdrawals, payments.val)))
+    (e : EtheoremState) (hagree : Agrees e (absState (withdrawals, payments.val)))
     (htab : total_active_balance.val = totalActiveBalance e)
     (hfits : e.builderPendingWithdrawals.val.size + (qualifyingBuilderWithdrawals e).length ≤
       EthCLSpecs.Gloas.Const.builderPendingWithdrawalsLimit) :

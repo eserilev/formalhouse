@@ -8,14 +8,14 @@ import EthCLSpecs.Proofs.Fulu.Run
 
 Etheorem (https://github.com/etheorem/etheorem) stores numbers as `UInt64` and lists as
 `Vector`, `SSZList` and `Bitvector`. The reference stores numbers as `Nat` and lists as `List`.
-`absEState` reads an Etheorem `BeaconState` as a reference `BeaconState`. It keeps every field.
+`toSpecState` reads an Etheorem `BeaconState` as a reference `BeaconState`. It keeps every field.
 
-Fulu's `absEState` keeps every Fulu field. The reference fields that Gloas adds (builders,
+Fulu's `toSpecState` keeps every Fulu field. The reference fields that Gloas adds (builders,
 builder payments and withdrawals, the bid, the payload withdrawals, the PTC window) read as
 empty, and `latest_block_hash` reads the block hash of the latest execution payload header. No
 Fulu epoch step reads or writes them.
 
-Each step proof states that the two runs agree through `absEState`. The `@[simp]` lemmas here
+Each step proof states that the two runs agree through `toSpecState`. The `@[simp]` lemmas here
 read and write one field through the map.
 
 Each proof here holds for Gloas and for Fulu. `forkproof EpochEtheorem` (see `Forks.lean`)
@@ -67,13 +67,13 @@ theorem absBits_getElem? {n : Nat} (b : Bitvector n) (i : Nat) (hi : i < n) :
 variable [EthCLSpecs.Gloas.Preset]
 
 forkonly Gloas
-abbrev EState := EthCLSpecs.Gloas.BeaconState
+abbrev EtheoremState := EthCLSpecs.Gloas.BeaconState
 abbrev EWithdrawal := EthCLSpecs.Gloas.BuilderPendingWithdrawal
 abbrev EPayment := EthCLSpecs.Gloas.BuilderPendingPayment
 end forkonly
 
 forkonly Fulu
-abbrev EState := EthCLSpecs.Fulu.BeaconState
+abbrev EtheoremState := EthCLSpecs.Fulu.BeaconState
 end forkonly
 
 def absValidator (v : EthCLSpecs.Gloas.Validator) : Spec.Validator :=
@@ -172,7 +172,7 @@ def absPayment (p : EPayment) : Spec.BuilderPendingPayment :=
     proposer_index := p.proposerIndex.toNat }
 
 /-- An Etheorem state as a reference state. Every field maps. -/
-def absEState (e : EState) : Spec.BeaconState :=
+def toSpecState (e : EtheoremState) : Spec.BeaconState :=
   { genesis_time := e.genesisTime.toNat
     genesis_validators_root := e.genesisValidatorsRoot
     slot := e.slot.toNat
@@ -223,7 +223,7 @@ end forkonly
 
 forkonly Fulu
 /-- An Etheorem state as a reference state. Every field maps. -/
-def absEState (e : EState) : Spec.BeaconState :=
+def toSpecState (e : EtheoremState) : Spec.BeaconState :=
   { genesis_time := e.genesisTime.toNat
     genesis_validators_root := e.genesisValidatorsRoot
     slot := e.slot.toNat
@@ -276,134 +276,134 @@ end forkonly
 
 section Read
 
-variable (e : EState)
+variable (e : EtheoremState)
 
 forkonly Gloas
-@[simp] theorem absEState_slot : (absEState e).slot = e.slot.toNat := rfl
-@[simp] theorem absEState_validators :
-    (absEState e).validators = e.validators.toList.map absValidator := rfl
-@[simp] theorem absEState_balances :
-    (absEState e).balances = e.balances.toList.map UInt64.toNat := rfl
-@[simp] theorem absEState_randao_mixes : (absEState e).randao_mixes = e.randaoMixes.toList := rfl
-@[simp] theorem absEState_slashings :
-    (absEState e).slashings = e.slashings.toList.map UInt64.toNat := rfl
-@[simp] theorem absEState_previous_epoch_participation :
-    (absEState e).previous_epoch_participation = e.previousEpochParticipation.toList := rfl
-@[simp] theorem absEState_current_epoch_participation :
-    (absEState e).current_epoch_participation = e.currentEpochParticipation.toList := rfl
-@[simp] theorem absEState_justification_bits :
-    (absEState e).justification_bits = absBits e.justificationBits := rfl
-@[simp] theorem absEState_previous_justified_checkpoint :
-    (absEState e).previous_justified_checkpoint = absCheckpoint e.previousJustifiedCheckpoint := rfl
-@[simp] theorem absEState_current_justified_checkpoint :
-    (absEState e).current_justified_checkpoint = absCheckpoint e.currentJustifiedCheckpoint := rfl
-@[simp] theorem absEState_finalized_checkpoint :
-    (absEState e).finalized_checkpoint = absCheckpoint e.finalizedCheckpoint := rfl
-@[simp] theorem absEState_inactivity_scores :
-    (absEState e).inactivity_scores = e.inactivityScores.toList.map UInt64.toNat := rfl
-@[simp] theorem absEState_current_sync_committee :
-    (absEState e).current_sync_committee = absSyncCommittee e.currentSyncCommittee := rfl
-@[simp] theorem absEState_next_sync_committee :
-    (absEState e).next_sync_committee = absSyncCommittee e.nextSyncCommittee := rfl
-@[simp] theorem absEState_eth1_data_votes :
-    (absEState e).eth1_data_votes = e.eth1DataVotes.toList.map absEth1Data := rfl
-@[simp] theorem absEState_block_roots : (absEState e).block_roots = e.blockRoots.toList := rfl
-@[simp] theorem absEState_state_roots : (absEState e).state_roots = e.stateRoots.toList := rfl
-@[simp] theorem absEState_historical_summaries :
-    (absEState e).historical_summaries = e.historicalSummaries.toList.map absHistoricalSummary :=
+@[simp] theorem toSpecState_slot : (toSpecState e).slot = e.slot.toNat := rfl
+@[simp] theorem toSpecState_validators :
+    (toSpecState e).validators = e.validators.toList.map absValidator := rfl
+@[simp] theorem toSpecState_balances :
+    (toSpecState e).balances = e.balances.toList.map UInt64.toNat := rfl
+@[simp] theorem toSpecState_randao_mixes : (toSpecState e).randao_mixes = e.randaoMixes.toList := rfl
+@[simp] theorem toSpecState_slashings :
+    (toSpecState e).slashings = e.slashings.toList.map UInt64.toNat := rfl
+@[simp] theorem toSpecState_previous_epoch_participation :
+    (toSpecState e).previous_epoch_participation = e.previousEpochParticipation.toList := rfl
+@[simp] theorem toSpecState_current_epoch_participation :
+    (toSpecState e).current_epoch_participation = e.currentEpochParticipation.toList := rfl
+@[simp] theorem toSpecState_justification_bits :
+    (toSpecState e).justification_bits = absBits e.justificationBits := rfl
+@[simp] theorem toSpecState_previous_justified_checkpoint :
+    (toSpecState e).previous_justified_checkpoint = absCheckpoint e.previousJustifiedCheckpoint := rfl
+@[simp] theorem toSpecState_current_justified_checkpoint :
+    (toSpecState e).current_justified_checkpoint = absCheckpoint e.currentJustifiedCheckpoint := rfl
+@[simp] theorem toSpecState_finalized_checkpoint :
+    (toSpecState e).finalized_checkpoint = absCheckpoint e.finalizedCheckpoint := rfl
+@[simp] theorem toSpecState_inactivity_scores :
+    (toSpecState e).inactivity_scores = e.inactivityScores.toList.map UInt64.toNat := rfl
+@[simp] theorem toSpecState_current_sync_committee :
+    (toSpecState e).current_sync_committee = absSyncCommittee e.currentSyncCommittee := rfl
+@[simp] theorem toSpecState_next_sync_committee :
+    (toSpecState e).next_sync_committee = absSyncCommittee e.nextSyncCommittee := rfl
+@[simp] theorem toSpecState_eth1_data_votes :
+    (toSpecState e).eth1_data_votes = e.eth1DataVotes.toList.map absEth1Data := rfl
+@[simp] theorem toSpecState_block_roots : (toSpecState e).block_roots = e.blockRoots.toList := rfl
+@[simp] theorem toSpecState_state_roots : (toSpecState e).state_roots = e.stateRoots.toList := rfl
+@[simp] theorem toSpecState_historical_summaries :
+    (toSpecState e).historical_summaries = e.historicalSummaries.toList.map absHistoricalSummary :=
   rfl
-@[simp] theorem absEState_eth1_deposit_index :
-    (absEState e).eth1_deposit_index = e.eth1DepositIndex.toNat := rfl
-@[simp] theorem absEState_deposit_requests_start_index :
-    (absEState e).deposit_requests_start_index = e.depositRequestsStartIndex.toNat := rfl
-@[simp] theorem absEState_deposit_balance_to_consume :
-    (absEState e).deposit_balance_to_consume = e.depositBalanceToConsume.toNat := rfl
-@[simp] theorem absEState_exit_balance_to_consume :
-    (absEState e).exit_balance_to_consume = e.exitBalanceToConsume.toNat := rfl
-@[simp] theorem absEState_earliest_exit_epoch :
-    (absEState e).earliest_exit_epoch = e.earliestExitEpoch.toNat := rfl
-@[simp] theorem absEState_consolidation_balance_to_consume :
-    (absEState e).consolidation_balance_to_consume = e.consolidationBalanceToConsume.toNat := rfl
-@[simp] theorem absEState_earliest_consolidation_epoch :
-    (absEState e).earliest_consolidation_epoch = e.earliestConsolidationEpoch.toNat := rfl
-@[simp] theorem absEState_pending_deposits :
-    (absEState e).pending_deposits = e.pendingDeposits.toList.map absPendingDeposit := rfl
-@[simp] theorem absEState_pending_partial_withdrawals :
-    (absEState e).pending_partial_withdrawals =
+@[simp] theorem toSpecState_eth1_deposit_index :
+    (toSpecState e).eth1_deposit_index = e.eth1DepositIndex.toNat := rfl
+@[simp] theorem toSpecState_deposit_requests_start_index :
+    (toSpecState e).deposit_requests_start_index = e.depositRequestsStartIndex.toNat := rfl
+@[simp] theorem toSpecState_deposit_balance_to_consume :
+    (toSpecState e).deposit_balance_to_consume = e.depositBalanceToConsume.toNat := rfl
+@[simp] theorem toSpecState_exit_balance_to_consume :
+    (toSpecState e).exit_balance_to_consume = e.exitBalanceToConsume.toNat := rfl
+@[simp] theorem toSpecState_earliest_exit_epoch :
+    (toSpecState e).earliest_exit_epoch = e.earliestExitEpoch.toNat := rfl
+@[simp] theorem toSpecState_consolidation_balance_to_consume :
+    (toSpecState e).consolidation_balance_to_consume = e.consolidationBalanceToConsume.toNat := rfl
+@[simp] theorem toSpecState_earliest_consolidation_epoch :
+    (toSpecState e).earliest_consolidation_epoch = e.earliestConsolidationEpoch.toNat := rfl
+@[simp] theorem toSpecState_pending_deposits :
+    (toSpecState e).pending_deposits = e.pendingDeposits.toList.map absPendingDeposit := rfl
+@[simp] theorem toSpecState_pending_partial_withdrawals :
+    (toSpecState e).pending_partial_withdrawals =
       e.pendingPartialWithdrawals.toList.map absPendingPartialWithdrawal := rfl
-@[simp] theorem absEState_pending_consolidations :
-    (absEState e).pending_consolidations =
+@[simp] theorem toSpecState_pending_consolidations :
+    (toSpecState e).pending_consolidations =
       e.pendingConsolidations.toList.map absPendingConsolidation := rfl
-@[simp] theorem absEState_proposer_lookahead :
-    (absEState e).proposer_lookahead = e.proposerLookahead.toList.map UInt64.toNat := rfl
-@[simp] theorem absEState_builders : (absEState e).builders = e.builders.toList.map absBuilder := rfl
-@[simp] theorem absEState_builder_pending_payments :
-    (absEState e).builder_pending_payments = e.builderPendingPayments.toList.map absPayment := rfl
-@[simp] theorem absEState_builder_pending_withdrawals :
-    (absEState e).builder_pending_withdrawals =
+@[simp] theorem toSpecState_proposer_lookahead :
+    (toSpecState e).proposer_lookahead = e.proposerLookahead.toList.map UInt64.toNat := rfl
+@[simp] theorem toSpecState_builders : (toSpecState e).builders = e.builders.toList.map absBuilder := rfl
+@[simp] theorem toSpecState_builder_pending_payments :
+    (toSpecState e).builder_pending_payments = e.builderPendingPayments.toList.map absPayment := rfl
+@[simp] theorem toSpecState_builder_pending_withdrawals :
+    (toSpecState e).builder_pending_withdrawals =
       e.builderPendingWithdrawals.toList.map absWithdrawal := rfl
-@[simp] theorem absEState_ptc_window :
-    (absEState e).ptc_window = e.ptcWindow.toList.map fun ptc => ptc.toList.map UInt64.toNat := rfl
+@[simp] theorem toSpecState_ptc_window :
+    (toSpecState e).ptc_window = e.ptcWindow.toList.map fun ptc => ptc.toList.map UInt64.toNat := rfl
 end forkonly
 
 forkonly Fulu
-@[simp] theorem absEState_slot : (absEState e).slot = e.slot.toNat := rfl
-@[simp] theorem absEState_validators :
-    (absEState e).validators = e.validators.toList.map absValidator := rfl
-@[simp] theorem absEState_balances :
-    (absEState e).balances = e.balances.toList.map UInt64.toNat := rfl
-@[simp] theorem absEState_randao_mixes : (absEState e).randao_mixes = e.randaoMixes.toList := rfl
-@[simp] theorem absEState_slashings :
-    (absEState e).slashings = e.slashings.toList.map UInt64.toNat := rfl
-@[simp] theorem absEState_previous_epoch_participation :
-    (absEState e).previous_epoch_participation = e.previousEpochParticipation.toList := rfl
-@[simp] theorem absEState_current_epoch_participation :
-    (absEState e).current_epoch_participation = e.currentEpochParticipation.toList := rfl
-@[simp] theorem absEState_justification_bits :
-    (absEState e).justification_bits = absBits e.justificationBits := rfl
-@[simp] theorem absEState_previous_justified_checkpoint :
-    (absEState e).previous_justified_checkpoint = absCheckpoint e.previousJustifiedCheckpoint := rfl
-@[simp] theorem absEState_current_justified_checkpoint :
-    (absEState e).current_justified_checkpoint = absCheckpoint e.currentJustifiedCheckpoint := rfl
-@[simp] theorem absEState_finalized_checkpoint :
-    (absEState e).finalized_checkpoint = absCheckpoint e.finalizedCheckpoint := rfl
-@[simp] theorem absEState_inactivity_scores :
-    (absEState e).inactivity_scores = e.inactivityScores.toList.map UInt64.toNat := rfl
-@[simp] theorem absEState_current_sync_committee :
-    (absEState e).current_sync_committee = absSyncCommittee e.currentSyncCommittee := rfl
-@[simp] theorem absEState_next_sync_committee :
-    (absEState e).next_sync_committee = absSyncCommittee e.nextSyncCommittee := rfl
-@[simp] theorem absEState_eth1_data_votes :
-    (absEState e).eth1_data_votes = e.eth1DataVotes.toList.map absEth1Data := rfl
-@[simp] theorem absEState_block_roots : (absEState e).block_roots = e.blockRoots.toList := rfl
-@[simp] theorem absEState_state_roots : (absEState e).state_roots = e.stateRoots.toList := rfl
-@[simp] theorem absEState_historical_summaries :
-    (absEState e).historical_summaries = e.historicalSummaries.toList.map absHistoricalSummary :=
+@[simp] theorem toSpecState_slot : (toSpecState e).slot = e.slot.toNat := rfl
+@[simp] theorem toSpecState_validators :
+    (toSpecState e).validators = e.validators.toList.map absValidator := rfl
+@[simp] theorem toSpecState_balances :
+    (toSpecState e).balances = e.balances.toList.map UInt64.toNat := rfl
+@[simp] theorem toSpecState_randao_mixes : (toSpecState e).randao_mixes = e.randaoMixes.toList := rfl
+@[simp] theorem toSpecState_slashings :
+    (toSpecState e).slashings = e.slashings.toList.map UInt64.toNat := rfl
+@[simp] theorem toSpecState_previous_epoch_participation :
+    (toSpecState e).previous_epoch_participation = e.previousEpochParticipation.toList := rfl
+@[simp] theorem toSpecState_current_epoch_participation :
+    (toSpecState e).current_epoch_participation = e.currentEpochParticipation.toList := rfl
+@[simp] theorem toSpecState_justification_bits :
+    (toSpecState e).justification_bits = absBits e.justificationBits := rfl
+@[simp] theorem toSpecState_previous_justified_checkpoint :
+    (toSpecState e).previous_justified_checkpoint = absCheckpoint e.previousJustifiedCheckpoint := rfl
+@[simp] theorem toSpecState_current_justified_checkpoint :
+    (toSpecState e).current_justified_checkpoint = absCheckpoint e.currentJustifiedCheckpoint := rfl
+@[simp] theorem toSpecState_finalized_checkpoint :
+    (toSpecState e).finalized_checkpoint = absCheckpoint e.finalizedCheckpoint := rfl
+@[simp] theorem toSpecState_inactivity_scores :
+    (toSpecState e).inactivity_scores = e.inactivityScores.toList.map UInt64.toNat := rfl
+@[simp] theorem toSpecState_current_sync_committee :
+    (toSpecState e).current_sync_committee = absSyncCommittee e.currentSyncCommittee := rfl
+@[simp] theorem toSpecState_next_sync_committee :
+    (toSpecState e).next_sync_committee = absSyncCommittee e.nextSyncCommittee := rfl
+@[simp] theorem toSpecState_eth1_data_votes :
+    (toSpecState e).eth1_data_votes = e.eth1DataVotes.toList.map absEth1Data := rfl
+@[simp] theorem toSpecState_block_roots : (toSpecState e).block_roots = e.blockRoots.toList := rfl
+@[simp] theorem toSpecState_state_roots : (toSpecState e).state_roots = e.stateRoots.toList := rfl
+@[simp] theorem toSpecState_historical_summaries :
+    (toSpecState e).historical_summaries = e.historicalSummaries.toList.map absHistoricalSummary :=
   rfl
-@[simp] theorem absEState_eth1_deposit_index :
-    (absEState e).eth1_deposit_index = e.eth1DepositIndex.toNat := rfl
-@[simp] theorem absEState_deposit_requests_start_index :
-    (absEState e).deposit_requests_start_index = e.depositRequestsStartIndex.toNat := rfl
-@[simp] theorem absEState_deposit_balance_to_consume :
-    (absEState e).deposit_balance_to_consume = e.depositBalanceToConsume.toNat := rfl
-@[simp] theorem absEState_exit_balance_to_consume :
-    (absEState e).exit_balance_to_consume = e.exitBalanceToConsume.toNat := rfl
-@[simp] theorem absEState_earliest_exit_epoch :
-    (absEState e).earliest_exit_epoch = e.earliestExitEpoch.toNat := rfl
-@[simp] theorem absEState_consolidation_balance_to_consume :
-    (absEState e).consolidation_balance_to_consume = e.consolidationBalanceToConsume.toNat := rfl
-@[simp] theorem absEState_earliest_consolidation_epoch :
-    (absEState e).earliest_consolidation_epoch = e.earliestConsolidationEpoch.toNat := rfl
-@[simp] theorem absEState_pending_deposits :
-    (absEState e).pending_deposits = e.pendingDeposits.toList.map absPendingDeposit := rfl
-@[simp] theorem absEState_pending_partial_withdrawals :
-    (absEState e).pending_partial_withdrawals =
+@[simp] theorem toSpecState_eth1_deposit_index :
+    (toSpecState e).eth1_deposit_index = e.eth1DepositIndex.toNat := rfl
+@[simp] theorem toSpecState_deposit_requests_start_index :
+    (toSpecState e).deposit_requests_start_index = e.depositRequestsStartIndex.toNat := rfl
+@[simp] theorem toSpecState_deposit_balance_to_consume :
+    (toSpecState e).deposit_balance_to_consume = e.depositBalanceToConsume.toNat := rfl
+@[simp] theorem toSpecState_exit_balance_to_consume :
+    (toSpecState e).exit_balance_to_consume = e.exitBalanceToConsume.toNat := rfl
+@[simp] theorem toSpecState_earliest_exit_epoch :
+    (toSpecState e).earliest_exit_epoch = e.earliestExitEpoch.toNat := rfl
+@[simp] theorem toSpecState_consolidation_balance_to_consume :
+    (toSpecState e).consolidation_balance_to_consume = e.consolidationBalanceToConsume.toNat := rfl
+@[simp] theorem toSpecState_earliest_consolidation_epoch :
+    (toSpecState e).earliest_consolidation_epoch = e.earliestConsolidationEpoch.toNat := rfl
+@[simp] theorem toSpecState_pending_deposits :
+    (toSpecState e).pending_deposits = e.pendingDeposits.toList.map absPendingDeposit := rfl
+@[simp] theorem toSpecState_pending_partial_withdrawals :
+    (toSpecState e).pending_partial_withdrawals =
       e.pendingPartialWithdrawals.toList.map absPendingPartialWithdrawal := rfl
-@[simp] theorem absEState_pending_consolidations :
-    (absEState e).pending_consolidations =
+@[simp] theorem toSpecState_pending_consolidations :
+    (toSpecState e).pending_consolidations =
       e.pendingConsolidations.toList.map absPendingConsolidation := rfl
-@[simp] theorem absEState_proposer_lookahead :
-    (absEState e).proposer_lookahead = e.proposerLookahead.toList.map UInt64.toNat := rfl
+@[simp] theorem toSpecState_proposer_lookahead :
+    (toSpecState e).proposer_lookahead = e.proposerLookahead.toList.map UInt64.toNat := rfl
 end forkonly
 
 end Read
@@ -414,103 +414,103 @@ A write to an Etheorem field is the same write to the reference field. -/
 
 section Write
 
-variable (e : EState)
+variable (e : EtheoremState)
 
-theorem absEState_set_balances (b : SSZList EthCLSpecs.Gloas.Gwei
+theorem toSpecState_set_balances (b : SSZList EthCLSpecs.Gloas.Gwei
       EthCLSpecs.Gloas.Const.validatorRegistryLimit) :
-    absEState { e with balances := b } =
-      { absEState e with balances := b.toList.map UInt64.toNat } := rfl
+    toSpecState { e with balances := b } =
+      { toSpecState e with balances := b.toList.map UInt64.toNat } := rfl
 
-theorem absEState_set_validators (v : SSZList EthCLSpecs.Gloas.Validator
+theorem toSpecState_set_validators (v : SSZList EthCLSpecs.Gloas.Validator
       EthCLSpecs.Gloas.Const.validatorRegistryLimit) :
-    absEState { e with validators := v } =
-      { absEState e with validators := v.toList.map absValidator } := rfl
+    toSpecState { e with validators := v } =
+      { toSpecState e with validators := v.toList.map absValidator } := rfl
 
-theorem absEState_set_inactivityScores (s : SSZList UInt64
+theorem toSpecState_set_inactivityScores (s : SSZList UInt64
       EthCLSpecs.Gloas.Const.validatorRegistryLimit) :
-    absEState { e with inactivityScores := s } =
-      { absEState e with inactivity_scores := s.toList.map UInt64.toNat } := rfl
+    toSpecState { e with inactivityScores := s } =
+      { toSpecState e with inactivity_scores := s.toList.map UInt64.toNat } := rfl
 
-theorem absEState_set_participation
+theorem toSpecState_set_participation
     (prev cur : SSZList EthCLSpecs.Gloas.ParticipationFlags
       EthCLSpecs.Gloas.Const.validatorRegistryLimit) :
-    absEState { e with previousEpochParticipation := prev, currentEpochParticipation := cur } =
-      { absEState e with previous_epoch_participation := prev.toList,
-                         current_epoch_participation := cur.toList } := rfl
+    toSpecState { e with previousEpochParticipation := prev, currentEpochParticipation := cur } =
+      { toSpecState e with previous_epoch_participation := prev.toList,
+                           current_epoch_participation := cur.toList } := rfl
 
-theorem absEState_set_slashings (s : Vector EthCLSpecs.Gloas.Gwei
+theorem toSpecState_set_slashings (s : Vector EthCLSpecs.Gloas.Gwei
       EthCLSpecs.Gloas.Const.epochsPerSlashingsVector) :
-    absEState { e with slashings := s } =
-      { absEState e with slashings := s.toList.map UInt64.toNat } := rfl
+    toSpecState { e with slashings := s } =
+      { toSpecState e with slashings := s.toList.map UInt64.toNat } := rfl
 
-theorem absEState_set_randaoMixes (m : Vector EthCLSpecs.Gloas.Bytes32
+theorem toSpecState_set_randaoMixes (m : Vector EthCLSpecs.Gloas.Bytes32
       EthCLSpecs.Gloas.Const.epochsPerHistoricalVector) :
-    absEState { e with randaoMixes := m } = { absEState e with randao_mixes := m.toList } := rfl
+    toSpecState { e with randaoMixes := m } = { toSpecState e with randao_mixes := m.toList } := rfl
 
-theorem absEState_set_eth1DataVotes (v : SSZList EthCLSpecs.Gloas.Eth1Data
+theorem toSpecState_set_eth1DataVotes (v : SSZList EthCLSpecs.Gloas.Eth1Data
       (EthCLSpecs.Gloas.Const.epochsPerEth1VotingPeriod * EthCLSpecs.Gloas.Const.slotsPerEpoch)) :
-    absEState { e with eth1DataVotes := v } =
-      { absEState e with eth1_data_votes := v.toList.map absEth1Data } := rfl
+    toSpecState { e with eth1DataVotes := v } =
+      { toSpecState e with eth1_data_votes := v.toList.map absEth1Data } := rfl
 
-theorem absEState_set_historicalSummaries (h : SSZList EthCLSpecs.Gloas.HistoricalSummary
+theorem toSpecState_set_historicalSummaries (h : SSZList EthCLSpecs.Gloas.HistoricalSummary
       EthCLSpecs.Gloas.Const.historicalRootsLimit) :
-    absEState { e with historicalSummaries := h } =
-      { absEState e with historical_summaries := h.toList.map absHistoricalSummary } := rfl
+    toSpecState { e with historicalSummaries := h } =
+      { toSpecState e with historical_summaries := h.toList.map absHistoricalSummary } := rfl
 
-theorem absEState_set_syncCommittees (cur next : EthCLSpecs.Gloas.SyncCommittee) :
-    absEState { e with currentSyncCommittee := cur, nextSyncCommittee := next } =
-      { absEState e with current_sync_committee := absSyncCommittee cur,
-                         next_sync_committee := absSyncCommittee next } := rfl
+theorem toSpecState_set_syncCommittees (cur next : EthCLSpecs.Gloas.SyncCommittee) :
+    toSpecState { e with currentSyncCommittee := cur, nextSyncCommittee := next } =
+      { toSpecState e with current_sync_committee := absSyncCommittee cur,
+                           next_sync_committee := absSyncCommittee next } := rfl
 
-theorem absEState_set_proposerLookahead (l : Vector EthCLSpecs.Gloas.ValidatorIndex
+theorem toSpecState_set_proposerLookahead (l : Vector EthCLSpecs.Gloas.ValidatorIndex
       (2 * EthCLSpecs.Gloas.Const.slotsPerEpoch)) :
-    absEState { e with proposerLookahead := l } =
-      { absEState e with proposer_lookahead := l.toList.map UInt64.toNat } := rfl
+    toSpecState { e with proposerLookahead := l } =
+      { toSpecState e with proposer_lookahead := l.toList.map UInt64.toNat } := rfl
 
 forkonly Gloas
-theorem absEState_set_ptcWindow (w : Vector (Vector EthCLSpecs.Gloas.ValidatorIndex
+theorem toSpecState_set_ptcWindow (w : Vector (Vector EthCLSpecs.Gloas.ValidatorIndex
       EthCLSpecs.Gloas.Const.ptcSize) (3 * EthCLSpecs.Gloas.Const.slotsPerEpoch)) :
-    absEState { e with ptcWindow := w } =
-      { absEState e with ptc_window := w.toList.map fun ptc => ptc.toList.map UInt64.toNat } := rfl
+    toSpecState { e with ptcWindow := w } =
+      { toSpecState e with ptc_window := w.toList.map fun ptc => ptc.toList.map UInt64.toNat } := rfl
 end forkonly
 
-theorem absEState_set_pendingDeposits (d : SSZList EthCLSpecs.Gloas.PendingDeposit
+theorem toSpecState_set_pendingDeposits (d : SSZList EthCLSpecs.Gloas.PendingDeposit
       EthCLSpecs.Gloas.Const.pendingDepositsLimit) :
-    absEState { e with pendingDeposits := d } =
-      { absEState e with pending_deposits := d.toList.map absPendingDeposit } := rfl
+    toSpecState { e with pendingDeposits := d } =
+      { toSpecState e with pending_deposits := d.toList.map absPendingDeposit } := rfl
 
-theorem absEState_set_pendingConsolidations (c : SSZList EthCLSpecs.Gloas.PendingConsolidation
+theorem toSpecState_set_pendingConsolidations (c : SSZList EthCLSpecs.Gloas.PendingConsolidation
       EthCLSpecs.Gloas.Const.pendingConsolidationsLimit) :
-    absEState { e with pendingConsolidations := c } =
-      { absEState e with pending_consolidations := c.toList.map absPendingConsolidation } := rfl
+    toSpecState { e with pendingConsolidations := c } =
+      { toSpecState e with pending_consolidations := c.toList.map absPendingConsolidation } := rfl
 
-theorem absEState_set_justification
+theorem toSpecState_set_justification
     (bits : Bitvector EthCLSpecs.Gloas.Const.justificationBitsLength)
     (prev cur fin : EthCLSpecs.Gloas.Checkpoint) :
-    absEState { e with justificationBits := bits, previousJustifiedCheckpoint := prev,
-                       currentJustifiedCheckpoint := cur, finalizedCheckpoint := fin } =
-      { absEState e with justification_bits := absBits bits,
-                         previous_justified_checkpoint := absCheckpoint prev,
-                         current_justified_checkpoint := absCheckpoint cur,
-                         finalized_checkpoint := absCheckpoint fin } := rfl
+    toSpecState { e with justificationBits := bits, previousJustifiedCheckpoint := prev,
+                         currentJustifiedCheckpoint := cur, finalizedCheckpoint := fin } =
+      { toSpecState e with justification_bits := absBits bits,
+                           previous_justified_checkpoint := absCheckpoint prev,
+                           current_justified_checkpoint := absCheckpoint cur,
+                           finalized_checkpoint := absCheckpoint fin } := rfl
 
-theorem absEState_set_churn (dbtc ebtc ebc : EthCLSpecs.Gloas.Gwei)
+theorem toSpecState_set_churn (dbtc ebtc ebc : EthCLSpecs.Gloas.Gwei)
     (eee ece : EthCLSpecs.Gloas.Epoch) :
-    absEState { e with depositBalanceToConsume := dbtc, exitBalanceToConsume := ebtc,
-                       earliestExitEpoch := eee, consolidationBalanceToConsume := ebc,
-                       earliestConsolidationEpoch := ece } =
-      { absEState e with deposit_balance_to_consume := dbtc.toNat,
-                         exit_balance_to_consume := ebtc.toNat,
-                         earliest_exit_epoch := eee.toNat,
-                         consolidation_balance_to_consume := ebc.toNat,
-                         earliest_consolidation_epoch := ece.toNat } := rfl
+    toSpecState { e with depositBalanceToConsume := dbtc, exitBalanceToConsume := ebtc,
+                         earliestExitEpoch := eee, consolidationBalanceToConsume := ebc,
+                         earliestConsolidationEpoch := ece } =
+      { toSpecState e with deposit_balance_to_consume := dbtc.toNat,
+                           exit_balance_to_consume := ebtc.toNat,
+                           earliest_exit_epoch := eee.toNat,
+                           consolidation_balance_to_consume := ebc.toNat,
+                           earliest_consolidation_epoch := ece.toNat } := rfl
 
 forkonly Gloas
-theorem absEState_set_builderPayments (pay : Vector EPayment (2 * EthCLSpecs.Gloas.Const.slotsPerEpoch))
+theorem toSpecState_set_builderPayments (pay : Vector EPayment (2 * EthCLSpecs.Gloas.Const.slotsPerEpoch))
     (wd : SSZList EWithdrawal EthCLSpecs.Gloas.Const.builderPendingWithdrawalsLimit) :
-    absEState { e with builderPendingPayments := pay, builderPendingWithdrawals := wd } =
-      { absEState e with builder_pending_payments := pay.toList.map absPayment,
-                         builder_pending_withdrawals := wd.toList.map absWithdrawal } := rfl
+    toSpecState { e with builderPendingPayments := pay, builderPendingWithdrawals := wd } =
+      { toSpecState e with builder_pending_payments := pay.toList.map absPayment,
+                           builder_pending_withdrawals := wd.toList.map absWithdrawal } := rfl
 end forkonly
 
 end Write

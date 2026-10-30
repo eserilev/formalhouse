@@ -153,8 +153,8 @@ theorem tailNFG_eq [PresetCfg] (o : Oracle) (K : BeaconState → SpecM BeaconSta
 
 /-- Two computations that do not depend on each other give the same `ok` results in either
 order. -/
-theorem sameOk_bind_swap {α β γ : Type} (x : SpecM α) (y : SpecM β) (k : α → β → SpecM γ) :
-    SameOk (x >>= fun a => y >>= fun b => k a b) (y >>= fun b => x >>= fun a => k a b) := by
+theorem sameResultOrBothFail_bind_swap {α β γ : Type} (x : SpecM α) (y : SpecM β) (k : α → β → SpecM γ) :
+    SameResultOrBothFail (x >>= fun a => y >>= fun b => k a b) (y >>= fun b => x >>= fun a => k a b) := by
   intro v
   cases x <;> cases y <;> simp [bind, Except.bind]
 
@@ -246,7 +246,7 @@ theorem lhAfter_pass2_nf [PresetCfg] (o : Oracle) (K : BeaconState → SpecM Bea
     (hthr : hysteresisThresholds P = .ok (downward, upward)) (hrows : RowsOk s1)
     (dec : Nat × Gwei × List Bool) (sums : List Gwei) (x : (Epoch × Gwei) × List Row)
     (hkey : x.2.map rowKey = (rowsOf s1).map rowKey) :
-    SameOk (passM (fun _ r => (fun r' => ((), r')) <$> lhRowStep2 downward upward
+    SameResultOrBothFail (passM (fun _ r => (fun r' => ((), r')) <$> lhRowStep2 downward upward
         (sums.getD r.index 0) (decide (r.index ∈ consolidationIndices s1)) r) () x.2 >>=
         fun y => lhAfterPassG o K s1 (planOf s1 dec sums) (x.1, y.2))
       (nfAfterG o K s1 (s1.withRowsChurn x.1 x.2) dec sums) := by
@@ -275,13 +275,13 @@ theorem lhAfter_pass2_nf [PresetCfg] (o : Oracle) (K : BeaconState → SpecM Bea
     simp only [nfAfterG, addSums]
     rw [hlen, bind_assoc]
     rfl
-  show SameOk (passM (fun _ r => (fun r' => ((), r')) <$> lhRowStep2 downward upward
+  show SameResultOrBothFail (passM (fun _ r => (fun r' => ((), r')) <$> lhRowStep2 downward upward
       (td r.index) (nm r.index) r) () x.2 >>=
       fun y => lhAfterPassG o K s1 (planOf s1 dec sums) (x.1, y.2))
     (nfAfterG o K s1 S4 dec sums)
   rw [hL, hR]
-  refine SameOk.bind ((rows_pass2_fold S4 hokS4 downward upward hthr td nm).trans
-    (fold_interleave td nm _ S4)) (fun T2 hT2 => SameOk.of_eq ?_)
+  refine SameResultOrBothFail.bind ((rows_pass2_fold S4 hokS4 downward upward hthr td nm).trans
+    (fold_interleave td nm _ S4)) (fun T2 hT2 => SameResultOrBothFail.of_eq ?_)
   apply lhRest_eq_nfRest
   obtain ⟨y, hy, rfl⟩ := (map_ok_iff' _ _ _).mp hT2
   have hyl := (passM_rows _ _ _ _ hy).1
@@ -300,7 +300,7 @@ theorem lhFullTailG_nf [PresetCfg] (o : Oracle) (rt : Gwei → Gwei)
       .ok (adjusted, per))
     (hthr : hysteresisThresholds P = .ok (downward, upward))
     (hrows : RowsOk s1) :
-    SameOk (lhFullTailG o rt fin s1)
+    SameResultOrBothFail (lhFullTailG o rt fin s1)
       (do
         let x ← passM (fun c r => lhRowStep P
             (lhContextOf s1 (rt total_active_balance) current_epoch rctx per)
@@ -316,19 +316,19 @@ theorem lhFullTailG_nf [PresetCfg] (o : Oracle) (rt : Gwei → Gwei)
   rw [lhFullTailG_eq o rt fin s1 current_epoch total_active_balance rctx adjusted per downward
     upward hcur htab hctx hpre hthr, lhDepositPlan_eq]
   simp only [tailNFG_eq, bind_assoc, bind_map_left]
-  refine SameOk.trans ?_ (sameOk_bind_swap (planDec s1 (rt total_active_balance) current_epoch)
+  refine SameResultOrBothFail.trans ?_ (sameResultOrBothFail_bind_swap (planDec s1 (rt total_active_balance) current_epoch)
     pass1 (fun dec x => sumsOfDec s1 dec >>= fun sums =>
       nfAfterG o K s1 (s1.withRowsChurn x.1 x.2) dec sums))
-  refine SameOk.bind (SameOk.refl _) (fun dec _ => ?_)
-  refine SameOk.trans ?_ (sameOk_bind_swap (sumsOfDec s1 dec) pass1 (fun sums x =>
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun dec _ => ?_)
+  refine SameResultOrBothFail.trans ?_ (sameResultOrBothFail_bind_swap (sumsOfDec s1 dec) pass1 (fun sums x =>
       nfAfterG o K s1 (s1.withRowsChurn x.1 x.2) dec sums))
-  refine SameOk.bind (SameOk.refl _) (fun sums _ => ?_)
-  refine SameOk.trans (SameOk.bind (lhRowStepFull_split ctx downward upward
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun sums _ => ?_)
+  refine SameResultOrBothFail.trans (SameResultOrBothFail.bind (lhRowStepFull_split ctx downward upward
     (lhBaseReward total_active_balance) (fun i => sums.getD i 0)
     (fun i => decide (i ∈ consolidationIndices s1)) c0 (rowsOf s1))
-    (fun _ _ => SameOk.refl _)) ?_
+    (fun _ _ => SameResultOrBothFail.refl _)) ?_
   simp only [bind_assoc, pure_bind]
-  refine SameOk.bind (SameOk.refl _) (fun x hx => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun x hx => ?_)
   exact lhAfter_pass2_nf o K s1 downward upward hthr hrows dec sums x
     (passM_rowKey _ (fun c r y h => lhRowStep_rowKey ctx _ c r y h) c0 (rowsOf s1) x hx)
 
@@ -343,7 +343,7 @@ theorem lhFullTail_nf [PresetCfg] (o : Oracle) (s1 : BeaconState) (current_epoch
       .ok (adjusted, per))
     (hthr : hysteresisThresholds P = .ok (downward, upward))
     (hrows : RowsOk s1) :
-    SameOk (lhFullTail o s1)
+    SameResultOrBothFail (lhFullTail o s1)
       (do
         let x ← passM (fun c r => lhRowStep P
             (lhContextOf s1 total_active_balance current_epoch rctx per)

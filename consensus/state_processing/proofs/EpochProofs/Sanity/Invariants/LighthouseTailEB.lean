@@ -135,7 +135,7 @@ theorem ebUpdateAt_commute [PresetCfg] (F : BeaconState → SpecM BeaconState) (
     (hF2 : ∀ t t', P t → F t = .ok t' →
       t'.validators[i]? = t.validators[i]? ∧ t'.balances[i]? = t.balances[i]?)
     (s : BeaconState) (hs : P s) :
-    SameOk (ebUpdateAt s i >>= F) (F s >>= fun t => ebUpdateAt t i) := by
+    SameResultOrBothFail (ebUpdateAt s i >>= F) (F s >>= fun t => ebUpdateAt t i) := by
   intro w
   constructor
   · intro h
@@ -168,25 +168,25 @@ theorem ebFold_commute [PresetCfg] (F : BeaconState → SpecM BeaconState) (P : 
     (hF2 : ∀ i ∈ l, ∀ t t', P t → F t = .ok t' →
       t'.validators[i]? = t.validators[i]? ∧ t'.balances[i]? = t.balances[i]?)
     (s : BeaconState) (hs : P s) :
-    SameOk (l.foldlM ebUpdateAt s >>= F) (F s >>= fun t => l.foldlM ebUpdateAt t) := by
+    SameResultOrBothFail (l.foldlM ebUpdateAt s >>= F) (F s >>= fun t => l.foldlM ebUpdateAt t) := by
   induction l generalizing s with
   | nil =>
-    apply SameOk.of_eq
+    apply SameResultOrBothFail.of_eq
     show F s = (F s >>= pure)
     rw [bind_pure]
   | cons i l ih =>
     have hPi := hP i (by simp)
-    refine SameOk.trans (SameOk.of_eq (by rw [List.foldlM_cons, bind_assoc])) ?_
-    refine SameOk.trans
+    refine SameResultOrBothFail.trans (SameResultOrBothFail.of_eq (by rw [List.foldlM_cons, bind_assoc])) ?_
+    refine SameResultOrBothFail.trans
       (y := ebUpdateAt s i >>= fun s1 => F s1 >>= fun t' => l.foldlM ebUpdateAt t')
-      (SameOk.bind (SameOk.refl (ebUpdateAt s i)) (fun s1 h1 => ?_)) ?_
+      (SameResultOrBothFail.bind (SameResultOrBothFail.refl (ebUpdateAt s i)) (fun s1 h1 => ?_)) ?_
     · obtain ⟨v, b, e, -, -, -, rfl⟩ := (ebUpdateAt_ok s s1 i).mp h1
       exact ih (fun j hj => hP j (by simp [hj])) (fun j hj => hF1 j (by simp [hj]))
         (fun j hj => hF2 j (by simp [hj])) _ (hPi s e hs)
-    · refine SameOk.trans (SameOk.of_eq (by rw [← bind_assoc])) ?_
-      refine SameOk.trans (SameOk.bind (ebUpdateAt_commute F i P (hF1 i (by simp))
-        (hF2 i (by simp)) s hs) (fun _ _ => SameOk.refl _)) ?_
-      apply SameOk.of_eq
+    · refine SameResultOrBothFail.trans (SameResultOrBothFail.of_eq (by rw [← bind_assoc])) ?_
+      refine SameResultOrBothFail.trans (SameResultOrBothFail.bind (ebUpdateAt_commute F i P (hF1 i (by simp))
+        (hF2 i (by simp)) s hs) (fun _ _ => SameResultOrBothFail.refl _)) ?_
+      apply SameResultOrBothFail.of_eq
       rw [bind_assoc]
       rfl
 
@@ -409,28 +409,28 @@ theorem ebUpdateAt_hF2 [PresetCfg] (j i : Nat) (hij : i ≠ j) (t t' : BeaconSta
 
 /-- Two updates at different indices commute. -/
 theorem ebUpdateAt_swap [PresetCfg] (s : BeaconState) (i j : Nat) :
-    SameOk (ebUpdateAt s i >>= fun t => ebUpdateAt t j)
+    SameResultOrBothFail (ebUpdateAt s i >>= fun t => ebUpdateAt t j)
       (ebUpdateAt s j >>= fun t => ebUpdateAt t i) := by
   by_cases hij : i = j
   · subst hij
-    exact SameOk.refl _
+    exact SameResultOrBothFail.refl _
   · exact ebUpdateAt_commute (fun t => ebUpdateAt t j) i (fun _ => True)
       (fun t e _ => ebUpdateAt_hF1 j i hij t e) (fun t t' _ h => ebUpdateAt_hF2 j i hij t t' h)
       s trivial
 
 /-- Updates over two permuted lists give the same `ok` results. -/
 theorem ebFold_perm [PresetCfg] {l l' : List Nat} (h : l.Perm l') (s : BeaconState) :
-    SameOk (l.foldlM ebUpdateAt s) (l'.foldlM ebUpdateAt s) := by
+    SameResultOrBothFail (l.foldlM ebUpdateAt s) (l'.foldlM ebUpdateAt s) := by
   induction h generalizing s with
-  | nil => exact SameOk.refl _
+  | nil => exact SameResultOrBothFail.refl _
   | cons x _ ih =>
     rw [List.foldlM_cons, List.foldlM_cons]
-    exact SameOk.bind (SameOk.refl _) (fun t _ => ih t)
+    exact SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t _ => ih t)
   | swap x y l =>
     simp only [List.foldlM_cons]
-    refine SameOk.trans (SameOk.of_eq (bind_assoc _ _ _).symm) ?_
-    refine SameOk.trans (SameOk.bind (ebUpdateAt_swap s y x) (fun _ _ => SameOk.refl _)) ?_
-    exact SameOk.of_eq (bind_assoc _ _ _)
+    refine SameResultOrBothFail.trans (SameResultOrBothFail.of_eq (bind_assoc _ _ _).symm) ?_
+    refine SameResultOrBothFail.trans (SameResultOrBothFail.bind (ebUpdateAt_swap s y x) (fun _ _ => SameResultOrBothFail.refl _)) ?_
+    exact SameResultOrBothFail.of_eq (bind_assoc _ _ _)
   | trans _ _ ih1 ih2 => exact (ih1 s).trans (ih2 s)
 
 
@@ -498,9 +498,9 @@ theorem ebFold_range_eq [PresetCfg] (s : BeaconState) :
 
 /-- The update of all validators equals one update per index, in index order. -/
 theorem process_effective_balance_updates_fold [PresetCfg] (s : BeaconState) :
-    SameOk (process_effective_balance_updates P s)
+    SameResultOrBothFail (process_effective_balance_updates P s)
       ((List.range s.validators.length).foldlM ebUpdateAt s) := by
-  apply SameOk.of_eq
+  apply SameResultOrBothFail.of_eq
   have h := ebFold_range_eq s s.validators []
   simp only [List.length_nil, List.nil_append] at h
   rw [process_effective_balance_updates_eq, List.range_eq_range', ← h]

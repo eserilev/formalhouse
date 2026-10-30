@@ -18,7 +18,7 @@ import EthCLSpecs.Fulu.Transition
 # The whole epoch equals Etheorem
 
 `process_epoch_etheorem`: if the reference `process_epoch` returns `s'`, Etheorem's Gloas
-`processEpoch` succeeds and `absEState` of its result is `s'`.
+`processEpoch` succeeds and `toSpecState` of its result is `s'`.
 
 Both specs run the same 17 steps in the same order. `epochSteps` lists Etheorem's steps, and
 `processEpoch_eq` shows that `processEpoch` runs them in sequence. The proof runs one step
@@ -32,7 +32,7 @@ the state.
 For Fulu, `process_epoch_fulu_etheorem` states the same for the reference Fulu `process_epoch`
 and Etheorem's Fulu `processEpoch`. The two run 15 steps. The reference registry update and
 pending deposits are the Gloas functions at `fuluTab` (`process_epoch_fulu_eq_tab`), so the proof
-runs the Fulu copies of the step theorems. `FuluEpochConds p o e` collects the conditions.
+runs the Fulu copies of the step theorems. `FuluEtheoremBridgeConditions p o e` collects the conditions.
 
 Each proof here holds for Gloas and for Fulu. `forkproof EpochEtheorem` (see `Forks.lean`)
 elaborates the shared text once per fork, and `forkonly` holds the parts that differ.
@@ -45,49 +45,28 @@ open EthCLLib.Spec EthCLLib.Proofs SizzLean.Proofs EthCLSpecs.Proofs.Gloas
 section Preset
 
 forkonly Gloas
-/-- All the preset facts the 17 steps read. -/
-structure EpochPresetAgrees [EthCLSpecs.Gloas.Preset] [EthCLSpecs.Gloas.Config]
-    (p : Spec.Preset) : Prop where
-  base : PresetAgrees p
-  tail : TailPresetAgrees p
-  passes : PassesPresetAgrees p
-  queues : QueuesPresetAgrees p
-  committee : CommitteePresetAgrees p
-  slotsPerEpochSix : 6 ≤ p.SLOTS_PER_EPOCH
-  epochsPerSyncCommitteePeriodLt : p.EPOCHS_PER_SYNC_COMMITTEE_PERIOD < 2 ^ 64
 
 section
 attribute [local instance] EthCLSpecs.Gloas.mainnet EthCLSpecs.Gloas.mainnetConfig
-theorem epochPresetAgrees_mainnet : EpochPresetAgrees Spec.Preset.mainnet :=
+theorem presetMatchesEtheorem_mainnet : PresetMatchesEtheorem Spec.Preset.mainnet :=
   ⟨presetAgrees_mainnet, tailPresetAgrees_mainnet, passesPresetAgrees_mainnet,
     queuesPresetAgrees_mainnet, committeePresetAgrees_mainnet, by decide, by decide⟩
 end
 
 section
 attribute [local instance] EthCLSpecs.Gloas.minimal EthCLSpecs.Gloas.minimalConfig
-theorem epochPresetAgrees_minimal : EpochPresetAgrees Spec.Preset.minimal :=
+theorem presetMatchesEtheorem_minimal : PresetMatchesEtheorem Spec.Preset.minimal :=
   ⟨presetAgrees_minimal, tailPresetAgrees_minimal, passesPresetAgrees_minimal,
     queuesPresetAgrees_minimal, committeePresetAgrees_minimal, by decide, by decide⟩
 end
 end forkonly
 
 forkonly Fulu
-/-- All the preset and config facts the 15 Fulu steps read. -/
-structure EpochPresetAgrees [EthCLSpecs.Fulu.Preset] [EthCLSpecs.Fulu.Config]
-    (p : Spec.Preset) (f : Spec.FuluConfig) : Prop where
-  base : PresetAgrees p
-  churn : FuluChurnAgrees p f
-  tail : TailPresetAgrees p
-  passes : PassesPresetAgrees p
-  queues : QueuesPresetAgrees p
-  committee : CommitteePresetAgrees p
-  epochsPerSyncCommitteePeriodLt : p.EPOCHS_PER_SYNC_COMMITTEE_PERIOD < 2 ^ 64
-  syncCommitteeSizePos : 0 < p.SYNC_COMMITTEE_SIZE
 
 section
 attribute [local instance] EthCLSpecs.Fulu.mainnet EthCLSpecs.Fulu.mainnetConfig
-theorem epochPresetAgrees_mainnet :
-    EpochPresetAgrees Spec.Preset.mainnet Spec.FuluConfig.mainnet :=
+theorem presetMatchesEtheorem_mainnet :
+    PresetMatchesEtheorem Spec.Preset.mainnet Spec.FuluConfig.mainnet :=
   ⟨presetAgrees_mainnet, fuluChurnAgrees_mainnet, tailPresetAgrees_mainnet,
     passesPresetAgrees_mainnet, queuesPresetAgrees_mainnet, committeePresetAgrees_mainnet,
     by decide, by decide⟩
@@ -95,8 +74,8 @@ end
 
 section
 attribute [local instance] EthCLSpecs.Fulu.minimal EthCLSpecs.Fulu.minimalConfig
-theorem epochPresetAgrees_minimal :
-    EpochPresetAgrees Spec.Preset.minimal Spec.FuluConfig.minimal :=
+theorem presetMatchesEtheorem_minimal :
+    PresetMatchesEtheorem Spec.Preset.minimal Spec.FuluConfig.minimal :=
   ⟨presetAgrees_minimal, fuluChurnAgrees_minimal, tailPresetAgrees_minimal,
     passesPresetAgrees_minimal, queuesPresetAgrees_minimal, committeePresetAgrees_minimal,
     by decide, by decide⟩
@@ -111,14 +90,7 @@ variable [EthCLSpecs.Gloas.Preset] [HasherTag]
 
 /-! ## Running steps in sequence -/
 
-/-- Etheorem runs the steps `l` in order from `e` and reaches `e'`. Each step starts and ends on
-the uncached box. -/
-inductive StepsOk : List (GloasRun Unit) → EState → EState → Prop
-  | nil (e : EState) : StepsOk [] e e
-  | cons {a : GloasRun Unit} {l : List (GloasRun Unit)} {e e1 e2 : EState} :
-      a.run (pureState e) = .ok ((), pureState e1) → StepsOk l e1 e2 → StepsOk (a :: l) e e2
-
-theorem StepsOk.snoc {l : List (GloasRun Unit)} {a : GloasRun Unit} {e e1 e2 : EState}
+theorem StepsOk.snoc {l : List (GloasRun Unit)} {a : GloasRun Unit} {e e1 e2 : EtheoremState}
     (h : StepsOk l e e1) (ha : a.run (pureState e1) = .ok ((), pureState e2)) :
     StepsOk (l ++ [a]) e e2 := by
   induction h with
@@ -131,7 +103,7 @@ def seqSteps : List (GloasRun Unit) → GloasRun Unit
   | [a] => a
   | a :: b :: l => a >>= fun _ => seqSteps (b :: l)
 
-theorem StepsOk.run_seq {l : List (GloasRun Unit)} {e e' : EState} (h : StepsOk l e e') :
+theorem StepsOk.run_seq {l : List (GloasRun Unit)} {e e' : EtheoremState} (h : StepsOk l e e') :
     (seqSteps l).run (pureState e) = .ok ((), pureState e') := by
   induction h with
   | nil e => rfl
@@ -142,53 +114,10 @@ theorem StepsOk.run_seq {l : List (GloasRun Unit)} {e e' : EState} (h : StepsOk 
 
 variable [EthCLSpecs.Gloas.Config] [CryptoBackend]
 
-forkonly Gloas
-/-- Etheorem's 17 epoch steps, in `processEpoch` order. -/
-def epochSteps : List (GloasRun Unit) :=
-  [EthCLSpecs.Gloas.processJustificationAndFinalization,
-   EthCLSpecs.Gloas.processInactivityUpdates,
-   EthCLSpecs.Gloas.processRewardsAndPenalties,
-   EthCLSpecs.Gloas.processRegistryUpdates,
-   EthCLSpecs.Gloas.processSlashings,
-   EthCLSpecs.Gloas.processEth1DataReset,
-   EthCLSpecs.Gloas.processPendingDeposits,
-   EthCLSpecs.Gloas.processPendingConsolidations,
-   EthCLSpecs.Gloas.processBuilderPendingPayments,
-   EthCLSpecs.Gloas.processEffectiveBalanceUpdates,
-   EthCLSpecs.Gloas.processSlashingsReset,
-   EthCLSpecs.Gloas.processRandaoMixesReset,
-   EthCLSpecs.Gloas.processHistoricalSummariesUpdate,
-   EthCLSpecs.Gloas.processParticipationFlagUpdates,
-   EthCLSpecs.Gloas.processSyncCommitteeUpdates,
-   EthCLSpecs.Gloas.processProposerLookahead,
-   EthCLSpecs.Gloas.processPtcWindow]
-end forkonly
-
-forkonly Fulu
-/-- Etheorem's 15 Fulu epoch steps, in `processEpoch` order. -/
-def epochSteps : List (FuluRun Unit) :=
-  [EthCLSpecs.Fulu.processJustificationAndFinalization,
-   EthCLSpecs.Fulu.processInactivityUpdates,
-   EthCLSpecs.Fulu.processRewardsAndPenalties,
-   EthCLSpecs.Fulu.processRegistryUpdates,
-   EthCLSpecs.Fulu.processSlashings,
-   EthCLSpecs.Fulu.processEth1DataReset,
-   EthCLSpecs.Fulu.processPendingDeposits,
-   EthCLSpecs.Fulu.processPendingConsolidations,
-   EthCLSpecs.Fulu.processEffectiveBalanceUpdates,
-   EthCLSpecs.Fulu.processSlashingsReset,
-   EthCLSpecs.Fulu.processRandaoMixesReset,
-   EthCLSpecs.Fulu.processHistoricalSummariesUpdate,
-   EthCLSpecs.Fulu.processParticipationFlagUpdates,
-   EthCLSpecs.Fulu.processSyncCommitteeUpdates,
-   EthCLSpecs.Fulu.processProposerLookahead]
-end forkonly
 
 theorem processEpoch_eq :
     (EthCLSpecs.Gloas.processEpoch (StateTransition := GloasRun)) = seqSteps epochSteps := rfl
 
-/-- Etheorem runs the first `k` epoch steps from `e` and reaches `e'`. -/
-def Before (k : Nat) (e e' : EState) : Prop := StepsOk (epochSteps.take k) e e'
 
 /-! ## The conditions -/
 
@@ -203,9 +132,9 @@ State facts:
 - `builderRoom`: the new builder withdrawals fit under Etheorem's list limit (F6).
 - `summariesRoom`: the historical summaries list has room for one more item. Beta.4 keeps
   this `HISTORICAL_ROOTS_LIMIT` cap. -/
-structure EtheoremEpochConds (e : EState) : Prop where
+structure EtheoremEpochConds (e : EtheoremState) : Prop where
   finalized : ∀ e', Before 3 e e' →
-    (absEState e').finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH
+    (toSpecState e').finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH
   depositLens : ∀ e', Before 6 e e' → LensEq e'
   depositRoom : ∀ e', Before 6 e e' → e'.validators.val.size +
     EthCLSpecs.Gloas.Const.maxPendingDepositsPerEpoch ≤ EthCLSpecs.Gloas.Const.validatorRegistryLimit
@@ -220,73 +149,46 @@ structure EtheoremEpochConds (e : EState) : Prop where
 
 omit [CryptoBackend] in
 theorem builder_pending_payments_etheorem' {p : Spec.Preset} (hp : PresetAgrees p)
-    (hslots6 : 6 ≤ p.SLOTS_PER_EPOCH) (e : EState)
+    (hslots6 : 6 ≤ p.SLOTS_PER_EPOCH) (e : EtheoremState)
     (hfits : e.builderPendingWithdrawals.val.size + (qualifyingBuilderWithdrawals e).length ≤
       EthCLSpecs.Gloas.Const.builderPendingWithdrawalsLimit)
     {s' : Spec.BeaconState}
-    (h : Spec.process_builder_pending_payments p (etheoremTotalActiveBalance e) (absEState e) =
+    (h : Spec.process_builder_pending_payments p (etheoremTotalActiveBalance e) (toSpecState e) =
       .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processBuilderPendingPayments (StateTransition := GloasRun)).run
-        (pureState e) = .ok ((), pureState e') ∧ absEState e' = s' := by
+        (pureState e) = .ok ((), pureState e') ∧ toSpecState e' = s' := by
   obtain ⟨e', s'', hrun, hspec, ⟨hpay, hwd⟩, he', hs''⟩ :=
-    builder_pending_payments_etheorem p hp.slotsPerEpoch hslots6 e (absEState e) ⟨rfl, rfl⟩ hfits
+    builder_pending_payments_etheorem p hp.slotsPerEpoch hslots6 e (toSpecState e) ⟨rfl, rfl⟩ hfits
   have hbox := processBuilderPendingPayments_run e
   have hX := runPure_of_run_ok hbox
   rw [hX] at hrun
   cases hrun
   refine ⟨_, hbox, ?_⟩
   have : s' = s'' := by
-    have h2 : Spec.process_builder_pending_payments p (totalActiveBalance e) (absEState e) =
+    have h2 : Spec.process_builder_pending_payments p (totalActiveBalance e) (toSpecState e) =
       .ok s' := h
     rw [h2] at hspec; cases hspec; rfl
   subst this
-  rw [hs'', absEState_set_builderPayments, ← hpay, ← hwd]
+  rw [hs'', toSpecState_set_builderPayments, ← hpay, ← hwd]
 end forkonly
 
-forkonly Fulu
-/-- The conditions of the 15 Fulu step theorems, for an epoch that starts at `e`.
-
-State facts:
-- `finalized`: the finalized epoch is below `FAR_FUTURE_EPOCH` before the registry update.
-- `depositLens`, `depositRoom`: before the pending deposits, the registry lists have the same
-  length, and each pending deposit has room for a new validator.
-- `consolidationLens`: one balance for each validator before the pending consolidations.
-- `summariesRoom`: the historical summaries list has room for one more item.
-
-Facts about the hash values:
-- `proposerFin`: each Electra proposer loop of the lookahead ends before its last pass
-  (`Spec.ProposerFin`). The last pass needs `2**64 - 1` rejected candidates before it. -/
-structure FuluEpochConds (p : Spec.Preset) (o : Spec.Oracle) (e : EState) : Prop where
-  finalized : ∀ e', Before 3 e e' →
-    (absEState e').finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH
-  depositLens : ∀ e', Before 6 e e' → LensEq e'
-  depositRoom : ∀ e', Before 6 e e' → e'.validators.val.size + e'.pendingDeposits.val.size ≤
-    EthCLSpecs.Fulu.Const.validatorRegistryLimit
-  consolidationLens : ∀ e', Before 7 e e' → e'.balances.val.size = e'.validators.val.size
-  summariesRoom : ∀ e', Before 11 e e' →
-    e'.historicalSummaries.val.size < EthCLSpecs.Fulu.Const.historicalRootsLimit
-  proposerFin : ∀ e', Before 14 e e' → ∀ s, Spec.ProposerFin p o (absEState e')
-    (Spec.get_active_validator_indices (absEState e')
-      (EthCLSpecs.Fulu.currentEpochOf (pureState e') + EthCLSpecs.Fulu.Const.minSeedLookahead +
-        1).toNat) s
-end forkonly
 
 /-! ## The whole epoch -/
 
 forkonly Gloas
-variable {p : Spec.Preset} (hp : EpochPresetAgrees p)
+variable {p : Spec.Preset} (hp : PresetMatchesEtheorem p)
 include hp
 
 /-- The reference `process_epoch` equals Etheorem's Gloas `processEpoch`.
 
-If the reference returns `s'`, Etheorem's run succeeds and `absEState` of its result is `s'`.
+If the reference returns `s'`, Etheorem's run succeeds and `toSpecState` of its result is `s'`.
 `ho`: the oracle fields equal Etheorem's functions. `hsha`: `sha` returns 32 bytes
 (`sha_size_pure` proves it for the pure SHA-256). `hc`: the step conditions. -/
 theorem process_epoch_etheorem (o : Spec.Oracle) (ho : OracleAgrees o)
-    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState) (hc : EtheoremEpochConds e)
-    {s' : Spec.BeaconState} (h : Spec.process_epoch p o (absEState e) = .ok s') :
+    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EtheoremState) (hc : EtheoremEpochConds e)
+    {s' : Spec.BeaconState} (h : Spec.process_epoch p o (toSpecState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processEpoch (StateTransition := GloasRun)).run (pureState e) =
-      .ok ((), pureState e') ∧ absEState e' = s' := by
+      .ok ((), pureState e') ∧ toSpecState e' = s' := by
   have hpp := hp.passes
   have hb := hp.base
   unfold Spec.process_epoch at h
@@ -381,19 +283,19 @@ theorem process_epoch_etheorem (o : Spec.Oracle) (ho : OracleAgrees o)
 end forkonly
 
 forkonly Fulu
-variable {p : Spec.Preset} {f : Spec.FuluConfig} (hp : EpochPresetAgrees p f)
+variable {p : Spec.Preset} {f : Spec.FuluConfig} (hp : PresetMatchesEtheorem p f)
 include hp
 
 /-- The reference Fulu `process_epoch` equals Etheorem's Fulu `processEpoch`.
 
-If the reference returns `s'`, Etheorem's run succeeds and `absEState` of its result is `s'`.
+If the reference returns `s'`, Etheorem's run succeeds and `toSpecState` of its result is `s'`.
 `ho`: the oracle fields equal Etheorem's functions. `hsha`: `sha` returns 32 bytes
 (`sha_size_pure` proves it for the pure SHA-256). `hc`: the step conditions. -/
 theorem process_epoch_fulu_etheorem (o : Spec.Oracle) (ho : OracleAgrees o)
-    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState) (hc : FuluEpochConds p o e)
-    {s' : Spec.BeaconState} (h : Spec.process_epoch_fulu p f o (absEState e) = .ok s') :
+    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EtheoremState) (hc : FuluEtheoremBridgeConditions p o e)
+    {s' : Spec.BeaconState} (h : Spec.process_epoch_fulu p f o (toSpecState e) = .ok s') :
     ∃ e', (EthCLSpecs.Fulu.processEpoch (StateTransition := FuluRun)).run (pureState e) =
-      .ok ((), pureState e') ∧ absEState e' = s' := by
+      .ok ((), pureState e') ∧ toSpecState e' = s' := by
   have hpp := hp.passes
   have hb := hp.base
   rw [Spec.process_epoch_fulu_eq_tab p f hp.churn.compat] at h
@@ -489,19 +391,19 @@ agrees with Etheorem's (`hpa`).
 
 `process_epoch_lh_full` is the model of the whole Lighthouse epoch: the single pass from the
 Aeneas translation, then the Lighthouse order of deposits, consolidations and effective
-balances. If it returns `s'`, Etheorem's run succeeds and `absEState` of its result is `s'`.
+balances. If it returns `s'`, Etheorem's run succeeds and `toSpecState` of its result is `s'`.
 
-`hin` is the condition that `reachable_state_transition_sameOk'''` proves at each epoch
+`hin` is the condition that `reachable_state_transition_sameResultOrBothFail'''` proves at each epoch
 boundary of a reachable state. `hc` holds the conditions of the Etheorem steps. -/
 theorem lighthouse_epoch_etheorem [EpochProofs.Spec.PresetCfg] [EpochProofs.Spec.PresetCfg.Ok]
-    (hpa : EpochPresetAgrees Spec.P) (o : Spec.Oracle) (ho : OracleAgrees o)
-    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState)
-    (hin : Spec.EpochInputOk'' Spec.EpochSupply (absEState e)) (hc : EtheoremEpochConds e)
-    {s' : Spec.BeaconState} (h : Spec.process_epoch_lh_full o (absEState e) = .ok s') :
+    (hpa : PresetMatchesEtheorem Spec.P) (o : Spec.Oracle) (ho : OracleAgrees o)
+    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EtheoremState)
+    (hin : Spec.ReachableInvariants (toSpecState e)) (hc : EtheoremEpochConds e)
+    {s' : Spec.BeaconState} (h : Spec.process_epoch_lh_full o (toSpecState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processEpoch (StateTransition := GloasRun)).run (pureState e) =
-      .ok ((), pureState e') ∧ absEState e' = s' := by
+      .ok ((), pureState e') ∧ toSpecState e' = s' := by
   obtain ⟨⟨⟨hb, hslot, heb, hexit, hsup⟩, _, hcons⟩, _, hvalid⟩ := hin
-  have hsame := Spec.process_epoch_lh_full_sameOk' o (absEState e) hb hslot heb hexit hsup hvalid
+  have hsame := Spec.process_epoch_lh_full_sameResultOrBothFail' o (toSpecState e) hb hslot heb hexit hsup hvalid
     hcons
   exact process_epoch_etheorem hpa o ho hsha e hc ((hsame s').mp h)
 

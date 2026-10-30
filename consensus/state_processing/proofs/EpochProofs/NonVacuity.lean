@@ -1,13 +1,13 @@
-import EpochProofs.FormalhouseRust
+import EpochProofs.Headline
 
 /-!
-# The hypotheses of the final theorems can hold together
+# The hypotheses of the headline theorems can hold together
 
-A theorem with hypotheses that cannot hold together proves nothing. The final theorems had this
-bug: `committees` stated the committee conditions at every state `s` with `CommFrame t s`.
-`CommFrame` fixes only the slot, the list lengths and the RANDAO length, so it admits `t` with
-every validator list emptied, where `CommitteeStepPreconds.syncActive` fails. That hypothesis was
-false for every input. It now holds at the one state that the epoch passes to the committee steps
+A theorem with hypotheses that cannot hold together proves nothing. The headline theorems had
+this bug: the committee conditions held at every state `s` with `CommFrame t s`. `CommFrame`
+fixes only the slot, the list lengths and the RANDAO length, so it admits `t` with every
+validator list emptied, where a sync committee candidate fails to exist. That hypothesis was false
+for every input. It now holds at the one state that the epoch passes to the committee steps
 (`Spec.AtCommitteeStepState`, `Spec.FuluAtCommitteeStepState`).
 
 This file gives a witness: `witnessState`, a minimal-preset state at the last slot of epoch 0
@@ -15,21 +15,24 @@ with eight active compounding validators (`witnessValidator`) at `2048 ETH`; `wi
 the same state without the Gloas fields; and `witnessEtheorem`, `witnessEtheoremFulu`, the
 Etheorem states that map to them. Lean computes the epoch steps on it.
 
-- `gloasFinalHypotheses_witness`: every field of `GloasFinalHypotheses` holds at
-  `witnessEtheorem`, with an oracle that agrees with Etheorem, given that SHA-256 returns 32
-  bytes.
-- `fuluFinalHypotheses_witness`: the same for `FuluFinalHypotheses` at `witnessEtheoremFulu`,
-  given also the run bounds (`supply`, `econ`) and `FuluEpochConds`.
+- `gloas_bundles_at_witness`: the chain, Etheorem divergence and oracle bundles of the Gloas
+  headline theorems (`Assumptions.lean`) hold together at `witnessEtheorem`, with an oracle that
+  agrees with Etheorem, given that SHA-256 returns 32 bytes.
+- `fulu_bundles_at_witness`: the chain and oracle bundles of the Fulu headline theorems hold at
+  `witnessEtheoremFulu`, given also the Etheorem bridge bundle (`FuluEtheoremBridgeConditions`).
 - `gloas_spec_witness`, `fulu_spec_witness`: at the same state, the start-state facts
-  (`FuluStartOk`) and the reachable-state facts that the run hypotheses give (`EpochInputOk''`)
-  hold too, the epoch reaches its committee steps (so `committees` is not vacuous), and the spec
-  `process_epoch` returns `ok`.
+  (`FuluStartOk`), unique pubkeys and the reachable-state facts that the run gives
+  (`ReachableInvariants`) hold too, the epoch reaches its committee steps (so the committee
+  conditions are not vacuous), and the spec `process_epoch` returns `ok`.
+- `agrees_pyspec_hyps_at_witness`, `agrees_pyspec_hyps_at_witness_fulu`: the state hypotheses
+  that the `_agrees_pyspec` theorems use hold at `witnessState`, `witnessStateFulu`, and
+  `lighthouse_model_gloas_epoch_agrees_pyspec_at_witness` applies the Gloas one there.
 - `selFin_full`: the selection facts in `CommitteeStepPreconds` hold for every hash when every
   candidate has the maximum effective balance.
 
-Not covered: the run hypotheses (`GloasEpochInput`, `FuluEpochInput`, the supply and economic
-bounds over all runs), the Fulu Etheorem conditions (`FuluEpochConds`),
-the hash backend (`sha`), the cache facts and the Rust glue (`EpochLinks`).
+Not covered: the runs (`GloasEpochRun`, `FuluEpochRun`, whose supply bounds range over every
+run), the Fulu Etheorem bridge conditions (`FuluEtheoremBridgeConditions`), the hash backend
+(`sha`), the cache facts and the Rust glue.
 -/
 
 namespace EpochProofs.Spec
@@ -190,9 +193,9 @@ theorem witnessState_vectors : witnessState.VectorLengths P :=
 theorem witnessState_fuluVectors : witnessState.FuluVectorLengths P := by
   unfold BeaconState.FuluVectorLengths; decide +kernel
 
-theorem witnessState_atEpochBoundary : TailPre witnessState := by unfold TailPre; decide +kernel
+theorem witnessState_atEpochBoundary : AtEpochBoundary witnessState := by unfold AtEpochBoundary; decide +kernel
 
-theorem witnessState_physicalLimits : RowBounds witnessState where
+theorem witnessState_physicalLimits : PhysicalLimits witnessState where
   scores := by decide +kernel
   supply := by decide +kernel
   funds := by decide +kernel
@@ -223,8 +226,8 @@ theorem witnessState_startOk : FuluStartOk witnessState where
   consolidations := by unfold ConsolidationsInRange; decide +kernel
   withdrawable := by unfold WithdrawableU64; decide +kernel
 
-theorem witnessState_reachableInvariants : EpochInputOk'' EpochSupply witnessState := by
-  unfold EpochInputOk'' EpochInputOk' EpochInputOk BoundaryOk EpochSupply
+theorem witnessState_reachableInvariants : ReachableInvariants witnessState := by
+  unfold ReachableInvariants EpochInputOk'' EpochInputOk' EpochInputOk BoundaryOk EpochBalanceBounds
   refine ⟨⟨⟨⟨witnessState_startOk.ffg, witnessState_rowsOk, ?_⟩, by decide +kernel, ?_,
     witnessState_startOk.exitEpochs,
     by decide +kernel, by decide +kernel, by decide +kernel⟩, witnessState_pubkeys,
@@ -234,13 +237,13 @@ theorem witnessState_reachableInvariants : EpochInputOk'' EpochSupply witnessSta
   · unfold WithdrawableValid; decide +kernel
 
 /-- The Gloas witness. At `witnessState`, for every oracle that accepts the eight keys: the
-spec-state fields of `GloasFinalHypotheses`, the start-state facts and the reachable-state facts
+spec-state facts of the Gloas chain bundle, the start-state facts and the reachable-state facts
 hold together, the epoch reaches its committee steps, and the spec `process_epoch` returns `ok`. -/
 theorem gloas_spec_witness (o : Oracle)
     (hk : ∀ v ∈ witnessState.validators, o.bls_KeyValidate v.pubkey = true) :
-    FuluStartOk witnessState ∧ EpochInputOk'' EpochSupply witnessState ∧
+    FuluStartOk witnessState ∧ ReachableInvariants witnessState ∧
       PubkeysUnique witnessState ∧ witnessState.VectorLengths P ∧
-      TailPre witnessState ∧ witnessState.slot + 8192 < 2 ^ 64 ∧ RowBounds witnessState ∧
+      AtEpochBoundary witnessState ∧ witnessState.slot + 8192 < 2 ^ 64 ∧ PhysicalLimits witnessState ∧
         AtCommitteeStepState o witnessState ∧
       epochToCommittees P o witnessState = .ok witnessState ∧ ∃ s',
         process_epoch P o witnessState = .ok s' := by
@@ -274,7 +277,7 @@ theorem witnessStateFulu_atCommitteeStepState (o : Oracle)
 
 theorem witnessStateFulu_rowsOk : RowsOk witnessStateFulu := witnessState_rowsOk
 
-theorem witnessStateFulu_physicalLimits : RowBounds witnessStateFulu where
+theorem witnessStateFulu_physicalLimits : PhysicalLimits witnessStateFulu where
   scores := by decide +kernel
   supply := by decide +kernel
   funds := by decide +kernel
@@ -293,22 +296,22 @@ theorem witnessStateFulu_startOk : FuluStartOk witnessStateFulu where
   consolidations := witnessState_startOk.consolidations
   withdrawable := witnessState_startOk.withdrawable
 
-theorem witnessStateFulu_reachableInvariants : EpochInputOk'' EpochSupply witnessStateFulu :=
+theorem witnessStateFulu_reachableInvariants : ReachableInvariants witnessStateFulu :=
     witnessState_reachableInvariants
 
 theorem witnessStateFulu_fuluVectors : witnessStateFulu.FuluVectorLengths P :=
     witnessState_fuluVectors
 
-theorem witnessStateFulu_atEpochBoundary : TailPre witnessStateFulu := witnessState_atEpochBoundary
+theorem witnessStateFulu_atEpochBoundary : AtEpochBoundary witnessStateFulu := witnessState_atEpochBoundary
 
 /-- The Fulu witness: at `witnessStateFulu`, for every oracle that accepts the eight keys, the
-spec-state fields of `FuluFinalHypotheses`, the start-state facts and the reachable-state facts hold
+spec-state facts of the Fulu chain bundle, the start-state facts and the reachable-state facts hold
 together, the epoch reaches its committee steps, and the Fulu spec `process_epoch` returns `ok`. -/
 theorem fulu_spec_witness (o : Oracle)
     (hk : ∀ v ∈ witnessStateFulu.validators, o.bls_KeyValidate v.pubkey = true) :
-    FuluStartOk witnessStateFulu ∧ EpochInputOk'' EpochSupply witnessStateFulu ∧
-      witnessStateFulu.FuluVectorLengths P ∧ TailPre witnessStateFulu ∧
-      witnessStateFulu.slot + 8192 < 2 ^ 64 ∧ RowBounds witnessStateFulu ∧
+    FuluStartOk witnessStateFulu ∧ ReachableInvariants witnessStateFulu ∧
+      witnessStateFulu.FuluVectorLengths P ∧ AtEpochBoundary witnessStateFulu ∧
+      witnessStateFulu.slot + 8192 < 2 ^ 64 ∧ PhysicalLimits witnessStateFulu ∧
         FuluAtCommitteeStepState o witnessStateFulu ∧
       epochToCommitteesFulu P FC o witnessStateFulu = .ok witnessStateFulu ∧
       ∃ s', process_epoch_fulu P FC o witnessStateFulu = .ok s' := by
@@ -322,12 +325,35 @@ theorem fulu_spec_witness (o : Oracle)
   rw [process_epoch_fulu_committees, witnessStateFulu_epochToCommitteesFulu, tot_bind_ok]
   exact hs'
 
+
+/-- The state hypotheses of the Gloas agreement theorem hold at `witnessState`. -/
+theorem agrees_pyspec_hyps_at_witness :
+    ReachableInvariants witnessState ∧ AtEpochBoundary witnessState ∧
+      HistoricalSummariesBelowLimit witnessState :=
+  ⟨witnessState_reachableInvariants, witnessState_atEpochBoundary,
+    witnessState_atEpochBoundary.2.2⟩
+
+/-- The state hypotheses of the Fulu agreement theorem hold at `witnessStateFulu`. -/
+theorem agrees_pyspec_hyps_at_witness_fulu :
+    ReachableInvariants witnessStateFulu ∧ AtEpochBoundary witnessStateFulu ∧
+      HistoricalSummariesBelowLimit witnessStateFulu :=
+  ⟨witnessStateFulu_reachableInvariants, witnessStateFulu_atEpochBoundary,
+    witnessStateFulu_atEpochBoundary.2.2⟩
+
+/-- At `witnessState`, the Lean model of Lighthouse's Gloas epoch and the transcription agree,
+for every oracle. -/
+theorem lighthouse_model_gloas_epoch_agrees_pyspec_at_witness (o : Oracle) :
+    SameResultOrBothFail (process_epoch_lighthouse o witnessState)
+      (process_epoch P o witnessState) :=
+  Formalhouse.lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants o
+    witnessState_reachableInvariants witnessState_atEpochBoundary
+
 end Minimal
 
 /-! ## The assumption structures
 
-The witnesses above are reference states. Here they are the `absEState` of Etheorem states, so
-they give the fields of `GloasFinalHypotheses` and `FuluFinalHypotheses` directly. -/
+The witnesses above are reference states. Here they are the `toSpecState` of Etheorem states, so
+they give the bundles of `Assumptions.lean` directly. -/
 
 /-- An `Oracle` that accepts every key. Its other fields are constants. -/
 def keyOracle : Oracle where
@@ -390,7 +416,7 @@ def witnessEtheorem : EthCLSpecs.Gloas.BeaconState :=
     inactivityScores := ⟨Array.replicate 8 0, by decide⟩ }
 
 
-theorem witnessEtheorem_abs : Etheorem.absEState witnessEtheorem = witnessState := by decide +kernel
+theorem witnessEtheorem_abs : Etheorem.toSpecState witnessEtheorem = witnessState := by decide +kernel
 
 variable [EthCLLib.Spec.HasherTag] [EthCLLib.Spec.CryptoBackend]
 
@@ -398,23 +424,30 @@ variable [EthCLLib.Spec.HasherTag] [EthCLLib.Spec.CryptoBackend]
 theorem oracle_witness : ∃ o, Etheorem.OracleAgrees o ∧ ∀ pk, o.bls_KeyValidate pk = true :=
   ⟨Etheorem.etheoremOracle keyOracle, Etheorem.etheoremOracle_agrees _, fun _ => rfl⟩
 
-/-- Every field of `GloasFinalHypotheses` holds at `witnessEtheorem` on the minimal preset, given
-the fact about the hash backend that the structure takes as it is: SHA-256 returns 32 bytes. -/
-theorem gloasFinalHypotheses_witness
+/-- The chain, Etheorem divergence and oracle bundles of the Gloas headline theorems hold
+together at `witnessEtheorem` on the minimal preset, given the fact about the hash backend that
+the oracle bundle takes as it is: SHA-256 returns 32 bytes. -/
+theorem gloas_bundles_at_witness
     (hsha : ∀ b : ByteArray, (EthCLLib.Spec.sha b).size = 32) :
-    ∃ o, Formalhouse.GloasFinalHypotheses o { state := witnessState } witnessEtheorem := by
+    ∃ o, Formalhouse.GloasChainAssumptions o (Etheorem.toSpecState witnessEtheorem) ∧
+      Etheorem.GloasEtheoremDivergenceAssumptions witnessEtheorem ∧
+      Etheorem.GloasOracleMatchesEtheorem o := by
   obtain ⟨o, ho, hk⟩ := oracle_witness
-  exact ⟨o, {
-    start := witnessState_startOk
-    pubkeys := witnessEtheorem_abs ▸ witnessState_pubkeys
-    vectors := witnessEtheorem_abs ▸ witnessState_vectors
-    boundary := witnessEtheorem_abs ▸ witnessState_atEpochBoundary
-    slot := by rw [witnessEtheorem_abs]; decide +kernel
-    rows := witnessEtheorem_abs ▸ witnessState_physicalLimits
-    committees := witnessEtheorem_abs ▸ witnessState_atCommitteeStepState o (fun v _ => hk _)
-    etheoremRoom := ⟨by rw [witnessEtheorem_abs]; decide +kernel, by decide +kernel⟩
-    oracle := ho
-    sha := hsha }⟩
+  have hc := witnessState_atCommitteeStepState o (fun v _ => hk _)
+  rw [witnessEtheorem_abs]
+  refine ⟨o, {
+    syncCandidate := fun t h => (hc t h).2.syncActive
+    proposerCandidate := fun t h => (hc t h).2.proposers
+    enoughActiveForPtc := fun t h => (hc t h).2.ptc32
+    syncSelectionEnds := fun t h => (hc t h).2.selSync
+    proposerSelectionEnds := fun t h => (hc t h).2.selProp
+    ptcSelectionEnds := fun t h => (hc t h).2.selPtc
+    physicalLimits := witnessState_physicalLimits
+    slotFarFromOverflow := by decide +kernel
+    historicalSummariesBelowLimit := witnessState_atEpochBoundary.2.2
+    vectorLengths := witnessState_vectors
+    committeeStepStateFacts := fun t h => (hc t h).1 },
+    ⟨by rw [witnessEtheorem_abs]; decide +kernel, by decide +kernel⟩, ⟨ho, hsha⟩⟩
 
 end GloasEState
 
@@ -448,7 +481,7 @@ def witnessEtheoremFulu : EthCLSpecs.Fulu.BeaconState :=
     currentEpochParticipation := ⟨Array.replicate 8 0, by decide⟩
     inactivityScores := ⟨Array.replicate 8 0, by decide⟩ }
 
-theorem witnessEtheoremFulu_abs : Etheorem.Fulu.absEState witnessEtheoremFulu = witnessStateFulu :=
+theorem witnessEtheoremFulu_abs : Etheorem.Fulu.toSpecState witnessEtheoremFulu = witnessStateFulu :=
     by decide +kernel
 
 variable [EthCLLib.Spec.HasherTag] [EthCLLib.Spec.CryptoBackend]
@@ -457,31 +490,30 @@ theorem fulu_oracle_witness :
     ∃ o, Etheorem.Fulu.OracleAgrees o ∧ ∀ pk, o.bls_KeyValidate pk = true :=
   ⟨Etheorem.Fulu.etheoremOracle keyOracle, Etheorem.Fulu.etheoremOracle_agrees _, fun _ => rfl⟩
 
-/-- Every field of `FuluFinalHypotheses` that is about the epoch input holds at
-`witnessEtheoremFulu` on the minimal preset, with an oracle that agrees with Etheorem. Taken as they
-are: the supply and economic bounds over every run from the start state (`supply`, `econ`), the
-facts about Etheorem's Fulu output (`FuluEpochConds`) and SHA-256 returning 32 bytes. -/
-theorem fuluFinalHypotheses_witness (fo : FuluOracle) (c : FuluBlockConfig)
+/-- The chain and oracle bundles of the Fulu headline theorems hold at `witnessEtheoremFulu` on
+the minimal preset, with the Etheorem bridge bundle, given that bundle and SHA-256 returning 32
+bytes. The bridge conditions are facts about Etheorem's intermediate states, taken as they
+are. -/
+theorem fulu_bundles_at_witness
     (hsha : ∀ b : ByteArray, (EthCLLib.Spec.sha b).size = 32) :
-    ∃ o, (SupplyBoundFulu o fo c { state := witnessStateFulu } →
-      EpochEconFulu o fo c { state := witnessStateFulu } EpochSupply →
-      Etheorem.Fulu.FuluEpochConds P o witnessEtheoremFulu →
-      Formalhouse.FuluFinalHypotheses o fo c { state := witnessStateFulu } witnessEtheoremFulu) :=
-        by
+    ∃ o, Etheorem.Fulu.FuluEtheoremBridgeConditions P o witnessEtheoremFulu →
+      Formalhouse.FuluChainAssumptions o (Etheorem.Fulu.toSpecState witnessEtheoremFulu) ∧
+        Etheorem.Fulu.FuluEtheoremBridgeConditions P o witnessEtheoremFulu ∧
+        Etheorem.Fulu.FuluOracleMatchesEtheorem o := by
   obtain ⟨o, ho, hk⟩ := fulu_oracle_witness
-  exact ⟨o, fun hsup hecon hconds => {
-    start := witnessStateFulu_startOk
-    supply := hsup
-    econ := hecon
-    boundary := witnessEtheoremFulu_abs ▸ witnessState_atEpochBoundary
-    slot := by rw [witnessEtheoremFulu_abs]; decide +kernel
-    vectors := witnessEtheoremFulu_abs ▸ witnessStateFulu_fuluVectors
-    rows := witnessEtheoremFulu_abs ▸ witnessStateFulu_physicalLimits
-    committees := witnessEtheoremFulu_abs ▸ witnessStateFulu_atCommitteeStepState o
-      (fun v _ => hk _)
-    etheorem := hconds
-    oracle := ho
-    sha := hsha }⟩
+  refine ⟨o, fun hconds => ⟨?_, hconds, ⟨ho, hsha⟩⟩⟩
+  rw [witnessEtheoremFulu_abs]
+  have hc := witnessStateFulu_atCommitteeStepState o (fun v _ => hk _)
+  exact {
+    syncCandidate := fun t h => (hc t h).2.syncActive
+    proposerCandidate := fun t h => (hc t h).2.proposers
+    syncSelectionEnds := fun t h => (hc t h).2.selSync
+    proposerSelectionEnds := fun t h => (hc t h).2.selProp
+    physicalLimits := witnessStateFulu_physicalLimits
+    slotFarFromOverflow := by decide +kernel
+    historicalSummariesBelowLimit := witnessStateFulu_atEpochBoundary.2.2
+    vectorLengths := witnessStateFulu_fuluVectors
+    committeeStepStateFacts := fun t h => (hc t h).1 }
 
 end FuluEState
 

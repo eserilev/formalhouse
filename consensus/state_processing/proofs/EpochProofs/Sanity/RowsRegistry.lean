@@ -282,14 +282,14 @@ theorem process_registry_updates_rows (p : Preset) (total_active_balance : Gwei)
     (state : BeaconState) (current_epoch activation_epoch : Epoch) (hrows : RowsOk state)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hactivation : compute_activation_exit_epoch p current_epoch = .ok activation_epoch) :
-    SameOk (process_registry_updates p total_active_balance state)
+    SameResultOrBothFail (process_registry_updates p total_active_balance state)
       ((fun x => { state.withRows x.2 with
           earliest_exit_epoch := x.1.1
           exit_balance_to_consume := x.1.2 }) <$>
         passM (registryRowStep p total_active_balance current_epoch
           state.finalized_checkpoint.epoch activation_epoch)
           (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
-  apply SameOk.of_eq
+  apply SameResultOrBothFail.of_eq
   have h := registrySpecBody_forIn p total_active_balance state current_epoch activation_epoch
     hcurrent (rowsOf state) [] (state.earliest_exit_epoch, state.exit_balance_to_consume)
   have hstate : registryLoopState state state.validators

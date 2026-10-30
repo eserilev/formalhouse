@@ -93,7 +93,7 @@ theorem plFuluNew_set [PresetCfg] (o : Oracle) (s t : BeaconState)
 /-! ## The swaps with the Fulu proposer lookahead -/
 
 theorem eth1_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) :
-    SameOk (process_eth1_data_reset P s >>= process_proposer_lookahead_fulu P o)
+    SameResultOrBothFail (process_eth1_data_reset P s >>= process_proposer_lookahead_fulu P o)
       (process_proposer_lookahead_fulu P o s >>= process_eth1_data_reset P) :=
   swap_shapes _ _ eth1Cond (fun b t => if b then { t with eth1_data_votes := [] } else t)
     (plFuluNew o) (fun w t => setPL t w) s eth1_eq (process_proposer_lookahead_fulu_eq o)
@@ -101,14 +101,14 @@ theorem eth1_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState
     (fun _ _ => eth1Cond_slot rfl) (fun b _ => by cases b <;> rfl)
 
 theorem slashings_reset_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) :
-    SameOk (process_slashings_reset P s >>= process_proposer_lookahead_fulu P o)
+    SameResultOrBothFail (process_slashings_reset P s >>= process_proposer_lookahead_fulu P o)
       (process_proposer_lookahead_fulu P o s >>= process_slashings_reset P) :=
   swap_shapes _ _ srNew (fun v t => { t with slashings := v }) (plFuluNew o)
     (fun w t => setPL t w) s process_slashings_reset_eq (process_proposer_lookahead_fulu_eq o)
     (fun _ _ => plFuluNew_set o s _ rfl rfl rfl rfl) (fun _ _ => rfl) (fun _ _ => rfl)
 
 theorem randao_reset_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (hroom : SlotRoom s) :
-    SameOk (process_randao_mixes_reset P s >>=
+    SameResultOrBothFail (process_randao_mixes_reset P s >>=
         process_proposer_lookahead_fulu P o)
       (process_proposer_lookahead_fulu P o s >>=
         process_randao_mixes_reset P) :=
@@ -118,7 +118,7 @@ theorem randao_reset_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : Bea
     (fun _ _ => rfl) (fun _ _ => rfl)
 
 theorem historical_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) :
-    SameOk (process_historical_summaries_update P o s >>=
+    SameResultOrBothFail (process_historical_summaries_update P o s >>=
         process_proposer_lookahead_fulu P o)
       (process_proposer_lookahead_fulu P o s >>=
         process_historical_summaries_update P o) :=
@@ -128,14 +128,14 @@ theorem historical_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : Beaco
     (fun _ _ => plFuluNew_set o s _ rfl rfl rfl rfl) (fun _ _ => rfl) (fun _ _ => rfl)
 
 theorem participation_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) :
-    SameOk (pfStep s >>= process_proposer_lookahead_fulu P o)
+    SameResultOrBothFail (pfStep s >>= process_proposer_lookahead_fulu P o)
       (process_proposer_lookahead_fulu P o s >>= pfStep) :=
   swap_shapes _ _ pfNew (fun v t => setPF t v) (plFuluNew o) (fun w t => setPL t w) s
     pfStep_eq (process_proposer_lookahead_fulu_eq o)
     (fun _ _ => plFuluNew_set o s _ rfl rfl rfl rfl) (fun _ _ => rfl) (fun _ _ => rfl)
 
 theorem sync_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) :
-    SameOk (process_sync_committee_updates P o s >>=
+    SameResultOrBothFail (process_sync_committee_updates P o s >>=
         process_proposer_lookahead_fulu P o)
       (process_proposer_lookahead_fulu P o s >>=
         process_sync_committee_updates P o) :=
@@ -163,7 +163,7 @@ def lhOrderFulu [PresetCfg] (o : Oracle) : List (BeaconState → SpecM BeaconSta
 
 /-- The two Fulu orders give the same `ok` results. -/
 theorem specOrderFulu_lhOrderFulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (hroom : SlotRoom s) :
-    SameOk (runSteps (specOrderFulu o) s) (runSteps (lhOrderFulu o) s) := by
+    SameResultOrBothFail (runSteps (specOrderFulu o) s) (runSteps (lhOrderFulu o) s) := by
   let e1 := process_eth1_data_reset P
   let sr := process_slashings_reset P
   let rr := process_randao_mixes_reset P
@@ -181,15 +181,15 @@ theorem specOrderFulu_lhOrderFulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : B
     intro l hl f hf
     rcases hl f hf with rfl | rfl | rfl | rfl | rfl
     all_goals assumption
-  refine SameOk.trans (runSteps_swap SlotRoom [e1, sr, rr, hs, pfStep] [] sc pl
+  refine SameResultOrBothFail.trans (runSteps_swap SlotRoom [e1, sr, rr, hs, pfStep] [] sc pl
     (keep _ (by simp)) (fun t _ => sync_swaps_fulu o t) s hroom) ?_
-  refine SameOk.trans (runSteps_swap SlotRoom [e1, sr, rr, hs] [sc] pfStep pl
+  refine SameResultOrBothFail.trans (runSteps_swap SlotRoom [e1, sr, rr, hs] [sc] pfStep pl
     (keep _ (by simp)) (fun t _ => participation_swaps_fulu o t) s hroom) ?_
-  refine SameOk.trans (runSteps_swap SlotRoom [e1, sr, rr] [pfStep, sc] hs pl
+  refine SameResultOrBothFail.trans (runSteps_swap SlotRoom [e1, sr, rr] [pfStep, sc] hs pl
     (keep _ (by simp)) (fun t _ => historical_swaps_fulu o t) s hroom) ?_
-  refine SameOk.trans (runSteps_swap SlotRoom [e1, sr] [hs, pfStep, sc] rr pl
+  refine SameResultOrBothFail.trans (runSteps_swap SlotRoom [e1, sr] [hs, pfStep, sc] rr pl
     (keep _ (by simp)) (fun t ht => randao_reset_swaps_fulu o t ht) s hroom) ?_
-  refine SameOk.trans (runSteps_swap SlotRoom [e1] [rr, hs, pfStep, sc] sr pl
+  refine SameResultOrBothFail.trans (runSteps_swap SlotRoom [e1] [rr, hs, pfStep, sc] sr pl
     (keep _ (by simp)) (fun t _ => slashings_reset_swaps_fulu o t) s hroom) ?_
   exact runSteps_swap SlotRoom [] [sr, rr, hs, pfStep, sc] e1 pl
     (keep _ (by simp)) (fun t _ => eth1_swaps_fulu o t) s hroom

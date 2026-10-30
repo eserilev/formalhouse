@@ -4,7 +4,7 @@ import EpochProofs.Trusted.CacheUpkeep
 # The progressive balances cache stays coherent inside an epoch
 
 `PBStep.coherent` proves each hook of `Trusted/CacheUpkeep.lean` correct from the Aeneas-checked
-update functions (#64). `PBTrace.coherent` chains them. `FormalhouseUpkeep.lean` uses them to ask for a coherent cache at
+update functions (#64). `PBTrace.coherent` chains them. `lighthouse_model_gloas_epoch_eq_etheorem_upkeep` (`Headline.lean`) uses them to ask for a coherent cache at
 a state `start` of the epoch, not at the epoch input.
 -/
 

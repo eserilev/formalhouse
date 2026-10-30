@@ -42,7 +42,7 @@ abbrev ebTarget (v : EthCLSpecs.Gloas.Validator) (b : UInt64) : UInt64 :=
     (EthCLSpecs.Gloas.getMaxEffectiveBalance v)
 
 /-- One step of Etheorem's loop on the plain state. -/
-def ebStepView (s : EState) (i : Nat) : EState :=
+def ebStepView (s : EtheoremState) (i : Nat) : EtheoremState :=
   if s.balances[i]! + ebDown < s.validators[i]!.effectiveBalance ||
       s.validators[i]!.effectiveBalance + ebUp < s.balances[i]! then
     let v := s.validators[(UInt64.ofNat i).toNat]!
@@ -60,8 +60,8 @@ variable [HasherTag]
 
 /-- A `foldl` that keeps the uncached box is a `foldl` on the plain state. -/
 theorem foldl_pureState {α : Type} (F : EthCLSpecs.Gloas.State → α → EthCLSpecs.Gloas.State)
-    (G : EState → α → EState) (hFG : ∀ s a, F (pureState s) a = pureState (G s a)) :
-    ∀ (l : List α) (s : EState), l.foldl F (pureState s) = pureState (l.foldl G s) := by
+    (G : EtheoremState → α → EtheoremState) (hFG : ∀ s a, F (pureState s) a = pureState (G s a)) :
+    ∀ (l : List α) (s : EtheoremState), l.foldl F (pureState s) = pureState (l.foldl G s) := by
   intro l
   induction l with
   | nil => intro s; rfl
@@ -69,16 +69,16 @@ theorem foldl_pureState {α : Type} (F : EthCLSpecs.Gloas.State → α → EthCL
 
 /-- The reads and sums of step `i` of Etheorem's loop succeed: the balance exists, and neither
 threshold sum overflows `uint64`. The second sum runs only when the first comparison fails. -/
-def EbStepOk (e : EState) (i : Nat) : Prop :=
+def EbStepOk (e : EtheoremState) (i : Nat) : Prop :=
   i < e.balances.val.size ∧ (e.balances[i]!).toNat + ebDown.toNat < 2 ^ 64 ∧
     (¬ (e.balances[i]! + ebDown < (e.validators[i]!).effectiveBalance) →
       (e.validators[i]!).effectiveBalance.toNat + ebUp.toNat < 2 ^ 64)
 
 /-- A loop over a list on the plain state, where step `k` runs as `G` on the state that the first
 `k` steps reach. -/
-theorem forIn_run_foldl {α : Type} (G : EState → α → EState)
+theorem forIn_run_foldl {α : Type} (G : EtheoremState → α → EtheoremState)
     (body : α → PUnit → GloasRun (ForInStep PUnit)) :
-    ∀ (l : List α) (v : EState),
+    ∀ (l : List α) (v : EtheoremState),
       (∀ k (hk : k < l.length), (body l[k] PUnit.unit).run (pureState ((l.take k).foldl G v)) =
         .ok (.yield PUnit.unit, pureState (G ((l.take k).foldl G v) l[k]))) →
       (forIn l PUnit.unit body).run (pureState v) = .ok (PUnit.unit, pureState (l.foldl G v)) := by
@@ -143,7 +143,7 @@ theorem absValidator_ebNew (v : EthCLSpecs.Gloas.Validator) (b : UInt64) :
 
 omit [HasherTag] in
 /-- One step writes `ebNew` at index `i`. -/
-theorem ebStepView_eq (s : EState) (i : Nat) (hi : i < 2 ^ 64) :
+theorem ebStepView_eq (s : EtheoremState) (i : Nat) (hi : i < 2 ^ 64) :
     ebStepView s i = { s with validators := s.validators.set! i (ebNew s.validators[i]! s.balances[i]!) } := by
   unfold ebStepView
   rw [UInt64.toNat_ofNat_of_lt' hi]
@@ -165,7 +165,7 @@ theorem ebStepView_eq (s : EState) (i : Nat) (hi : i < 2 ^ 64) :
 
 omit [HasherTag] in
 /-- After `k` steps, Etheorem's loop has replaced the first `k` validators by `ebNew`. -/
-theorem ebFold (e : EState) (hn : e.validators.val.size < 2 ^ 64) :
+theorem ebFold (e : EtheoremState) (hn : e.validators.val.size < 2 ^ 64) :
     ∀ k, k ≤ e.validators.val.size →
       ∃ V : SSZList EthCLSpecs.Gloas.Validator EthCLSpecs.Gloas.Const.validatorRegistryLimit,
         (List.range' 0 k).foldl ebStepView e = { e with validators := V } ∧
@@ -203,7 +203,7 @@ theorem ebFold (e : EState) (hn : e.validators.val.size < 2 ^ 64) :
 
 omit [HasherTag] in
 /-- After `k` steps, validator `k` and the balances are still those of `e`. -/
-theorem ebFold_at (e : EState) (hn : e.validators.val.size < 2 ^ 64) (k : Nat)
+theorem ebFold_at (e : EtheoremState) (hn : e.validators.val.size < 2 ^ 64) (k : Nat)
     (hk : k < e.validators.val.size) :
     ((List.range' 0 k).foldl ebStepView e).balances = e.balances ∧
       ((List.range' 0 k).foldl ebStepView e).validators[k]! = e.validators[k]! := by
@@ -222,7 +222,7 @@ theorem ebFold_at (e : EState) (hn : e.validators.val.size < 2 ^ 64) (k : Nat)
   rw [List.getElem_append_right (Nat.le_of_eq hP)]
   simp [hP]
 
-theorem processEffectiveBalanceUpdates_run (e : EState) (hn : e.validators.val.size < 2 ^ 64)
+theorem processEffectiveBalanceUpdates_run (e : EtheoremState) (hn : e.validators.val.size < 2 ^ 64)
     (hok : ∀ i < e.validators.val.size, EbStepOk e i) :
     (EthCLSpecs.Gloas.processEffectiveBalanceUpdates (StateTransition := GloasRun)).run
         (pureState e) =
@@ -392,7 +392,7 @@ theorem newEffectiveBalance_ok (v : EthCLSpecs.Gloas.Validator) (b : UInt64) {do
 
 omit [HasherTag] in
 /-- One reference loop step returns `ebNew` under the map. -/
-theorem effectiveBalanceStep_ok (e : EState) (v : EthCLSpecs.Gloas.Validator) (i : Nat)
+theorem effectiveBalanceStep_ok (e : EtheoremState) (v : EthCLSpecs.Gloas.Validator) (i : Nat)
     {w : Spec.Validator}
     (h : Spec.effectiveBalanceStep p (e.balances.toList.map UInt64.toNat) (absValidator v, i) =
       .ok w) :
@@ -427,7 +427,7 @@ theorem effectiveBalanceStep_ok (e : EState) (v : EthCLSpecs.Gloas.Validator) (i
 omit [HasherTag] in
 /-- A reference loop step that returns reads a balance and sums its thresholds without overflow.
 These are the reads and sums of Etheorem's step. -/
-theorem effectiveBalanceStep_cond (e : EState) (v : EthCLSpecs.Gloas.Validator) (i : Nat)
+theorem effectiveBalanceStep_cond (e : EtheoremState) (v : EthCLSpecs.Gloas.Validator) (i : Nat)
     {w : Spec.Validator}
     (h : Spec.effectiveBalanceStep p (e.balances.toList.map UInt64.toNat) (absValidator v, i) =
       .ok w) :
@@ -481,7 +481,7 @@ theorem effectiveBalanceStep_cond (e : EState) (v : EthCLSpecs.Gloas.Validator) 
 
 omit [HasherTag] in
 /-- The reference loop returns `ebNew` for every validator. -/
-theorem mapM_effectiveBalanceStep_ok (e : EState) :
+theorem mapM_effectiveBalanceStep_ok (e : EtheoremState) :
     ∀ (l : List Nat) (vs : List Spec.Validator),
       (l.map fun i => (absValidator e.validators.val[i]!, i)).mapM
           (Spec.effectiveBalanceStep p (e.balances.toList.map UInt64.toNat)) = .ok vs →
@@ -508,22 +508,22 @@ theorem mapM_effectiveBalanceStep_ok (e : EState) :
         rw [← h, effectiveBalanceStep_ok hp ht e _ i hs, ih ws hm, List.map_cons]
 
 /-- `process_effective_balance_updates` equals Etheorem's. -/
-theorem effective_balance_updates_etheorem (e : EState) {s' : Spec.BeaconState}
-    (h : Spec.process_effective_balance_updates p (absEState e) = .ok s') :
+theorem effective_balance_updates_etheorem (e : EtheoremState) {s' : Spec.BeaconState}
+    (h : Spec.process_effective_balance_updates p (toSpecState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processEffectiveBalanceUpdates (StateTransition := GloasRun)).run
-        (pureState e) = .ok ((), pureState e') ∧ absEState e' = s' := by
+        (pureState e) = .ok ((), pureState e') ∧ toSpecState e' = s' := by
   have hn : e.validators.val.size < 2 ^ 64 :=
     Nat.lt_of_le_of_lt e.validators.property hp.validatorRegistryLimit
   obtain ⟨V, hV, hVl⟩ := ebFold e hn _ (Nat.le_refl _)
   rw [Spec.process_effective_balance_updates_eq] at h
-  cases hm : (absEState e).validators.zipIdx.mapM
-      (Spec.effectiveBalanceStep p (absEState e).balances) with
+  cases hm : (toSpecState e).validators.zipIdx.mapM
+      (Spec.effectiveBalanceStep p (toSpecState e).balances) with
   | error err => rw [hm] at h; cases h
   | ok vs =>
     rw [hm] at h
     simp only [Except.map, Except.ok.injEq] at h
     rw [← h]
-    simp only [absEState_validators, absEState_balances, SSZList.toList,
+    simp only [toSpecState_validators, toSpecState_balances, SSZList.toList,
       zipIdx_map_eq e.validators.val absValidator] at hm
     -- Each reference step returns, so each Etheorem read and sum succeeds.
     have hok : ∀ i < e.validators.val.size, EbStepOk e i := by
@@ -534,7 +534,7 @@ theorem effective_balance_updates_etheorem (e : EState) {s' : Spec.BeaconState}
       rw [← sszList_getElem!_val] at this
       exact this
     refine ⟨_, processEffectiveBalanceUpdates_run e hn hok, ?_⟩
-    rw [hV, absEState_set_validators]
+    rw [hV, toSpecState_set_validators]
     have hvs := mapM_effectiveBalanceStep_ok hp ht e _ _ hm
     rw [hvs, SSZList.toList, hVl, List.drop_eq_nil_of_le (by simp), List.append_nil, List.map_map]
     rfl

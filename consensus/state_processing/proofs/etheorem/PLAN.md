@@ -2,11 +2,11 @@
 
 Status: done. `process_epoch_etheorem` proves `Spec.process_epoch` equal to Etheorem's
 `EthCLSpecs.Gloas.processEpoch`. `lighthouse_epoch_etheorem` joins it to the Lighthouse epoch
-model of `process_epoch_lh_full_sameOk'`, so Lighthouse's epoch equals Etheorem on mainnet.
+model of `process_epoch_lh_full_sameResultOrBothFail'`, so Lighthouse's epoch equals Etheorem on mainnet.
 
 ## The foundation (done)
 
-- `EpochProofs/Etheorem/State.lean`: `absEState` maps every field of an Etheorem state to the
+- `EpochProofs/Etheorem/State.lean`: `toSpecState` maps every field of an Etheorem state to the
   reference state. It also has read and write lemmas for each field.
 - `EpochProofs/Etheorem/Helpers.lean`:
   - `PresetAgrees p`: the Etheorem preset holds the values of `p`. Proved for both presets.
@@ -63,7 +63,7 @@ that `processEpoch` is the 17 steps in sequence.
 
 `process_epoch_etheorem` takes:
 
-- `EpochPresetAgrees p`: the preset facts of all steps. Proved for mainnet and minimal.
+- `PresetMatchesEtheorem p`: the preset facts of all steps. Proved for mainnet and minimal.
 - `OracleAgrees o`, and `sha` returns 32 bytes (`sha_size_pure` proves it for the pure
   SHA-256).
 - `EtheoremEpochConds e`. Each field reads the Etheorem state right before its step.
@@ -73,8 +73,8 @@ that `processEpoch` is the 17 steps in sequence.
     withdrawals fit (F6), the historical summaries fit (`HISTORICAL_ROOTS_LIMIT`, kept in
     beta.4).
 
-`lighthouse_epoch_etheorem` adds `EpochInputOk'' EpochSupply`, the condition that
-`reachable_state_transition_sameOk'''` proves at each epoch boundary of a reachable state.
+`lighthouse_epoch_etheorem` adds `ReachableInvariants`, the condition that
+`reachable_state_transition_sameResultOrBothFail'''` proves at each epoch boundary of a reachable state.
 
 Not done: the conditions of `EtheoremEpochConds` are not yet proved from the reachable-state
 invariants. Each one reads a state in the middle of the epoch, so each needs a frame lemma for
@@ -122,7 +122,7 @@ the steps before it.
   and `historical_summaries` keep their caps. Etheorem keeps the alpha.11 limits and drops items
   past them. The epoch proofs need one of them: `builder_pending_withdrawals` (2^20), as
   `builderRoom`. The `historical_summaries` cap (2^24) is a beta.4 cap too, so it is a spec
-  condition (`HistRoom`). Only the Etheorem fork moving to progressive lists removes
+  condition (`HistoricalSummariesBelowLimit`). Only the Etheorem fork moving to progressive lists removes
   `builderRoom`. Three block-only values also changed:
   `MIN_BUILDER_WITHDRAWABILITY_DELAY` (8192 to 64), `BUILDER_WITHDRAWAL_PREFIX` (0x03 to 0xB0)
   and `MAX_BUILDER_DEPOSIT_REQUESTS_PER_PAYLOAD` (256 to 64).

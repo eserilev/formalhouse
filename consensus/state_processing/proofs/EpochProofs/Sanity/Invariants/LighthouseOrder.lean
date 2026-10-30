@@ -7,7 +7,7 @@ import EpochProofs.Sanity.LighthouseNewValidator
 # The Lighthouse epoch in the Lighthouse order
 
 `process_epoch_lh_full` runs the steps after the single pass in the spec order and calls the spec
-functions for the resets and the historical summaries update. `process_epoch_lh_order` runs them
+functions for the resets and the historical summaries update. `process_epoch_lighthouse` runs them
 as `altair.rs` and `single_pass.rs` do:
 
 1. the single pass, the deposits, the consolidations and the builder payments,
@@ -16,7 +16,7 @@ as `altair.rs` and `single_pass.rs` do:
    `tail_updates.rs` (`LighthouseResets.lean`),
 4. the participation rotation and the sync committee update.
 
-`process_epoch_lh_order_sameOk` shows that the two give the same `ok` results, at the last slot
+`process_epoch_lighthouse_sameResultOrBothFail` shows that the two give the same `ok` results, at the last slot
 of an epoch, when the next slot fits in a `u64` and `historical_summaries` is below the
 Lighthouse limit.
 -/
@@ -121,9 +121,9 @@ def lhRestOrder [PresetCfg] (o : Oracle) (t : BeaconState) : SpecM BeaconState :
 
 /-- The conditions of the Lighthouse order at a state: the last slot of an epoch, the next slot
 fits in a `u64`, and `historical_summaries` is below the Lighthouse limit. -/
-def TailPre [PresetCfg] (s : BeaconState) : Prop :=
+def AtEpochBoundary [PresetCfg] (s : BeaconState) : Prop :=
   (s.slot + 1) % P.SLOTS_PER_EPOCH = 0 ∧ s.slot + 1 < 2 ^ 64 ∧
-    s.historical_summaries.length < LH_HISTORICAL_ROOTS_LIMIT
+    s.historical_summaries.length < LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT
 
 /-- A bind whose continuations agree on the results with `Q`. -/
 theorem bind_congr_of {α : Type} {x : SpecM α} {k1 k2 : α → SpecM BeaconState} (Q : α → Prop)
@@ -136,7 +136,7 @@ theorem bind_congr_of {α : Type} {x : SpecM α} {k1 k2 : α → SpecM BeaconSta
 def SameSH (T t : BeaconState) : Prop :=
   t.slot = T.slot ∧ t.historical_summaries = T.historical_summaries
 
-theorem runSteps_lhOrder_eq [PresetCfg] [PresetCfg.Ok] (o : Oracle) (T : BeaconState) (hT : TailPre T) :
+theorem runSteps_lhOrder_eq [PresetCfg] [PresetCfg.Ok] (o : Oracle) (T : BeaconState) (hT : AtEpochBoundary T) :
     runSteps (lhOrder o) T = lhRestOrder o T := by
   obtain ⟨halign, hslot, hroom⟩ := hT
   have kpl : StepKeeps (SameSH T) (process_proposer_lookahead P o) :=
@@ -178,37 +178,37 @@ theorem runSteps_specOrder_eq [PresetCfg] (o : Oracle) (T : BeaconState) :
 
 /-- The steps after the builder payments: the Lighthouse order with the Lighthouse resets gives
 the same `ok` results as the eth1 reset followed by the spec order. -/
-theorem lhRestOrder_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (T : BeaconState) (hT : TailPre T) :
-    SameOk (lhRestOrder o T) (process_eth1_data_reset P T >>= epochRest2 o) := by
+theorem lhRestOrder_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] (o : Oracle) (T : BeaconState) (hT : AtEpochBoundary T) :
+    SameResultOrBothFail (lhRestOrder o T) (process_eth1_data_reset P T >>= epochRest2 o) := by
   have hroom : SlotRoom T := P_slot_room hT.2.1
   rw [← runSteps_lhOrder_eq o T hT, ← runSteps_specOrder_eq o T]
-  exact SameOk.flip (specOrder_lhOrder o T hroom)
+  exact SameResultOrBothFail.flip (specOrder_lhOrder o T hroom)
 
 /-- `lhAfterPass` in the Lighthouse order. -/
 def lhAfterPassOrder [PresetCfg] (o : Oracle) (s : BeaconState) (total_active_balance : Gwei)
     (plan : LhDepositPlan) (x : (Epoch × Gwei) × List Row) : SpecM BeaconState :=
   lhMid o s total_active_balance plan (s.withRowsChurn x.1 x.2) >>= lhRestOrder o
 
-theorem lhAfterPassOrder_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (tab : Gwei)
-    (plan : LhDepositPlan) (x : (Epoch × Gwei) × List Row) (hs : TailPre s) :
-    SameOk (lhAfterPassOrder o s tab plan x) (lhAfterPass o s tab plan x) := by
+theorem lhAfterPassOrder_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (tab : Gwei)
+    (plan : LhDepositPlan) (x : (Epoch × Gwei) × List Row) (hs : AtEpochBoundary s) :
+    SameResultOrBothFail (lhAfterPassOrder o s tab plan x) (lhAfterPass o s tab plan x) := by
   rw [lhAfterPass_eq]
   let W := s.withRowsChurn x.1 x.2
-  have hW : TailPre W := hs
+  have hW : AtEpochBoundary W := hs
   -- Move the eth1 reset after the middle steps.
   have hcomm := eth1_comm (lhMid o s tab plan) W (fun t h => (lhMid_slotKeep o s tab plan W t h).1)
     (lhMid_votesBlind o s tab plan W)
-  have hspec : SameOk
+  have hspec : SameResultOrBothFail
       (process_eth1_data_reset P W >>= fun s1 =>
         lhMid o s tab plan s1 >>= epochRest2 o)
       (lhMid o s tab plan W >>= fun t => process_eth1_data_reset P t >>=
         epochRest2 o) := by
     rw [← bind_assoc, ← bind_assoc]
-    exact sameOk_cont hcomm (epochRest2 o)
-  refine SameOk.trans ?_ (SameOk.flip hspec)
-  refine SameOk.bind (SameOk.refl _) (fun t ht => ?_)
+    exact sameResultOrBothFail_cont hcomm (epochRest2 o)
+  refine SameResultOrBothFail.trans ?_ (SameResultOrBothFail.flip hspec)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t ht => ?_)
   obtain ⟨h1, h2⟩ := lhMid_slotKeep o s tab plan W t ht
-  exact lhRestOrder_sameOk o t ⟨by rw [h1]; exact hW.1, by rw [h1]; exact hW.2.1,
+  exact lhRestOrder_sameResultOrBothFail o t ⟨by rw [h1]; exact hW.1, by rw [h1]; exact hW.2.1,
     by rw [h2]; exact hW.2.2⟩
 
 /-! ## The whole Lighthouse epoch in the Lighthouse order -/
@@ -237,48 +237,48 @@ theorem lhFullTail_eq_with [PresetCfg] (o : Oracle) (s : BeaconState) :
   unfold lhFullTail lhFullTailG lhFullTailWith lhAfterPass lhAfterPassG gloasFin
   rfl
 
-theorem lhFullTailWith_sameOk [PresetCfg]
+theorem lhFullTailWith_sameResultOrBothFail [PresetCfg]
     (a1 a2 : BeaconState → Gwei → LhDepositPlan → (Epoch × Gwei) × List Row →
       SpecM BeaconState) (s : BeaconState)
-    (h : ∀ tab plan x, SameOk (a1 s tab plan x) (a2 s tab plan x)) :
-    SameOk (lhFullTailWith a1 s) (lhFullTailWith a2 s) := by
+    (h : ∀ tab plan x, SameResultOrBothFail (a1 s tab plan x) (a2 s tab plan x)) :
+    SameResultOrBothFail (lhFullTailWith a1 s) (lhFullTailWith a2 s) := by
   unfold lhFullTailWith
-  refine SameOk.bind (SameOk.refl _) fun _ _ => ?_
-  refine SameOk.bind (SameOk.refl _) fun _ _ => ?_
-  refine SameOk.bind (SameOk.refl _) fun _ _ => ?_
-  refine SameOk.bind (SameOk.refl _) fun ap _ => ?_
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun _ _ => ?_
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun _ _ => ?_
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun _ _ => ?_
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun ap _ => ?_
   obtain ⟨_, _⟩ := ap
-  refine SameOk.bind (SameOk.refl _) fun _ _ => ?_
-  refine SameOk.bind (SameOk.refl _) fun du _ => ?_
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun _ _ => ?_
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun du _ => ?_
   obtain ⟨_, _⟩ := du
-  refine SameOk.bind (SameOk.refl _) fun _ _ => ?_
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun _ _ => ?_
   exact h _ _ _
 
 /-- The Gloas `process_epoch` as Lighthouse runs it, in the Lighthouse order and with the
 Lighthouse resets, for any preset (`PresetCfg`). The genesis epoch takes the same path. -/
-def process_epoch_lh_order [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
+def process_epoch_lighthouse [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
   let s1 ← lhJustificationAndFinalization P s
   lhFullTailWith (lhAfterPassOrder o) s1
 
 /-- At the last slot of an epoch, when the next slot fits in a `u64` and `historical_summaries`
 is below the Lighthouse limit, the Lighthouse order gives the same `ok` results as
 `process_epoch_lh_full`. -/
-theorem process_epoch_lh_order_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (hs : TailPre s) :
-    SameOk (process_epoch_lh_order o s) (process_epoch_lh_full o s) := by
-  unfold process_epoch_lh_order process_epoch_lh_full
-  refine SameOk.bind (SameOk.refl _) fun s1 h1 => ?_
+theorem process_epoch_lighthouse_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (hs : AtEpochBoundary s) :
+    SameResultOrBothFail (process_epoch_lighthouse o s) (process_epoch_lh_full o s) := by
+  unfold process_epoch_lighthouse process_epoch_lh_full
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun s1 h1 => ?_
   obtain ⟨_, _, _, _, rfl⟩ := process_justification_and_finalization_shape _ _ _
-    ((lhJustificationAndFinalization_sameOk _ _ s1).mp h1)
+    ((lhJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1)
   rw [lhFullTail_eq_with]
-  exact lhFullTailWith_sameOk _ _ _ fun tab plan x =>
-    lhAfterPassOrder_sameOk o _ tab plan x hs
+  exact lhFullTailWith_sameResultOrBothFail _ _ _ fun tab plan x =>
+    lhAfterPassOrder_sameResultOrBothFail o _ tab plan x hs
 
 /-! ## Every reachable state -/
 
-/-- `reachable_state_transition_sameOk'` for an epoch function `f` that also needs the
+/-- `reachable_state_transition_sameResultOrBothFail'` for an epoch function `f` that also needs the
 last-slot and next-slot facts. `process_slots` runs `process_epoch` only at the last slot of an
 epoch, before the slot of the block, so the next slot fits. -/
-theorem reachable_state_transition_sameOk_last [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem reachable_state_transition_sameResultOrBothFail_last [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
     (hffg : FfgInvariant P init) (hrows : RowsOk init)
     (hd : ExitDelay P init) (hx : ExitEpochsU64 init)
@@ -288,24 +288,24 @@ theorem reachable_state_transition_sameOk_last [PresetCfg] [PresetCfg.Ok] (o : O
     (hecon : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH init Econ)
     (f : BeaconState → SpecM BeaconState)
     (hf : ∀ t, EpochInputOk Econ t → (t.slot + 1) % P.SLOTS_PER_EPOCH = 0 →
-      t.slot + 1 < 2 ^ 64 → SameOk (f t) (process_epoch P o t))
+      t.slot + 1 < 2 ^ 64 → SameResultOrBothFail (f t) (process_epoch P o t))
     (s : BeaconState) (hr : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (hslot64 : signed_block.message.slot < 2 ^ 64) :
-    SameOk (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH f s signed_block
+    SameResultOrBothFail (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH f s signed_block
         validate_result)
       (state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
         validate_result) := by
   have hs := reachable_inv o _ _ init hffg hrows hd hx h0 hsupply s hr
-  have hslots : SameOk (process_slots P o f s signed_block.message.slot)
+  have hslots : SameResultOrBothFail (process_slots P o f s signed_block.message.slot)
       (process_slots P o (process_epoch P o) s
         signed_block.message.slot) := by
     unfold process_slots
     simp only [bind, Except.bind, pure, Except.pure]
     split
-    · exact SameOk.refl _
+    · exact SameResultOrBothFail.refl _
     · have h := loopInv_steps o signed_block.message.slot s.slot hslot64
-      refine process_slots_loop_sameOk' _ o _
+      refine process_slots_loop_sameResultOrBothFail' _ o _
         (fun t => LoopInv s.slot t ∧ SlotReach o s t)
         (fun t => LoopInv s.slot t ∧ ∃ t0, SlotReach o s t0 ∧
           process_slot P o t0 = .ok t)
@@ -335,18 +335,18 @@ theorem reachable_state_transition_sameOk_last [PresetCfg] [PresetCfg.Ok] (o : O
         exact ⟨h.2.2.2.2 t hlt hz hinv, .skip h0' ht0 hz⟩
   unfold state_transition_with state_transition
   dsimp only
-  exact sameOk_bind hslots fun _ _ => SameOk.refl _
+  exact sameResultOrBothFail_bind hslots fun _ _ => SameResultOrBothFail.refl _
 
 /-- `historical_summaries` is below the Lighthouse limit. -/
-def HistRoom (t : BeaconState) : Prop :=
-  t.historical_summaries.length < LH_HISTORICAL_ROOTS_LIMIT
+def HistoricalSummariesBelowLimit (t : BeaconState) : Prop :=
+  t.historical_summaries.length < LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT
 
 /-- The whole Lighthouse epoch in the Lighthouse order: on mainnet, from every reachable state,
-`state_transition` with `process_epoch_lh_order` has the same `ok` results as the spec
-`state_transition`. Beyond the hypotheses of `lighthouse_full_epoch_state_transition_sameOk`,
-`historical_summaries` is below the Lighthouse limit at each epoch boundary (`HistRoom` in the
+`state_transition` with `process_epoch_lighthouse` has the same `ok` results as the spec
+`state_transition`. Beyond the hypotheses of `lighthouse_full_epoch_state_transition_sameResultOrBothFail`,
+`historical_summaries` is below the Lighthouse limit at each epoch boundary (`HistoricalSummariesBelowLimit` in the
 economic facts). -/
-theorem lighthouse_order_epoch_state_transition_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle)
+theorem lighthouse_order_epoch_state_transition_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] (o : Oracle)
     (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
     (hffg : FfgInvariant P init) (hrows : RowsOk init)
     (hd : ExitDelay P init) (hx : ExitEpochsU64 init)
@@ -354,23 +354,23 @@ theorem lighthouse_order_epoch_state_transition_sameOk [PresetCfg] [PresetCfg.Ok
     (hcr : ConsolidationsInRange init) (hw : WithdrawableU64 init)
     (hsupply : SupplyBound o max_blobs_per_block GLOAS_FORK_EPOCH init)
     (hecon : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH init
-      (fun t => EpochSupply t ∧ HistRoom t))
+      (fun t => EpochBalanceBounds t ∧ HistoricalSummariesBelowLimit t))
     (s : BeaconState) (hr : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (hslot64 : signed_block.message.slot < 2 ^ 64) :
-    SameOk (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH
-        (process_epoch_lh_order o) s signed_block validate_result)
+    SameResultOrBothFail (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH
+        (process_epoch_lighthouse o) s signed_block validate_result)
       (state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
         validate_result) := by
   have hecon1 : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH init
-      (fun t => (EpochSupply t ∧ HistRoom t) ∧ PubkeysUnique t ∧ ConsolidationsInRange t) := by
+      (fun t => (EpochBalanceBounds t ∧ HistoricalSummariesBelowLimit t) ∧ PubkeysUnique t ∧ ConsolidationsInRange t) := by
     intro s' t t1 hr' hreach ht hz
     have htail := hreach.tail (reachable_tail o _ _ init hpk hcr s' hr')
     exact ⟨hecon s' t t1 hr' hreach ht hz,
       (PkSame.of_eq (process_slot_frame _ o _ _ ht).1.1).pubkeysUnique htail.1,
       (process_slot_cstep _ o _ _ ht).inRange htail.2⟩
   have hecon2 : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH init
-      (fun t => ((EpochSupply t ∧ HistRoom t) ∧ PubkeysUnique t ∧ ConsolidationsInRange t) ∧
+      (fun t => ((EpochBalanceBounds t ∧ HistoricalSummariesBelowLimit t) ∧ PubkeysUnique t ∧ ConsolidationsInRange t) ∧
         WithdrawableU64 t ∧ WithdrawableValid t) := by
     intro s' t t1 hr' hreach ht hz
     have hstart : ExitDelay P s' ∧ WithdrawableU64 s' :=
@@ -381,10 +381,10 @@ theorem lighthouse_order_epoch_state_transition_sameOk [PresetCfg] [PresetCfg.Ok
     have h1 := ExitDelay.of_validators_eq hv hwd.1
     have h2 := WithdrawableU64.of_validators_eq hv hwd.2
     exact ⟨hecon1 s' t t1 hr' hreach ht hz, h2, withdrawableValid_of h1 h2⟩
-  refine reachable_state_transition_sameOk_last o _ _ init hffg hrows hd hx h0 hsupply _ hecon2
-    (process_epoch_lh_order o) ?_ s hr signed_block validate_result hslot64
+  refine reachable_state_transition_sameResultOrBothFail_last o _ _ init hffg hrows hd hx h0 hsupply _ hecon2
+    (process_epoch_lighthouse o) ?_ s hr signed_block validate_result hslot64
   intro t ⟨hb, hslot, heb, hexit, ⟨⟨hsup, hroom⟩, _, hcons⟩, _, hvalid⟩ hz hn
-  exact SameOk.trans (process_epoch_lh_order_sameOk o t ⟨hz, hn, hroom⟩)
-    (process_epoch_lh_full_sameOk' o t hb hslot heb hexit hsup hvalid hcons)
+  exact SameResultOrBothFail.trans (process_epoch_lighthouse_sameResultOrBothFail o t ⟨hz, hn, hroom⟩)
+    (process_epoch_lh_full_sameResultOrBothFail' o t hb hslot heb hexit hsup hvalid hcons)
 
 end EpochProofs.Spec

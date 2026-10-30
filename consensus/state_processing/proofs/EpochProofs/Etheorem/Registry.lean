@@ -35,16 +35,16 @@ variable [EthCLSpecs.Gloas.Preset] [HasherTag]
 
 /-- A `for` loop over indices that runs on the reference and on Etheorem. If each step agrees,
 the loops agree. -/
-theorem forIn_list_etheorem (Inv : EState → Prop)
+theorem forIn_list_etheorem (Inv : EtheoremState → Prop)
     (specBody : Nat → Spec.BeaconState → Spec.SpecM (ForInStep Spec.BeaconState))
     (body : Nat → PUnit → GloasRun (ForInStep PUnit))
-    (hstep : ∀ i e r, Inv e → specBody i (absEState e) = .ok r →
+    (hstep : ∀ i e r, Inv e → specBody i (toSpecState e) = .ok r →
       ∃ e', (body i PUnit.unit).run (pureState e) = .ok (.yield PUnit.unit, pureState e') ∧
-        r = .yield (absEState e') ∧ Inv e') :
-    ∀ (l : List Nat) (e : EState) {s' : Spec.BeaconState}, Inv e →
-      forIn l (absEState e) specBody = .ok s' →
+        r = .yield (toSpecState e') ∧ Inv e') :
+    ∀ (l : List Nat) (e : EtheoremState) {s' : Spec.BeaconState}, Inv e →
+      forIn l (toSpecState e) specBody = .ok s' →
       ∃ e', (forIn l PUnit.unit body).run (pureState e) = .ok (PUnit.unit, pureState e') ∧
-        s' = absEState e' ∧ Inv e' := by
+        s' = toSpecState e' ∧ Inv e' := by
   intro l
   induction l with
   | nil =>
@@ -65,7 +65,7 @@ omit [EthCLSpecs.Gloas.Preset] [HasherTag] in
 theorem run_get_gloas [EthCLSpecs.Gloas.Preset] [HasherTag] (s : EthCLSpecs.Gloas.State) :
     (get : GloasRun EthCLSpecs.Gloas.State).run s = .ok (s, s) := rfl
 
-theorem modValidator_run (e : EState) (i : UInt64)
+theorem modValidator_run (e : EtheoremState) (i : UInt64)
     (f : EthCLSpecs.Gloas.Validator → EthCLSpecs.Gloas.Validator) :
     (EthCLSpecs.Gloas.modifyState (fun st => EthCLSpecs.Gloas.modValidator st i f) :
         GloasRun Unit).run (pureState e) =
@@ -76,16 +76,6 @@ section WithConfig
 
 variable [EthCLSpecs.Gloas.Config]
 
-open EthCLSpecs.Gloas in
-/-- The Etheorem preset holds the registry and deposit values of `p`. They are not in
-`PresetAgrees`. -/
-structure QueuesPresetAgrees (p : Spec.Preset) : Prop where
-  minActivationBalance : Const.minActivationBalance.toNat = p.MIN_ACTIVATION_BALANCE
-  ejectionBalance : Const.ejectionBalanceG.toNat = p.EJECTION_BALANCE
-  ejection_lt : p.EJECTION_BALANCE < p.MIN_ACTIVATION_BALANCE
-  maxEffectiveBalanceElectra :
-    Const.maxEffectiveBalanceElectraG.toNat = p.MAX_EFFECTIVE_BALANCE_ELECTRA
-  maxPendingDepositsPerEpoch : Const.maxPendingDepositsPerEpoch = p.MAX_PENDING_DEPOSITS_PER_EPOCH
 
 omit [EthCLSpecs.Gloas.Preset] [HasherTag] [EthCLSpecs.Gloas.Config] in
 theorem far_toNat : (EthCLSpecs.Gloas.Const.farFutureEpoch).toNat = Spec.FAR_FUTURE_EPOCH := rfl
@@ -101,11 +91,11 @@ theorem is_eligible_for_activation_queue_eq {p : Spec.Preset} (hq : QueuesPreset
   simp [UInt64.le_iff_toNat_le, UInt64.toNat_inj]
 
 omit [EthCLSpecs.Gloas.Config] in
-theorem is_eligible_for_activation_eq (e : EState) (v : EthCLSpecs.Gloas.Validator) :
-    Spec.is_eligible_for_activation (absEState e) (absValidator v) =
+theorem is_eligible_for_activation_eq (e : EtheoremState) (v : EthCLSpecs.Gloas.Validator) :
+    Spec.is_eligible_for_activation (toSpecState e) (absValidator v) =
       EthCLSpecs.Gloas.isEligibleForActivation (pureState e) v := by
   simp only [Spec.is_eligible_for_activation, EthCLSpecs.Gloas.isEligibleForActivation,
-    absValidator, absEState_finalized_checkpoint, absCheckpoint, view_uncachedBox, ← far_toNat]
+    absValidator, toSpecState_finalized_checkpoint, absCheckpoint, view_uncachedBox, ← far_toNat]
   apply Bool.eq_iff_iff.mpr
   simp [UInt64.le_iff_toNat_le, UInt64.toNat_inj]
 
@@ -132,7 +122,7 @@ def regBody (cur act : UInt64) (idx : Nat) (_ : PUnit) : GloasRun (ForInStep PUn
       fun validator => { validator with activationEpoch := act }
   pure (.yield PUnit.unit)
 
-theorem processRegistryUpdates_run (e : EState) :
+theorem processRegistryUpdates_run (e : EtheoremState) :
     (EthCLSpecs.Gloas.processRegistryUpdates (StateTransition := GloasRun)).run (pureState e) =
       ((forIn (List.range e.validators.val.size) PUnit.unit
         (regBody (EthCLSpecs.Gloas.currentEpochOf (pureState e))
@@ -161,23 +151,23 @@ forkonly Gloas
 variable {p : Spec.Preset} (hp : PresetAgrees p) (hq : QueuesPresetAgrees p)
 include hp hq
 
-theorem regBody_step (e : EState) (C : UInt64) (act tab idx : Nat)
-    (hcur : Spec.get_current_epoch p (absEState e) = .ok C.toNat)
+theorem regBody_step (e : EtheoremState) (C : UInt64) (act tab idx : Nat)
+    (hcur : Spec.get_current_epoch p (toSpecState e) = .ok C.toNat)
     (hact : Spec.compute_activation_exit_epoch p C.toNat = .ok act)
     (hCfar : C.toNat < Spec.FAR_FUTURE_EPOCH)
     (htab : etheoremTotalActiveBalance e = tab)
-    (hfin : (absEState e).finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH)
+    (hfin : (toSpecState e).finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH)
     {r : ForInStep Spec.BeaconState}
-    (h : Spec.registrySpecBody p tab C.toNat act idx (absEState e) = .ok r) :
+    (h : Spec.registrySpecBody p tab C.toNat act idx (toSpecState e) = .ok r) :
     ∃ e', (regBody C (EthCLSpecs.Gloas.computeActivationExitEpoch C) idx PUnit.unit).run
-        (pureState e) = .ok (.yield PUnit.unit, pureState e') ∧ r = .yield (absEState e') ∧
-      (absEState e').slot = (absEState e).slot ∧
-      (absEState e').finalized_checkpoint = (absEState e).finalized_checkpoint ∧
-      (absEState e').validators.map (Spec.activeKey C.toNat) =
-        (absEState e).validators.map (Spec.activeKey C.toNat) := by
+        (pureState e) = .ok (.yield PUnit.unit, pureState e') ∧ r = .yield (toSpecState e') ∧
+      (toSpecState e').slot = (toSpecState e).slot ∧
+      (toSpecState e').finalized_checkpoint = (toSpecState e).finalized_checkpoint ∧
+      (toSpecState e').validators.map (Spec.activeKey C.toNat) =
+        (toSpecState e).validators.map (Spec.activeKey C.toNat) := by
   unfold Spec.registrySpecBody at h
   obtain ⟨v', hv', h⟩ := Spec.specM_bind_ok h
-  rw [absEState_validators] at hv'
+  rw [toSpecState_validators] at hv'
   obtain ⟨hi, rfl⟩ := listGet_map_ok e.validators.val absValidator idx hv'
   have hidx64 : idx < 2 ^ 64 :=
     Nat.lt_of_lt_of_le hi (Nat.le_trans e.validators.property (Nat.le_of_lt hp.validatorRegistryLimit))
@@ -253,9 +243,9 @@ theorem regBody_step (e : EState) (C : UInt64) (act tab idx : Nat)
     · simp only [run_bind, modValidator_run, except_bind_ok, hofNat, hvget]
       rfl
     · rw [← hn']
-      simp only [absEState, map_toList_set!]
+      simp only [toSpecState, map_toList_set!]
       rfl
-    · rw [absEState_set_validators, map_toList_set!, absEState_validators]
+    · rw [toSpecState_set_validators, map_toList_set!, toSpecState_validators]
       apply map_set_of_key _ _ _ _ (by simpa using hi)
       simp [Spec.activeKey, absValidator, hv2, Spec.is_active_validator, v1]
   have hA' : EthCLSpecs.Gloas.isEligibleForActivationQueue v = false := by simpa using hA
@@ -268,7 +258,7 @@ theorem regBody_step (e : EState) (C : UInt64) (act tab idx : Nat)
     obtain ⟨s1, hs1, h⟩ := Spec.specM_bind_ok h
     simp only [pure, Except.pure, bind, Except.bind, Except.ok.injEq] at h
     subst h
-    have hs1' : Spec.initiate_validator_exit p (etheoremTotalActiveBalance e) (absEState e)
+    have hs1' : Spec.initiate_validator_exit p (etheoremTotalActiveBalance e) (toSpecState e)
         (UInt64.ofNat idx).toNat = .ok s1 := by rw [htab, hofNat]; exact hs1
     obtain ⟨e1, hrun1, rfl⟩ := initiate_validator_exit_etheorem hp e _ hs1'
     obtain ⟨-, hcs, hcases⟩ := Spec.initiate_validator_exit_cases p tab _ _ idx hs1
@@ -280,12 +270,12 @@ theorem regBody_step (e : EState) (C : UInt64) (act tab idx : Nat)
         rw [hcur] at hc
         cases hc
         have hwv : w = absValidator v := by
-          rw [absEState_validators] at hw
+          rw [toSpecState_validators] at hw
           simp [hi, hv2] at hw
           exact hw.symm
         subst hwv
         apply map_set_of_key _ _ _ _ (by simpa using hi)
-        simp only [Spec.activeKey, absEState_validators, List.getElem_map, Prod.mk.injEq]
+        simp only [Spec.activeKey, toSpecState_validators, List.getElem_map, Prod.mk.injEq]
         have hv3 : (e.validators.toList)[idx]'(by simpa using hi) = v := by
           simp [SSZList.toList, hv2]
         rw [hv3]
@@ -313,10 +303,10 @@ theorem regBody_step (e : EState) (C : UInt64) (act tab idx : Nat)
       refine ⟨{ e with validators := e.validators.set! idx v1 }, ?_, ?_, rfl, rfl, ?_⟩
       · simp only [run_bind, run_pure, modValidator_run, except_bind_ok, hofNat, hvget]
         rfl
-      · simp only [absEState, map_toList_set!]
+      · simp only [toSpecState, map_toList_set!]
         rw [← hactC]
         rfl
-      · rw [absEState_set_validators, map_toList_set!, absEState_validators]
+      · rw [toSpecState_set_validators, map_toList_set!, toSpecState_validators]
         apply map_set_of_key _ _ _ _ (by simpa using hi)
         simp only [EthCLSpecs.Gloas.isEligibleForActivation, Bool.and_eq_true, decide_eq_true_eq,
           beq_iff_eq, view_uncachedBox] at hC
@@ -333,13 +323,13 @@ theorem regBody_step (e : EState) (C : UInt64) (act tab idx : Nat)
       simp only [hC', Bool.false_eq_true, if_false, run_bind, run_pure, except_bind_ok]
 
 /-- The reference `process_registry_updates` equals Etheorem's. -/
-theorem process_registry_updates_etheorem (e : EState) {tab : Nat} {s' : Spec.BeaconState}
-    (htab : Spec.get_total_active_balance p (absEState e) = .ok tab)
-    (hfin : (absEState e).finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH)
-    (h : Spec.process_registry_updates p tab (absEState e) = .ok s') :
-    ∃ e' : EState,
+theorem process_registry_updates_etheorem (e : EtheoremState) {tab : Nat} {s' : Spec.BeaconState}
+    (htab : Spec.get_total_active_balance p (toSpecState e) = .ok tab)
+    (hfin : (toSpecState e).finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH)
+    (h : Spec.process_registry_updates p tab (toSpecState e) = .ok s') :
+    ∃ e' : EtheoremState,
       (EthCLSpecs.Gloas.processRegistryUpdates (StateTransition := GloasRun)).run (pureState e) =
-        .ok ((), pureState e') ∧ s' = absEState e' := by
+        .ok ((), pureState e') ∧ s' = toSpecState e' := by
   have hcur := get_current_epoch_eq hp e
   generalize hC : EthCLSpecs.Gloas.currentEpochOf (pureState e) = C at hcur
   have hact0 := h
@@ -357,23 +347,23 @@ theorem process_registry_updates_etheorem (e : EState) {tab : Nat} {s' : Spec.Be
     rw [hactC] at this
     simp only [Spec.FAR_FUTURE_EPOCH]
     omega
-  have hlen : (absEState e).validators.length = e.validators.val.size := by simp
+  have hlen : (toSpecState e).validators.length = e.validators.val.size := by simp
   rw [hlen] at h
-  let Inv : EState → Prop := fun e1 =>
-    (absEState e1).slot = (absEState e).slot ∧
-      (absEState e1).finalized_checkpoint = (absEState e).finalized_checkpoint ∧
-      (absEState e1).validators.map (Spec.activeKey C.toNat) =
-        (absEState e).validators.map (Spec.activeKey C.toNat)
-  have hstep : ∀ i e1 r, Inv e1 → Spec.registrySpecBody p tab C.toNat act i (absEState e1) = .ok r →
+  let Inv : EtheoremState → Prop := fun e1 =>
+    (toSpecState e1).slot = (toSpecState e).slot ∧
+      (toSpecState e1).finalized_checkpoint = (toSpecState e).finalized_checkpoint ∧
+      (toSpecState e1).validators.map (Spec.activeKey C.toNat) =
+        (toSpecState e).validators.map (Spec.activeKey C.toNat)
+  have hstep : ∀ i e1 r, Inv e1 → Spec.registrySpecBody p tab C.toNat act i (toSpecState e1) = .ok r →
       ∃ e', (regBody C (EthCLSpecs.Gloas.computeActivationExitEpoch C) i PUnit.unit).run
           (pureState e1) = .ok (.yield PUnit.unit, pureState e') ∧
-        r = .yield (absEState e') ∧ Inv e' := by
+        r = .yield (toSpecState e') ∧ Inv e' := by
     intro i e1 r ⟨hs, hf, hk⟩ hr
-    have hcur1 : Spec.get_current_epoch p (absEState e1) = .ok C.toNat := by
+    have hcur1 : Spec.get_current_epoch p (toSpecState e1) = .ok C.toNat := by
       rw [← hcur]; simp only [Spec.get_current_epoch, hs]
     have htab1 : etheoremTotalActiveBalance e1 = tab := by
       apply get_total_active_balance_ok hp e1
-      rw [Spec.get_total_active_balance_congr_key p (absEState e) (absEState e1) C.toNat hcur hs hk]
+      rw [Spec.get_total_active_balance_congr_key p (toSpecState e) (toSpecState e1) C.toNat hcur hs hk]
       exact htab
     obtain ⟨e', hrun, hr', hs', hf', hk'⟩ :=
       regBody_step hp hq e1 C act tab i hcur1 hact hCfar htab1 (hf ▸ hfin) hr
@@ -390,23 +380,23 @@ variable {p : Spec.Preset} (hp : PresetAgrees p) (hq : QueuesPresetAgrees p)
   {f : Spec.FuluConfig} (hf : FuluChurnAgrees p f)
 include hp hq hf
 
-theorem regBody_step (e : EState) (C : UInt64) (act tab idx : Nat)
-    (hcur : Spec.get_current_epoch p (absEState e) = .ok C.toNat)
+theorem regBody_step (e : EtheoremState) (C : UInt64) (act tab idx : Nat)
+    (hcur : Spec.get_current_epoch p (toSpecState e) = .ok C.toNat)
     (hact : Spec.compute_activation_exit_epoch p C.toNat = .ok act)
     (hCfar : C.toNat < Spec.FAR_FUTURE_EPOCH)
     (htab : Spec.fuluTab p f (etheoremTotalActiveBalance e) = tab)
-    (hfin : (absEState e).finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH)
+    (hfin : (toSpecState e).finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH)
     {r : ForInStep Spec.BeaconState}
-    (h : Spec.registrySpecBody p tab C.toNat act idx (absEState e) = .ok r) :
+    (h : Spec.registrySpecBody p tab C.toNat act idx (toSpecState e) = .ok r) :
     ∃ e', (regBody C (EthCLSpecs.Fulu.computeActivationExitEpoch C) idx PUnit.unit).run
-        (pureState e) = .ok (.yield PUnit.unit, pureState e') ∧ r = .yield (absEState e') ∧
-      (absEState e').slot = (absEState e).slot ∧
-      (absEState e').finalized_checkpoint = (absEState e).finalized_checkpoint ∧
-      (absEState e').validators.map (Spec.activeKey C.toNat) =
-        (absEState e).validators.map (Spec.activeKey C.toNat) := by
+        (pureState e) = .ok (.yield PUnit.unit, pureState e') ∧ r = .yield (toSpecState e') ∧
+      (toSpecState e').slot = (toSpecState e).slot ∧
+      (toSpecState e').finalized_checkpoint = (toSpecState e).finalized_checkpoint ∧
+      (toSpecState e').validators.map (Spec.activeKey C.toNat) =
+        (toSpecState e).validators.map (Spec.activeKey C.toNat) := by
   unfold Spec.registrySpecBody at h
   obtain ⟨v', hv', h⟩ := Spec.specM_bind_ok h
-  rw [absEState_validators] at hv'
+  rw [toSpecState_validators] at hv'
   obtain ⟨hi, rfl⟩ := listGet_map_ok e.validators.val absValidator idx hv'
   have hidx64 : idx < 2 ^ 64 :=
     Nat.lt_of_lt_of_le hi (Nat.le_trans e.validators.property (Nat.le_of_lt hp.validatorRegistryLimit))
@@ -482,9 +472,9 @@ theorem regBody_step (e : EState) (C : UInt64) (act tab idx : Nat)
     · simp only [run_bind, modValidator_run, except_bind_ok, hofNat, hvget]
       rfl
     · rw [← hn']
-      simp only [absEState, map_toList_set!]
+      simp only [toSpecState, map_toList_set!]
       rfl
-    · rw [absEState_set_validators, map_toList_set!, absEState_validators]
+    · rw [toSpecState_set_validators, map_toList_set!, toSpecState_validators]
       apply map_set_of_key _ _ _ _ (by simpa using hi)
       simp [Spec.activeKey, absValidator, hv2, Spec.is_active_validator, v1]
   have hA' : EthCLSpecs.Fulu.isEligibleForActivationQueue v = false := by simpa using hA
@@ -498,7 +488,7 @@ theorem regBody_step (e : EState) (C : UInt64) (act tab idx : Nat)
     simp only [pure, Except.pure, bind, Except.bind, Except.ok.injEq] at h
     subst h
     have hs1' : Spec.initiate_validator_exit p (Spec.fuluTab p f (etheoremTotalActiveBalance e))
-        (absEState e)
+        (toSpecState e)
         (UInt64.ofNat idx).toNat = .ok s1 := by rw [htab, hofNat]; exact hs1
     obtain ⟨e1, hrun1, rfl⟩ := initiate_validator_exit_etheorem hp hf e _ hs1'
     obtain ⟨-, hcs, hcases⟩ := Spec.initiate_validator_exit_cases p tab _ _ idx hs1
@@ -510,12 +500,12 @@ theorem regBody_step (e : EState) (C : UInt64) (act tab idx : Nat)
         rw [hcur] at hc
         cases hc
         have hwv : w = absValidator v := by
-          rw [absEState_validators] at hw
+          rw [toSpecState_validators] at hw
           simp [hi, hv2] at hw
           exact hw.symm
         subst hwv
         apply map_set_of_key _ _ _ _ (by simpa using hi)
-        simp only [Spec.activeKey, absEState_validators, List.getElem_map, Prod.mk.injEq]
+        simp only [Spec.activeKey, toSpecState_validators, List.getElem_map, Prod.mk.injEq]
         have hv3 : (e.validators.toList)[idx]'(by simpa using hi) = v := by
           simp [SSZList.toList, hv2]
         rw [hv3]
@@ -543,10 +533,10 @@ theorem regBody_step (e : EState) (C : UInt64) (act tab idx : Nat)
       refine ⟨{ e with validators := e.validators.set! idx v1 }, ?_, ?_, rfl, rfl, ?_⟩
       · simp only [run_bind, run_pure, modValidator_run, except_bind_ok, hofNat, hvget]
         rfl
-      · simp only [absEState, map_toList_set!]
+      · simp only [toSpecState, map_toList_set!]
         rw [← hactC]
         rfl
-      · rw [absEState_set_validators, map_toList_set!, absEState_validators]
+      · rw [toSpecState_set_validators, map_toList_set!, toSpecState_validators]
         apply map_set_of_key _ _ _ _ (by simpa using hi)
         simp only [EthCLSpecs.Fulu.isEligibleForActivation, Bool.and_eq_true, decide_eq_true_eq,
           beq_iff_eq, view_uncachedBox] at hC
@@ -563,13 +553,13 @@ theorem regBody_step (e : EState) (C : UInt64) (act tab idx : Nat)
       simp only [hC', Bool.false_eq_true, if_false, run_bind, run_pure, except_bind_ok]
 
 /-- The reference `process_registry_updates` equals Etheorem's. -/
-theorem process_registry_updates_etheorem (e : EState) {tab : Nat} {s' : Spec.BeaconState}
-    (htab : Spec.get_total_active_balance p (absEState e) = .ok tab)
-    (hfin : (absEState e).finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH)
-    (h : Spec.process_registry_updates p (Spec.fuluTab p f tab) (absEState e) = .ok s') :
-    ∃ e' : EState,
+theorem process_registry_updates_etheorem (e : EtheoremState) {tab : Nat} {s' : Spec.BeaconState}
+    (htab : Spec.get_total_active_balance p (toSpecState e) = .ok tab)
+    (hfin : (toSpecState e).finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH)
+    (h : Spec.process_registry_updates p (Spec.fuluTab p f tab) (toSpecState e) = .ok s') :
+    ∃ e' : EtheoremState,
       (EthCLSpecs.Fulu.processRegistryUpdates (StateTransition := FuluRun)).run (pureState e) =
-        .ok ((), pureState e') ∧ s' = absEState e' := by
+        .ok ((), pureState e') ∧ s' = toSpecState e' := by
   have hcur := get_current_epoch_eq hp e
   generalize hC : EthCLSpecs.Fulu.currentEpochOf (pureState e) = C at hcur
   have hact0 := h
@@ -587,25 +577,25 @@ theorem process_registry_updates_etheorem (e : EState) {tab : Nat} {s' : Spec.Be
     rw [hactC] at this
     simp only [Spec.FAR_FUTURE_EPOCH]
     omega
-  have hlen : (absEState e).validators.length = e.validators.val.size := by simp
+  have hlen : (toSpecState e).validators.length = e.validators.val.size := by simp
   rw [hlen] at h
-  let Inv : EState → Prop := fun e1 =>
-    (absEState e1).slot = (absEState e).slot ∧
-      (absEState e1).finalized_checkpoint = (absEState e).finalized_checkpoint ∧
-      (absEState e1).validators.map (Spec.activeKey C.toNat) =
-        (absEState e).validators.map (Spec.activeKey C.toNat)
+  let Inv : EtheoremState → Prop := fun e1 =>
+    (toSpecState e1).slot = (toSpecState e).slot ∧
+      (toSpecState e1).finalized_checkpoint = (toSpecState e).finalized_checkpoint ∧
+      (toSpecState e1).validators.map (Spec.activeKey C.toNat) =
+        (toSpecState e).validators.map (Spec.activeKey C.toNat)
   have hstep : ∀ i e1 r, Inv e1 →
-      Spec.registrySpecBody p (Spec.fuluTab p f tab) C.toNat act i (absEState e1) = .ok r →
+      Spec.registrySpecBody p (Spec.fuluTab p f tab) C.toNat act i (toSpecState e1) = .ok r →
       ∃ e', (regBody C (EthCLSpecs.Fulu.computeActivationExitEpoch C) i PUnit.unit).run
           (pureState e1) = .ok (.yield PUnit.unit, pureState e') ∧
-        r = .yield (absEState e') ∧ Inv e' := by
+        r = .yield (toSpecState e') ∧ Inv e' := by
     intro i e1 r ⟨hs, hf', hk⟩ hr
-    have hcur1 : Spec.get_current_epoch p (absEState e1) = .ok C.toNat := by
+    have hcur1 : Spec.get_current_epoch p (toSpecState e1) = .ok C.toNat := by
       rw [← hcur]; simp only [Spec.get_current_epoch, hs]
     have htab1 : Spec.fuluTab p f (etheoremTotalActiveBalance e1) = Spec.fuluTab p f tab := by
       congr 1
       apply get_total_active_balance_ok hp e1
-      rw [Spec.get_total_active_balance_congr_key p (absEState e) (absEState e1) C.toNat hcur hs hk]
+      rw [Spec.get_total_active_balance_congr_key p (toSpecState e) (toSpecState e1) C.toNat hcur hs hk]
       exact htab
     obtain ⟨e', hrun, hr', hs', hf'', hk'⟩ :=
       regBody_step hp hq hf e1 C act (Spec.fuluTab p f tab) i hcur1 hact hCfar htab1 (hf' ▸ hfin) hr

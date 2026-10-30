@@ -24,9 +24,9 @@ set_option linter.unusedSimpArgs false in
 /-- With four justification bits, the Lighthouse model of
 `weigh_justification_and_finalization` has the same `ok` results as the spec. Lighthouse runs
 the arithmetic before it reads the block roots, so the two can fail at different steps. -/
-theorem lhWeigh_sameOk (p : Preset) (s : BeaconState) (tab x y : Gwei)
+theorem lhWeigh_sameResultOrBothFail (p : Preset) (s : BeaconState) (tab x y : Gwei)
     (hlen : s.justification_bits.length = JUSTIFICATION_BITS_LENGTH) :
-    SameOk (lhWeighJustificationAndFinalization p s tab x y)
+    SameResultOrBothFail (lhWeighJustificationAndFinalization p s tab x y)
       (weigh_justification_and_finalization p s tab x y) := by
   obtain ⟨a, b, c, d, hbits⟩ : ∃ a b c d, s.justification_bits = [a, b, c, d] := by
     match h : s.justification_bits, hlen with
@@ -58,25 +58,25 @@ theorem lhWeigh_sameOk (p : Preset) (s : BeaconState) (tab x y : Gwei)
 
 /-- The Lighthouse model of `process_justification_and_finalization` has the same `ok` results
 as the spec. -/
-theorem lhJustificationAndFinalization_sameOk (p : Preset) (s : BeaconState) :
-    SameOk (lhJustificationAndFinalization p s) (process_justification_and_finalization p s) := by
+theorem lhJustificationAndFinalization_sameResultOrBothFail (p : Preset) (s : BeaconState) :
+    SameResultOrBothFail (lhJustificationAndFinalization p s) (process_justification_and_finalization p s) := by
   unfold lhJustificationAndFinalization
   split
-  · exact SameOk.refl _
+  · exact SameResultOrBothFail.refl _
   rename_i hlen
   have hlen : s.justification_bits.length = JUSTIFICATION_BITS_LENGTH := Decidable.of_not_not hlen
   unfold process_justification_and_finalization
-  refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
   split
-  · exact SameOk.refl _
-  refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
-  refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
-  refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
-  refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
-  refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
-  refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
-  refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
-  refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
-  exact lhWeigh_sameOk p s _ _ _ hlen
+  · exact SameResultOrBothFail.refl _
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
+  exact lhWeigh_sameResultOrBothFail p s _ _ _ hlen
 
 end EpochProofs.Spec

@@ -42,9 +42,9 @@ def BeaconState.withRows (state : BeaconState) (rows : List Row) : BeaconState :
     balances := rows.map (·.balance)
     inactivity_scores := rows.map (·.inactivity_score) }
 
-/-- `SameOk` goes through `bind`. -/
-theorem SameOk.bind {α β : Type} {x y : SpecM α} {k l : α → SpecM β} (h : SameOk x y)
-    (hk : ∀ v, x = .ok v → SameOk (k v) (l v)) : SameOk (x >>= k) (y >>= l) := by
+/-- `SameResultOrBothFail` goes through `bind`. -/
+theorem SameResultOrBothFail.bind {α β : Type} {x y : SpecM α} {k l : α → SpecM β} (h : SameResultOrBothFail x y)
+    (hk : ∀ v, x = .ok v → SameResultOrBothFail (k v) (l v)) : SameResultOrBothFail (x >>= k) (y >>= l) := by
   intro w
   cases hx : x with
   | error e1 =>

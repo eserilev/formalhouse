@@ -66,7 +66,7 @@ theorem lhRowStepFull_eq [PresetCfg] (ctx : LhStepContext) (downward upward : Ui
 /-- One pass of `lhRowStepFull` equals a pass of `lhRowStep`, then a pass of `lhRowStep2`. -/
 theorem lhRowStepFull_split [PresetCfg] (ctx : LhStepContext) (downward upward : Uint64)
     (bf : Row → Gwei) (td : Nat → Gwei) (nm : Nat → Bool) (c0 : Epoch × Gwei) (rows : List Row) :
-    SameOk (passM (fun c r => lhRowStepFull P ctx downward upward
+    SameResultOrBothFail (passM (fun c r => lhRowStepFull P ctx downward upward
         ⟨bf r, td r.index, nm r.index⟩ c r) c0 rows)
       (do
         let x ← passM (fun c r => lhRowStep P ctx (bf r) c r) c0 rows
@@ -83,8 +83,8 @@ theorem lhRowStepFull_split [PresetCfg] (ctx : LhStepContext) (downward upward :
       (fun _ => rfl)]
     exact passM_congr _ _ rows (fun c r _ => lhRowStepFull_eq ctx downward upward bf td nm c r) c0
   rw [h1]
-  refine SameOk.trans (SameOk.map (two_passes_eq_one_pass f g c0 () rows).flip _) ?_
-  apply SameOk.of_eq
+  refine SameResultOrBothFail.trans (SameResultOrBothFail.map (two_passes_eq_one_pass f g c0 () rows).flip _) ?_
+  apply SameResultOrBothFail.of_eq
   unfold twoPasses
   cases passM f c0 rows with
   | error e => rfl
@@ -222,12 +222,12 @@ theorem rowsStep_fold [PresetCfg] (S : BeaconState) (downward upward : Uint64)
 theorem rows_pass2_fold [PresetCfg] (S : BeaconState) (hrows : RowsOk S) (downward upward : Uint64)
     (hthr : hysteresisThresholds P = .ok (downward, upward))
     (td : Nat → Gwei) (nm : Nat → Bool) :
-    SameOk ((fun y => S.withRows y.2) <$> passM (fun _ r => (fun r' => ((), r')) <$>
+    SameResultOrBothFail ((fun y => S.withRows y.2) <$> passM (fun _ r => (fun r' => ((), r')) <$>
         lhRowStep2 downward upward (td r.index) (nm r.index) r) () (rowsOf S))
       ((List.range S.validators.length).foldlM (fun t i => do
         let t ← increaseAt i (td i) t
         if nm i then pure t else ebUpdateAt t i) S) := by
-  apply SameOk.of_eq
+  apply SameResultOrBothFail.of_eq
   have h := rowsStep_fold S downward upward hthr td nm (rowsOf S) [] (by
     intro j hj
     simp [rowsOf_getElem])
@@ -267,12 +267,12 @@ theorem increaseFold_hF2 (td : Nat → Gwei) (i : Nat) :
 updates of the validators that are not named. -/
 theorem fold_interleave_gen [PresetCfg] (td : Nat → Gwei) (nm : Nat → Bool) :
     ∀ (l : List Nat), l.Nodup → ∀ S : BeaconState,
-      SameOk (l.foldlM (rowsStep td nm) S)
+      SameResultOrBothFail (l.foldlM (rowsStep td nm) S)
         (do
           let t ← l.foldlM (fun t i => increaseAt i (td i) t) S
           (l.filter (fun i => !nm i)).foldlM ebUpdateAt t)
   | [], _, S => by
-    apply SameOk.of_eq
+    apply SameResultOrBothFail.of_eq
     rfl
   | i :: l, hnd, S => by
     have hil : i ∉ l := (List.nodup_cons.mp hnd).1
@@ -280,7 +280,7 @@ theorem fold_interleave_gen [PresetCfg] (td : Nat → Gwei) (nm : Nat → Bool) 
     rw [List.foldlM_cons, List.foldlM_cons]
     unfold rowsStep
     simp only [bind_assoc]
-    refine SameOk.bind (SameOk.refl _) (fun t1 _ => ?_)
+    refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t1 _ => ?_)
     cases hn : nm i with
     | true =>
       have hf : (i :: l).filter (fun i => !nm i) = l.filter (fun i => !nm i) := by
@@ -292,23 +292,23 @@ theorem fold_interleave_gen [PresetCfg] (td : Nat → Gwei) (nm : Nat → Bool) 
         simp [hn]
       rw [hf]
       simp only [Bool.false_eq_true, if_false, List.foldlM_cons]
-      refine SameOk.trans (y := ebUpdateAt t1 i >>= fun t2 =>
+      refine SameResultOrBothFail.trans (y := ebUpdateAt t1 i >>= fun t2 =>
         l.foldlM (fun t i => increaseAt i (td i) t) t2 >>= fun t3 =>
           (l.filter (fun i => !nm i)).foldlM ebUpdateAt t3)
-        (SameOk.bind (SameOk.refl _) (fun t2 _ => ih t2)) ?_
-      refine SameOk.trans (SameOk.of_eq (by rw [← bind_assoc])) ?_
-      refine SameOk.trans (SameOk.bind (ebUpdateAt_commute
+        (SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t2 _ => ih t2)) ?_
+      refine SameResultOrBothFail.trans (SameResultOrBothFail.of_eq (by rw [← bind_assoc])) ?_
+      refine SameResultOrBothFail.trans (SameResultOrBothFail.bind (ebUpdateAt_commute
         (fun t => l.foldlM (fun t i => increaseAt i (td i) t) t) i (fun _ => True)
         (fun t e _ => increaseFold_hF1 td i e l t)
         (fun t t' _ h => increaseFold_hF2 td i l hil t t' h) t1 trivial)
-        (fun _ _ => SameOk.refl _)) ?_
-      apply SameOk.of_eq
+        (fun _ _ => SameResultOrBothFail.refl _)) ?_
+      apply SameResultOrBothFail.of_eq
       rw [bind_assoc]
 
 /-- The interleaved fold over `0, …, n - 1` equals all top-ups first, then the updates of the
 validators that are not named. -/
 theorem fold_interleave [PresetCfg] (td : Nat → Gwei) (nm : Nat → Bool) (n : Nat) (S : BeaconState) :
-    SameOk ((List.range n).foldlM (fun t i => do
+    SameResultOrBothFail ((List.range n).foldlM (fun t i => do
         let t ← increaseAt i (td i) t
         if nm i then pure t else ebUpdateAt t i) S)
       (do

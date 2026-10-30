@@ -12,11 +12,11 @@ after the single pass in the spec order. It is `lhFullTailG` at the Fulu churn t
 and without the Gloas steps (builder payments, PTC window). The sync committee update is the
 Gloas function, which is the selection that Lighthouse runs (`next_sync_committee_indices`).
 
-`process_epoch_lh_full_fulu_sameOk'` shows that it gives the same `ok` results as the Fulu
-`process_epoch`, under the hypotheses of `process_epoch_lh_full_sameOk'`. The proof is the Gloas
+`process_epoch_lh_full_fulu_sameResultOrBothFail'` shows that it gives the same `ok` results as the Fulu
+`process_epoch`, under the hypotheses of `process_epoch_lh_full_sameResultOrBothFail'`. The proof is the Gloas
 proof with the registry and deposit churn at `fuluTab`, `B = pure` in place of the builder
 payments, and the Fulu sync committee update swapped for the Gloas one
-(`process_sync_committee_updates_fulu_sameOk`).
+(`process_sync_committee_updates_fulu_sameResultOrBothFail`).
 -/
 
 namespace EpochProofs.Spec
@@ -84,20 +84,20 @@ theorem process_epoch_fulu_parts [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle)
   simp only [specFourStepsFulu, epochRestFulu, fuluTabM, bind_assoc]
 
 /-- `specFourStepsFulu` with one total active balance. -/
-theorem specFourStepsFulu_sameOk [PresetCfg] [FuluCfg] (s1 : BeaconState) (total_active_balance : Gwei)
+theorem specFourStepsFulu_sameResultOrBothFail [PresetCfg] [FuluCfg] (s1 : BeaconState) (total_active_balance : Gwei)
     (htab : get_total_active_balance P s1 = .ok total_active_balance)
     (hrows : RowsOk s1) (current_epoch activation_epoch : Epoch)
     (hcurrent : get_current_epoch P s1 = .ok current_epoch)
     (hactivation : compute_activation_exit_epoch P current_epoch =
       .ok activation_epoch)
     (hcur : current_epoch < FAR_FUTURE_EPOCH) :
-    SameOk (specFourStepsFulu s1) (do
+    SameResultOrBothFail (specFourStepsFulu s1) (do
       let s2 ← process_inactivity_updates P s1
       let s3 ← process_rewards_and_penalties P total_active_balance s2
       let s4 ← process_registry_updates P (fuluTabM total_active_balance) s3
       process_slashings P total_active_balance s4) := by
   unfold specFourStepsFulu
-  refine SameOk.bind (SameOk.refl _) (fun s2 h2 => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun s2 h2 => ?_)
   have hv2 := process_inactivity_updates_validators P _ _ h2
   have hslot2 := (process_inactivity_updates_checkpointsStable P _ _ h2).1
   have hl2 := process_inactivity_updates_len P _ _ h2
@@ -106,7 +106,7 @@ theorem specFourStepsFulu_sameOk [PresetCfg] [FuluCfg] (s1 : BeaconState) (total
       (by rw [hv2])]
     exact htab
   rw [t2, ok_bind'']
-  refine SameOk.bind (SameOk.refl _) (fun s3 h3 => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun s3 h3 => ?_)
   have hv3 := process_rewards_and_penalties_validators P _ _ _ h3
   have hslot3 := (process_rewards_and_penalties_checkpointsStable P _ _ _ h3).1
   have hl3 := process_rewards_and_penalties_len P _ _ _ h3
@@ -117,7 +117,7 @@ theorem specFourStepsFulu_sameOk [PresetCfg] [FuluCfg] (s1 : BeaconState) (total
       (current_epoch_of_slot' hcurrent hslot2) hslot3 (by rw [hv3])]
     exact t2
   rw [t3, ok_bind'']
-  refine SameOk.bind (SameOk.refl _) (fun s4 h4 => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun s4 h4 => ?_)
   have hslot4 := (process_registry_updates_checkpointsStable P _ _ _ h4).1
   have hrows3 : RowsOk s3 := (hl2.trans hl3).rowsOk hrows
   have hkey := process_registry_updates_activeKey P _ s3 s4 hrows3 current_epoch
@@ -126,7 +126,7 @@ theorem specFourStepsFulu_sameOk [PresetCfg] [FuluCfg] (s1 : BeaconState) (total
     rw [get_total_active_balance_congr_key P s3 s4 current_epoch hc3 hslot4 hkey]
     exact t3
   rw [t4, ok_bind'']
-  exact SameOk.refl _
+  exact SameResultOrBothFail.refl _
 
 /-- The four Fulu steps with one total keep the total active balance. -/
 theorem fourStepsFulu_total [PresetCfg] [FuluCfg] (s1 : BeaconState) (total_active_balance : Gwei)
@@ -168,8 +168,8 @@ theorem fourStepsFulu_total [PresetCfg] [FuluCfg] (s1 : BeaconState) (total_acti
 
 /-- `epochRest2Fulu` with the Fulu sync committee update gives the same `ok` results as with the
 Gloas one. -/
-theorem epochRest2Fulu_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (S : BeaconState) :
-    SameOk (do
+theorem epochRest2Fulu_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] (o : Oracle) (S : BeaconState) :
+    SameResultOrBothFail (do
         let state ← process_slashings_reset P S
         let state ← process_randao_mixes_reset P state
         let state ← process_historical_summaries_update P o state
@@ -178,22 +178,22 @@ theorem epochRest2Fulu_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (S : Beaco
         process_proposer_lookahead_fulu P o state)
       (epochRest2Fulu o S) := by
   unfold epochRest2Fulu
-  refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
-  refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
-  refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
-  exact SameOk.bind (process_sync_committee_updates_fulu_sameOk P o _ P_sync_size_pos)
-    (fun _ _ => SameOk.refl _)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
+  exact SameResultOrBothFail.bind (process_sync_committee_updates_fulu_sameResultOrBothFail P o _ P_sync_size_pos)
+    (fun _ _ => SameResultOrBothFail.refl _)
 
 /-- In `epochRestFulu`, the deposit churn total is `fuluTab` of the total of the state before
 it, and the rest is `specTailG` with no step in place of the builder payments. -/
 theorem epochRestFulu_specTail [PresetCfg] [PresetCfg.Ok] [FuluCfg] (o : Oracle) (S4 : BeaconState) (tab : Gwei) (cur : Epoch)
     (hcur : get_current_epoch P S4 = .ok cur) (hfar : cur < FAR_FUTURE_EPOCH)
     (htab : get_total_active_balance P S4 = .ok tab) :
-    SameOk (epochRestFulu o S4)
+    SameResultOrBothFail (epochRestFulu o S4)
       (process_eth1_data_reset P S4 >>=
         specTailG o (fuluTabM tab) pure (epochRest2Fulu o)) := by
   unfold epochRestFulu
-  refine SameOk.bind (SameOk.refl _) (fun S5 h5 => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun S5 h5 => ?_)
   obtain ⟨v, rfl⟩ := eth1_shape h5
   have hcur5 : get_current_epoch P { S4 with eth1_data_votes := v } = .ok cur := hcur
   have htab5 : get_total_active_balance P { S4 with eth1_data_votes := v } =
@@ -203,11 +203,11 @@ theorem epochRestFulu_specTail [PresetCfg] [PresetCfg.Ok] [FuluCfg] (o : Oracle)
     exact htab
   rw [htab5, ok_bind']
   unfold specTailG
-  refine SameOk.bind (SameOk.refl _) (fun S6 _ => ?_)
-  refine SameOk.bind (SameOk.refl _) (fun S7 _ => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun S6 _ => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun S7 _ => ?_)
   simp only [pure_bind]
-  refine SameOk.bind (SameOk.refl _) (fun S9 _ => ?_)
-  exact epochRest2Fulu_sameOk o S9
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun S9 _ => ?_)
+  exact epochRest2Fulu_sameResultOrBothFail o S9
 
 /-! ## The single pass -/
 
@@ -244,7 +244,7 @@ theorem lighthouse_single_pass_eq_spec_supply_fulu [PresetCfg] [FuluCfg] (total_
     (base_reward : Row → Gwei)
     (hbase : ∀ r ∈ rowsOf state, rewardsEligible rctx.previous_epoch r.validator = .ok true →
       rewardsBaseReward P total_active_balance r.validator = .ok (base_reward r)) :
-    SameOk (do
+    SameResultOrBothFail (do
       let s1 ← process_inactivity_updates P state
       let s2 ← process_rewards_and_penalties P total_active_balance s1
       let s3 ← process_registry_updates P (fuluTabM total_active_balance) s2
@@ -256,10 +256,10 @@ theorem lighthouse_single_pass_eq_spec_supply_fulu [PresetCfg] [FuluCfg] (total_
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
   obtain ⟨hprevious, -, -, -, -, hleak, htab⟩ :=
     rewardsContextOf_ok P total_active_balance state rctx hctx
-  refine SameOk.trans (separate_passes_eq_single_pass_tab P total_active_balance
+  refine SameResultOrBothFail.trans (separate_passes_eq_single_pass_tab P total_active_balance
     (fuluTabM total_active_balance) state hrows current_epoch rctx.previous_epoch rctx.in_leak
     hcurrent hgenesis hprevious hleak rctx hctx activation_epoch hactivation htarget adjusted per
-    hpre) (SameOk.of_eq ?_)
+    hpre) (SameResultOrBothFail.of_eq ?_)
   have hstep : ∀ churn r, r ∈ rowsOf state →
       lhRowStep P (lhContextOf state (fuluTabM total_active_balance) current_epoch
         rctx per) (base_reward r) churn r =
@@ -294,7 +294,7 @@ theorem genesis_passes_eq_single_pass_tab (p : Preset) (total_active_balance reg
     (htarget : GENESIS_EPOCH + p.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE)
     (adjusted per : Gwei)
     (hpre : slashingsPreamble p total_active_balance state.slashings = .ok (adjusted, per)) :
-    SameOk (do
+    SameResultOrBothFail (do
       let s1 ← process_inactivity_updates p state
       let s2 ← process_rewards_and_penalties p total_active_balance s1
       let s3 ← process_registry_updates p registry_total s2
@@ -308,9 +308,9 @@ theorem genesis_passes_eq_single_pass_tab (p : Preset) (total_active_balance reg
   simp only [bind, Except.bind]
   rw [process_rewards_and_penalties_genesis p total_active_balance state hcurrent]
   dsimp only
-  refine SameOk.trans ?_ (passM_seq_bothSteps _ _ _ () (rowsOf state)
+  refine SameResultOrBothFail.trans ?_ (passM_seq_bothSteps _ _ _ () (rowsOf state)
     (fun c y => pure (state.withRowsChurn c y.2)))
-  apply SameOk.bind_map (process_registry_updates_rows p registry_total state
+  apply SameResultOrBothFail.bind_map (process_registry_updates_rows p registry_total state
     GENESIS_EPOCH activation_epoch hrows hcurrent hactivation)
   intro y3 hy3
   have hk3 : y3.2.map rowKey = (rowsOf state).map rowKey :=
@@ -320,10 +320,10 @@ theorem genesis_passes_eq_single_pass_tab (p : Preset) (total_active_balance reg
   have hR3 : rowsOf (state.withRowsChurn y3.1 y3.2) = y3.2 := rowsOf_withRows state y3.2 hk3
   have hok3 : RowsOk (state.withRowsChurn y3.1 y3.2) :=
     rowsOk_withRows_of_key state y3.2 hrows hk3
-  have h4 := process_slashings_rows_sameOk p total_active_balance
+  have h4 := process_slashings_rows_sameResultOrBothFail p total_active_balance
     (state.withRowsChurn y3.1 y3.2) GENESIS_EPOCH hcurrent htarget adjusted per hpre hok3
   rw [hR3] at h4
-  refine SameOk.trans h4 (SameOk.of_eq ?_)
+  refine SameResultOrBothFail.trans h4 (SameResultOrBothFail.of_eq ?_)
   simp only [Functor.map, Except.map, bind, Except.bind, pure, Except.pure]
   cases passM (slashingsRowStep p (GENESIS_EPOCH + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) ()
     y3.2 <;> rfl
@@ -343,7 +343,7 @@ theorem lighthouse_single_pass_eq_spec_genesis_fulu [PresetCfg] [PresetCfg.Ok] [
       .ok (adjusted, per))
     (hfinalized : state.finalized_checkpoint.epoch ≤ GENESIS_EPOCH)
     (base_reward : Row → Gwei) :
-    SameOk (do
+    SameResultOrBothFail (do
       let s1 ← process_inactivity_updates P state
       let s2 ← process_rewards_and_penalties P total_active_balance s1
       let s3 ← process_registry_updates P (fuluTabM total_active_balance) s2
@@ -353,10 +353,10 @@ theorem lighthouse_single_pass_eq_spec_genesis_fulu [PresetCfg] [PresetCfg.Ok] [
           (lhContextOf state (fuluTabM total_active_balance) GENESIS_EPOCH rctx per)
           (base_reward r) churn r)
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
-  refine SameOk.trans (genesis_passes_eq_single_pass_tab P total_active_balance
+  refine SameResultOrBothFail.trans (genesis_passes_eq_single_pass_tab P total_active_balance
     (fuluTabM total_active_balance) state hrows hcurrent activation_epoch hactivation
     (P_slashings_target_lt (by decide))
-    adjusted per hpre) (SameOk.of_eq ?_)
+    adjusted per hpre) (SameResultOrBothFail.of_eq ?_)
   have hstep : ∀ churn r, r ∈ rowsOf state →
       lhRowStep P (lhContextOf state (fuluTabM total_active_balance) GENESIS_EPOCH
         rctx per) (base_reward r) churn r =
@@ -403,13 +403,13 @@ theorem epochRestFulu_nf [PresetCfg] [PresetCfg.Ok] [FuluCfg] (o : Oracle) (s1 :
       .ok total_active_balance)
     (hbal4 : ∀ r ∈ rows, r.balance < 2 ^ 64)
     (hnamed : ∀ i ∈ consolidationIndices s1, i < s1.validators.length) :
-    SameOk (epochRestFulu o (s1.withRowsChurn churn rows))
+    SameResultOrBothFail (epochRestFulu o (s1.withRowsChurn churn rows))
       (tailNFG o (epochRest2Fulu o) s1 (s1.withRowsChurn churn rows)
         (fuluTabM total_active_balance) current_epoch) := by
   have hfar : current_epoch < FAR_FUTURE_EPOCH := Nat.lt_trans (Nat.lt_succ_self _) hnext
   have hcur4 : get_current_epoch P (s1.withRowsChurn churn rows) =
       .ok current_epoch := hcur
-  refine SameOk.trans (epochRestFulu_specTail o _ total_active_balance current_epoch hcur4 hfar
+  refine SameResultOrBothFail.trans (epochRestFulu_specTail o _ total_active_balance current_epoch hcur4 hfar
     htab4) ?_
   have hK : (fun t => (pure t : SpecM BeaconState) >>= epochRest2Fulu o) = epochRest2Fulu o :=
     funext fun t => pure_bind _ _
@@ -419,14 +419,14 @@ theorem epochRestFulu_nf [PresetCfg] [PresetCfg.Ok] [FuluCfg] (o : Oracle) (s1 :
   rw [hK] at h
   exact h
 
-/-- `process_epoch_lh_full_fulu_sameOk'` at the genesis epoch. Justification and finalization return
+/-- `process_epoch_lh_full_fulu_sameResultOrBothFail'` at the genesis epoch. Justification and finalization return
 the state, the spec skips the inactivity and rewards steps, and the single pass skips them
 through `after_genesis`. -/
 theorem process_epoch_lh_full_fulu_genesis [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
-    (hexitb : ExitBounds t) (hsupply_t : EpochSupply t) (hvalid : WithdrawableValid t)
+    (hexitb : ExitBounds t) (hsupply_t : EpochBalanceBounds t) (hvalid : WithdrawableValid t)
     (hcons : ConsolidationsInRange t)
     (hgen : t.slot / P.SLOTS_PER_EPOCH = GENESIS_EPOCH) :
-    SameOk (process_epoch_lh_full_fulu o t)
+    SameResultOrBothFail (process_epoch_lh_full_fulu o t)
       (process_epoch_fulu P FC o t) := by
   obtain ⟨hinv, hrows, -⟩ := hb
   obtain ⟨hbalance, hsupply, hslashings⟩ := hsupply_t
@@ -436,8 +436,8 @@ theorem process_epoch_lh_full_fulu_genesis [PresetCfg] [PresetCfg.Ok] [FuluCfg] 
       Except.pure]
   unfold process_epoch_lh_full_fulu
   rw [process_epoch_fulu_parts]
-  refine SameOk.bind (lhJustificationAndFinalization_sameOk _ _) (fun s1 h1 => ?_)
-  replace h1 := (lhJustificationAndFinalization_sameOk _ _ s1).mp h1
+  refine SameResultOrBothFail.bind (lhJustificationAndFinalization_sameResultOrBothFail _ _) (fun s1 h1 => ?_)
+  replace h1 := (lhJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1
   have hs1 : s1 = t := by
     unfold process_justification_and_finalization at h1
     simp [hcurrent, GENESIS_EPOCH, bind, Except.bind, pure, Except.pure] at h1
@@ -461,21 +461,21 @@ theorem process_epoch_lh_full_fulu_genesis [PresetCfg] [PresetCfg.Ok] [FuluCfg] 
     fun i h => hexitb _ (List.getElem_mem h)
   have hcfar : GENESIS_EPOCH < FAR_FUTURE_EPOCH := by decide
   -- The four spec steps equal the first Lighthouse pass.
-  have hfour := SameOk.trans (specFourStepsFulu_sameOk s1 tab htab hrows
+  have hfour := SameResultOrBothFail.trans (specFourStepsFulu_sameResultOrBothFail s1 tab htab hrows
     GENESIS_EPOCH _ hcurrent hactivation hcfar)
     (lighthouse_single_pass_eq_spec_genesis_fulu tab s1 hrows hcurrent rctx hprevr hexit1 _
       hactivation adj per hpre (Nat.le_of_eq hfin0) (lhBaseReward tab))
   -- The Lighthouse tail reaches `tailNF`.
-  refine SameOk.trans (lhFullTailG_nf o fuluTabM (fun _ => epochRest2Fulu o) s1 GENESIS_EPOCH tab rctx adj per _ _ hcurrent htab hctx
+  refine SameResultOrBothFail.trans (lhFullTailG_nf o fuluTabM (fun _ => epochRest2Fulu o) s1 GENESIS_EPOCH tab rctx adj per _ _ hcurrent htab hctx
     hpre hysteresisThresholds_mainnet hrows) ?_
   -- The spec tail reaches `tailNF`.
-  refine SameOk.flip ?_
-  refine SameOk.trans (SameOk.bind hfour (fun _ _ => SameOk.refl _)) ?_
+  refine SameResultOrBothFail.flip ?_
+  refine SameResultOrBothFail.trans (SameResultOrBothFail.bind hfour (fun _ _ => SameResultOrBothFail.refl _)) ?_
   rw [map_bind']
-  refine SameOk.bind (SameOk.refl _) (fun x hx => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun x hx => ?_)
   have hspec := (hfour (s1.withRowsChurn x.1 x.2)).mpr (by rw [hx]; rfl)
   have htab4 := fourStepsFulu_total s1 tab htab hrows GENESIS_EPOCH _ hcurrent hactivation hcfar _
-    ((specFourStepsFulu_sameOk s1 tab htab hrows GENESIS_EPOCH _ hcurrent hactivation
+    ((specFourStepsFulu_sameResultOrBothFail s1 tab htab hrows GENESIS_EPOCH _ hcurrent hactivation
       hcfar _).mp hspec)
   exact epochRestFulu_nf o s1 GENESIS_EPOCH tab _ _ x.1 x.2 _ hx rfl rfl hcurrent
     (Nat.le_of_eq hfin0) (by decide) hactivation hexit1 hvalid htab4
@@ -485,14 +485,14 @@ theorem process_epoch_lh_full_fulu_genesis [PresetCfg] [PresetCfg.Ok] [FuluCfg] 
 
 /-- On mainnet, at a state that the Fulu `process_epoch` starts from, the Lighthouse Fulu epoch
 with the deposits and effective balance updates in the single pass gives the same `ok` results
-as the Fulu spec epoch. Beyond the hypotheses of `process_epoch_lh_sameOk'` it needs `WithdrawableValid`,
+as the Fulu spec epoch. Beyond the hypotheses of `process_epoch_lh_sameResultOrBothFail'` it needs `WithdrawableValid`,
 for the deposit statuses that Lighthouse predicts, and `ConsolidationsInRange`, so that the
 validators that consolidations name are existing validators. -/
-theorem process_epoch_lh_full_fulu_sameOk' [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
+theorem process_epoch_lh_full_fulu_sameResultOrBothFail' [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
     (hslot : t.slot < 2 ^ 64) (heb : EBOk P t) (hexitb : ExitBounds t)
-    (hsupply_t : EpochSupply t) (hvalid : WithdrawableValid t)
+    (hsupply_t : EpochBalanceBounds t) (hvalid : WithdrawableValid t)
     (hcons : ConsolidationsInRange t) :
-    SameOk (process_epoch_lh_full_fulu o t)
+    SameResultOrBothFail (process_epoch_lh_full_fulu o t)
       (process_epoch_fulu P FC o t) := by
   obtain ⟨hinv, hrows, heffective⟩ := hb
   obtain ⟨hbalance, hsupply, hslashings⟩ := hsupply_t
@@ -511,8 +511,8 @@ theorem process_epoch_lh_full_fulu_sameOk' [PresetCfg] [PresetCfg.Ok] [FuluCfg] 
   rw [hce] at hcurrent hepoch hgen heffective
   have h32 : @LT.lt Nat _ (current_epoch + 32) (2 ^ 64) := P_target_bound hepoch
   rw [process_epoch_fulu_parts]
-  refine SameOk.bind (lhJustificationAndFinalization_sameOk _ _) (fun s1 h1 => ?_)
-  replace h1 := (lhJustificationAndFinalization_sameOk _ _ s1).mp h1
+  refine SameResultOrBothFail.bind (lhJustificationAndFinalization_sameResultOrBothFail _ _) (fun s1 h1 => ?_)
+  replace h1 := (lhJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1
   obtain ⟨_, _, _, _, hs1⟩ := process_justification_and_finalization_shape _ _ _ h1
   have hcur1 : get_current_epoch P s1 = .ok current_epoch := by
     rw [hs1]; exact hcurrent
@@ -599,7 +599,7 @@ theorem process_epoch_lh_full_fulu_sameOk' [PresetCfg] [PresetCfg.Ok] [FuluCfg] 
   have hcfar : current_epoch < FAR_FUTURE_EPOCH := (P_target_far hepoch).1
   have hnext : current_epoch + 1 < FAR_FUTURE_EPOCH := (P_target_far hepoch).2
   -- The four spec steps equal the first Lighthouse pass.
-  have hfour := SameOk.trans (specFourStepsFulu_sameOk s1 tab htab hrows1
+  have hfour := SameResultOrBothFail.trans (specFourStepsFulu_sameResultOrBothFail s1 tab htab hrows1
     current_epoch _ hcur1 hactivation hcfar)
     (lighthouse_single_pass_eq_spec_supply_fulu tab s1 hrows1 current_epoch hcur1
     (by simpa [GENESIS_EPOCH] using hgen) rctx hctx (hpe ▸ heff1) hexit1 hmax1 hbal1 _
@@ -612,16 +612,16 @@ theorem process_epoch_lh_full_fulu_sameOk' [PresetCfg] [PresetCfg.Ok] [FuluCfg] 
         (hmax1 _ (by rw [← rowsOf_map_validator]; exact List.mem_map_of_mem hr))
       unfold lhBaseReward; rw [hb]))
   -- The Lighthouse tail reaches `tailNF`.
-  refine SameOk.trans (lhFullTailG_nf o fuluTabM (fun _ => epochRest2Fulu o) s1 current_epoch tab rctx adj per _ _ hcur1 htab hctx
+  refine SameResultOrBothFail.trans (lhFullTailG_nf o fuluTabM (fun _ => epochRest2Fulu o) s1 current_epoch tab rctx adj per _ _ hcur1 htab hctx
     hpre hysteresisThresholds_mainnet hrows1) ?_
   -- The spec tail reaches `tailNF`.
-  refine SameOk.flip ?_
-  refine SameOk.trans (SameOk.bind hfour (fun _ _ => SameOk.refl _)) ?_
+  refine SameResultOrBothFail.flip ?_
+  refine SameResultOrBothFail.trans (SameResultOrBothFail.bind hfour (fun _ _ => SameResultOrBothFail.refl _)) ?_
   rw [map_bind']
-  refine SameOk.bind (SameOk.refl _) (fun x hx => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun x hx => ?_)
   have hspec := (hfour (s1.withRowsChurn x.1 x.2)).mpr (by rw [hx]; rfl)
   have htab4 := fourStepsFulu_total s1 tab htab hrows1 current_epoch _ hcur1 hactivation hcfar _
-    ((specFourStepsFulu_sameOk s1 tab htab hrows1 current_epoch _ hcur1 hactivation
+    ((specFourStepsFulu_sameResultOrBothFail s1 tab htab hrows1 current_epoch _ hcur1 hactivation
       hcfar _).mp hspec)
   exact epochRestFulu_nf o s1 current_epoch tab _ _ x.1 x.2 _ hx rfl rfl hcur1
     (Nat.le_of_succ_le hfin) hnext hactivation hexit1 hvalid1 htab4
