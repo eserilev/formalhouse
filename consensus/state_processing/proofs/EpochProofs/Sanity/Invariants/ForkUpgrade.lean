@@ -11,11 +11,11 @@ import EpochProofs.Sanity.SelectionPass
 the validators, the balances, the inactivity scores, the participation flags, the checkpoints,
 the slot and the pending consolidations (`UpgradeFrame`). So each upgrade keeps the eight start
 facts of `FuluStartOk`. These are the start facts that the Gloas theorems take too
-(`reachable_state_transition_sameOk'''`).
+(`reachable_state_transition_sameResultOrBothFail'''`).
 
 At the Gloas fork, the upgrade runs on the state right after the Fulu `process_epoch` of the
 last Fulu epoch and the slot increment. `fulu_gloas_fork_startOk` proves the start facts there
-from a reachable Fulu run, and `fulu_then_gloas_sameOk` runs the Gloas state transitions from
+from a reachable Fulu run, and `fulu_then_gloas_sameResultOrBothFail` runs the Gloas state transitions from
 the upgraded state. `gloas_reachable_invariants` is `fulu_reachable_invariants` for Gloas: every
 input of the Gloas `process_epoch` in a reachable Gloas run has `EpochInputOk''`.
 -/
@@ -376,8 +376,8 @@ theorem fulu_gloas_fork_startOk [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok
 /-- A Fulu run that crosses the Gloas fork: every Gloas `state_transition` from a state that the
 Gloas run reaches from the upgraded state `g` has the same `ok` results with any epoch function
 `f` that agrees with `process_epoch` on the inputs that `EpochInputOk''` describes. The Gloas
-supply and economic hypotheses are on the Gloas run, as in `reachable_state_transition_sameOk'''`. -/
-theorem fulu_then_gloas_sameOk [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok]
+supply and economic hypotheses are on the Gloas run, as in `reachable_state_transition_sameResultOrBothFail'''`. -/
+theorem fulu_then_gloas_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok]
     (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
     (uc : UpgradeConfig) (init : FuluState) (hi : FuluStartOk init.state)
     (hsupply : SupplyBoundFulu o fo c init)
@@ -392,17 +392,17 @@ theorem fulu_then_gloas_sameOk [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok]
     (hsupplyG : SupplyBound o max_blobs_per_block GLOAS_FORK_EPOCH g)
     (Econ : BeaconState → Prop) (hecon : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH g Econ)
     (f : BeaconState → SpecM BeaconState)
-    (hf : ∀ t, EpochInputOk'' Econ t → SameOk (f t) (process_epoch P o t))
+    (hf : ∀ t, EpochInputOk'' Econ t → SameResultOrBothFail (f t) (process_epoch P o t))
     (s : BeaconState) (hrg : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH g s)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (hslotb : signed_block.message.slot < 2 ^ 64) :
-    SameOk (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH f s signed_block
+    SameResultOrBothFail (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH f s signed_block
         validate_result)
       (state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
         validate_result) := by
   have hg := fulu_gloas_fork_startOk o fo c uc init hi hsupply fs t t1 s2 g slot hr hslot64 hreach
     hlt ht hz he hup
-  exact reachable_state_transition_sameOk''' o _ _ g hg.ffg hg.rows hg.exitDelay hg.exitEpochs
+  exact reachable_state_transition_sameResultOrBothFail''' o _ _ g hg.ffg hg.rows hg.exitDelay hg.exitEpochs
     hg.afterEB hg.pubkeys hg.consolidations hg.withdrawable hsupplyG Econ hecon f hf s hrg
     signed_block validate_result hslotb
 

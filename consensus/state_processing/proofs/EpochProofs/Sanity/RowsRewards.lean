@@ -565,7 +565,7 @@ private theorem get_base_reward_row (p : Preset) (total_active_balance : Gwei)
   rfl
 
 /-- `get_flag_index_deltas` gives the same `ok` values as `flagRow` over the rows. -/
-private theorem flag_deltas_sameOk (p : Preset) (state : BeaconState) (hrows : RowsOk state)
+private theorem flag_deltas_sameResultOrBothFail (p : Preset) (state : BeaconState) (hrows : RowsOk state)
     (ctx : RewardsContext) (current_epoch : Epoch)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hprevious : get_previous_epoch p state = .ok ctx.previous_epoch)
@@ -576,7 +576,7 @@ private theorem flag_deltas_sameOk (p : Preset) (state : BeaconState) (hrows : R
     (flag_index : Nat) (weight increments : Uint64) (hflag : flag_index < 3)
     (hweight : listGet PARTICIPATION_FLAG_WEIGHTS flag_index = .ok weight)
     (hinc : rewardsFlagIncrements p state ctx.previous_epoch flag_index = .ok increments) :
-    SameOk (get_flag_index_deltas p ctx.total_active_balance state flag_index)
+    SameResultOrBothFail (get_flag_index_deltas p ctx.total_active_balance state flag_index)
       ((fun ds => (ds.map (·.1), ds.map (·.2))) <$>
         (rowsOf state).mapM (flagRow p ctx weight flag_index increments)) := by
   have hpow : 2 ^ flag_index < 256 := by
@@ -619,7 +619,7 @@ private theorem flag_deltas_sameOk (p : Preset) (state : BeaconState) (hrows : R
             flagCore p ctx weight flag_index increments r else pure (0, 0)) :=
         mapM_congr_mem _ _ _ (fun r hr => by simp [flagRow, hEv r hr, bind, Except.bind])
       rw [hmap]
-      apply SameOk.of_eq
+      apply SameResultOrBothFail.of_eq
       cases (rowsOf state).mapM (fun r => if Ev r.validator then
         flagCore p ctx weight flag_index increments r else pure (0, 0)) <;> rfl
     · intro r pre suf hr _ hidx
@@ -708,12 +708,12 @@ private def inactivityRow (p : Preset) (ctx : RewardsContext) (r : Row) : SpecM 
 
 /-- `get_inactivity_penalty_deltas` gives the same `ok` values as `inactivityRow` over the
 rows. -/
-private theorem inactivity_deltas_sameOk (p : Preset) (state : BeaconState)
+private theorem inactivity_deltas_sameResultOrBothFail (p : Preset) (state : BeaconState)
     (hrows : RowsOk state) (ctx : RewardsContext) (current_epoch : Epoch)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hprevious : get_previous_epoch p state = .ok ctx.previous_epoch)
     (hne : ctx.previous_epoch ≠ current_epoch) :
-    SameOk (get_inactivity_penalty_deltas p state)
+    SameResultOrBothFail (get_inactivity_penalty_deltas p state)
       ((fun ds => (List.replicate state.validators.length 0, ds)) <$>
         (rowsOf state).mapM (inactivityRow p ctx)) := by
   have hpart := participating_ok p state hrows current_epoch ctx.previous_epoch
@@ -746,7 +746,7 @@ private theorem inactivity_deltas_sameOk (p : Preset) (state : BeaconState)
             else pure 0) :=
         mapM_congr_mem _ _ _ (fun r hr => by simp [inactivityRow, hEv r hr, bind, Except.bind])
       rw [hmap]
-      apply SameOk.of_eq
+      apply SameResultOrBothFail.of_eq
       cases (rowsOf state).mapM (fun r => if Ev r.validator then
             inactivityDelta p r.validator.effective_balance r.inactivity_score
               (rewardsParticipating ctx.previous_epoch r TIMELY_TARGET_FLAG_INDEX)
@@ -1135,15 +1135,15 @@ private theorem spec_ok_iff (p : Preset) (state : BeaconState) (hrows : RowsOk s
       let inactivity ← get_inactivity_penalty_deltas p state
       let balances ← forIn (flag_deltas ++ [inactivity]) state.balances body
       pure { state with balances }) = .ok v ↔ RewardsGood p ctx state v := by
-  have hF0 := flag_deltas_sameOk p state hrows ctx current_epoch hcurrent hprevious hne hleak
+  have hF0 := flag_deltas_sameResultOrBothFail p state hrows ctx current_epoch hcurrent hprevious hne hleak
     hactive TIMELY_SOURCE_FLAG_INDEX TIMELY_SOURCE_WEIGHT ctx.source_increments (by decide) rfl
     hsource
-  have hF1 := flag_deltas_sameOk p state hrows ctx current_epoch hcurrent hprevious hne hleak
+  have hF1 := flag_deltas_sameResultOrBothFail p state hrows ctx current_epoch hcurrent hprevious hne hleak
     hactive TIMELY_TARGET_FLAG_INDEX TIMELY_TARGET_WEIGHT ctx.target_increments (by decide) rfl
     htarget
-  have hF2 := flag_deltas_sameOk p state hrows ctx current_epoch hcurrent hprevious hne hleak
+  have hF2 := flag_deltas_sameResultOrBothFail p state hrows ctx current_epoch hcurrent hprevious hne hleak
     hactive TIMELY_HEAD_FLAG_INDEX TIMELY_HEAD_WEIGHT ctx.head_increments (by decide) rfl hhead
-  have hI := inactivity_deltas_sameOk p state hrows ctx current_epoch hcurrent hprevious hne
+  have hI := inactivity_deltas_sameResultOrBothFail p state hrows ctx current_epoch hcurrent hprevious hne
   have hn : (rowsOf state).length = state.validators.length := rowsOf_length state
   have hbal0 : state.balances.length = state.validators.length := hrows.1
   simp only [List.mapM_cons, List.mapM_nil, bind_ok_iff, pure, Except.pure, Except.ok.injEq]
@@ -1257,14 +1257,14 @@ private theorem ok_bind {α β : Type} (a : α) (f : α → SpecM β) :
     (Except.ok a >>= f) = f a := rfl
 
 /-- `process_rewards_and_penalties` gives the same `ok` values as a pass of `rewardsRowStep` over
-the rows. `SameOk`, not equality: the spec computes all deltas before it changes any balance, so
+the rows. `SameResultOrBothFail`, not equality: the spec computes all deltas before it changes any balance, so
 it can fail on a later row first. -/
 theorem process_rewards_and_penalties_rows (p : Preset) (total_active_balance : Gwei)
     (state : BeaconState) (hrows : RowsOk state) (current_epoch : Epoch)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hgenesis : current_epoch ≠ GENESIS_EPOCH) (ctx : RewardsContext)
     (hctx : rewardsContextOf p total_active_balance state = .ok ctx) :
-    SameOk (process_rewards_and_penalties p total_active_balance state)
+    SameResultOrBothFail (process_rewards_and_penalties p total_active_balance state)
       ((fun x => state.withRows x.2) <$> passM (rewardsRowStep p ctx) () (rowsOf state)) := by
   obtain ⟨hprevious, hsource, htarget, hhead, hactive, hleak, htab⟩ :=
     rewardsContextOf_ok p total_active_balance state ctx hctx

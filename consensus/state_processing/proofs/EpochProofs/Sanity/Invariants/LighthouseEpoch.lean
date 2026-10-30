@@ -592,7 +592,7 @@ theorem lighthouse_single_pass_eq_spec_supply [PresetCfg] (total_active_balance 
     (base_reward : Row → Gwei)
     (hbase : ∀ r ∈ rowsOf state, rewardsEligible rctx.previous_epoch r.validator = .ok true →
       rewardsBaseReward P total_active_balance r.validator = .ok (base_reward r)) :
-    SameOk (do
+    SameResultOrBothFail (do
       let s1 ← process_inactivity_updates P state
       let s2 ← process_rewards_and_penalties P total_active_balance s1
       let s3 ← process_registry_updates P total_active_balance s2
@@ -603,9 +603,9 @@ theorem lighthouse_single_pass_eq_spec_supply [PresetCfg] (total_active_balance 
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
   obtain ⟨hprevious, -, -, -, -, hleak, htab⟩ :=
     rewardsContextOf_ok P total_active_balance state rctx hctx
-  refine SameOk.trans (separate_passes_eq_single_pass P total_active_balance state
+  refine SameResultOrBothFail.trans (separate_passes_eq_single_pass P total_active_balance state
     hrows current_epoch rctx.previous_epoch rctx.in_leak hcurrent hgenesis hprevious hleak rctx
-    hctx activation_epoch hactivation htarget adjusted per hpre) (SameOk.of_eq ?_)
+    hctx activation_epoch hactivation htarget adjusted per hpre) (SameResultOrBothFail.of_eq ?_)
   have hstep : ∀ churn r, r ∈ rowsOf state →
       lhRowStep P (lhContextOf state total_active_balance current_epoch rctx per)
         (base_reward r) churn r =
@@ -798,19 +798,19 @@ private theorem current_epoch_of_slot {p : Preset} {s s' : BeaconState} {e : Epo
 
 /-- Inside `process_epoch`, the total active balance does not change during the inactivity,
 rewards and registry steps. So the four steps use the total of the state before them. -/
-theorem specFourSteps_sameOk (p : Preset) (s1 : BeaconState) (total_active_balance : Gwei)
+theorem specFourSteps_sameResultOrBothFail (p : Preset) (s1 : BeaconState) (total_active_balance : Gwei)
     (htab : get_total_active_balance p s1 = .ok total_active_balance) (hrows : RowsOk s1)
     (current_epoch activation_epoch : Epoch)
     (hcurrent : get_current_epoch p s1 = .ok current_epoch)
     (hactivation : compute_activation_exit_epoch p current_epoch = .ok activation_epoch)
     (hcur : current_epoch < FAR_FUTURE_EPOCH) :
-    SameOk (specFourSteps p s1) (do
+    SameResultOrBothFail (specFourSteps p s1) (do
       let s2 ← process_inactivity_updates p s1
       let s3 ← process_rewards_and_penalties p total_active_balance s2
       let s4 ← process_registry_updates p total_active_balance s3
       process_slashings p total_active_balance s4) := by
   unfold specFourSteps
-  refine SameOk.bind (SameOk.refl _) (fun s2 h2 => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun s2 h2 => ?_)
   have hv2 := process_inactivity_updates_validators p _ _ h2
   have hslot2 := (process_inactivity_updates_checkpointsStable p _ _ h2).1
   have hl2 := process_inactivity_updates_len p _ _ h2
@@ -818,7 +818,7 @@ theorem specFourSteps_sameOk (p : Preset) (s1 : BeaconState) (total_active_balan
     rw [get_total_active_balance_congr_key p s1 s2 current_epoch hcurrent hslot2 (by rw [hv2])]
     exact htab
   rw [t2, ok_bind]
-  refine SameOk.bind (SameOk.refl _) (fun s3 h3 => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun s3 h3 => ?_)
   have hv3 := process_rewards_and_penalties_validators p _ _ _ h3
   have hslot3 := (process_rewards_and_penalties_checkpointsStable p _ _ _ h3).1
   have hl3 := process_rewards_and_penalties_len p _ _ _ h3
@@ -829,7 +829,7 @@ theorem specFourSteps_sameOk (p : Preset) (s1 : BeaconState) (total_active_balan
       (current_epoch_of_slot hcurrent hslot2) hslot3 (by rw [hv3])]
     exact t2
   rw [t3, ok_bind]
-  refine SameOk.bind (SameOk.refl _) (fun s4 h4 => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun s4 h4 => ?_)
   have hslot4 := (process_registry_updates_checkpointsStable p _ _ _ h4).1
   have hrows3 : RowsOk s3 := (hl2.trans hl3).rowsOk hrows
   have hkey := process_registry_updates_activeKey p _ s3 s4 hrows3 current_epoch
@@ -838,7 +838,7 @@ theorem specFourSteps_sameOk (p : Preset) (s1 : BeaconState) (total_active_balan
     rw [get_total_active_balance_congr_key p s3 s4 current_epoch hc3 hslot4 hkey]
     exact t3
   rw [t4, ok_bind]
-  exact SameOk.refl _
+  exact SameResultOrBothFail.refl _
 
 /-! ## The context computations succeed -/
 
@@ -913,7 +913,7 @@ The hypotheses are facts about the state at the start of the epoch:
   balances is below `2^60`. They replace the participation bound and the supply part of
   `EpochEntry`.
 - `hslashings`: three times the sum of the slashings vector fits in a `u64`. -/
-theorem process_epoch_lh_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (hrows : RowsOk s)
+theorem process_epoch_lh_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (hrows : RowsOk s)
     (hinv : FfgInvariant P s) (current_epoch : Epoch)
     (hcurrent : get_current_epoch P s = .ok current_epoch)
     (hgenesis : current_epoch ≠ GENESIS_EPOCH)
@@ -927,11 +927,11 @@ theorem process_epoch_lh_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : Bea
     (hbalance : ∀ i (h : i < s.validators.length), s.balances.getD i 0 < 2 ^ 62)
     (hsupply : totalEffectiveBalance s < 2 ^ 60)
     (hslashings : s.slashings.sum * 3 < UINT64_SIZE) :
-    SameOk (process_epoch P o s) (process_epoch_lh_core o s) := by
+    SameResultOrBothFail (process_epoch P o s) (process_epoch_lh_core o s) := by
   rw [process_epoch_parts]
   unfold process_epoch_lh_core
-  refine SameOk.bind (SameOk.refl _) (fun s1 h1 => ?_)
-  refine SameOk.bind ?_ (fun _ _ => SameOk.refl _)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun s1 h1 => ?_)
+  refine SameResultOrBothFail.bind ?_ (fun _ _ => SameResultOrBothFail.refl _)
   obtain ⟨_, _, _, _, hs1⟩ := process_justification_and_finalization_shape _ _ _ h1
   have hcur1 : get_current_epoch P s1 = .ok current_epoch := by
     rw [hs1]; exact hcurrent
@@ -1005,15 +1005,15 @@ theorem process_epoch_lh_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : Bea
     have h64 : @LT.lt Nat _ (current_epoch + H) (2 ^ 64) := hepoch
     show @LT.lt Nat _ current_epoch (2 ^ 64 - 1)
     omega
-  refine SameOk.trans (specFourSteps_sameOk P s1 tab htab hrows1 current_epoch _
+  refine SameResultOrBothFail.trans (specFourSteps_sameResultOrBothFail P s1 tab htab hrows1 current_epoch _
     hcur1 hactivation hcfar) ?_
-  refine SameOk.trans (lighthouse_single_pass_eq_spec_supply tab s1 hrows1 current_epoch hcur1
+  refine SameResultOrBothFail.trans (lighthouse_single_pass_eq_spec_supply tab s1 hrows1 current_epoch hcur1
     (by simpa [GENESIS_EPOCH] using hgenesis) rctx hctx (hpe ▸ heff1) hexit1 hmax1 hbal1 _
     hactivation hepoch0 adj per hpre
     (Nat.le_of_succ_le hfin)
     (Nat.lt_of_le_of_lt (Nat.add_le_add_left (show 1 ≤ H by omega) current_epoch) hepoch)
     htab_lo
-    _ hk ⟨hle _ hsrc, hle _ htgt, hle _ hhd⟩ (lhBaseReward tab) ?_) (SameOk.of_eq ?_)
+    _ hk ⟨hle _ hsrc, hle _ htgt, hle _ hhd⟩ (lhBaseReward tab) ?_) (SameResultOrBothFail.of_eq ?_)
   · intro r hr _
     obtain ⟨b, hb⟩ := rewardsBaseReward_ok_mainnet tab r.validator htab_lo
       (hmax1 _ (by rw [← rowsOf_map_validator]; exact List.mem_map_of_mem hr))
@@ -1030,25 +1030,32 @@ def ExitBounds (s : BeaconState) : Prop :=
 
 /-- The supply facts of the epoch: each balance is below `2^62`, the effective balances sum to
 less than `2^60` Gwei, and three times the slashed sum fits in a `u64`. -/
-def EpochSupply (s : BeaconState) : Prop :=
+def EpochBalanceBounds (s : BeaconState) : Prop :=
   (∀ i, i < s.validators.length → s.balances.getD i 0 < 2 ^ 62) ∧
     totalEffectiveBalance s < 2 ^ 60 ∧ s.slashings.sum * 3 < 2 ^ 64
 
-/-- `SameOk` is symmetric. -/
-private theorem SameOk.symm' {α : Type} {x y : SpecM α} (h : SameOk x y) : SameOk y x :=
+/-- The invariants at every `process_epoch` input of a reachable run (`EpochInputOk''`), with the
+balance bounds `EpochBalanceBounds` as its economic facts. `fulu_reachable_invariants` and
+`fulu_then_gloas_reachable_invariants` prove them on every run from a start state with the
+genesis invariants. -/
+def ReachableInvariants [PresetCfg] [PresetCfg.Ok] (s : BeaconState) : Prop :=
+  EpochInputOk'' EpochBalanceBounds s
+
+/-- `SameResultOrBothFail` is symmetric. -/
+private theorem SameResultOrBothFail.symm' {α : Type} {x y : SpecM α} (h : SameResultOrBothFail x y) : SameResultOrBothFail y x :=
   fun v => (h v).symm
 
 /-- On mainnet, at a state that `process_epoch` starts from, the Lighthouse epoch gives the
 same `ok` results as the spec epoch. -/
-theorem process_epoch_lh_sameOk' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
+theorem process_epoch_lh_sameResultOrBothFail' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
     (hslot : t.slot < 2 ^ 64) (heb : EBOk P t) (hexit : ExitBounds t)
-    (hsupply : EpochSupply t) :
-    SameOk (process_epoch_lh o t) (process_epoch P o t) := by
+    (hsupply : EpochBalanceBounds t) :
+    SameResultOrBothFail (process_epoch_lh o t) (process_epoch P o t) := by
   obtain ⟨hinv, hrows, hentry⟩ := hb
   obtain ⟨hbalance, htotal, hslashings⟩ := hsupply
   unfold process_epoch_lh
   split
-  · exact SameOk.refl _
+  · exact SameResultOrBothFail.refl _
   rename_i hgen
   have hcurrent : get_current_epoch P t =
       .ok (t.slot / P.SLOTS_PER_EPOCH) := by
@@ -1064,17 +1071,17 @@ theorem process_epoch_lh_sameOk' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : Be
     rw [hV', hq]
     show @LT.lt Nat _ (q + V / 2) (2 ^ 64)
     omega
-  exact SameOk.symm' (process_epoch_lh_sameOk o t hrows hinv _ hcurrent hgen hepoch hentry
+  exact SameResultOrBothFail.symm' (process_epoch_lh_sameResultOrBothFail o t hrows hinv _ hcurrent hgen hepoch hentry
     (fun i h => hexit _ (List.getElem_mem h)) (fun v hv => (heb v hv).2) hbalance htotal
     hslashings)
 
 
-/-- `process_epoch_lh_sameOk'` in the form of the `hf` hypothesis of
-`reachable_state_transition_sameOk'`, with `EpochSupply` as the epoch condition. -/
+/-- `process_epoch_lh_sameResultOrBothFail'` in the form of the `hf` hypothesis of
+`reachable_state_transition_sameResultOrBothFail'`, with `EpochBalanceBounds` as the epoch condition. -/
 theorem process_epoch_lh_hf [PresetCfg] [PresetCfg.Ok] (o : Oracle) :
-    ∀ t, EpochInputOk EpochSupply t →
-      SameOk (process_epoch_lh o t) (process_epoch P o t) :=
+    ∀ t, EpochInputOk EpochBalanceBounds t →
+      SameResultOrBothFail (process_epoch_lh o t) (process_epoch P o t) :=
   fun t ⟨hb, hslot, heb, hexit, hsupply⟩ =>
-    process_epoch_lh_sameOk' o t hb hslot heb hexit hsupply
+    process_epoch_lh_sameResultOrBothFail' o t hb hslot heb hexit hsupply
 
 end EpochProofs.Spec

@@ -10,7 +10,7 @@ import EpochProofs.Compose.Tail
 one Lean function: the calls of the translated functions of `Generated.lean`, in Lighthouse's
 order, joined by the untranslated glue (`EpochGlue`). `epoch_spec` shows that, under the trusted
 facts about the glue (`EpochLinks`), `epoch` returns `Ok` with the state of the model
-`process_epoch_lh_order` whenever the model returns `ok`.
+`process_epoch_lighthouse` whenever the model returns `ok`.
 
 The cache builds at the start of `process_epoch` and `process_epoch_single_pass`, and the cache
 writes that do not change the state's fields (`set_total_active_balance`, the epoch cache, the
@@ -82,16 +82,16 @@ structure EpochLinks (G : EpochGlue σ E) (o : Spec.Oracle) (view : σ → Spec.
     EpochProofs.Compose.lookahead G.lookahead st2 = ok (some st3) → ptcWindow G.lookahead G.ptc st3 = ok (some st4) →
     resets G.tail st4 = ok (some st5) → SyncN1 G.tail st5
 
-/-- The composed Gloas epoch returns the state of the model: when `process_epoch_lh_order`
+/-- The composed Gloas epoch returns the state of the model: when `process_epoch_lighthouse`
 returns `ok`, the Rust returns `Ok` with a state whose view is the model's. The facts about the
 input are the vector lengths and the slot bound. -/
 theorem epoch_spec [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds] (G : EpochGlue σ E)
     (o : Spec.Oracle) (view : σ → Spec.BeaconState) (st : σ) (hL : EpochLinks G o view st)
     (hslot : (view st).slot < 2 ^ 64) (hvec : (view st).VectorLengths Spec.P)
-    (s' : Spec.BeaconState) (h : Spec.process_epoch_lh_order o (view st) = .ok s') :
+    (s' : Spec.BeaconState) (h : Spec.process_epoch_lighthouse o (view st) = .ok s') :
     ∃ st', epoch G st = ok (some st') ∧ view st' = s' := by
   obtain ⟨-, -, -, -, hjb, -, -, hpl, -, hbpp, hptc, -⟩ := hvec
-  unfold Spec.process_epoch_lh_order at h
+  unfold Spec.process_epoch_lighthouse at h
   obtain ⟨s1, h1, h⟩ := Spec.specM_bind_ok h
   rw [Spec.lhFullTailWith_order_eq] at h
   obtain ⟨T, hT, h⟩ := Spec.specM_bind_ok h
@@ -100,7 +100,7 @@ theorem epoch_spec [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds] (G : EpochGlue σ
   obtain ⟨t2, ht2, h⟩ := Spec.specM_bind_ok h
   -- Justification and finalization writes only the checkpoints and the bits.
   obtain ⟨a, b, c, d, hs1⟩ := Spec.process_justification_and_finalization_shape _ _ _
-    ((Spec.lhJustificationAndFinalization_sameOk _ _ s1).mp h1)
+    ((Spec.lhJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1)
   obtain ⟨st1, hj, hv1⟩ := justification_spec G.justification view st hL.justification hjb s1 h1
   obtain ⟨st2, hsp, hv2⟩ := singlePass_spec G.singlePass G.payments o view st1
     (hL.singlePass st1 hj).1 (hL.singlePass st1 hj).2 hL.registryConstants

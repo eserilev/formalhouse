@@ -5,7 +5,7 @@ import EpochProofs.Sanity.Rows
 /-!
 # The Fulu `process_epoch` in terms of the Gloas steps
 
-- `process_sync_committee_updates_fulu_sameOk`: the Fulu sync committee update gives the same
+- `process_sync_committee_updates_fulu_sameResultOrBothFail`: the Fulu sync committee update gives the same
   `ok` results as the Gloas one (`get_next_sync_committee_indices_fulu_iff`).
 - `process_epoch_fulu_eq_tab`: in Fulu `process_epoch`, the registry update and the pending
   deposits are the Gloas functions at `fuluTab` (`process_registry_updates_fulu_eq`,
@@ -14,25 +14,25 @@ import EpochProofs.Sanity.Rows
 
 namespace EpochProofs.Spec
 
-theorem get_next_sync_committee_fulu_sameOk (p : Preset) (o : Oracle) (state : BeaconState)
+theorem get_next_sync_committee_fulu_sameResultOrBothFail (p : Preset) (o : Oracle) (state : BeaconState)
     (hsize : 0 < p.SYNC_COMMITTEE_SIZE) :
-    SameOk (get_next_sync_committee_fulu p o state) (get_next_sync_committee p o state) := by
+    SameResultOrBothFail (get_next_sync_committee_fulu p o state) (get_next_sync_committee p o state) := by
   unfold get_next_sync_committee_fulu get_next_sync_committee
-  exact SameOk.bind (get_next_sync_committee_indices_fulu_iff p o state hsize)
-    (fun _ _ => SameOk.refl _)
+  exact SameResultOrBothFail.bind (get_next_sync_committee_indices_fulu_iff p o state hsize)
+    (fun _ _ => SameResultOrBothFail.refl _)
 
 /-- The Fulu sync committee update gives the same `ok` results as the Gloas one. -/
-theorem process_sync_committee_updates_fulu_sameOk (p : Preset) (o : Oracle)
+theorem process_sync_committee_updates_fulu_sameResultOrBothFail (p : Preset) (o : Oracle)
     (state : BeaconState) (hsize : 0 < p.SYNC_COMMITTEE_SIZE) :
-    SameOk (process_sync_committee_updates_fulu p o state)
+    SameResultOrBothFail (process_sync_committee_updates_fulu p o state)
       (process_sync_committee_updates p o state) := by
   unfold process_sync_committee_updates_fulu process_sync_committee_updates
-  refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
-  refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
-  refine SameOk.bind (SameOk.refl _) (fun _ _ => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
   split
-  · exact SameOk.bind (get_next_sync_committee_fulu_sameOk p o _ hsize) (fun _ _ => SameOk.refl _)
-  · exact SameOk.refl _
+  · exact SameResultOrBothFail.bind (get_next_sync_committee_fulu_sameResultOrBothFail p o _ hsize) (fun _ _ => SameResultOrBothFail.refl _)
+  · exact SameResultOrBothFail.refl _
 
 /-- Fulu `process_epoch` with the registry update and the pending deposits written as the Gloas
 functions at `fuluTab`. -/

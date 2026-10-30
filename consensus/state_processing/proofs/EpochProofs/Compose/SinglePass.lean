@@ -15,7 +15,7 @@ the untranslated glue (`SinglePassGlue`, `PaymentsGlue`): the trait implementati
 milhouse lists, the borrows of the state by each wrapper, and the values read from the state and
 the spec. `singlePass_spec` shows that, under the trusted facts about the glue
 (`SinglePassLinks`, `PaymentsLinks`), it returns the state of the model `lhSinglePass`, the
-single pass of `process_epoch_lh_order`. `singlePassCore` stops before the builder payments; the
+single pass of `process_epoch_lighthouse`. `singlePassCore` stops before the builder payments; the
 Fulu epoch uses it (`Compose/Fulu.lean`).
 
 The first part of the file proves the frame facts of the model steps that the composition needs:

@@ -4,7 +4,7 @@ import EpochProofs.Spec.PresetCfg
 /-!
 # The spec epoch succeeds on reachable states
 
-`SameOk` says that the Lighthouse model returns `ok v` exactly when the spec returns `ok v`. This
+`SameResultOrBothFail` says that the Lighthouse model returns `ok v` exactly when the spec returns `ok v`. This
 file proves the other half of liveness: the spec `process_epoch` returns `ok` at the last slot
 of an epoch, on mainnet.
 
@@ -19,7 +19,7 @@ Error sources and why they do not fire:
 - The vector reads (`block_roots`, `randao_mixes`, `slashings`, `justification_bits`) need the
   SSZ lengths (`VectorLengths`). The Lean state holds the vectors as lists.
 - The balance sums stay below `2^64` because the effective balance total is below `2^60`
-  (`EpochSupply`), and a consolidation moves balance without raising the sum
+  (`EpochBalanceBounds`), and a consolidation moves balance without raising the sum
   (`process_pending_consolidations_total`).
 - `apply_pending_deposit` raises only if a balance plus the deposit passes `2^64`
   (`apply_pending_deposit_total`).
@@ -789,14 +789,14 @@ structure DepFrame [PresetCfg] (t s : BeaconState) : Prop where
   fin : s.finalized_checkpoint.epoch ≤ t.slot / P.SLOTS_PER_EPOCH
 
 /-- The inactivity, rewards, registry and slashings steps succeed after justification and
-finalization. `TotalityRows.lean` proves it (`midOk_of_rowBounds`). -/
+finalization. `TotalityRows.lean` proves it (`midOk_of_physicalLimits`). -/
 def MidOk [PresetCfg] (t : BeaconState) : Prop :=
   ∀ s1, JFShape t s1 → s1.finalized_checkpoint.epoch ≤ t.slot / P.SLOTS_PER_EPOCH →
     (t.slot / P.SLOTS_PER_EPOCH ≠ 0 → s1.finalized_checkpoint.epoch + 1 ≤ t.slot / P.SLOTS_PER_EPOCH) →
     OkWith (specFourSteps P s1) (fun s => TailFrame t s ∧ DepFrame t s)
 
 /-- `process_pending_deposits` succeeds after the eth1 data reset. `TotalityRows.lean` proves it
-(`depOk_of_rowBounds`). -/
+(`depOk_of_physicalLimits`). -/
 def DepOk [PresetCfg] (o : Oracle) (t : BeaconState) : Prop :=
   ∀ s tab, TailFrame t s → DepFrame t s → get_total_active_balance P s = .ok tab →
     OkWith (process_pending_deposits P tab (apply_pending_deposit P o) s)

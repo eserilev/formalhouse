@@ -85,13 +85,13 @@ theorem process_effective_balance_updates_rows (p : Preset) (state : BeaconState
     rw [rowsOf_map_inactivity_score state hscores] at hs
     simp only [Functor.map, Except.map, BeaconState.withRows, hb, hs]
 
-/-- `process_effective_balance_updates_rows` in `SameOk` form, for the single pass proof. -/
-theorem process_effective_balance_updates_rows_sameOk (p : Preset) (state : BeaconState)
+/-- `process_effective_balance_updates_rows` in `SameResultOrBothFail` form, for the single pass proof. -/
+theorem process_effective_balance_updates_rows_sameResultOrBothFail (p : Preset) (state : BeaconState)
     (downward upward : Uint64) (hthresholds : hysteresisThresholds p = .ok (downward, upward))
     (hrows : RowsOk state) :
-    SameOk (process_effective_balance_updates p state)
+    SameResultOrBothFail (process_effective_balance_updates p state)
       ((fun x => state.withRows x.2) <$>
         passM (effectiveBalanceRowStep p downward upward) () (rowsOf state)) :=
-  SameOk.of_eq (process_effective_balance_updates_rows p state downward upward hthresholds hrows)
+  SameResultOrBothFail.of_eq (process_effective_balance_updates_rows p state downward upward hthresholds hrows)
 
 end EpochProofs.Spec

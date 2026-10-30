@@ -35,9 +35,9 @@ Pull requests and Workflows.
 
 - Index of all proofs: issue #44. Tracking issues: #32 slashing protection, #33 epoch
   processing, #34 Lean spec, #35 caches.
-- The main results for epoch processing are `formalhouse_gloas_epoch_final` and
-  `formalhouse_fulu_epoch_final` (`EpochProofs/FormalhouseFinal.lean`), each for mainnet and
-  minimal. On every epoch input of a reachable run, Lighthouse's epoch processing returns Ok and
+- The main results for epoch processing are `lighthouse_model_gloas_epoch_eq_etheorem` and
+  `lighthouse_model_fulu_epoch_eq_etheorem` (`EpochProofs/Headline.lean`, with their assumptions
+  in `EpochProofs/Assumptions.lean`), each for mainnet and minimal (`HeadlinePresets.lean`). On every epoch input of a reachable run, Lighthouse's epoch processing returns Ok and
   gives the same state as Etheorem, an independent Lean spec that passes the EF test vectors.
 
 ## Trusted base

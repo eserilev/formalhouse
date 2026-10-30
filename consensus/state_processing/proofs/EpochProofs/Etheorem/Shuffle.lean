@@ -660,32 +660,6 @@ theorem map_toNat_getElem!_all (A : Array UInt64) (k : Nat) :
   · rw [getElem!_neg _ k (by simpa using hk), getElem!_neg A k hk]
     rfl
 
-forkonly Gloas
-open EthCLSpecs.Gloas in
-/-- The Etheorem preset holds the committee values of `p`. -/
-structure CommitteePresetAgrees (p : Spec.Preset) : Prop where
-  shuffleRoundCount : Const.shuffleRoundCount = p.SHUFFLE_ROUND_COUNT
-  shuffleRoundCountPos : 0 < p.SHUFFLE_ROUND_COUNT
-  targetCommitteeSize : Const.targetCommitteeSize = p.TARGET_COMMITTEE_SIZE
-  maxCommitteesPerSlot : Const.maxCommitteesPerSlot = p.MAX_COMMITTEES_PER_SLOT
-  syncCommitteeSize : Const.syncCommitteeSize = p.SYNC_COMMITTEE_SIZE
-  ptcSize : Const.ptcSize = p.PTC_SIZE
-  epochsPerSyncCommitteePeriod : Const.epochsPerSyncCommitteePeriod = p.EPOCHS_PER_SYNC_COMMITTEE_PERIOD
-  maxEffectiveBalanceElectra : Const.maxEffectiveBalanceElectra = p.MAX_EFFECTIVE_BALANCE_ELECTRA
-end forkonly
-
-forkonly Fulu
-open EthCLSpecs.Fulu in
-/-- The Etheorem preset holds the committee values of `p`. -/
-structure CommitteePresetAgrees (p : Spec.Preset) : Prop where
-  shuffleRoundCount : Const.shuffleRoundCount = p.SHUFFLE_ROUND_COUNT
-  shuffleRoundCountPos : 0 < p.SHUFFLE_ROUND_COUNT
-  targetCommitteeSize : Const.targetCommitteeSize = p.TARGET_COMMITTEE_SIZE
-  maxCommitteesPerSlot : Const.maxCommitteesPerSlot = p.MAX_COMMITTEES_PER_SLOT
-  syncCommitteeSize : Const.syncCommitteeSize = p.SYNC_COMMITTEE_SIZE
-  epochsPerSyncCommitteePeriod : Const.epochsPerSyncCommitteePeriod = p.EPOCHS_PER_SYNC_COMMITTEE_PERIOD
-  maxEffectiveBalanceElectra : Const.maxEffectiveBalanceElectra = p.MAX_EFFECTIVE_BALANCE_ELECTRA
-end forkonly
 
 /-! ## The balance weighted selection -/
 
@@ -831,9 +805,9 @@ theorem selection_loop_lockstep (p : Spec.Preset) (o : Spec.Oracle)
 /-- `compute_balance_weighted_selection` equals Etheorem's. If the reference returns `r`, Etheorem
 returns the same items. Both loops stop at the same `uint64` counter bound. -/
 theorem compute_balance_weighted_selection_ok (p : Spec.Preset) (o : Spec.Oracle)
-    (ho : ∀ d, o.hash d = etheoremHash d) (hc : CommitteePresetAgrees p) (e : EState)
+    (ho : ∀ d, o.hash d = etheoremHash d) (hc : CommitteePresetAgrees p) (e : EtheoremState)
     (idxArr : Array UInt64) (seed : Spec.Bytes32) (size : Nat) (shuffle : Bool) {r : List Nat}
-    (h : Spec.compute_balance_weighted_selection p o (absEState e) (idxArr.toList.map UInt64.toNat)
+    (h : Spec.compute_balance_weighted_selection p o (toSpecState e) (idxArr.toList.map UInt64.toNat)
       seed size shuffle = .ok r) :
     ∃ res, EthCLSpecs.Gloas.computeBalanceWeightedSelection (pureState e) idxArr (vecToBytes seed)
       size shuffle = .ok res ∧ r = res.toList.map UInt64.toNat := by
@@ -850,7 +824,7 @@ theorem compute_balance_weighted_selection_ok (p : Spec.Preset) (o : Spec.Oracle
     intro v _ b hb
     simp only [except_bind_eq_ok, except_pure_eq_ok] at hb
     obtain ⟨val, hval, rfl⟩ := hb
-    simp only [absEState_validators] at hval
+    simp only [toSpecState_validators] at hval
     obtain ⟨-, rfl⟩ := listGet_map_ok e.validators.val absValidator v hval
     rfl
   subst heffs'
@@ -898,7 +872,7 @@ theorem cbwsAux_ok_size (indices effBals : Array Nat) (perm : Array UInt64) (see
       exact Nat.le_trans (hite _ _) (by omega)
 
 /-- An `.ok` result of Etheorem's `computeBalanceWeightedSelection` holds exactly `size` items. -/
-theorem computeBalanceWeightedSelection_ok_size (e : EState) (indices : Array UInt64)
+theorem computeBalanceWeightedSelection_ok_size (e : EtheoremState) (indices : Array UInt64)
     (seed : ByteArray) (size : Nat) (shuffle : Bool) {res : Array UInt64}
     (h : EthCLSpecs.Gloas.computeBalanceWeightedSelection (pureState e) indices seed size shuffle =
       .ok res) : res.size = size := by
@@ -915,10 +889,10 @@ variable [EthCLSpecs.Gloas.Config] {p : Spec.Preset} (hp : PresetAgrees p)
 include hp
 
 /-- `get_seed` equals Etheorem's `getSeed`. `domBA` is the domain as Etheorem stores it. -/
-theorem get_seed_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d) (e : EState)
+theorem get_seed_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d) (e : EtheoremState)
     (epoch : UInt64) (dom : Spec.DomainType) (domBA : ByteArray)
     (hdom : dom.toList = domBA.data.toList) {s : Spec.Bytes32}
-    (h : Spec.get_seed p o (absEState e) epoch.toNat dom = .ok s) :
+    (h : Spec.get_seed p o (toSpecState e) epoch.toNat dom = .ok s) :
     s = EthCLSpecs.Gloas.getSeed (pureState e) epoch domBA := by
   have hlt := EthCLSpecs.Gloas.Const.epochsPerHistoricalVectorLt
   have hpos := EthCLSpecs.Gloas.Const.epochsPerHistoricalVectorPos
@@ -940,7 +914,7 @@ theorem get_seed_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d) (e
   rw [← hc'] at hidx
   have hidx' := uint64Mod_ok hidx
   subst hidx'
-  simp only [absEState_randao_mixes] at hmix
+  simp only [toSpecState_randao_mixes] at hmix
   obtain ⟨hk, hmix⟩ := listGet_ok hmix
   subst hmix
   unfold EthCLSpecs.Gloas.getSeed
@@ -955,9 +929,9 @@ theorem get_seed_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d) (e
   simp
 
 /-- `get_committee_count_per_slot` equals Etheorem's. -/
-theorem get_committee_count_per_slot_ok (hc : CommitteePresetAgrees p) (e : EState)
+theorem get_committee_count_per_slot_ok (hc : CommitteePresetAgrees p) (e : EtheoremState)
     (epoch : UInt64) {c : Nat}
-    (h : Spec.get_committee_count_per_slot p (absEState e) epoch.toNat = .ok c) :
+    (h : Spec.get_committee_count_per_slot p (toSpecState e) epoch.toNat = .ok c) :
     c = EthCLSpecs.Gloas.getCommitteeCountPerSlot (pureState e) epoch := by
   unfold Spec.get_committee_count_per_slot at h
   simp only [except_bind_eq_ok, except_pure_eq_ok] at h
@@ -1007,8 +981,8 @@ theorem compute_committee_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremH
 
 /-- `get_beacon_committee` equals Etheorem's `getBeaconCommittee`. -/
 theorem get_beacon_committee_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d)
-    (hc : CommitteePresetAgrees p) (e : EState) (slot : UInt64) (index : Nat) {r : List Nat}
-    (h : Spec.get_beacon_committee p o (absEState e) slot.toNat index = .ok r) :
+    (hc : CommitteePresetAgrees p) (e : EtheoremState) (slot : UInt64) (index : Nat) {r : List Nat}
+    (h : Spec.get_beacon_committee p o (toSpecState e) slot.toNat index = .ok r) :
     r = (EthCLSpecs.Gloas.getBeaconCommittee (pureState e) slot index).toList.map
       UInt64.toNat := by
   unfold Spec.get_beacon_committee at h

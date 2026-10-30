@@ -14,23 +14,23 @@ namespace EpochProofs.Spec
 /-! ## Moving binds -/
 
 /-- Two independent computations commute. -/
-theorem sameOk_bind_comm {α β γ : Type} (x : SpecM α) (y : SpecM β) (k : α → β → SpecM γ) :
-    SameOk (x >>= fun a => y >>= fun b => k a b) (y >>= fun b => x >>= fun a => k a b) := by
+theorem sameResultOrBothFail_bind_comm {α β γ : Type} (x : SpecM α) (y : SpecM β) (k : α → β → SpecM γ) :
+    SameResultOrBothFail (x >>= fun a => y >>= fun b => k a b) (y >>= fun b => x >>= fun a => k a b) := by
   intro v
   cases x <;> cases y <;> simp [bind, Except.bind]
 
 /-- A swap of two steps carries over to any continuation. -/
-theorem sameOk_swap_cont {A B : BeaconState → SpecM BeaconState} {s : BeaconState}
-    (h : SameOk (A s >>= B) (B s >>= A)) (k : BeaconState → SpecM BeaconState) :
-    SameOk (A s >>= fun t => B t >>= k) (B s >>= fun t => A t >>= k) := by
-  refine SameOk.trans (SameOk.of_eq (bind_assoc (A s) B k).symm) ?_
-  refine SameOk.trans (SameOk.bind h (fun _ _ => SameOk.refl _)) ?_
-  exact SameOk.of_eq (bind_assoc (B s) A k)
+theorem sameResultOrBothFail_swap_cont {A B : BeaconState → SpecM BeaconState} {s : BeaconState}
+    (h : SameResultOrBothFail (A s >>= B) (B s >>= A)) (k : BeaconState → SpecM BeaconState) :
+    SameResultOrBothFail (A s >>= fun t => B t >>= k) (B s >>= fun t => A t >>= k) := by
+  refine SameResultOrBothFail.trans (SameResultOrBothFail.of_eq (bind_assoc (A s) B k).symm) ?_
+  refine SameResultOrBothFail.trans (SameResultOrBothFail.bind h (fun _ _ => SameResultOrBothFail.refl _)) ?_
+  exact SameResultOrBothFail.of_eq (bind_assoc (B s) A k)
 
-/-- `SameOk` of the first steps carries over to any continuation. -/
-theorem sameOk_cont {x y : SpecM BeaconState} (h : SameOk x y)
-    (k : BeaconState → SpecM BeaconState) : SameOk (x >>= k) (y >>= k) :=
-  SameOk.bind h (fun _ _ => SameOk.refl _)
+/-- `SameResultOrBothFail` of the first steps carries over to any continuation. -/
+theorem sameResultOrBothFail_cont {x y : SpecM BeaconState} (h : SameResultOrBothFail x y)
+    (k : BeaconState → SpecM BeaconState) : SameResultOrBothFail (x >>= k) (y >>= k) :=
+  SameResultOrBothFail.bind h (fun _ _ => SameResultOrBothFail.refl _)
 
 /-! ## The eth1 reset -/
 
@@ -79,7 +79,7 @@ theorem eth1_comm [PresetCfg] (F : BeaconState → SpecM BeaconState) (S : Beaco
     (hslot : ∀ T, F S = .ok T → T.slot = S.slot)
     (hB : F { S with eth1_data_votes := [] } =
       (fun t => { t with eth1_data_votes := [] }) <$> F S) :
-    SameOk (process_eth1_data_reset P S >>= F)
+    SameResultOrBothFail (process_eth1_data_reset P S >>= F)
       (F S >>= process_eth1_data_reset P) := by
   intro w
   rw [eth1_eq]
@@ -524,10 +524,10 @@ def specTail [PresetCfg] (o : Oracle) (tab : Gwei) (S5 : BeaconState) : SpecM Be
 theorem epochRest_specTail [PresetCfg] (o : Oracle) (S4 : BeaconState) (tab : Gwei) (cur : Epoch)
     (hcur : get_current_epoch P S4 = .ok cur) (hfar : cur < FAR_FUTURE_EPOCH)
     (htab : get_total_active_balance P S4 = .ok tab) :
-    SameOk (epochRest P o S4)
+    SameResultOrBothFail (epochRest P o S4)
       (process_eth1_data_reset P S4 >>= specTail o tab) := by
   unfold epochRest
-  refine SameOk.bind (SameOk.refl _) (fun S5 h5 => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun S5 h5 => ?_)
   obtain ⟨v, rfl⟩ := eth1_shape h5
   have hcur5 : get_current_epoch P { S4 with eth1_data_votes := v } = .ok cur := hcur
   have htab5 : get_total_active_balance P { S4 with eth1_data_votes := v } =
@@ -537,8 +537,8 @@ theorem epochRest_specTail [PresetCfg] (o : Oracle) (S4 : BeaconState) (tab : Gw
     exact htab
   rw [htab5, ok_bind']
   unfold specTail specTailG
-  refine SameOk.bind (SameOk.refl _) (fun S6 h6 => ?_)
-  refine SameOk.bind (SameOk.refl _) (fun S7 h7 => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun S6 h6 => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun S7 h7 => ?_)
   have hva := process_pending_deposits_valAct o tab _ S6 h6
   have hc7 := process_pending_consolidations_checkpointsStable P S6 S7 h7
   have hv7 := (consolidations_frame S6 S7 h7).1
@@ -547,7 +547,7 @@ theorem epochRest_specTail [PresetCfg] (o : Oracle) (S4 : BeaconState) (tab : Gw
     rw [get_total_active_balance_append _ S7 extra cur hcur5 hs7 hv7' hext hfar]
     exact htab5
   rw [htab7, ok_bind']
-  exact SameOk.refl _
+  exact SameResultOrBothFail.refl _
 
 /-! ## The deposits in pieces -/
 
@@ -602,7 +602,7 @@ theorem specTail_inner [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM Bea
         (lhDepositView s1 cur))
     (hlen5 : S5.balances.length = S5.validators.length)
     (hbs5 : ∀ i (h : i < S5.balances.length), S5.balances[i] < UINT64_SIZE) :
-    SameOk (specTailG o tab B K S5)
+    SameResultOrBothFail (specTailG o tab B K S5)
       (decOf s1 tab cur >>= fun x => sumsOf s1 x >>= fun sums =>
         innerAfterG o B K s1 S5 x sums) := by
   have hn : S5.validators.length = s1.validators.length := by
@@ -610,17 +610,17 @@ theorem specTail_inner [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM Bea
   have hD := process_pending_deposits_decide o tab S5 cur hcur5 hfar
   rw [decide_form_eq] at hD
   unfold specTailG
-  refine SameOk.trans (sameOk_cont hD _) ?_
+  refine SameResultOrBothFail.trans (sameResultOrBothFail_cont hD _) ?_
   unfold decOf
   simp only [bind_assoc]
   rw [hpend, hdbtc, hfinal]
-  refine SameOk.bind (SameOk.refl _) (fun fs _ => ?_)
-  refine SameOk.bind (SameOk.refl _) (fun c _ => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun fs _ => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun c _ => ?_)
   rw [depositDecisions_take_max, ← List.map_take, hviews]
-  refine SameOk.bind (SameOk.refl _) (fun x _ => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun x _ => ?_)
   have hsplit := applyHandled_split o S5 ((s1.pending_deposits.take x.1).zip x.2.2)
   rw [hpk] at hsplit
-  refine SameOk.trans (sameOk_cont hsplit _) ?_
+  refine SameResultOrBothFail.trans (sameResultOrBothFail_cont hsplit _) ?_
   have hin : ∀ y ∈ knownTopups (s1.validators.map (·.pubkey))
       ((s1.pending_deposits.take x.1).zip x.2.2), y.1 < S5.validators.length := by
     intro y hy
@@ -634,8 +634,8 @@ theorem specTail_inner [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM Bea
     have := List.idxOf_lt_length_of_mem hm
     simpa using this
   have hsum := topups_sum S5 _ hin hlen5 hbs5
-  refine SameOk.trans (sameOk_cont (sameOk_cont hsum _) _) ?_
-  apply SameOk.of_eq
+  refine SameResultOrBothFail.trans (sameResultOrBothFail_cont (sameResultOrBothFail_cont hsum _) _) ?_
+  apply SameResultOrBothFail.of_eq
   simp only [bind_assoc, sumsOf, innerAfterG, handledOf', newsOf, queueOf, hn]
   rfl
 
@@ -648,9 +648,9 @@ theorem fold_past [PresetCfg] (F : BeaconState → SpecM BeaconState) (P : Beaco
     (hF2 : ∀ i ∈ l, ∀ t t', P t → F t = .ok t' →
       t'.validators[i]? = t.validators[i]? ∧ t'.balances[i]? = t.balances[i]?)
     (s : BeaconState) (hs : P s) (k : BeaconState → SpecM BeaconState) :
-    SameOk (F s >>= fun t => l.foldlM ebUpdateAt t >>= k)
+    SameResultOrBothFail (F s >>= fun t => l.foldlM ebUpdateAt t >>= k)
       (l.foldlM ebUpdateAt s >>= fun t => F t >>= k) :=
-  (sameOk_swap_cont (A := fun t => l.foldlM ebUpdateAt t) (B := F)
+  (sameResultOrBothFail_swap_cont (A := fun t => l.foldlM ebUpdateAt t) (B := F)
     (ebFold_commute F P l hP hF1 hF2 s hs) k).flip
 
 /-- A fold of updates keeps the number of validators. -/
@@ -746,16 +746,16 @@ theorem ebBlind_pure : EBBlind (pure : BeaconState → SpecM BeaconState) :=
 groups. -/
 theorem inner_py [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : EBBlind B) (n : Nat) (named : List Nat) (hnd : named.Nodup)
     (hsub : ∀ i ∈ named, i < n) (t7 : BeaconState) (hn : n ≤ t7.validators.length) :
-    SameOk (B t7 >>= fun t8 =>
+    SameResultOrBothFail (B t7 >>= fun t8 =>
         process_effective_balance_updates P t8 >>= K)
       ((ebL1 n named ++ ebL2 n t7 ++ named).foldlM ebUpdateAt t7 >>= fun t =>
         B t >>= K) := by
-  refine SameOk.trans (y := B t7 >>= fun t8 =>
+  refine SameResultOrBothFail.trans (y := B t7 >>= fun t8 =>
       (ebL1 n named ++ ebL2 n t7 ++ named).foldlM ebUpdateAt t8 >>= K)
-    (SameOk.bind (SameOk.refl _) (fun t8 h8 => ?_)) ?_
+    (SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t8 h8 => ?_)) ?_
   · have hv := (hB.frame t7 t8 h8).1
-    refine SameOk.trans (sameOk_cont (process_effective_balance_updates_fold t8) _) ?_
-    refine sameOk_cont (ebFold_perm ?_ t8) _
+    refine SameResultOrBothFail.trans (sameResultOrBothFail_cont (process_effective_balance_updates_fold t8) _) ?_
+    refine sameResultOrBothFail_cont (ebFold_perm ?_ t8) _
     rw [hv]
     exact range_perm_split n t7.validators.length named hnd hsub hn
   · exact fold_past _ (fun _ => True) _ (fun _ _ _ _ _ => trivial)
@@ -779,23 +779,23 @@ theorem ebL12_not_named (n : Nat) (named : List Nat) (hsub : ∀ i ∈ named, i 
 theorem inner_co [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : EBBlind B) (n : Nat) (named : List Nat) (hnd : named.Nodup)
     (hsub : ∀ i ∈ named, i < n) (t5 : BeaconState) (hn : n ≤ t5.validators.length)
     (hci : consolidationIndices t5 = named) :
-    SameOk (process_pending_consolidations P t5 >>= fun t7 =>
+    SameResultOrBothFail (process_pending_consolidations P t5 >>= fun t7 =>
         B t7 >>= fun t8 =>
         process_effective_balance_updates P t8 >>= K)
       ((ebL1 n named ++ ebL2 n t5).foldlM ebUpdateAt t5 >>= fun t6 =>
         process_pending_consolidations P t6 >>= fun t7 =>
         named.foldlM ebUpdateAt t7 >>= fun t8 =>
         B t8 >>= K) := by
-  refine SameOk.trans (y := process_pending_consolidations P t5 >>= fun t7 =>
+  refine SameResultOrBothFail.trans (y := process_pending_consolidations P t5 >>= fun t7 =>
       (ebL1 n named ++ ebL2 n t5).foldlM ebUpdateAt t7 >>= fun t6 =>
         named.foldlM ebUpdateAt t6 >>= fun t8 =>
         B t8 >>= K)
-    (SameOk.bind (SameOk.refl _) (fun t7 h7 => ?_)) ?_
+    (SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t7 h7 => ?_)) ?_
   · have hv := (consolidations_frame t5 t7 h7).1
     have hl2 : ebL2 n t7 = ebL2 n t5 := by unfold ebL2; rw [hv]
-    refine SameOk.trans (inner_py o B K hB n named hnd hsub t7 (by rw [hv]; exact hn)) ?_
+    refine SameResultOrBothFail.trans (inner_py o B K hB n named hnd hsub t7 (by rw [hv]; exact hn)) ?_
     rw [hl2, List.foldlM_append, bind_assoc]
-    exact SameOk.refl _
+    exact SameResultOrBothFail.refl _
   · refine fold_past _ (fun t => consolidationIndices t = named) _
       (fun i _ t e h => by rw [consolidationIndices_setEB]; exact h)
       (fun i hi t e h => consolidations_hF1 i t e
@@ -816,7 +816,7 @@ theorem inner_news [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM BeaconS
     (hsub : ∀ i ∈ named, i < n) (Pk : List BLSPubkey) (ds : List PendingDeposit)
     (hds : ∀ d ∈ ds, d.pubkey ∉ Pk) (t3 : BeaconState) (hlen : t3.validators.length = n)
     (hq : ∀ i ∈ ebL1 n named, NewsQ Pk i t3) (hci : consolidationIndices t3 = named) :
-    SameOk (ds.foldlM (apply_pending_deposit P o) t3 >>= fun t5 =>
+    SameResultOrBothFail (ds.foldlM (apply_pending_deposit P o) t3 >>= fun t5 =>
         process_pending_consolidations P t5 >>= fun t7 =>
         B t7 >>= fun t8 =>
         process_effective_balance_updates P t8 >>= K)
@@ -826,21 +826,21 @@ theorem inner_news [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM BeaconS
         process_pending_consolidations P t6 >>= fun t7 =>
         named.foldlM ebUpdateAt t7 >>= fun t8 =>
         B t8 >>= K) := by
-  refine SameOk.trans (y := ds.foldlM (apply_pending_deposit P o) t3 >>= fun t5 =>
+  refine SameResultOrBothFail.trans (y := ds.foldlM (apply_pending_deposit P o) t3 >>= fun t5 =>
       (ebL1 n named).foldlM ebUpdateAt t5 >>= fun t4 =>
         (ebL2 n t4).foldlM ebUpdateAt t4 >>= fun t6 =>
         process_pending_consolidations P t6 >>= fun t7 =>
         named.foldlM ebUpdateAt t7 >>= fun t8 =>
         B t8 >>= K)
-    (SameOk.bind (SameOk.refl _) (fun t5 h5 => ?_)) ?_
+    (SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t5 h5 => ?_)) ?_
   · obtain ⟨hpc, hle⟩ := applyFold_pc o ds t3 t5 h5
-    refine SameOk.trans (inner_co o B K hB n named hnd hsub t5 (hlen ▸ hle)
+    refine SameResultOrBothFail.trans (inner_co o B K hB n named hnd hsub t5 (hlen ▸ hle)
       ((consolidationIndices_of_pc hpc).trans hci)) ?_
     rw [List.foldlM_append, bind_assoc]
-    refine SameOk.bind (SameOk.refl _) (fun t4 h4 => ?_)
+    refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t4 h4 => ?_)
     have hl2 : ebL2 n t4 = ebL2 n t5 := by unfold ebL2; rw [ebFold_len _ _ _ h4]
     rw [hl2]
-    exact SameOk.refl _
+    exact SameResultOrBothFail.refl _
   · exact fold_past (fun t => ds.foldlM (apply_pending_deposit P o) t)
       (fun t => ∀ i ∈ ebL1 n named, NewsQ Pk i t) _
       (fun i _ t e h j hj => (h j hj).setEB i e)
@@ -861,7 +861,7 @@ theorem inner_t1 [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM BeaconSta
     (hds : ∀ d ∈ ds, d.pubkey ∉ Pk) (q : List PendingDeposit) (dbtc : Gwei) (t1 : BeaconState)
     (hpk : t1.validators.map (·.pubkey) = Pk) (hlen : t1.validators.length = n)
     (hci : consolidationIndices t1 = named) :
-    SameOk (process_eth1_data_reset P t1 >>= fun t2 => writeQueue q dbtc t2 >>=
+    SameResultOrBothFail (process_eth1_data_reset P t1 >>= fun t2 => writeQueue q dbtc t2 >>=
         fun t3 => ds.foldlM (apply_pending_deposit P o) t3 >>= fun t5 =>
         process_pending_consolidations P t5 >>= fun t7 =>
         B t7 >>= fun t8 =>
@@ -877,20 +877,20 @@ theorem inner_t1 [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM BeaconSta
     intro i hi
     unfold ebL1 at hi
     exact List.mem_range.mp (List.mem_filter.mp hi).1
-  refine SameOk.trans (y := process_eth1_data_reset P t1 >>= fun t2 =>
+  refine SameResultOrBothFail.trans (y := process_eth1_data_reset P t1 >>= fun t2 =>
       writeQueue q dbtc t2 >>= fun t3 => (ebL1 n named).foldlM ebUpdateAt t3 >>= fun t4 =>
       ds.foldlM (apply_pending_deposit P o) t4 >>= fun t5 =>
       (ebL2 n t5).foldlM ebUpdateAt t5 >>= fun t6 =>
       process_pending_consolidations P t6 >>= fun t7 =>
       named.foldlM ebUpdateAt t7 >>= fun t8 =>
       B t8 >>= K)
-    (SameOk.bind (SameOk.refl _) (fun t2 h2 =>
-      SameOk.bind (SameOk.refl _) (fun t3 h3 => ?_))) ?_
+    (SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t2 h2 =>
+      SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t3 h3 => ?_))) ?_
   · obtain ⟨v, rfl⟩ := eth1_shape h2
     cases h3
     exact inner_news o B K hB n named hnd hsub Pk ds hds _ hlen
       (fun i hi => newsQ_of_pk hpk i (hlen ▸ hl1 i hi)) hci
-  · refine SameOk.trans (SameOk.bind (SameOk.refl _) (fun t2 _ =>
+  · refine SameResultOrBothFail.trans (SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t2 _ =>
       fold_past (writeQueue q dbtc) (fun _ => True) _ (fun _ _ _ _ _ => trivial)
         (fun i _ t e _ => writeQueue_hF1 q dbtc i t e)
         (fun i _ t t' _ h => writeQueue_hF2 q dbtc i t t' h) t2 trivial _)) ?_
@@ -924,19 +924,19 @@ theorem specAfter_nf [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM Beaco
     (hpk : S4.validators.map (·.pubkey) = s1.validators.map (·.pubkey))
     (hpc : S4.pending_consolidations = s1.pending_consolidations)
     (hnamed : ∀ i ∈ consolidationIndices s1, i < s1.validators.length) :
-    SameOk (process_eth1_data_reset P S4 >>= fun S5 =>
+    SameResultOrBothFail (process_eth1_data_reset P S4 >>= fun S5 =>
         innerAfterG o B K s1 S5 x sums)
       (specNfAfterG o B K s1 S4 x sums) := by
   have hn : S4.validators.length = s1.validators.length := by
     rw [← List.length_map (f := (·.pubkey)), hpk, List.length_map]
   have hA := addSums_eth1 S4 sums
-  refine SameOk.trans (sameOk_swap_cont (A := process_eth1_data_reset P)
+  refine SameResultOrBothFail.trans (sameResultOrBothFail_swap_cont (A := process_eth1_data_reset P)
     (B := fun S => addSums S sums) (eth1_comm _ S4 hA.1 hA.2) _) ?_
   unfold specNfAfterG
-  refine SameOk.bind (SameOk.refl _) (fun t1 h1 => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t1 h1 => ?_)
   obtain ⟨bs, rfl⟩ := addSums_shape h1
-  refine SameOk.trans (SameOk.bind (SameOk.refl _) (fun t2 _ =>
-    SameOk.of_eq (wq_news_comm o (queueOf s1 x) x.2.1 (newsOf s1 x) t2 (fun S6 =>
+  refine SameResultOrBothFail.trans (SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t2 _ =>
+    SameResultOrBothFail.of_eq (wq_news_comm o (queueOf s1 x) x.2.1 (newsOf s1 x) t2 (fun S6 =>
       process_pending_consolidations P S6 >>= fun S7 =>
       B S7 >>= fun S8 =>
       process_effective_balance_updates P S8 >>= K)))) ?_
@@ -987,7 +987,7 @@ theorem specRest_nf [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM Beacon
       v.withdrawable_epoch = FAR_FUTURE_EPOCH)
     (hbal4 : ∀ r ∈ rows, r.balance < 2 ^ 64)
     (hnamed : ∀ i ∈ consolidationIndices s1, i < s1.validators.length) :
-    SameOk (process_eth1_data_reset P (s1.withRowsChurn churn rows) >>=
+    SameResultOrBothFail (process_eth1_data_reset P (s1.withRowsChurn churn rows) >>=
         specTailG o tab B K)
       (tailNFG o (fun t => B t >>= K) s1 (s1.withRowsChurn churn rows) tab current_epoch) := by
   subst hctxcur
@@ -998,10 +998,10 @@ theorem specRest_nf [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM Beacon
     omega
   have hpk := pass_pubkeys ctx bf s1 _ churn rows activation_epoch hfinalized hexit hcur64
     hact hpass
-  refine SameOk.trans (y := process_eth1_data_reset P (s1.withRowsChurn churn rows) >>=
+  refine SameResultOrBothFail.trans (y := process_eth1_data_reset P (s1.withRowsChurn churn rows) >>=
       fun S5 => decOf s1 tab ctx.current_epoch >>= fun x => sumsOf s1 x >>=
         fun sums => innerAfterG o B K s1 S5 x sums)
-    (SameOk.bind (SameOk.refl _) (fun S5 h5 => ?_)) ?_
+    (SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun S5 h5 => ?_)) ?_
   · obtain ⟨v, rfl⟩ := eth1_shape h5
     have hviews := views_eq ctx bf s1 _ churn rows activation_epoch hfinalized hexit hvalid
       hnext hact hpass { s1.withRowsChurn churn rows with eth1_data_votes := v } rfl
@@ -1011,10 +1011,10 @@ theorem specRest_nf [PresetCfg] (o : Oracle) (B K : BeaconState → SpecM Beacon
     intro i hi
     simp only [BeaconState.withRowsChurn, BeaconState.withRows, List.getElem_map]
     exact hbal4 _ (List.getElem_mem _)
-  · refine SameOk.trans (sameOk_bind_comm _ _ _) ?_
-    refine SameOk.trans (SameOk.bind (SameOk.refl _) (fun x _ => sameOk_bind_comm _ _ _)) ?_
+  · refine SameResultOrBothFail.trans (sameResultOrBothFail_bind_comm _ _ _) ?_
+    refine SameResultOrBothFail.trans (SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun x _ => sameResultOrBothFail_bind_comm _ _ _)) ?_
     rw [tailNF_eq_spec]
-    refine SameOk.bind (SameOk.refl _) (fun x _ => SameOk.bind (SameOk.refl _) (fun sums _ => ?_))
+    refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun x _ => SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun sums _ => ?_))
     exact specAfter_nf o B K hB s1 _ x sums hpk rfl hnamed
 
 /-- The spec steps after the four passes give the same `ok` results as `tailNF`. -/
@@ -1036,12 +1036,12 @@ theorem epochRest_nf [PresetCfg] (o : Oracle) (s1 : BeaconState) (current_epoch 
       .ok total_active_balance)
     (hbal4 : ∀ r ∈ rows, r.balance < 2 ^ 64)
     (hnamed : ∀ i ∈ consolidationIndices s1, i < s1.validators.length) :
-    SameOk (epochRest P o (s1.withRowsChurn churn rows))
+    SameResultOrBothFail (epochRest P o (s1.withRowsChurn churn rows))
       (tailNF o s1 (s1.withRowsChurn churn rows) total_active_balance current_epoch) := by
   have hfar : current_epoch < FAR_FUTURE_EPOCH := Nat.lt_trans (Nat.lt_succ_self _) hnext
   have hcur4 : get_current_epoch P (s1.withRowsChurn churn rows) =
       .ok current_epoch := hcur
-  refine SameOk.trans (epochRest_specTail o _ total_active_balance current_epoch hcur4 hfar
+  refine SameResultOrBothFail.trans (epochRest_specTail o _ total_active_balance current_epoch hcur4 hfar
     htab4) ?_
   exact specRest_nf o _ _ (ebBlind_payments total_active_balance) s1 current_epoch
     total_active_balance ctx bf churn rows activation_epoch hpass hctxcur hctxfin hcur hfin hnext

@@ -70,24 +70,24 @@ section Plain
 variable [EthCLSpecs.Gloas.Preset] [HasherTag]
 
 /-- Etheorem's first two writes: rotate the justified checkpoints and shift the bits. -/
-def jfShift (e : EState) : EState :=
+def jfShift (e : EtheoremState) : EtheoremState :=
   { e with previousJustifiedCheckpoint := e.currentJustifiedCheckpoint,
            justificationBits := ⟨e.justificationBits.data <<< 1⟩ }
 
 /-- Justify `epoch` with `root` and set bit `bit`, when `c` holds. -/
-def jfJustify (w : EState) (c : Bool) (epoch : UInt64) (root : EthCLSpecs.Gloas.Root) (bit : Nat) :
-    EState :=
+def jfJustify (w : EtheoremState) (c : Bool) (epoch : UInt64) (root : EthCLSpecs.Gloas.Root) (bit : Nat) :
+    EtheoremState :=
   if c then
     { w with currentJustifiedCheckpoint := { epoch := epoch, root := root },
              justificationBits := bitSet w.justificationBits bit true }
   else w
 
 /-- Finalize `cp` when `c` holds. -/
-def jfFinalize (w : EState) (c : Bool) (cp : EthCLSpecs.Gloas.Checkpoint) : EState :=
+def jfFinalize (w : EtheoremState) (c : Bool) (cp : EthCLSpecs.Gloas.Checkpoint) : EtheoremState :=
   if c then { w with finalizedCheckpoint := cp } else w
 
 /-- The state after Etheorem's `weigh_justification_and_finalization`. -/
-def jfWeighE (e : EState) (jp jc : Bool) (pr cr : EthCLSpecs.Gloas.Root) : EState :=
+def jfWeighE (e : EtheoremState) (jp jc : Bool) (pr cr : EthCLSpecs.Gloas.Root) : EtheoremState :=
   let prevEpoch := EthCLSpecs.Gloas.previousEpochOf (pureState e)
   let currEpoch := EthCLSpecs.Gloas.currentEpochOf (pureState e)
   let oldPrev := e.previousJustifiedCheckpoint
@@ -101,7 +101,7 @@ def jfWeighE (e : EState) (jp jc : Bool) (pr cr : EthCLSpecs.Gloas.Root) : EStat
     (bitGet bits 0 && bitGet bits 1 && bitGet bits 2 && oldCurr.epoch + 2 == currEpoch) oldCurr
   jfFinalize s6 (bitGet bits 0 && bitGet bits 1 && oldCurr.epoch + 1 == currEpoch) oldCurr
 
-theorem weigh_run (e : EState) (tot pt ct : UInt64) (pr cr : EthCLSpecs.Gloas.Root)
+theorem weigh_run (e : EtheoremState) (tot pt ct : UInt64) (pr cr : EthCLSpecs.Gloas.Root)
     (hov : tot.toNat * 2 < 2 ^ 64 ∧ pt.toNat * 3 < 2 ^ 64 ∧ ct.toNat * 3 < 2 ^ 64)
     (hpr : pt.toNat * 3 ≥ tot.toNat * 2 →
       (EthCLSpecs.Gloas.getBlockRoot (StateTransition := GloasRun) (pureState e)
@@ -154,8 +154,8 @@ variable [EthCLSpecs.Gloas.Preset] [HasherTag] [EthCLSpecs.Gloas.Config]
 variable {p : Spec.Preset} (hpp : PassesPresetAgrees p)
 include hpp
 
-theorem get_block_root_etheorem (e : EState) (s0 : EthCLSpecs.Gloas.State) (epoch : UInt64)
-    {r : Spec.Root} (h : Spec.get_block_root p (absEState e) epoch.toNat = .ok r) :
+theorem get_block_root_etheorem (e : EtheoremState) (s0 : EthCLSpecs.Gloas.State) (epoch : UInt64)
+    {r : Spec.Root} (h : Spec.get_block_root p (toSpecState e) epoch.toNat = .ok r) :
     (EthCLSpecs.Gloas.getBlockRoot (StateTransition := GloasRun) (pureState e) epoch).run s0 =
       .ok (r, s0) := by
   have hp := hpp.toPresetAgrees
@@ -178,7 +178,7 @@ theorem get_block_root_etheorem (e : EState) (s0 : EthCLSpecs.Gloas.State) (epoc
       p.SLOTS_PER_HISTORICAL_ROOT := by
     rw [UInt64.toNat_ofNat_of_lt' hsphr, hpp.slotsPerHistoricalRoot]
   unfold Spec.get_block_root_at_slot at h
-  simp only [bind, Except.bind, absEState_slot] at h
+  simp only [bind, Except.bind, toSpecState_slot] at h
   by_cases c1 : S.toNat < e.slot.toNat
   · rw [if_neg (by simpa using c1)] at h
     cases ha : Spec.uint64Add S.toNat p.SLOTS_PER_HISTORICAL_ROOT with
@@ -195,7 +195,7 @@ theorem get_block_root_etheorem (e : EState) (s0 : EthCLSpecs.Gloas.State) (epoc
     dsimp only at h
     by_cases c2 : e.slot.toNat ≤ b
     · rw [if_neg (by simpa using c2)] at h
-      simp only [absEState_block_roots] at h
+      simp only [toSpecState_block_roots] at h
       unfold EthCLSpecs.Gloas.getBlockRoot EthCLSpecs.Gloas.getBlockRootAtSlot
       rw [hS]
       simp only [view_uncachedBox]
@@ -222,13 +222,13 @@ theorem get_block_root_etheorem (e : EState) (s0 : EthCLSpecs.Gloas.State) (epoc
   · rw [if_pos (by simpa using c1)] at h; cases h
 
 omit [HasherTag] [EthCLSpecs.Gloas.Config] hpp in
-theorem fin_step (s : Spec.BeaconState) (w : EState) (hs : s = absEState w) (bitsAll : Bool)
+theorem fin_step (s : Spec.BeaconState) (w : EtheoremState) (hs : s = toSpecState w) (bitsAll : Bool)
     (old : EthCLSpecs.Gloas.Checkpoint) (k : UInt64) (cur : UInt64) {s'' : Spec.BeaconState}
     (h : (if bitsAll then (do
         if (← Spec.uint64Add (absCheckpoint old).epoch k.toNat) == cur.toNat then
           pure { s with finalized_checkpoint := absCheckpoint old }
         else pure s) else pure s : Spec.SpecM Spec.BeaconState) = .ok s'') :
-    s'' = absEState (jfFinalize w (bitsAll && old.epoch + k == cur) old) := by
+    s'' = toSpecState (jfFinalize w (bitsAll && old.epoch + k == cur) old) := by
   subst hs
   unfold jfFinalize
   cases bitsAll
@@ -257,30 +257,30 @@ theorem fin_step (s : Spec.BeaconState) (w : EState) (hs : s = absEState w) (bit
         simp [this]
 
 omit [HasherTag] [EthCLSpecs.Gloas.Config] hpp in
-theorem get_block_root_absEState_congr (w e : EState) (hs : w.slot = e.slot)
+theorem get_block_root_toSpecState_congr (w e : EtheoremState) (hs : w.slot = e.slot)
     (hb : w.blockRoots = e.blockRoots) (ep : Nat) :
-    Spec.get_block_root p (absEState w) ep = Spec.get_block_root p (absEState e) ep := by
-  have h1 : (absEState w).slot = (absEState e).slot := by simp [hs]
-  have h2 : (absEState w).block_roots = (absEState e).block_roots := by simp [hb]
+    Spec.get_block_root p (toSpecState w) ep = Spec.get_block_root p (toSpecState e) ep := by
+  have h1 : (toSpecState w).slot = (toSpecState e).slot := by simp [hs]
+  have h2 : (toSpecState w).block_roots = (toSpecState e).block_roots := by simp [hb]
   unfold Spec.get_block_root Spec.get_block_root_at_slot
   rw [h1, h2]
 
 omit [HasherTag] [EthCLSpecs.Gloas.Config] hpp in
-theorem just_step (w : EState) (tot x epoch : UInt64) (bit : Nat) (hbit : bit < 4)
+theorem just_step (w : EtheoremState) (tot x epoch : UInt64) (bit : Nat) (hbit : bit < 4)
     {s4 : Spec.BeaconState}
     (h : (do
       let m1 ← Spec.uint64Mul x.toNat 3
       let m2 ← Spec.uint64Mul tot.toNat 2
       if m1 ≥ m2 then do
-        let r ← Spec.get_block_root p (absEState w) epoch.toNat
-        let b ← Spec.listSet (absEState w).justification_bits bit true
-        pure { absEState w with
+        let r ← Spec.get_block_root p (toSpecState w) epoch.toNat
+        let b ← Spec.listSet (toSpecState w).justification_bits bit true
+        pure { toSpecState w with
           current_justified_checkpoint := { epoch := epoch.toNat, root := r },
           justification_bits := b }
-      else pure (absEState w) : Spec.SpecM Spec.BeaconState) = .ok s4) :
+      else pure (toSpecState w) : Spec.SpecM Spec.BeaconState) = .ok s4) :
     ∃ r, (x.toNat * 3 < 2 ^ 64 ∧ tot.toNat * 2 < 2 ^ 64) ∧
-      (x.toNat * 3 ≥ tot.toNat * 2 → Spec.get_block_root p (absEState w) epoch.toNat = .ok r) ∧
-      s4 = absEState (jfJustify w (decide (x.toNat * 3 ≥ tot.toNat * 2)) epoch r bit) := by
+      (x.toNat * 3 ≥ tot.toNat * 2 → Spec.get_block_root p (toSpecState w) epoch.toNat = .ok r) ∧
+      s4 = toSpecState (jfJustify w (decide (x.toNat * 3 ≥ tot.toNat * 2)) epoch r bit) := by
   obtain ⟨m1, hm1, h⟩ := bind_ok_inv h
   obtain ⟨m2, hm2, h⟩ := bind_ok_inv h
   have hov : x.toNat * 3 < 2 ^ 64 ∧ tot.toNat * 2 < 2 ^ 64 := ⟨uint64Mul_lt hm1, uint64Mul_lt hm2⟩
@@ -292,37 +292,37 @@ theorem just_step (w : EState) (tot x epoch : UInt64) (bit : Nat) (hbit : bit < 
     refine ⟨r, hov, fun _ => hr, ?_⟩
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
-    have hlen : bit < (absEState w).justification_bits.length := by
-      simp [absEState_justification_bits, absBits_length]; omega
+    have hlen : bit < (toSpecState w).justification_bits.length := by
+      simp [toSpecState_justification_bits, absBits_length]; omega
     simp only [Spec.listSet, hlen, if_true, pure, Except.pure, Except.ok.injEq] at hb
     subst hb
     simp only [jfJustify, hj, decide_true, if_true]
-    rw [absEState_justification_bits, ← absBits_bitSet _ _ hbit]
+    rw [toSpecState_justification_bits, ← absBits_bitSet _ _ hbit]
     rfl
   · rw [if_neg hj] at h
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
     exact ⟨default, hov, fun h' => absurd h' hj, by simp [jfJustify, hj]⟩
 
-theorem weigh_etheorem (e : EState) (tot pt ct : UInt64) {s' : Spec.BeaconState}
-    (h : Spec.weigh_justification_and_finalization p (absEState e) tot.toNat pt.toNat ct.toNat =
+theorem weigh_etheorem (e : EtheoremState) (tot pt ct : UInt64) {s' : Spec.BeaconState}
+    (h : Spec.weigh_justification_and_finalization p (toSpecState e) tot.toNat pt.toNat ct.toNat =
       .ok s') :
     ∃ pr cr : EthCLSpecs.Gloas.Root,
       (tot.toNat * 2 < 2 ^ 64 ∧ pt.toNat * 3 < 2 ^ 64 ∧ ct.toNat * 3 < 2 ^ 64) ∧
-      (pt.toNat * 3 ≥ tot.toNat * 2 → Spec.get_block_root p (absEState e)
+      (pt.toNat * 3 ≥ tot.toNat * 2 → Spec.get_block_root p (toSpecState e)
         (EthCLSpecs.Gloas.previousEpochOf (pureState e)).toNat = .ok pr) ∧
-      (ct.toNat * 3 ≥ tot.toNat * 2 → Spec.get_block_root p (absEState e)
+      (ct.toNat * 3 ≥ tot.toNat * 2 → Spec.get_block_root p (toSpecState e)
         (EthCLSpecs.Gloas.currentEpochOf (pureState e)).toNat = .ok cr) ∧
-      s' = absEState (jfWeighE e (decide (pt.toNat * 3 ≥ tot.toNat * 2))
+      s' = toSpecState (jfWeighE e (decide (pt.toNat * 3 ≥ tot.toNat * 2))
         (decide (ct.toNat * 3 ≥ tot.toNat * 2)) pr cr) := by
   have hp := hpp.toPresetAgrees
   unfold Spec.weigh_justification_and_finalization at h
   rw [get_previous_epoch_eq hp, get_current_epoch_eq hp] at h
-  have hl0 : Spec.listSet ((absEState e).justification_bits.take 1 ++
-      (absEState e).justification_bits.take (Spec.JUSTIFICATION_BITS_LENGTH - 1)) 0 false =
+  have hl0 : Spec.listSet ((toSpecState e).justification_bits.take 1 ++
+      (toSpecState e).justification_bits.take (Spec.JUSTIFICATION_BITS_LENGTH - 1)) 0 false =
       .ok (absBits (⟨e.justificationBits.data <<< 1⟩ : Bitvector 4)) := by
     rw [absBits_shift]
-    simp [Spec.listSet, absEState_justification_bits, absBits_four, Spec.JUSTIFICATION_BITS_LENGTH,
+    simp [Spec.listSet, toSpecState_justification_bits, absBits_four, Spec.JUSTIFICATION_BITS_LENGTH,
       pure, Except.pure]
   simp only [ok_bind] at h
   rw [hl0] at h
@@ -338,12 +338,12 @@ theorem weigh_etheorem (e : EState) (tot pt ct : UInt64) {s' : Spec.BeaconState}
       = e.blockRoots := by
     intro c r; unfold jfJustify jfShift; split <;> exact ⟨rfl, rfl⟩
   refine ⟨pr, cr, ⟨h2, hp3, hc3⟩, hpr, fun hc => by
-    rw [← get_block_root_absEState_congr _ _ (hw4 _ _).1 (hw4 _ _).2]; exact hcr hc, ?_⟩
+    rw [← get_block_root_toSpecState_congr _ _ (hw4 _ _).1 (hw4 _ _).2]; exact hcr hc, ?_⟩
   generalize hW : jfJustify (jfJustify (jfShift e) (decide (pt.toNat * 3 ≥ tot.toNat * 2))
     (EthCLSpecs.Gloas.previousEpochOf (pureState e)) pr 1) (decide (ct.toNat * 3 ≥ tot.toNat * 2))
     (EthCLSpecs.Gloas.currentEpochOf (pureState e)) cr 0 = W at h
   obtain ⟨s6, h6, h⟩ := bind_ok_inv h
-  have e6 := fin_step (absEState W) W rfl _ e.previousJustifiedCheckpoint 3
+  have e6 := fin_step (toSpecState W) W rfl _ e.previousJustifiedCheckpoint 3
     (EthCLSpecs.Gloas.currentEpochOf (pureState e)) h6
   subst e6
   obtain ⟨s7, h7, h⟩ := bind_ok_inv h
@@ -358,17 +358,17 @@ theorem weigh_etheorem (e : EState) (tot pt ct : UInt64) {s' : Spec.BeaconState}
     (EthCLSpecs.Gloas.currentEpochOf (pureState e)) h
   subst e9
   subst hW
-  simp only [absEState_justification_bits, absBits_four, jfWeighE, List.extract_eq_take_drop,
+  simp only [toSpecState_justification_bits, absBits_four, jfWeighE, List.extract_eq_take_drop,
     List.drop, List.take, List.all_cons, List.all_nil, id, Nat.reduceSub, Bool.and_true,
     Bool.and_assoc]
 
 /-- `process_justification_and_finalization` equals Etheorem's. -/
-theorem justification_etheorem (e : EState) {s' : Spec.BeaconState}
-    (h : Spec.process_justification_and_finalization p (absEState e) = .ok s') :
-    ∃ e' : EState,
+theorem justification_etheorem (e : EtheoremState) {s' : Spec.BeaconState}
+    (h : Spec.process_justification_and_finalization p (toSpecState e) = .ok s') :
+    ∃ e' : EtheoremState,
       (EthCLSpecs.Gloas.processJustificationAndFinalization (StateTransition := GloasRun)).run
           (pureState e) = .ok ((), pureState e') ∧
-        s' = absEState e' := by
+        s' = toSpecState e' := by
   have hp := hpp.toPresetAgrees
   unfold Spec.process_justification_and_finalization at h
   rw [get_current_epoch_eq hp] at h

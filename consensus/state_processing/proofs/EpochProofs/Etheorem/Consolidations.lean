@@ -44,7 +44,7 @@ theorem pcLoop_eq (cons : Array EthCLSpecs.Gloas.PendingConsolidation) (ne : UIn
 
 /-- One step of the queue. Our step and Etheorem's step move the same balance, and they stop
 at the same consolidation. -/
-theorem pcStep_ok (cons : Array EthCLSpecs.Gloas.PendingConsolidation) (ne : UInt64) (e : EState)
+theorem pcStep_ok (cons : Array EthCLSpecs.Gloas.PendingConsolidation) (ne : UInt64) (e : EtheoremState)
     (k : Nat) (hk : k < cons.size) (hlen : e.balances.val.size = e.validators.val.size)
     {r : (List Nat × Nat) × Bool}
     (h : Spec.consolidationStep ((e.validators.toList.map absValidator).map Spec.globalLocal)
@@ -133,7 +133,7 @@ theorem pcStep_ok (cons : Array EthCLSpecs.Gloas.PendingConsolidation) (ne : UIn
   generalize hnb : e.balances.set! pc.sourceIndex.toNat
     (if umin b v.effectiveBalance > e.balances.val[pc.sourceIndex.toNat]! then 0
      else e.balances.val[pc.sourceIndex.toNat]! - umin b v.effectiveBalance) = nb at hi ⊢
-  generalize he1 : ({ e with balances := nb } : EState) = e1 at hi
+  generalize he1 : ({ e with balances := nb } : EtheoremState) = e1 at hi
   obtain ⟨hirun, hbs2⟩ := increase_balance_etheorem e1 e pc.targetIndex _ (by
     rw [← he1]; exact hi)
   rw [hirun, except_bind_ok]
@@ -165,7 +165,7 @@ def consPair (c : EthCLSpecs.Gloas.PendingConsolidation) : Nat × Nat :=
 /-- From position `k` with `j` items left, `pcLoop` stops where our loop stops and writes the same
 balances. -/
 theorem pcLoop_fuel (cons : Array EthCLSpecs.Gloas.PendingConsolidation) (ne : UInt64) :
-    ∀ (j k : Nat) (e : EState) {r : (List Nat × Nat) × Bool}, k + j = cons.size →
+    ∀ (j k : Nat) (e : EtheoremState) {r : (List Nat × Nat) × Bool}, k + j = cons.size →
       e.balances.val.size = e.validators.val.size →
       Spec.stepLoop (Spec.consolidationStep ((e.validators.toList.map absValidator).map
           Spec.globalLocal) ne.toNat) (e.balances.toList.map UInt64.toNat, k)
@@ -217,14 +217,14 @@ include hp
 
 /-- The reference `process_pending_consolidations` equals Etheorem's.
 
-If the reference succeeds, Etheorem succeeds and the two results agree through `absEState`.
+If the reference succeeds, Etheorem succeeds and the two results agree through `toSpecState`.
 `hlen`: the state has one balance for each validator. -/
-theorem process_pending_consolidations_etheorem (e : EState) {s' : Spec.BeaconState}
+theorem process_pending_consolidations_etheorem (e : EtheoremState) {s' : Spec.BeaconState}
     (hlen : e.balances.val.size = e.validators.val.size)
-    (h : Spec.process_pending_consolidations p (absEState e) = .ok s') :
-    ∃ e' : EState,
+    (h : Spec.process_pending_consolidations p (toSpecState e) = .ok s') :
+    ∃ e' : EtheoremState,
       (EthCLSpecs.Gloas.processPendingConsolidations (StateTransition := GloasRun)).run
-          (pureState e) = .ok ((), pureState e') ∧ s' = absEState e' := by
+          (pureState e) = .ok ((), pureState e') ∧ s' = toSpecState e' := by
   rw [Spec.process_pending_consolidations_eq p _ (by simpa using hlen)] at h
   rw [get_current_epoch_eq hp] at h
   simp only [bind, Except.bind] at h
@@ -239,7 +239,7 @@ theorem process_pending_consolidations_etheorem (e : EState) {s' : Spec.BeaconSt
   simp only [pure, Except.pure, Except.ok.injEq] at h
   subst h
   rw [← hne'] at hr
-  have hcons : (absEState e).pending_consolidations.map
+  have hcons : (toSpecState e).pending_consolidations.map
       (fun c => (c.source_index, c.target_index)) =
       (e.pendingConsolidations.toArray.toList.drop 0).map consPair := by
     simp [consPair, absPendingConsolidation, SSZList.toArray, SSZList.toList]
@@ -256,7 +256,7 @@ theorem process_pending_consolidations_etheorem (e : EState) {s' : Spec.BeaconSt
     rw [pcLoop_eq, hrun, except_bind_ok]
     rfl
   · rw [← hB]
-    simp [absEState, sszDrop, SSZList.toList, List.map_drop]
+    simp [toSpecState, sszDrop, SSZList.toList, List.map_drop]
     rw [List.take_of_length_le (by simp)]
 
 end Main

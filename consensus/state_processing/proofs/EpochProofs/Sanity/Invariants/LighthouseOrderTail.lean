@@ -55,13 +55,13 @@ theorem runSteps_keeps (P : BeaconState → Prop) :
 `P`. -/
 theorem runSteps_swap [PresetCfg] (P : BeaconState → Prop) (pre post : List (BeaconState → SpecM BeaconState))
     (f g : BeaconState → SpecM BeaconState) (hpre : ∀ h ∈ pre, StepKeeps P h)
-    (hfg : ∀ s, P s → SameOk (f s >>= g) (g s >>= f)) (s : BeaconState) (hs : P s) :
-    SameOk (runSteps (pre ++ f :: g :: post) s) (runSteps (pre ++ g :: f :: post) s) := by
+    (hfg : ∀ s, P s → SameResultOrBothFail (f s >>= g) (g s >>= f)) (s : BeaconState) (hs : P s) :
+    SameResultOrBothFail (runSteps (pre ++ f :: g :: post) s) (runSteps (pre ++ g :: f :: post) s) := by
   rw [runSteps_append, runSteps_append]
-  refine SameOk.bind (SameOk.refl _) (fun u hu => ?_)
+  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun u hu => ?_)
   have hPu := runSteps_keeps P pre hpre s u hs hu
-  show SameOk (f u >>= fun v => g v >>= runSteps post) (g u >>= fun v => f v >>= runSteps post)
-  exact sameOk_swap_cont (hfg u hPu) (runSteps post)
+  show SameResultOrBothFail (f u >>= fun v => g v >>= runSteps post) (g u >>= fun v => f v >>= runSteps post)
+  exact sameResultOrBothFail_swap_cont (hfg u hPu) (runSteps post)
 
 /-! ## The steps as computed values and writes -/
 
@@ -235,9 +235,9 @@ theorem ptcNew_set [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s t : BeaconState) (
 
 /-- A step `X` swaps with the proposer lookahead and with the PTC window. -/
 structure SwapsWithCommittees [PresetCfg] (o : Oracle) (X : BeaconState → SpecM BeaconState) : Prop where
-  pl : ∀ s, SlotRoom s → SameOk (X s >>= process_proposer_lookahead P o)
+  pl : ∀ s, SlotRoom s → SameResultOrBothFail (X s >>= process_proposer_lookahead P o)
     (process_proposer_lookahead P o s >>= X)
-  ptc : ∀ s, SlotRoom s → SameOk (X s >>= process_ptc_window P o)
+  ptc : ∀ s, SlotRoom s → SameResultOrBothFail (X s >>= process_ptc_window P o)
     (process_ptc_window P o s >>= X)
 
 theorem eth1_swaps [PresetCfg] [PresetCfg.Ok] (o : Oracle) : SwapsWithCommittees o (process_eth1_data_reset P) where
@@ -362,7 +362,7 @@ def lhOrder [PresetCfg] (o : Oracle) : List (BeaconState → SpecM BeaconState) 
 
 /-- The two orders give the same `ok` results. -/
 theorem specOrder_lhOrder [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (hroom : SlotRoom s) :
-    SameOk (runSteps (specOrder o) s) (runSteps (lhOrder o) s) := by
+    SameResultOrBothFail (runSteps (specOrder o) s) (runSteps (lhOrder o) s) := by
   let e1 := process_eth1_data_reset P
   let sr := process_slashings_reset P
   let rr := process_randao_mixes_reset P
@@ -383,28 +383,28 @@ theorem specOrder_lhOrder [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconSta
     rcases hl f hf with rfl | rfl | rfl | rfl | rfl | rfl
     all_goals assumption
   -- Move the proposer lookahead to the front.
-  refine SameOk.trans (runSteps_swap SlotRoom [e1, sr, rr, hs, pfStep] [ptc] sc pl
+  refine SameResultOrBothFail.trans (runSteps_swap SlotRoom [e1, sr, rr, hs, pfStep] [ptc] sc pl
     (keep _ (by simp)) (sync_swaps o).pl s hroom) ?_
-  refine SameOk.trans (runSteps_swap SlotRoom [e1, sr, rr, hs] [sc, ptc] pfStep pl
+  refine SameResultOrBothFail.trans (runSteps_swap SlotRoom [e1, sr, rr, hs] [sc, ptc] pfStep pl
     (keep _ (by simp)) (participation_swaps o).pl s hroom) ?_
-  refine SameOk.trans (runSteps_swap SlotRoom [e1, sr, rr] [pfStep, sc, ptc] hs pl
+  refine SameResultOrBothFail.trans (runSteps_swap SlotRoom [e1, sr, rr] [pfStep, sc, ptc] hs pl
     (keep _ (by simp)) (historical_swaps o).pl s hroom) ?_
-  refine SameOk.trans (runSteps_swap SlotRoom [e1, sr] [hs, pfStep, sc, ptc] rr pl
+  refine SameResultOrBothFail.trans (runSteps_swap SlotRoom [e1, sr] [hs, pfStep, sc, ptc] rr pl
     (keep _ (by simp)) (randao_reset_swaps o).pl s hroom) ?_
-  refine SameOk.trans (runSteps_swap SlotRoom [e1] [rr, hs, pfStep, sc, ptc] sr pl
+  refine SameResultOrBothFail.trans (runSteps_swap SlotRoom [e1] [rr, hs, pfStep, sc, ptc] sr pl
     (keep _ (by simp)) (slashings_reset_swaps o).pl s hroom) ?_
-  refine SameOk.trans (runSteps_swap SlotRoom [] [sr, rr, hs, pfStep, sc, ptc] e1 pl
+  refine SameResultOrBothFail.trans (runSteps_swap SlotRoom [] [sr, rr, hs, pfStep, sc, ptc] e1 pl
     (keep _ (by simp)) (eth1_swaps o).pl s hroom) ?_
   -- Move the PTC window to the second place.
-  refine SameOk.trans (runSteps_swap SlotRoom [pl, e1, sr, rr, hs, pfStep] [] sc ptc
+  refine SameResultOrBothFail.trans (runSteps_swap SlotRoom [pl, e1, sr, rr, hs, pfStep] [] sc ptc
     (keep _ (by simp)) (sync_swaps o).ptc s hroom) ?_
-  refine SameOk.trans (runSteps_swap SlotRoom [pl, e1, sr, rr, hs] [sc] pfStep ptc
+  refine SameResultOrBothFail.trans (runSteps_swap SlotRoom [pl, e1, sr, rr, hs] [sc] pfStep ptc
     (keep _ (by simp)) (participation_swaps o).ptc s hroom) ?_
-  refine SameOk.trans (runSteps_swap SlotRoom [pl, e1, sr, rr] [pfStep, sc] hs ptc
+  refine SameResultOrBothFail.trans (runSteps_swap SlotRoom [pl, e1, sr, rr] [pfStep, sc] hs ptc
     (keep _ (by simp)) (historical_swaps o).ptc s hroom) ?_
-  refine SameOk.trans (runSteps_swap SlotRoom [pl, e1, sr] [hs, pfStep, sc] rr ptc
+  refine SameResultOrBothFail.trans (runSteps_swap SlotRoom [pl, e1, sr] [hs, pfStep, sc] rr ptc
     (keep _ (by simp)) (randao_reset_swaps o).ptc s hroom) ?_
-  refine SameOk.trans (runSteps_swap SlotRoom [pl, e1] [rr, hs, pfStep, sc] sr ptc
+  refine SameResultOrBothFail.trans (runSteps_swap SlotRoom [pl, e1] [rr, hs, pfStep, sc] sr ptc
     (keep _ (by simp)) (slashings_reset_swaps o).ptc s hroom) ?_
   exact runSteps_swap SlotRoom [pl] [sr, rr, hs, pfStep, sc] e1 ptc
     (keep _ (by simp)) (eth1_swaps o).ptc s hroom

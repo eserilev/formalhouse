@@ -21,7 +21,7 @@ namespace EpochProofs.Spec
 
 /-- `E::HistoricalRootsLimit`: the limit of `historical_summaries` in Lighthouse. It is the same
 on mainnet and minimal. -/
-def LH_HISTORICAL_ROOTS_LIMIT : Nat := 16777216
+def LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT : Nat := 16777216
 
 /-- `E::SlotsPerEth1VotingPeriod`: `EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH`. -/
 def LH_SLOTS_PER_ETH1_VOTING_PERIOD [PresetCfg] : Nat :=
@@ -51,12 +51,12 @@ def lhRandaoMixesReset [PresetCfg] (s : BeaconState) : SpecM BeaconState := do
     pure { s with randao_mixes := ← listSet s.randao_mixes target mix }
 
 /-- `process_historical_summaries_update` in `historical_summaries_update.rs`. The push fails
-when the list holds `LH_HISTORICAL_ROOTS_LIMIT` items. -/
+when the list holds `LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT` items. -/
 def lhHistoricalSummariesUpdate [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
   let next_epoch ← uint64Add (s.slot / P.SLOTS_PER_EPOCH) 1
   if ← historicalSummaryDue next_epoch P.SLOTS_PER_HISTORICAL_ROOT
       P.SLOTS_PER_EPOCH then
-    if s.historical_summaries.length < LH_HISTORICAL_ROOTS_LIMIT then
+    if s.historical_summaries.length < LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT then
       let historical_summary : HistoricalSummary := {
         block_summary_root := o.hash_tree_root_BlockRoots s.block_roots
         state_summary_root := o.hash_tree_root_StateRoots s.state_roots }
@@ -148,7 +148,7 @@ theorem lhRandaoMixesReset_eq [PresetCfg] [PresetCfg.Ok] (s : BeaconState)
 /-- Below the Lighthouse list limit, the Lighthouse historical summaries update is the spec
 update. -/
 theorem lhHistoricalSummariesUpdate_eq [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState)
-    (hroom : s.historical_summaries.length < LH_HISTORICAL_ROOTS_LIMIT) :
+    (hroom : s.historical_summaries.length < LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT) :
     lhHistoricalSummariesUpdate o s = process_historical_summaries_update P o s := by
   simp only [lhHistoricalSummariesUpdate, process_historical_summaries_update,
     historicalSummaryDue, get_current_epoch_mainnet]

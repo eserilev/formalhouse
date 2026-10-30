@@ -247,7 +247,7 @@ theorem topups_sum (S : BeaconState) (pairs : List (ValidatorIndex × Gwei))
     (hin : ∀ x ∈ pairs, x.1 < S.validators.length)
     (hlen : S.balances.length = S.validators.length)
     (hbs : ∀ i (h : i < S.balances.length), S.balances[i] < UINT64_SIZE) :
-    SameOk (pairs.foldlM (fun t x => increaseAt x.1 x.2 t) S)
+    SameResultOrBothFail (pairs.foldlM (fun t x => increaseAt x.1 x.2 t) S)
       (do
         let sums ← pairs.foldlM (fun acc x => increase_balance acc x.1 x.2)
           (List.replicate S.validators.length 0)
@@ -416,7 +416,7 @@ theorem increaseAt_validators {j : Nat} {a : Gwei} {T T' : BeaconState}
 /-- A balance increase at a validator with another pubkey commutes with a deposit. -/
 theorem increaseAt_apply_comm [PresetCfg] (o : Oracle) (d : PendingDeposit) (T : BeaconState) (j : Nat)
     (a : Gwei) (hP : ApplyOther j d T) :
-    SameOk (increaseAt j a T >>= fun t => apply_pending_deposit P o t d)
+    SameResultOrBothFail (increaseAt j a T >>= fun t => apply_pending_deposit P o t d)
       (apply_pending_deposit P o T d >>= increaseAt j a) := by
   intro v
   have hkeep : ∀ T', apply_pending_deposit P o T d = .ok T' →
@@ -456,8 +456,8 @@ theorem increaseAt_apply_comm [PresetCfg] (o : Oracle) (d : PendingDeposit) (T :
           simp only [increaseAt_char, hkeep T' hA, hb, hfit, if_false] at h
           cases h
 
-/-- `SameOk` is symmetric. -/
-theorem SameOk.flip {α : Type} {x y : SpecM α} (h : SameOk x y) : SameOk y x :=
+/-- `SameResultOrBothFail` is symmetric. -/
+theorem SameResultOrBothFail.flip {α : Type} {x y : SpecM α} (h : SameResultOrBothFail x y) : SameResultOrBothFail y x :=
   fun v => (h v).symm
 
 /-- Run a list of balance increases. -/
@@ -467,10 +467,10 @@ def topupsF (L : List (ValidatorIndex × Gwei)) (T : BeaconState) : SpecM Beacon
 /-- Balance increases at validators with other pubkeys commute with a deposit. -/
 theorem topups_apply_comm [PresetCfg] (o : Oracle) (d : PendingDeposit) :
     ∀ (L : List (ValidatorIndex × Gwei)) (T : BeaconState), (∀ x ∈ L, ApplyOther x.1 d T) →
-      SameOk (apply_pending_deposit P o T d >>= topupsF L)
+      SameResultOrBothFail (apply_pending_deposit P o T d >>= topupsF L)
         (topupsF L T >>= fun t => apply_pending_deposit P o t d)
   | [], T, _ => by
-    apply SameOk.of_eq
+    apply SameResultOrBothFail.of_eq
     exact bind_pure _
   | (j, a) :: L, T, hL => by
     have hcons : ∀ t, topupsF ((j, a) :: L) t = increaseAt j a t >>= topupsF L := by
@@ -478,11 +478,11 @@ theorem topups_apply_comm [PresetCfg] (o : Oracle) (d : PendingDeposit) :
     have hc : topupsF ((j, a) :: L) = fun t => increaseAt j a t >>= topupsF L := funext hcons
     rw [hc, bind_assoc (increaseAt j a T)]
     rw [← bind_assoc (apply_pending_deposit P o T d) (increaseAt j a)]
-    refine SameOk.trans (SameOk.bind
+    refine SameResultOrBothFail.trans (SameResultOrBothFail.bind
       (increaseAt_apply_comm o d T j a (hL (j, a) (by simp))).flip
-      (fun _ _ => SameOk.refl _)) ?_
+      (fun _ _ => SameResultOrBothFail.refl _)) ?_
     rw [bind_assoc]
-    refine SameOk.bind (SameOk.refl _) (fun t ht => ?_)
+    refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t ht => ?_)
     have hv := increaseAt_validators ht
     refine topups_apply_comm o d L t (fun x hx => ?_)
     have h := hL x (by simp [hx])
@@ -531,12 +531,12 @@ theorem increaseAt_valExt {S T T' : BeaconState} {j : Nat} {a : Gwei} (hT : ValE
 /-- The general split: from any state that extends `S`. -/
 theorem applyHandled_split_gen [PresetCfg] (o : Oracle) (S : BeaconState) :
     ∀ (handled : List (PendingDeposit × Bool)) (T : BeaconState), ValExt S T →
-      SameOk (applyHandled o T handled)
+      SameResultOrBothFail (applyHandled o T handled)
         (topupsF (knownTopups (S.validators.map (·.pubkey)) handled) T >>= fun t =>
           (newDeposits (S.validators.map (·.pubkey)) handled).foldlM
             (apply_pending_deposit P o) t)
   | [], T, _ => by
-    apply SameOk.of_eq
+    apply SameResultOrBothFail.of_eq
     simp [applyHandled, topupsF, knownTopups, newDeposits]
   | (d, pp) :: handled, T, hT => by
     have ih := applyHandled_split_gen o S handled
@@ -571,7 +571,7 @@ theorem applyHandled_split_gen [PresetCfg] (o : Oracle) (S : BeaconState) :
             increaseAt ((S.validators.map (·.pubkey)).idxOf d.pubkey) d.amount T >>=
               topupsF (knownTopups (S.validators.map (·.pubkey)) handled) := rfl
         rw [hc, bind_assoc]
-        exact SameOk.bind (SameOk.refl _) (fun T1 h1 => ih T1 (increaseAt_valExt hT h1))
+        exact SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun T1 h1 => ih T1 (increaseAt_valExt hT h1))
       · have hk : knownTopups (S.validators.map (·.pubkey)) ((d, false) :: handled) =
             knownTopups (S.validators.map (·.pubkey)) handled := by
           simp only [knownTopups, List.filter_cons, Bool.not_false, decide_eq_false hm,
@@ -581,7 +581,7 @@ theorem applyHandled_split_gen [PresetCfg] (o : Oracle) (S : BeaconState) :
           simp only [newDeposits, List.filter_cons, Bool.not_false, decide_eq_false hm,
             Bool.and_self, if_true, List.map_cons]
         rw [hk, hn]
-        refine SameOk.trans (SameOk.bind (SameOk.refl _)
+        refine SameResultOrBothFail.trans (SameResultOrBothFail.bind (SameResultOrBothFail.refl _)
           (fun T1 h1 => ih T1 (apply_pending_deposit_valExt o S T T1 d hT h1))) ?_
         rw [← bind_assoc]
         have hother : ∀ x ∈ knownTopups (S.validators.map (·.pubkey)) handled,
@@ -595,16 +595,16 @@ theorem applyHandled_split_gen [PresetCfg] (o : Oracle) (S : BeaconState) :
           have hlt := List.idxOf_lt_length_of_mem hy'
           rw [List.length_map] at hlt
           exact applyOther_of_new d S T hT hm _ hlt
-        refine SameOk.trans (SameOk.bind (topups_apply_comm o d _ T hother)
-          (fun _ _ => SameOk.refl _)) ?_
+        refine SameResultOrBothFail.trans (SameResultOrBothFail.bind (topups_apply_comm o d _ T hother)
+          (fun _ _ => SameResultOrBothFail.refl _)) ?_
         rw [bind_assoc]
-        exact SameOk.refl _
+        exact SameResultOrBothFail.refl _
 
 /-- The spec's deposits split into the top-ups of known validators, then the deposits for new
 pubkeys in order. -/
 theorem applyHandled_split [PresetCfg] (o : Oracle) (S : BeaconState)
     (handled : List (PendingDeposit × Bool)) :
-    SameOk (applyHandled o S handled)
+    SameResultOrBothFail (applyHandled o S handled)
       (do
         let t ← (knownTopups (S.validators.map (·.pubkey)) handled).foldlM
           (fun t x => increaseAt x.1 x.2 t) S

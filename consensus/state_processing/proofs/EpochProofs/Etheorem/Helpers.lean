@@ -1,4 +1,4 @@
-import EpochProofs.Etheorem.State
+import EpochProofs.Assumptions.Etheorem
 import EpochProofs.Spec.Epoch
 import EpochProofs.Sanity.RewardsBound
 import EpochProofs.Sanity.Invariants.BalanceFloor
@@ -300,65 +300,9 @@ section WithPreset
 
 variable [EthCLSpecs.Gloas.Preset] [EthCLSpecs.Gloas.Config]
 
-/-! ## The preset -/
+/-! ## Epochs and slots
 
-forkonly Gloas
-open EthCLSpecs.Gloas in
-/-- The Etheorem preset and config hold the values of `p`. Each field is one constant that a
-helper below reads. `presetAgrees_mainnet` and `presetAgrees_minimal` prove it for the two
-presets. -/
-structure PresetAgrees (p : Spec.Preset) : Prop where
-  slotsPerEpoch : Const.slotsPerEpoch = p.SLOTS_PER_EPOCH
-  effectiveBalanceIncrement : Const.effectiveBalanceIncrement = p.EFFECTIVE_BALANCE_INCREMENT
-  effectiveBalanceIncrementG : Const.effectiveBalanceIncrementG.toNat = p.EFFECTIVE_BALANCE_INCREMENT
-  baseRewardFactor : Const.baseRewardFactor = p.BASE_REWARD_FACTOR
-  maxSeedLookahead : Const.maxSeedLookahead.toNat = p.MAX_SEED_LOOKAHEAD
-  minSeedLookahead : Const.minSeedLookahead.toNat = p.MIN_SEED_LOOKAHEAD
-  epochsPerHistoricalVector : Const.epochsPerHistoricalVector = p.EPOCHS_PER_HISTORICAL_VECTOR
-  minPerEpochChurnLimitElectra :
-    Const.minPerEpochChurnLimitElectra.toNat = p.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA
-  churnLimitQuotientGloas : Const.churnLimitQuotientGloas.toNat = p.CHURN_LIMIT_QUOTIENT_GLOAS
-  maxPerEpochActivationChurnLimitGloas :
-    Const.maxPerEpochActivationChurnLimitGloas.toNat = p.MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS
-  consolidationChurnLimitQuotient :
-    Const.consolidationChurnLimitQuotient.toNat = p.CONSOLIDATION_CHURN_LIMIT_QUOTIENT
-  minValidatorWithdrawabilityDelay :
-    Const.minValidatorWithdrawabilityDelay.toNat = p.MIN_VALIDATOR_WITHDRAWABILITY_DELAY
-  validatorRegistryLimit : Const.validatorRegistryLimit < 2 ^ 64
-  genesisForkVersion : Const.genesisForkVersion = p.GENESIS_FORK_VERSION
-end forkonly
-
-forkonly Fulu
-open EthCLSpecs.Fulu in
-/-- The Etheorem preset and config hold the values of `p`. Each field is one constant that a
-helper below reads. `presetAgrees_mainnet` and `presetAgrees_minimal` prove it for the two
-presets. -/
-structure PresetAgrees (p : Spec.Preset) : Prop where
-  slotsPerEpoch : Const.slotsPerEpoch = p.SLOTS_PER_EPOCH
-  effectiveBalanceIncrement : Const.effectiveBalanceIncrement = p.EFFECTIVE_BALANCE_INCREMENT
-  effectiveBalanceIncrementG : Const.effectiveBalanceIncrementG.toNat = p.EFFECTIVE_BALANCE_INCREMENT
-  baseRewardFactor : Const.baseRewardFactor = p.BASE_REWARD_FACTOR
-  maxSeedLookahead : Const.maxSeedLookahead.toNat = p.MAX_SEED_LOOKAHEAD
-  minSeedLookahead : Const.minSeedLookahead.toNat = p.MIN_SEED_LOOKAHEAD
-  epochsPerHistoricalVector : Const.epochsPerHistoricalVector = p.EPOCHS_PER_HISTORICAL_VECTOR
-  minPerEpochChurnLimitElectra :
-    Const.minPerEpochChurnLimitElectra.toNat = p.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA
-  minValidatorWithdrawabilityDelay :
-    Const.minValidatorWithdrawabilityDelay.toNat = p.MIN_VALIDATOR_WITHDRAWABILITY_DELAY
-  validatorRegistryLimit : Const.validatorRegistryLimit < 2 ^ 64
-  genesisForkVersion : Const.genesisForkVersion = p.GENESIS_FORK_VERSION
-
-open EthCLSpecs.Fulu in
-/-- The Etheorem Fulu churn config holds the values of the Fulu config `f`, and `f` relates to
-`p` as `fuluTab` needs. Then the Fulu churn of a total is the Gloas churn at `fuluTab`. -/
-structure FuluChurnAgrees (p : Spec.Preset) (f : Spec.FuluConfig) : Prop where
-  compat : Spec.FuluCompat p f
-  churnLimitQuotient : Const.churnLimitQuotient.toNat = f.CHURN_LIMIT_QUOTIENT
-  maxPerEpochActivationExitChurnLimit :
-    Const.maxPerEpochActivationExitChurnLimit.toNat = f.MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT
-end forkonly
-
-/-! ## Epochs and slots -/
+The preset structures (`PresetAgrees` and the others) are in `Assumptions/Etheorem.lean`. -/
 
 section Epochs
 
@@ -380,13 +324,13 @@ theorem compute_epoch_at_slot_eq (slot : UInt64) :
 
 variable [HasherTag]
 
-theorem get_current_epoch_eq (e : EState) :
-    Spec.get_current_epoch p (absEState e) =
+theorem get_current_epoch_eq (e : EtheoremState) :
+    Spec.get_current_epoch p (toSpecState e) =
       .ok (EthCLSpecs.Gloas.currentEpochOf (pureState e)).toNat :=
   compute_epoch_at_slot_eq hp e.slot
 
-theorem get_previous_epoch_eq (e : EState) :
-    Spec.get_previous_epoch p (absEState e) =
+theorem get_previous_epoch_eq (e : EtheoremState) :
+    Spec.get_previous_epoch p (toSpecState e) =
       .ok (EthCLSpecs.Gloas.previousEpochOf (pureState e)).toNat := by
   unfold Spec.get_previous_epoch EthCLSpecs.Gloas.previousEpochOf
   rw [get_current_epoch_eq hp]
@@ -449,14 +393,14 @@ section Active
 variable {p : Spec.Preset} (hp : PresetAgrees p) [HasherTag]
 include hp
 
-theorem get_active_validator_indices_eq (e : EState) (epoch : UInt64) :
-    Spec.get_active_validator_indices (absEState e) epoch.toNat =
+theorem get_active_validator_indices_eq (e : EtheoremState) (epoch : UInt64) :
+    Spec.get_active_validator_indices (toSpecState e) epoch.toNat =
       (EthCLSpecs.Gloas.getActiveValidatorIndices (pureState e) epoch).toList.map
         UInt64.toNat := by
   have hsize : e.validators.val.size < 2 ^ 64 :=
     Nat.lt_of_le_of_lt e.validators.property hp.validatorRegistryLimit
   unfold Spec.get_active_validator_indices EthCLSpecs.Gloas.getActiveValidatorIndices
-  simp only [view_uncachedBox, absEState_validators, SSZList.toList, SSZList.toArray]
+  simp only [view_uncachedBox, toSpecState_validators, SSZList.toList, SSZList.toArray]
   rw [indicesWhere_toList, zipIdx_map_eq, List.filter_map, List.map_map, List.map_map]
   simp only [Function.comp_def]
   apply List.map_congr_left
@@ -509,11 +453,11 @@ section Balances
 variable {p : Spec.Preset} (hp : PresetAgrees p) [HasherTag]
 include hp
 
-theorem get_total_balance_ok (e : EState) (indices : Array UInt64) {n : Nat}
-    (h : Spec.get_total_balance p (absEState e) (indices.toList.map UInt64.toNat) = .ok n) :
+theorem get_total_balance_ok (e : EtheoremState) (indices : Array UInt64) {n : Nat}
+    (h : Spec.get_total_balance p (toSpecState e) (indices.toList.map UInt64.toNat) = .ok n) :
     (EthCLSpecs.Gloas.getTotalBalance (pureState e) indices).toNat = n := by
   unfold Spec.get_total_balance at h
-  simp only [absEState_validators, SSZList.toList] at h
+  simp only [toSpecState_validators, SSZList.toList] at h
   cases hm : (indices.toList.map UInt64.toNat).mapM (fun index => do
       pure (← Spec.listGet (e.validators.val.toList.map absValidator) index).effective_balance) with
   | error err => rw [hm] at h; cases h
@@ -551,22 +495,22 @@ variable {p : Spec.Preset} (hp : PresetAgrees p) [HasherTag]
 include hp
 
 /-- `get_total_active_balance` in Etheorem, as a `Nat`. -/
-abbrev etheoremTotalActiveBalance (e : EState) : Nat :=
+abbrev etheoremTotalActiveBalance (e : EtheoremState) : Nat :=
   (EthCLSpecs.Gloas.getTotalActiveBalance (pureState e)).toNat
 
-theorem get_total_active_balance_ok (e : EState) {n : Nat}
-    (h : Spec.get_total_active_balance p (absEState e) = .ok n) :
+theorem get_total_active_balance_ok (e : EtheoremState) {n : Nat}
+    (h : Spec.get_total_active_balance p (toSpecState e) = .ok n) :
     etheoremTotalActiveBalance e = n := by
   unfold Spec.get_total_active_balance at h
   rw [get_current_epoch_eq hp] at h
-  change Spec.get_total_balance p (absEState e)
-    (Spec.get_active_validator_indices (absEState e)
+  change Spec.get_total_balance p (toSpecState e)
+    (Spec.get_active_validator_indices (toSpecState e)
       (EthCLSpecs.Gloas.currentEpochOf (pureState e)).toNat) = .ok n at h
   rw [get_active_validator_indices_eq hp] at h
   exact get_total_balance_ok hp e _ h
 
 omit hp in
-theorem get_base_reward_per_increment_ok (e : EState) {n : Nat}
+theorem get_base_reward_per_increment_ok (e : EtheoremState) {n : Nat}
     (h : Spec.get_base_reward_per_increment p (etheoremTotalActiveBalance e) = .ok n)
     (hp : PresetAgrees p) :
     EthCLSpecs.Gloas.getBaseRewardPerIncrement (pureState e) = n := by
@@ -590,7 +534,7 @@ theorem get_base_reward_per_increment_ok (e : EState) {n : Nat}
     · rw [← hm']; exact (Except.ok.inj h)
 
 forkonly Gloas
-theorem get_exit_churn_limit_ok (e : EState) {n : Nat}
+theorem get_exit_churn_limit_ok (e : EtheoremState) {n : Nat}
     (h : Spec.get_exit_churn_limit p (etheoremTotalActiveBalance e) = .ok n) :
     (EthCLSpecs.Gloas.getExitChurnLimit (pureState e)).toNat = n := by
   unfold Spec.get_exit_churn_limit at h
@@ -614,7 +558,7 @@ theorem get_exit_churn_limit_ok (e : EState) {n : Nat}
       rw [← uint64Mod_ok hm] at h
       exact uint64Sub_ok h
 
-theorem get_activation_churn_limit_ok (e : EState) {n : Nat}
+theorem get_activation_churn_limit_ok (e : EtheoremState) {n : Nat}
     (h : Spec.get_activation_churn_limit p (etheoremTotalActiveBalance e) = .ok n) :
     (EthCLSpecs.Gloas.getActivationChurnLimit (pureState e)).toNat = n := by
   unfold Spec.get_activation_churn_limit at h
@@ -647,7 +591,7 @@ end forkonly
 
 forkonly Fulu
 theorem get_activation_exit_churn_limit_ok {f : Spec.FuluConfig} (hf : FuluChurnAgrees p f)
-    (e : EState) {n : Nat}
+    (e : EtheoremState) {n : Nat}
     (h : Spec.get_activation_exit_churn_limit p f (etheoremTotalActiveBalance e) = .ok n) :
     (EthCLSpecs.Fulu.getActivationExitChurnLimit (pureState e)).toNat = n := by
   unfold Spec.get_activation_exit_churn_limit Spec.get_balance_churn_limit at h
@@ -678,7 +622,7 @@ theorem get_activation_exit_churn_limit_ok {f : Spec.FuluConfig} (hf : FuluChurn
         rw [umin_toNat, hc, hf.maxPerEpochActivationExitChurnLimit, h]
 
 /-- The Gloas exit churn at `fuluTab` reads as Etheorem's Fulu churn. -/
-theorem get_exit_churn_limit_ok {f : Spec.FuluConfig} (hf : FuluChurnAgrees p f) (e : EState)
+theorem get_exit_churn_limit_ok {f : Spec.FuluConfig} (hf : FuluChurnAgrees p f) (e : EtheoremState)
     {n : Nat}
     (h : Spec.get_exit_churn_limit p (Spec.fuluTab p f (etheoremTotalActiveBalance e)) = .ok n) :
     (EthCLSpecs.Fulu.getActivationExitChurnLimit (pureState e)).toNat = n := by
@@ -687,7 +631,7 @@ theorem get_exit_churn_limit_ok {f : Spec.FuluConfig} (hf : FuluChurnAgrees p f)
 
 /-- The Gloas activation churn at `fuluTab` reads as Etheorem's Fulu churn. -/
 theorem get_activation_churn_limit_ok {f : Spec.FuluConfig} (hf : FuluChurnAgrees p f)
-    (e : EState) {n : Nat}
+    (e : EtheoremState) {n : Nat}
     (h : Spec.get_activation_churn_limit p (Spec.fuluTab p f (etheoremTotalActiveBalance e)) =
       .ok n) :
     (EthCLSpecs.Fulu.getActivationExitChurnLimit (pureState e)).toNat = n := by
@@ -708,7 +652,7 @@ open EthCLSpecs.Proofs.Gloas (GloasRun)
 omit [EthCLSpecs.Gloas.Config] in
 /-- `increase_balance` equals Etheorem's `increaseBalance`. Etheorem returns the written state
 as its value and leaves the threaded state alone. -/
-theorem increase_balance_etheorem (state preState : EState) (i : EthCLSpecs.Gloas.ValidatorIndex)
+theorem increase_balance_etheorem (state preState : EtheoremState) (i : EthCLSpecs.Gloas.ValidatorIndex)
     (delta : EthCLSpecs.Gloas.Gwei) {bs : List Nat}
     (h : Spec.increase_balance (state.balances.toList.map UInt64.toNat) i.toNat delta.toNat =
       .ok bs) :
@@ -756,7 +700,7 @@ theorem increase_balance_etheorem (state preState : EState) (i : EthCLSpecs.Gloa
 
 omit [EthCLSpecs.Gloas.Config] in
 /-- `decrease_balance` equals Etheorem's `decreaseBalance`. -/
-theorem decrease_balance_etheorem (state preState : EState) (i : EthCLSpecs.Gloas.ValidatorIndex)
+theorem decrease_balance_etheorem (state preState : EtheoremState) (i : EthCLSpecs.Gloas.ValidatorIndex)
     (delta : EthCLSpecs.Gloas.Gwei) {bs : List Nat}
     (h : Spec.decrease_balance (state.balances.toList.map UInt64.toNat) i.toNat delta.toNat =
       .ok bs) :
@@ -821,7 +765,7 @@ open EthCLSpecs.Proofs.Gloas (GloasRun)
 forkonly Gloas
 omit hp in
 /-- Etheorem's `computeExitEpochAndUpdateChurn` on a plain state, as one value. -/
-theorem computeExitEpochAndUpdateChurn_run (e : EState) (b : UInt64) :
+theorem computeExitEpochAndUpdateChurn_run (e : EtheoremState) (b : UInt64) :
     (EthCLSpecs.Gloas.computeExitEpochAndUpdateChurn (StateTransition := GloasRun) b).run
         (pureState e) =
       (let earliest := umax e.earliestExitEpoch
@@ -834,21 +778,21 @@ theorem computeExitEpochAndUpdateChurn_run (e : EState) (b : UInt64) :
 
 /-- `compute_exit_epoch_and_update_churn` equals Etheorem's. Both write the same two churn
 fields and return the same exit epoch. -/
-theorem compute_exit_epoch_and_update_churn_etheorem (e : EState) (b : UInt64) {ep : Nat}
+theorem compute_exit_epoch_and_update_churn_etheorem (e : EtheoremState) (b : UInt64) {ep : Nat}
     {s' : Spec.BeaconState}
-    (h : Spec.compute_exit_epoch_and_update_churn p (etheoremTotalActiveBalance e) (absEState e)
+    (h : Spec.compute_exit_epoch_and_update_churn p (etheoremTotalActiveBalance e) (toSpecState e)
       b.toNat = .ok (ep, s')) :
     ∃ ee ebtc : UInt64,
       (EthCLSpecs.Gloas.computeExitEpochAndUpdateChurn (StateTransition := GloasRun) b).run
           (pureState e) =
         .ok (ee, pureState { e with exitBalanceToConsume := ebtc, earliestExitEpoch := ee }) ∧
       ep = ee.toNat ∧
-      s' = absEState { e with exitBalanceToConsume := ebtc, earliestExitEpoch := ee } := by
+      s' = toSpecState { e with exitBalanceToConsume := ebtc, earliestExitEpoch := ee } := by
   rw [computeExitEpochAndUpdateChurn_run]
   unfold Spec.compute_exit_epoch_and_update_churn at h
   rw [get_current_epoch_eq hp] at h
-  simp only [bind, Except.bind, absEState_earliest_exit_epoch,
-    absEState_exit_balance_to_consume] at h
+  simp only [bind, Except.bind, toSpecState_earliest_exit_epoch,
+    toSpecState_exit_balance_to_consume] at h
   generalize hc : EthCLSpecs.Gloas.currentEpochOf (pureState e) = c at h
   have hc' : EthCLSpecs.Gloas.computeEpochAtSlot e.slot = c := hc
   rw [hc']
@@ -924,7 +868,7 @@ theorem compute_exit_epoch_and_update_churn_etheorem (e : EState) (b : UInt64) {
     rw [← hC''] at hf
     have hf' := uint64Sub_ok hf
     refine ⟨_, _, rfl, hE''.symm, ?_⟩
-    simp only [absEState]
+    simp only [toSpecState]
     rw [hf', hE'']
   · rename_i hle
     have hle' : ¬ b > C := fun h' => hle (UInt64.lt_iff_toNat_lt.mp h')
@@ -939,14 +883,14 @@ theorem compute_exit_epoch_and_update_churn_etheorem (e : EState) (b : UInt64) {
     obtain ⟨rfl, rfl⟩ := h
     have hf' := uint64Sub_ok hf
     refine ⟨_, _, rfl, by simp only [hEn], ?_⟩
-    simp only [absEState]
+    simp only [toSpecState]
     rw [hf', hEn]
 end forkonly
 
 forkonly Fulu
 omit hp in
 /-- Etheorem's `computeExitEpochAndUpdateChurn` on a plain state, as one value. -/
-theorem computeExitEpochAndUpdateChurn_run (e : EState) (b : UInt64) :
+theorem computeExitEpochAndUpdateChurn_run (e : EtheoremState) (b : UInt64) :
     (EthCLSpecs.Fulu.computeExitEpochAndUpdateChurn (StateTransition := FuluRun) b).run
         (pureState e) =
       (let earliest := umax e.earliestExitEpoch
@@ -960,20 +904,20 @@ theorem computeExitEpochAndUpdateChurn_run (e : EState) (b : UInt64) :
 /-- `compute_exit_epoch_and_update_churn` equals Etheorem's. Both write the same two churn
 fields and return the same exit epoch. -/
 theorem compute_exit_epoch_and_update_churn_etheorem {f : Spec.FuluConfig}
-    (hf : FuluChurnAgrees p f) (e : EState) (b : UInt64) {ep : Nat} {s' : Spec.BeaconState}
+    (hf : FuluChurnAgrees p f) (e : EtheoremState) (b : UInt64) {ep : Nat} {s' : Spec.BeaconState}
     (h : Spec.compute_exit_epoch_and_update_churn p (Spec.fuluTab p f (etheoremTotalActiveBalance e))
-      (absEState e) b.toNat = .ok (ep, s')) :
+      (toSpecState e) b.toNat = .ok (ep, s')) :
     ∃ ee ebtc : UInt64,
       (EthCLSpecs.Fulu.computeExitEpochAndUpdateChurn (StateTransition := FuluRun) b).run
           (pureState e) =
         .ok (ee, pureState { e with exitBalanceToConsume := ebtc, earliestExitEpoch := ee }) ∧
       ep = ee.toNat ∧
-      s' = absEState { e with exitBalanceToConsume := ebtc, earliestExitEpoch := ee } := by
+      s' = toSpecState { e with exitBalanceToConsume := ebtc, earliestExitEpoch := ee } := by
   rw [computeExitEpochAndUpdateChurn_run]
   unfold Spec.compute_exit_epoch_and_update_churn at h
   rw [get_current_epoch_eq hp] at h
-  simp only [bind, Except.bind, absEState_earliest_exit_epoch,
-    absEState_exit_balance_to_consume] at h
+  simp only [bind, Except.bind, toSpecState_earliest_exit_epoch,
+    toSpecState_exit_balance_to_consume] at h
   generalize hc : EthCLSpecs.Fulu.currentEpochOf (pureState e) = c at h
   have hc' : EthCLSpecs.Fulu.computeEpochAtSlot e.slot = c := hc
   rw [hc']
@@ -1049,7 +993,7 @@ theorem compute_exit_epoch_and_update_churn_etheorem {f : Spec.FuluConfig}
     rw [← hC''] at hf
     have hf' := uint64Sub_ok hf
     refine ⟨_, _, rfl, hE''.symm, ?_⟩
-    simp only [absEState]
+    simp only [toSpecState]
     rw [hf', hE'']
   · rename_i hle
     have hle' : ¬ b > C := fun h' => hle (UInt64.lt_iff_toNat_lt.mp h')
@@ -1064,7 +1008,7 @@ theorem compute_exit_epoch_and_update_churn_etheorem {f : Spec.FuluConfig}
     obtain ⟨rfl, rfl⟩ := h
     have hf' := uint64Sub_ok hf
     refine ⟨_, _, rfl, by simp only [hEn], ?_⟩
-    simp only [absEState]
+    simp only [toSpecState]
     rw [hf', hEn]
 end forkonly
 
@@ -1079,18 +1023,18 @@ theorem checkedAdd_run_ok {σ : Type} (a b : UInt64) (d : String) (st : σ)
 
 forkonly Gloas
 /-- `initiate_validator_exit` equals Etheorem's `initiateValidatorExit`. -/
-theorem initiate_validator_exit_etheorem (e : EState) (i : UInt64) {s' : Spec.BeaconState}
-    (h : Spec.initiate_validator_exit p (etheoremTotalActiveBalance e) (absEState e) i.toNat =
+theorem initiate_validator_exit_etheorem (e : EtheoremState) (i : UInt64) {s' : Spec.BeaconState}
+    (h : Spec.initiate_validator_exit p (etheoremTotalActiveBalance e) (toSpecState e) i.toNat =
       .ok s') :
-    ∃ e' : EState,
+    ∃ e' : EtheoremState,
       (EthCLSpecs.Gloas.initiateValidatorExit (StateTransition := GloasRun) i).run (pureState e) =
-        .ok ((), pureState e') ∧ s' = absEState e' := by
+        .ok ((), pureState e') ∧ s' = toSpecState e' := by
   unfold Spec.initiate_validator_exit at h
   simp only [bind, Except.bind] at h
   split at h
   · cases h
   next v hv =>
-  rw [absEState_validators] at hv
+  rw [toSpecState_validators] at hv
   obtain ⟨hi, rfl⟩ := listGet_map_ok e.validators.val absValidator i.toNat hv
   have hsome : e.validators.val[i.toNat]? = some e.validators.val[i.toNat]! := by simp [hi]
   unfold EthCLSpecs.Gloas.initiateValidatorExit
@@ -1157,28 +1101,28 @@ theorem initiate_validator_exit_etheorem (e : EState) (i : UInt64) {s' : Spec.Be
     subst hs1
     unfold Spec.listSet at hvs
     have hlen : i.toNat <
-        (absEState { e with exitBalanceToConsume := ebtc, earliestExitEpoch := ee }).validators.length := by
+        (toSpecState { e with exitBalanceToConsume := ebtc, earliestExitEpoch := ee }).validators.length := by
       simpa using hi
     rw [if_pos hlen] at hvs
     cases hvs
-    simp only [absEState, map_toList_set!, sszList_getElem!_val, absValidator, hep, ← hw']
+    simp only [toSpecState, map_toList_set!, sszList_getElem!_val, absValidator, hep, ← hw']
 end forkonly
 
 forkonly Fulu
 /-- `initiate_validator_exit` equals Etheorem's `initiateValidatorExit`. -/
 theorem initiate_validator_exit_etheorem {f : Spec.FuluConfig} (hf : FuluChurnAgrees p f)
-    (e : EState) (i : UInt64) {s' : Spec.BeaconState}
+    (e : EtheoremState) (i : UInt64) {s' : Spec.BeaconState}
     (h : Spec.initiate_validator_exit p (Spec.fuluTab p f (etheoremTotalActiveBalance e))
-      (absEState e) i.toNat = .ok s') :
-    ∃ e' : EState,
+      (toSpecState e) i.toNat = .ok s') :
+    ∃ e' : EtheoremState,
       (EthCLSpecs.Fulu.initiateValidatorExit (StateTransition := FuluRun) i).run (pureState e) =
-        .ok ((), pureState e') ∧ s' = absEState e' := by
+        .ok ((), pureState e') ∧ s' = toSpecState e' := by
   unfold Spec.initiate_validator_exit at h
   simp only [bind, Except.bind] at h
   split at h
   · cases h
   next v hv =>
-  rw [absEState_validators] at hv
+  rw [toSpecState_validators] at hv
   obtain ⟨hi, rfl⟩ := listGet_map_ok e.validators.val absValidator i.toNat hv
   have hsome : e.validators.val[i.toNat]? = some e.validators.val[i.toNat]! := by simp [hi]
   unfold EthCLSpecs.Fulu.initiateValidatorExit
@@ -1245,11 +1189,11 @@ theorem initiate_validator_exit_etheorem {f : Spec.FuluConfig} (hf : FuluChurnAg
     subst hs1
     unfold Spec.listSet at hvs
     have hlen : i.toNat <
-        (absEState { e with exitBalanceToConsume := ebtc, earliestExitEpoch := ee }).validators.length := by
+        (toSpecState { e with exitBalanceToConsume := ebtc, earliestExitEpoch := ee }).validators.length := by
       simpa using hi
     rw [if_pos hlen] at hvs
     cases hvs
-    simp only [absEState, map_toList_set!, sszList_getElem!_val, absValidator, hep, ← hw']
+    simp only [toSpecState, map_toList_set!, sszList_getElem!_val, absValidator, hep, ← hw']
 end forkonly
 
 end Exits

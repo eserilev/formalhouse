@@ -31,12 +31,12 @@ def inactivityScoresE (matchingTarget : Array UInt64) (leak : Bool) (l : List UI
   l.foldl (fun s vi => s.set! vi.toNat (inactivityScoreE matchingTarget leak vi s[vi.toNat]!)) s
 
 /-- One iteration of Etheorem's inactivity loop. -/
-def inactivityStepE (mt : Array UInt64) (leak : Bool) (w : EState) (vi : UInt64) : EState :=
+def inactivityStepE (mt : Array UInt64) (leak : Bool) (w : EtheoremState) (vi : UInt64) : EtheoremState :=
   { w with inactivityScores :=
       w.inactivityScores.set! vi.toNat (inactivityScoreE mt leak vi w.inactivityScores[vi.toNat]!) }
 
 omit [HasherTag] in
-theorem foldl_inactivityStepE (mt : Array UInt64) (leak : Bool) : ∀ (l : List UInt64) (w : EState),
+theorem foldl_inactivityStepE (mt : Array UInt64) (leak : Bool) : ∀ (l : List UInt64) (w : EtheoremState),
     l.foldl (fun w a => inactivityStepE mt leak w a) w =
       { w with inactivityScores := inactivityScoresE mt leak l w.inactivityScores } := by
   intro l
@@ -45,7 +45,7 @@ theorem foldl_inactivityStepE (mt : Array UInt64) (leak : Bool) : ∀ (l : List 
   | cons a l ih => intro w; rw [List.foldl_cons, ih]; rfl
 
 /-- The state after Etheorem's `process_inactivity_updates`. -/
-def inactivityUpdatesE (e : EState) : EState :=
+def inactivityUpdatesE (e : EtheoremState) : EtheoremState :=
   if EthCLSpecs.Gloas.currentEpochOf (pureState e) == EthCLSpecs.Gloas.Const.genesisEpoch then e
   else
     let mt := eUnslashed e EthCLSpecs.Gloas.Const.timelyTargetFlagIndex
@@ -55,7 +55,7 @@ def inactivityUpdatesE (e : EState) : EState :=
     { e with inactivityScores := inactivityScoresE mt leak eligible e.inactivityScores }
 
 /-- Etheorem's `processInactivityUpdates` at the genesis epoch leaves the state. -/
-theorem processInactivityUpdates_run_genesis (e : EState)
+theorem processInactivityUpdates_run_genesis (e : EtheoremState)
     (h : (EthCLSpecs.Gloas.currentEpochOf (pureState e) == EthCLSpecs.Gloas.Const.genesisEpoch) = true) :
     (EthCLSpecs.Gloas.processInactivityUpdates (StateTransition := GloasRun)).run (pureState e) =
       .ok ((), pureState (inactivityUpdatesE e)) := by
@@ -69,12 +69,12 @@ omit [EthCLSpecs.Gloas.Config] in
 /-- A loop over a list on the plain state that runs in step with a reference fold. `R` relates the
 reference value to the Etheorem state. Each step that the reference takes, Etheorem takes as
 `G`. -/
-theorem forIn_run_foldlM {α σ : Type} (R : σ → EState → Prop) (specStep : σ → α → Spec.SpecM σ)
-    (body : α → PUnit → GloasRun (ForInStep PUnit)) (G : EState → α → EState)
+theorem forIn_run_foldlM {α σ : Type} (R : σ → EtheoremState → Prop) (specStep : σ → α → Spec.SpecM σ)
+    (body : α → PUnit → GloasRun (ForInStep PUnit)) (G : EtheoremState → α → EtheoremState)
     (hstep : ∀ a x w x', R x w → specStep x a = .ok x' →
       (body a PUnit.unit).run (pureState w) = .ok (.yield PUnit.unit, pureState (G w a)) ∧
         R x' (G w a)) :
-    ∀ (l : List α) (x : σ) (w : EState) {r : σ}, R x w → l.foldlM specStep x = .ok r →
+    ∀ (l : List α) (x : σ) (w : EtheoremState) {r : σ}, R x w → l.foldlM specStep x = .ok r →
       (forIn l PUnit.unit body).run (pureState w) = .ok (PUnit.unit, pureState (l.foldl G w)) ∧
         R r (l.foldl G w) := by
   intro l
@@ -159,7 +159,7 @@ theorem inactivityScoreStep_ok (mt : Array UInt64) (leak : Bool) (vi cur : UInt6
 omit [HasherTag] in
 /-- One reference step of the inactivity loop reads the score in bounds and adds
 `INACTIVITY_SCORE_BIAS` without overflow. These are the read and the sum that Etheorem checks. -/
-theorem inactivity_step_facts (mt : Array UInt64) (leak : Bool) (vi : UInt64) (w : EState)
+theorem inactivity_step_facts (mt : Array UInt64) (leak : Bool) (vi : UInt64) (w : EtheoremState)
     {R1 : List Nat}
     (hstep : Spec.inactivityLoopStep p (mt.toList.map UInt64.toNat) leak
       (w.inactivityScores.toList.map UInt64.toNat) vi.toNat = .ok R1) :
@@ -241,11 +241,11 @@ theorem inactivity_fold (mt : Array UInt64) (leak : Bool) :
     exact ih _ h
 
 /-- `process_inactivity_updates` equals Etheorem's. -/
-theorem inactivity_updates_etheorem (e : EState) {s' : Spec.BeaconState}
-    (h : Spec.process_inactivity_updates p (absEState e) = .ok s') :
+theorem inactivity_updates_etheorem (e : EtheoremState) {s' : Spec.BeaconState}
+    (h : Spec.process_inactivity_updates p (toSpecState e) = .ok s') :
     (EthCLSpecs.Gloas.processInactivityUpdates (StateTransition := GloasRun)).run (pureState e) =
         .ok ((), pureState (inactivityUpdatesE e)) ∧
-      s' = absEState (inactivityUpdatesE e) := by
+      s' = toSpecState (inactivityUpdatesE e) := by
   have hp := hpp.toPresetAgrees
   have hcur := get_current_epoch_eq hp e
   by_cases hg : (EthCLSpecs.Gloas.currentEpochOf (pureState e) ==
@@ -327,7 +327,7 @@ theorem inactivity_updates_etheorem (e : EState) {s' : Spec.BeaconState}
         rw [hR]
         unfold inactivityUpdatesE
         rw [if_neg hg]
-    cases helig : Spec.get_eligible_validator_indices p (absEState e) with
+    cases helig : Spec.get_eligible_validator_indices p (toSpecState e) with
     | error err =>
       unfold Spec.process_inactivity_updates at h
       simp [hcur, bind, Except.bind, hg', helig, pure, Except.pure] at h
@@ -359,7 +359,7 @@ theorem inactivity_updates_etheorem (e : EState) {s' : Spec.BeaconState}
     rw [hel'] at hel
     subst hel
     have hprev := get_previous_epoch_eq hp e
-    cases hpart : Spec.get_unslashed_participating_indices p (absEState e)
+    cases hpart : Spec.get_unslashed_participating_indices p (toSpecState e)
         Spec.TIMELY_TARGET_FLAG_INDEX (EthCLSpecs.Gloas.previousEpochOf (pureState e)).toNat with
     | error err =>
       exfalso
@@ -368,7 +368,7 @@ theorem inactivity_updates_etheorem (e : EState) {s' : Spec.BeaconState}
           false := by simpa using hg'
       simp [hcur, hgb, helig, hprev, hpart, bind, Except.bind, pure, Except.pure] at h
     | ok part =>
-    cases hleak : Spec.is_in_inactivity_leak p (absEState e) with
+    cases hleak : Spec.is_in_inactivity_leak p (toSpecState e) with
     | error err =>
       exfalso
       unfold Spec.process_inactivity_updates at h
@@ -403,7 +403,7 @@ theorem inactivity_updates_etheorem (e : EState) {s' : Spec.BeaconState}
         (Spec.inactivityLoopStep p
           ((eUnslashed e 1 (EthCLSpecs.Gloas.previousEpochOf (pureState e))).toList.map UInt64.toNat)
           (EthCLSpecs.Gloas.isInInactivityLeak (pureState e)))
-        (absEState e).inactivity_scores with
+        (toSpecState e).inactivity_scores with
     | error err => rw [hf] at h; cases h
     | ok R =>
     rw [hf] at h

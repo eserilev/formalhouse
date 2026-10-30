@@ -443,9 +443,9 @@ theorem BoundaryOk.of_justification [PresetCfg] {s s' : BeaconState} (hb : Bound
 
 /-! ## Any epoch function that agrees on `BoundaryOk` states -/
 
-/-- `SameOk` goes through a bind. -/
-theorem sameOk_bind [PresetCfg] {α β : Type} {x y : SpecM α} {k k' : α → SpecM β} (hxy : SameOk x y)
-    (hk : ∀ a, y = .ok a → SameOk (k a) (k' a)) : SameOk (x >>= k) (y >>= k') := by
+/-- `SameResultOrBothFail` goes through a bind. -/
+theorem sameResultOrBothFail_bind [PresetCfg] {α β : Type} {x y : SpecM α} {k k' : α → SpecM β} (hxy : SameResultOrBothFail x y)
+    (hk : ∀ a, y = .ok a → SameResultOrBothFail (k a) (k' a)) : SameResultOrBothFail (x >>= k) (y >>= k') := by
   intro v
   cases hy : y with
   | error e =>
@@ -463,7 +463,7 @@ theorem sameOk_bind [PresetCfg] {α β : Type} {x y : SpecM α} {k k' : α → S
 /-- The `process_slots` loop with an epoch function `f` has the same `ok` results as the loop
 with the real `process_epoch`, if `f` has the same `ok` results on states with `C`, and `P`
 gives `C` before each `process_epoch`. -/
-theorem process_slots_loop_sameOk [PresetCfg] (p : Preset) (o : Oracle) (slot : Slot)
+theorem process_slots_loop_sameResultOrBothFail [PresetCfg] (p : Preset) (o : Oracle) (slot : Slot)
     (P Q C : BeaconState → Prop)
     (hslot : ∀ s s', process_slot p o s = .ok s' → s.slot < slot → P s → P s')
     (hepoch : ∀ s s', s.slot < slot → (s.slot + 1) % p.SLOTS_PER_EPOCH = 0 →
@@ -473,42 +473,42 @@ theorem process_slots_loop_sameOk [PresetCfg] (p : Preset) (o : Oracle) (slot : 
       P { s with slot := s.slot + 1 })
     (hbump : ∀ s, s.slot < slot → (s.slot + 1) % p.SLOTS_PER_EPOCH ≠ 0 → P s →
       P { s with slot := s.slot + 1 })
-    (f : BeaconState → SpecM BeaconState) (hf : ∀ s, C s → SameOk (f s) (process_epoch p o s)) :
+    (f : BeaconState → SpecM BeaconState) (hf : ∀ s, C s → SameResultOrBothFail (f s) (process_epoch p o s)) :
     ∀ fuel st, P st →
-      SameOk (process_slots_loop p o f slot fuel st)
+      SameResultOrBothFail (process_slots_loop p o f slot fuel st)
         (process_slots_loop p o (process_epoch p o) slot fuel st) := by
   intro fuel
   induction fuel with
-  | zero => intro st _; exact SameOk.refl _
+  | zero => intro st _; exact SameResultOrBothFail.refl _
   | succ n ih =>
     intro st hP
     by_cases hlt : st.slot < slot
     · simp only [process_slots_loop, hlt, if_true]
-      refine sameOk_bind (SameOk.refl _) fun s1 h1 => ?_
+      refine sameResultOrBothFail_bind (SameResultOrBothFail.refl _) fun s1 h1 => ?_
       have hs1 := (process_slot_frame p o _ _ h1).2
       have hP1 := hslot _ _ h1 hlt hP
       have hlt1 : s1.slot < slot := hs1 ▸ hlt
-      refine sameOk_bind (SameOk.refl _) fun a ha => ?_
-      refine sameOk_bind (SameOk.refl _) fun m hm => ?_
+      refine sameResultOrBothFail_bind (SameResultOrBothFail.refl _) fun a ha => ?_
+      refine sameResultOrBothFail_bind (SameResultOrBothFail.refl _) fun m hm => ?_
       have hm' : m = (s1.slot + 1) % p.SLOTS_PER_EPOCH := by
         rw [← uint64Add_ok ha]; exact uint64Mod_ok'' hm
       by_cases hz : (m == 0) = true
       · have hz' : (s1.slot + 1) % p.SLOTS_PER_EPOCH = 0 := by rw [← hm']; simpa using hz
         rw [if_pos hz, if_pos hz]
-        refine sameOk_bind (hf s1 (hcheck s1 hlt1 hz' hP1)) fun s2 h2 => ?_
-        refine sameOk_bind (SameOk.refl _) fun c hc => ?_
+        refine sameResultOrBothFail_bind (hf s1 (hcheck s1 hlt1 hz' hP1)) fun s2 h2 => ?_
+        refine sameResultOrBothFail_bind (SameResultOrBothFail.refl _) fun c hc => ?_
         rw [uint64Add_ok hc]
         exact ih _ (hbump_epoch s2 ((process_epoch_slot p o _ _ h2) ▸ hz')
           (hepoch _ _ hlt1 hz' h2 hP1))
       · have hz' : (s1.slot + 1) % p.SLOTS_PER_EPOCH ≠ 0 := by rw [← hm']; simpa using hz
         rw [if_neg hz, if_neg hz]
-        refine sameOk_bind (SameOk.refl _) fun s2 h2 => ?_
+        refine sameResultOrBothFail_bind (SameResultOrBothFail.refl _) fun s2 h2 => ?_
         cases h2
-        refine sameOk_bind (SameOk.refl _) fun c hc => ?_
+        refine sameResultOrBothFail_bind (SameResultOrBothFail.refl _) fun c hc => ?_
         rw [uint64Add_ok hc]
         exact ih _ (hbump s1 hlt1 hz' hP1)
     · simp only [process_slots_loop, hlt, if_false]
-      exact SameOk.refl _
+      exact SameResultOrBothFail.refl _
 
 /-- `state_transition` with an epoch function `f` in place of `process_epoch`. -/
 def state_transition_with [PresetCfg] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
@@ -528,35 +528,35 @@ def state_transition_with [PresetCfg] (o : Oracle) (max_blobs_per_block : Epoch 
 the same `ok` results as `process_epoch` on states with `BoundaryOk` has the same `ok` results
 as `state_transition`. So a Lighthouse epoch function that matches the spec on `BoundaryOk`
 states matches it on every reachable run. -/
-theorem reachable_state_transition_sameOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem reachable_state_transition_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
     (hffg : FfgInvariant P init) (hrows : RowsOk init)
     (hd : ExitDelay P init) (hx : ExitEpochsU64 init)
     (h0 : AfterEB P init)
     (hsupply : SupplyBound o max_blobs_per_block GLOAS_FORK_EPOCH init)
     (f : BeaconState → SpecM BeaconState)
-    (hf : ∀ t, BoundaryOk t → SameOk (f t) (process_epoch P o t))
+    (hf : ∀ t, BoundaryOk t → SameResultOrBothFail (f t) (process_epoch P o t))
     (s : BeaconState) (hr : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (hslot64 : signed_block.message.slot < 2 ^ 64) :
-    SameOk (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH f s signed_block
+    SameResultOrBothFail (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH f s signed_block
         validate_result)
       (state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
         validate_result) := by
   have hs := reachable_inv o _ _ init hffg hrows hd hx h0 hsupply s hr
-  have hslots : SameOk (process_slots P o f s signed_block.message.slot)
+  have hslots : SameResultOrBothFail (process_slots P o f s signed_block.message.slot)
       (process_slots P o (process_epoch P o) s
         signed_block.message.slot) := by
     unfold process_slots
     simp only [bind, Except.bind, pure, Except.pure]
     split
-    · exact SameOk.refl _
+    · exact SameResultOrBothFail.refl _
     · have h := loopInv_steps o _ s.slot hslot64
-      exact process_slots_loop_sameOk _ o _ (LoopInv s.slot) (PostEpoch s.slot) BoundaryOk
+      exact process_slots_loop_sameResultOrBothFail _ o _ (LoopInv s.slot) (PostEpoch s.slot) BoundaryOk
         h.1 h.2.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2 f hf _ s hs
   unfold state_transition_with state_transition
   dsimp only
-  exact sameOk_bind hslots fun _ _ => SameOk.refl _
+  exact sameResultOrBothFail_bind hslots fun _ _ => SameResultOrBothFail.refl _
 
 /-! ## Epoch inputs with the economic facts -/
 
@@ -586,7 +586,7 @@ def EpochEcon [PresetCfg] (o : Oracle) (max_blobs_per_block : Epoch → Uint64) 
 with the real `process_epoch`. `P` holds at each loop state, `M` after `process_slot`, and `Q`
 after `process_epoch`. `M` gives the check `C`, and `f` has the same `ok` results as
 `process_epoch` on states with `C`. -/
-theorem process_slots_loop_sameOk' [PresetCfg] (p : Preset) (o : Oracle) (slot : Slot)
+theorem process_slots_loop_sameResultOrBothFail' [PresetCfg] (p : Preset) (o : Oracle) (slot : Slot)
     (P M Q C : BeaconState → Prop)
     (hslot : ∀ s s', process_slot p o s = .ok s' → s.slot < slot → P s → M s')
     (hepoch : ∀ s s', s.slot < slot → (s.slot + 1) % p.SLOTS_PER_EPOCH = 0 →
@@ -596,42 +596,42 @@ theorem process_slots_loop_sameOk' [PresetCfg] (p : Preset) (o : Oracle) (slot :
       P { s with slot := s.slot + 1 })
     (hbump : ∀ s, s.slot < slot → (s.slot + 1) % p.SLOTS_PER_EPOCH ≠ 0 → M s →
       P { s with slot := s.slot + 1 })
-    (f : BeaconState → SpecM BeaconState) (hf : ∀ s, C s → SameOk (f s) (process_epoch p o s)) :
+    (f : BeaconState → SpecM BeaconState) (hf : ∀ s, C s → SameResultOrBothFail (f s) (process_epoch p o s)) :
     ∀ fuel st, P st →
-      SameOk (process_slots_loop p o f slot fuel st)
+      SameResultOrBothFail (process_slots_loop p o f slot fuel st)
         (process_slots_loop p o (process_epoch p o) slot fuel st) := by
   intro fuel
   induction fuel with
-  | zero => intro st _; exact SameOk.refl _
+  | zero => intro st _; exact SameResultOrBothFail.refl _
   | succ n ih =>
     intro st hP
     by_cases hlt : st.slot < slot
     · simp only [process_slots_loop, hlt, if_true]
-      refine sameOk_bind (SameOk.refl _) fun s1 h1 => ?_
+      refine sameResultOrBothFail_bind (SameResultOrBothFail.refl _) fun s1 h1 => ?_
       have hs1 := (process_slot_frame p o _ _ h1).2
       have hM1 := hslot _ _ h1 hlt hP
       have hlt1 : s1.slot < slot := hs1 ▸ hlt
-      refine sameOk_bind (SameOk.refl _) fun a ha => ?_
-      refine sameOk_bind (SameOk.refl _) fun m hm => ?_
+      refine sameResultOrBothFail_bind (SameResultOrBothFail.refl _) fun a ha => ?_
+      refine sameResultOrBothFail_bind (SameResultOrBothFail.refl _) fun m hm => ?_
       have hm' : m = (s1.slot + 1) % p.SLOTS_PER_EPOCH := by
         rw [← uint64Add_ok ha]; exact uint64Mod_ok'' hm
       by_cases hz : (m == 0) = true
       · have hz' : (s1.slot + 1) % p.SLOTS_PER_EPOCH = 0 := by rw [← hm']; simpa using hz
         rw [if_pos hz, if_pos hz]
-        refine sameOk_bind (hf s1 (hcheck s1 hlt1 hz' hM1)) fun s2 h2 => ?_
-        refine sameOk_bind (SameOk.refl _) fun c hc => ?_
+        refine sameResultOrBothFail_bind (hf s1 (hcheck s1 hlt1 hz' hM1)) fun s2 h2 => ?_
+        refine sameResultOrBothFail_bind (SameResultOrBothFail.refl _) fun c hc => ?_
         rw [uint64Add_ok hc]
         exact ih _ (hbump_epoch s2 ((process_epoch_slot p o _ _ h2) ▸ hz')
           (hepoch _ _ hlt1 hz' h2 hM1))
       · have hz' : (s1.slot + 1) % p.SLOTS_PER_EPOCH ≠ 0 := by rw [← hm']; simpa using hz
         rw [if_neg hz, if_neg hz]
-        refine sameOk_bind (SameOk.refl _) fun s2 h2 => ?_
+        refine sameResultOrBothFail_bind (SameResultOrBothFail.refl _) fun s2 h2 => ?_
         cases h2
-        refine sameOk_bind (SameOk.refl _) fun c hc => ?_
+        refine sameResultOrBothFail_bind (SameResultOrBothFail.refl _) fun c hc => ?_
         rw [uint64Add_ok hc]
         exact ih _ (hbump s1 hlt1 hz' hM1)
     · simp only [process_slots_loop, hlt, if_false]
-      exact SameOk.refl _
+      exact SameResultOrBothFail.refl _
 
 /-- The facts at each `process_epoch` input of a reachable run: `BoundaryOk`, a `u64` slot,
 `EBOk`, `ExitEpochsU64` and the economic facts `Econ`. -/
@@ -642,7 +642,7 @@ def EpochInputOk [PresetCfg] (Econ : BeaconState → Prop) (t : BeaconState) : P
 same `ok` results as `state_transition`, if `f` has the same `ok` results as `process_epoch`
 on every state with `EpochInputOk Econ`, and `Econ` holds at every `process_epoch` input of
 the run (`EpochEcon`). -/
-theorem reachable_state_transition_sameOk' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem reachable_state_transition_sameResultOrBothFail' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
     (hffg : FfgInvariant P init) (hrows : RowsOk init)
     (hd : ExitDelay P init) (hx : ExitEpochsU64 init)
@@ -651,24 +651,24 @@ theorem reachable_state_transition_sameOk' [PresetCfg] [PresetCfg.Ok] (o : Oracl
     (Econ : BeaconState → Prop)
     (hecon : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH init Econ)
     (f : BeaconState → SpecM BeaconState)
-    (hf : ∀ t, EpochInputOk Econ t → SameOk (f t) (process_epoch P o t))
+    (hf : ∀ t, EpochInputOk Econ t → SameResultOrBothFail (f t) (process_epoch P o t))
     (s : BeaconState) (hr : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (hslot64 : signed_block.message.slot < 2 ^ 64) :
-    SameOk (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH f s signed_block
+    SameResultOrBothFail (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH f s signed_block
         validate_result)
       (state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
         validate_result) := by
   have hs := reachable_inv o _ _ init hffg hrows hd hx h0 hsupply s hr
-  have hslots : SameOk (process_slots P o f s signed_block.message.slot)
+  have hslots : SameResultOrBothFail (process_slots P o f s signed_block.message.slot)
       (process_slots P o (process_epoch P o) s
         signed_block.message.slot) := by
     unfold process_slots
     simp only [bind, Except.bind, pure, Except.pure]
     split
-    · exact SameOk.refl _
+    · exact SameResultOrBothFail.refl _
     · have h := loopInv_steps o signed_block.message.slot s.slot hslot64
-      refine process_slots_loop_sameOk' _ o _
+      refine process_slots_loop_sameResultOrBothFail' _ o _
         (fun t => LoopInv s.slot t ∧ SlotReach o s t)
         (fun t => LoopInv s.slot t ∧ ∃ t0, SlotReach o s t0 ∧
           process_slot P o t0 = .ok t)
@@ -696,7 +696,7 @@ theorem reachable_state_transition_sameOk' [PresetCfg] [PresetCfg.Ok] (o : Oracl
         exact ⟨h.2.2.2.2 t hlt hz hinv, .skip h0' ht0 hz⟩
   unfold state_transition_with state_transition
   dsimp only
-  exact sameOk_bind hslots fun _ _ => SameOk.refl _
+  exact sameResultOrBothFail_bind hslots fun _ _ => SameResultOrBothFail.refl _
 
 /-! ## Unique pubkeys and in-range consolidations -/
 
@@ -736,9 +736,9 @@ consolidations. -/
 def EpochInputOk' [PresetCfg] [PresetCfg.Ok] (Econ : BeaconState → Prop) (t : BeaconState) : Prop :=
   EpochInputOk Econ t ∧ PubkeysUnique t ∧ ConsolidationsInRange t
 
-/-- `reachable_state_transition_sameOk'` for an epoch function `f` that needs, in addition,
+/-- `reachable_state_transition_sameResultOrBothFail'` for an epoch function `f` that needs, in addition,
 unique pubkeys and in-range pending consolidations at its input. The start state has them. -/
-theorem reachable_state_transition_sameOk'' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem reachable_state_transition_sameResultOrBothFail'' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
     (hffg : FfgInvariant P init) (hrows : RowsOk init)
     (hd : ExitDelay P init) (hx : ExitEpochsU64 init)
@@ -748,11 +748,11 @@ theorem reachable_state_transition_sameOk'' [PresetCfg] [PresetCfg.Ok] (o : Orac
     (Econ : BeaconState → Prop)
     (hecon : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH init Econ)
     (f : BeaconState → SpecM BeaconState)
-    (hf : ∀ t, EpochInputOk' Econ t → SameOk (f t) (process_epoch P o t))
+    (hf : ∀ t, EpochInputOk' Econ t → SameResultOrBothFail (f t) (process_epoch P o t))
     (s : BeaconState) (hr : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (hslot64 : signed_block.message.slot < 2 ^ 64) :
-    SameOk (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH f s signed_block
+    SameResultOrBothFail (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH f s signed_block
         validate_result)
       (state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
         validate_result) := by
@@ -763,7 +763,7 @@ theorem reachable_state_transition_sameOk'' [PresetCfg] [PresetCfg.Ok] (o : Orac
     exact ⟨hecon s' t t1 hr' hreach ht hz,
       (PkSame.of_eq (process_slot_frame _ o _ _ ht).1.1).pubkeysUnique htail.1,
       (process_slot_cstep _ o _ _ ht).inRange htail.2⟩
-  exact reachable_state_transition_sameOk' o _ _ init hffg hrows hd hx h0 hsupply _ hecon' f
+  exact reachable_state_transition_sameResultOrBothFail' o _ _ init hffg hrows hd hx h0 hsupply _ hecon' f
     (fun t ⟨hb, hslot, heb, hex, hec, hp, hc⟩ => hf t ⟨⟨hb, hslot, heb, hex, hec⟩, hp, hc⟩)
     s hr signed_block validate_result hslot64
 
@@ -800,10 +800,10 @@ theorem SlotReach.withdrawable [PresetCfg] {o : Oracle} {s t : BeaconState} (hr 
 def EpochInputOk'' [PresetCfg] [PresetCfg.Ok] (Econ : BeaconState → Prop) (t : BeaconState) : Prop :=
   EpochInputOk' Econ t ∧ WithdrawableU64 t ∧ WithdrawableValid t
 
-/-- `reachable_state_transition_sameOk''` for an epoch function `f` that needs, in addition,
+/-- `reachable_state_transition_sameResultOrBothFail''` for an epoch function `f` that needs, in addition,
 `u64` withdrawable epochs and `WithdrawableValid` at its input. The start state has
 `WithdrawableU64`. -/
-theorem reachable_state_transition_sameOk''' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem reachable_state_transition_sameResultOrBothFail''' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
     (hffg : FfgInvariant P init) (hrows : RowsOk init)
     (hd : ExitDelay P init) (hx : ExitEpochsU64 init)
@@ -813,11 +813,11 @@ theorem reachable_state_transition_sameOk''' [PresetCfg] [PresetCfg.Ok] (o : Ora
     (Econ : BeaconState → Prop)
     (hecon : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH init Econ)
     (f : BeaconState → SpecM BeaconState)
-    (hf : ∀ t, EpochInputOk'' Econ t → SameOk (f t) (process_epoch P o t))
+    (hf : ∀ t, EpochInputOk'' Econ t → SameResultOrBothFail (f t) (process_epoch P o t))
     (s : BeaconState) (hr : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (hslot64 : signed_block.message.slot < 2 ^ 64) :
-    SameOk (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH f s signed_block
+    SameResultOrBothFail (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH f s signed_block
         validate_result)
       (state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
         validate_result) := by
@@ -832,7 +832,7 @@ theorem reachable_state_transition_sameOk''' [PresetCfg] [PresetCfg.Ok] (o : Ora
     have h1 := ExitDelay.of_validators_eq hv hwd.1
     have h2 := WithdrawableU64.of_validators_eq hv hwd.2
     exact ⟨hecon s' t t1 hr' hreach ht hz, h2, withdrawableValid_of h1 h2⟩
-  exact reachable_state_transition_sameOk'' o _ _ init hffg hrows hd hx h0 hpk hcr hsupply _
+  exact reachable_state_transition_sameResultOrBothFail'' o _ _ init hffg hrows hd hx h0 hpk hcr hsupply _
     hecon' f
     (fun t ⟨⟨hb, hslot, heb, hex, hec, hwu, hwv⟩, hp, hc⟩ =>
       hf t ⟨⟨⟨hb, hslot, heb, hex, hec⟩, hp, hc⟩, hwu, hwv⟩)

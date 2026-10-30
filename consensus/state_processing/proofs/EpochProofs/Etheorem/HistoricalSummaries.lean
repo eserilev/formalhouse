@@ -20,10 +20,10 @@ open EthCLSpecs.Proofs.Gloas (GloasRun)
 variable [EthCLSpecs.Gloas.Preset] [HasherTag]
 
 /-- The summary that Etheorem appends. -/
-def etheoremSummary (e : EState) : EthCLSpecs.Gloas.HistoricalSummary :=
+def etheoremSummary (e : EtheoremState) : EthCLSpecs.Gloas.HistoricalSummary :=
   { blockSummaryRoot := htr e.blockRoots, stateSummaryRoot := htr e.stateRoots }
 
-theorem processHistoricalSummariesUpdate_run (e : EState) :
+theorem processHistoricalSummariesUpdate_run (e : EtheoremState) :
     (EthCLSpecs.Gloas.processHistoricalSummariesUpdate (StateTransition := GloasRun)).run
         (pureState e) =
       .ok ((), pureState (if (EthCLSpecs.Gloas.computeEpochAtSlot e.slot + 1) %
@@ -55,12 +55,12 @@ variable [EthCLSpecs.Gloas.Config] [CryptoBackend]
 
 `hcap`: the list is below Etheorem's alpha.11 limit `HISTORICAL_ROOTS_LIMIT` (F6). -/
 theorem historical_summaries_update_etheorem {p : Spec.Preset} (hp : PresetAgrees p)
-    (ht : TailPresetAgrees p) {o : Spec.Oracle} (ho : OracleAgrees o) (e : EState)
+    (ht : TailPresetAgrees p) {o : Spec.Oracle} (ho : OracleAgrees o) (e : EtheoremState)
     (hcap : e.historicalSummaries.val.size < EthCLSpecs.Gloas.Const.historicalRootsLimit)
     {s' : Spec.BeaconState}
-    (h : Spec.process_historical_summaries_update p o (absEState e) = .ok s') :
+    (h : Spec.process_historical_summaries_update p o (toSpecState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processHistoricalSummariesUpdate (StateTransition := GloasRun)).run
-        (pureState e) = .ok ((), pureState e') ∧ absEState e' = s' := by
+        (pureState e) = .ok ((), pureState e') ∧ toSpecState e' = s' := by
   refine ⟨_, processHistoricalSummariesUpdate_run e, ?_⟩
   have hlt := EthCLSpecs.Gloas.Const.slotsPerHistoricalRootLt
   have hper : (UInt64.ofNat (EthCLSpecs.Gloas.Const.slotsPerHistoricalRoot /
@@ -101,8 +101,8 @@ theorem historical_summaries_update_etheorem {p : Spec.Preset} (hp : PresetAgree
         by_cases h0 : r = 0
         · rw [if_pos (by rw [uint64_eq_zero_iff, hr, h0])]
           simp only [h0, beq_self_eq_true, if_true, Except.ok.injEq] at h
-          rw [← h, absEState_set_historicalSummaries, sszList_push_toList _ _ hcap, List.map_append]
-          simp only [absEState_historical_summaries, absEState_block_roots, absEState_state_roots,
+          rw [← h, toSpecState_set_historicalSummaries, sszList_push_toList _ _ hcap, List.map_append]
+          simp only [toSpecState_historical_summaries, toSpecState_block_roots, toSpecState_state_roots,
             ho.blockRoots, ho.stateRoots, rootsVector_toList]
           rfl
         · rw [if_neg (by rw [uint64_eq_zero_iff, hr]; exact h0)]

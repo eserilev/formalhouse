@@ -101,15 +101,9 @@ theorem findIdx_pubkey (vs : SSZList EthCLSpecs.Gloas.Validator
   show vs.val.findIdx? _ = _
   rw [← List.findIdx?_toArray]
 
-/-- The registry lists of a state have the same length. -/
-def LensEq (e : EState) : Prop :=
-  e.balances.val.size = e.validators.val.size ∧
-    e.previousEpochParticipation.val.size = e.validators.val.size ∧
-    e.currentEpochParticipation.val.size = e.validators.val.size ∧
-    e.inactivityScores.val.size = e.validators.val.size
 
 /-- `e'` is `e` with new registry lists. -/
-def RegistryWrite (e e' : EState) : Prop :=
+def RegistryWrite (e e' : EtheoremState) : Prop :=
   ∃ V B P1 P2 I, e' = { e with
     validators := V
     balances := B
@@ -118,11 +112,11 @@ def RegistryWrite (e e' : EState) : Prop :=
     inactivityScores := I }
 
 omit [EthCLSpecs.Gloas.Config] [HasherTag] [CryptoBackend] in
-theorem RegistryWrite.refl (e : EState) : RegistryWrite e e :=
+theorem RegistryWrite.refl (e : EtheoremState) : RegistryWrite e e :=
   ⟨_, _, _, _, _, rfl⟩
 
 omit [EthCLSpecs.Gloas.Config] [HasherTag] [CryptoBackend] in
-theorem RegistryWrite.trans {e1 e2 e3 : EState} (h12 : RegistryWrite e1 e2)
+theorem RegistryWrite.trans {e1 e2 e3 : EtheoremState} (h12 : RegistryWrite e1 e2)
     (h23 : RegistryWrite e2 e3) : RegistryWrite e1 e3 := by
   obtain ⟨_, _, _, _, _, rfl⟩ := h12
   obtain ⟨V, B, P1, P2, I, rfl⟩ := h23
@@ -183,20 +177,20 @@ theorem push_size {α : Type} {cap : Nat} (xs : SSZList α cap) (x : α) (h : xs
   simp [SSZList.push, h]
 
 omit [CryptoBackend] in
-theorem add_validator_to_registry_etheorem (e : EState) (pk : Spec.BLSPubkey) (wc : Spec.Bytes32)
+theorem add_validator_to_registry_etheorem (e : EtheoremState) (pk : Spec.BLSPubkey) (wc : Spec.Bytes32)
     (amount : UInt64) {s' : Spec.BeaconState} (hlens : LensEq e)
     (hroom : e.validators.val.size < EthCLSpecs.Gloas.Const.validatorRegistryLimit)
-    (h : Spec.add_validator_to_registry p (absEState e) pk wc amount.toNat = .ok s') :
+    (h : Spec.add_validator_to_registry p (toSpecState e) pk wc amount.toNat = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.addValidatorToRegistry (StateTransition := GloasRun) pk wc
-        amount).run (pureState e) = .ok ((), pureState e') ∧ s' = absEState e' ∧
+        amount).run (pureState e) = .ok ((), pureState e') ∧ s' = toSpecState e' ∧
       RegistryWrite e e' ∧ LensEq e' ∧ e'.validators.val.size = e.validators.val.size + 1 := by
   obtain ⟨hb, hp1, hp2, hi⟩ := hlens
   unfold Spec.add_validator_to_registry Spec.get_index_for_new_validator at h
   obtain ⟨v', hv', h⟩ := Spec.specM_bind_ok h
   rw [get_validator_from_deposit_ok hp hq pk wc amount hv'] at h
-  simp only [Spec.set_or_append_list, absEState_validators, absEState_balances,
-    absEState_previous_epoch_participation, absEState_current_epoch_participation,
-    absEState_inactivity_scores, List.length_map, SSZList.toList, Array.length_toList, hb, hp1, hp2,
+  simp only [Spec.set_or_append_list, toSpecState_validators, toSpecState_balances,
+    toSpecState_previous_epoch_participation, toSpecState_current_epoch_participation,
+    toSpecState_inactivity_scores, List.length_map, SSZList.toList, Array.length_toList, hb, hp1, hp2,
     hi, beq_self_eq_true, if_true, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
   subst h
   refine ⟨{ e with
@@ -205,7 +199,7 @@ theorem add_validator_to_registry_etheorem (e : EState) (pk : Spec.BLSPubkey) (w
     previousEpochParticipation := e.previousEpochParticipation.push 0
     currentEpochParticipation := e.currentEpochParticipation.push 0
     inactivityScores := e.inactivityScores.push 0 }, rfl, ?_, ⟨_, _, _, _, _, rfl⟩, ?_, ?_⟩
-  · simp only [absEState]
+  · simp only [toSpecState]
     rw [push_toList _ _ hroom, push_toList _ _ (by omega), push_toList _ _ (by omega),
       push_toList _ _ (by omega), push_toList _ _ (by omega)]
     simp [SSZList.toList]
@@ -213,17 +207,17 @@ theorem add_validator_to_registry_etheorem (e : EState) (pk : Spec.BLSPubkey) (w
       rw [push_size _ _ hroom] <;> first | rw [push_size _ _ (by omega)]; omega
   · exact push_size _ _ hroom
 
-theorem apply_pending_deposit_etheorem (o : Spec.Oracle) (ho : OracleAgrees o) (e : EState)
+theorem apply_pending_deposit_etheorem (o : Spec.Oracle) (ho : OracleAgrees o) (e : EtheoremState)
     (d : EthCLSpecs.Gloas.PendingDeposit) {s' : Spec.BeaconState} (hlens : LensEq e)
     (hroom : e.validators.val.size < EthCLSpecs.Gloas.Const.validatorRegistryLimit)
-    (h : Spec.apply_pending_deposit p o (absEState e) (absPendingDeposit d) = .ok s') :
+    (h : Spec.apply_pending_deposit p o (toSpecState e) (absPendingDeposit d) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.applyPendingDeposit (StateTransition := GloasRun) d).run
-        (pureState e) = .ok ((), pureState e') ∧ s' = absEState e' ∧
+        (pureState e) = .ok ((), pureState e') ∧ s' = toSpecState e' ∧
       RegistryWrite e e' ∧ LensEq e' ∧ e'.validators.val.size ≤ e.validators.val.size + 1 := by
   unfold Spec.apply_pending_deposit at h
   unfold EthCLSpecs.Gloas.applyPendingDeposit EthCLSpecs.Gloas.validatorIndexByPubkey?
   simp only [run_bind, run_get_gloas, except_bind_ok, view_uncachedBox, findIdx_pubkey]
-  simp only [absEState_validators, absPendingDeposit] at h
+  simp only [toSpecState_validators, absPendingDeposit] at h
   by_cases hm : d.pubkey ∈ (e.validators.toList.map absValidator).map (·.pubkey)
   · simp only [hm, not_true_eq_false, if_false, if_true] at h ⊢
     obtain ⟨bs, hbs, h⟩ := Spec.specM_bind_ok h
@@ -260,7 +254,7 @@ theorem apply_pending_deposit_etheorem (o : Spec.Oracle) (ho : OracleAgrees o) (
 end Deposit
 
 /-- Whether the validator of a deposit is withdrawn and whether it has exited. -/
-def ppdStatus (v : EState) (deposit : EthCLSpecs.Gloas.PendingDeposit) (nextEpoch : UInt64) :
+def ppdStatus (v : EtheoremState) (deposit : EthCLSpecs.Gloas.PendingDeposit) (nextEpoch : UInt64) :
     Bool × Bool :=
   match v.validators.findIdx? (·.pubkey == deposit.pubkey) with
   | some vi =>
@@ -337,21 +331,21 @@ theorem process_pending_deposits_eqP (q : Spec.Preset)
   rfl
 
 /-- The reference loop state `acc` and the Etheorem scan `sc` on state `e` agree. -/
-structure DepRel (e0 : EState) (acc : Spec.DepAcc) (sc : EthCLSpecs.Gloas.DepositScan)
-    (e : EState) : Prop where
+structure DepRel (e0 : EtheoremState) (acc : Spec.DepAcc) (sc : EthCLSpecs.Gloas.DepositScan)
+    (e : EtheoremState) : Prop where
   postpone : acc.1 = sc.postpone.toList.map absPendingDeposit
   churn : acc.2.1 = sc.churnReached
   ndi : acc.2.2.1 = sc.ndi
   processed : acc.2.2.2.1 = sc.processed.toNat
-  state : acc.2.2.2.2 = absEState e
+  state : acc.2.2.2.2 = toSpecState e
   lens : LensEq e
   write : RegistryWrite e0 e
   size : e.validators.val.size ≤ e0.validators.val.size + sc.ndi
   postpone_le : sc.postpone.size ≤ sc.ndi
 
 /-- How one reference loop step and one Etheorem `ppdStep` agree. -/
-def StepOut (e0 : EState) (n k : Nat) (res : ForInStep Spec.DepAcc)
-    (st : Step EthCLSpecs.Gloas.DepositScan EthCLSpecs.Gloas.DepositScan) (e' : EState) : Prop :=
+def StepOut (e0 : EtheoremState) (n k : Nat) (res : ForInStep Spec.DepAcc)
+    (st : Step EthCLSpecs.Gloas.DepositScan EthCLSpecs.Gloas.DepositScan) (e' : EtheoremState) : Prop :=
   match res, st with
   | .done racc, .done sc' => DepRel e0 racc sc' e' ∧ sc'.ndi ≤ n
   | .yield acc', .next sc' => DepRel e0 acc' sc' e' ∧ sc'.ndi = k + 1 ∧ sc'.churnReached = false
@@ -362,12 +356,12 @@ omit [EthCLSpecs.Gloas.Config] [HasherTag] [CryptoBackend] in
 theorem depBody_status (q : Spec.Preset)
     (apd : Spec.BeaconState → Spec.PendingDeposit → Spec.SpecM Spec.BeaconState)
     (avail fs : Nat) (neU : UInt64) (d : EthCLSpecs.Gloas.PendingDeposit) (acc : Spec.DepAcc)
-    (e : EState) (hstate : acc.2.2.2.2 = absEState e)
+    (e : EtheoremState) (hstate : acc.2.2.2.2 = toSpecState e)
     (hs : ¬ (absPendingDeposit d).slot > fs) (hm : ¬ acc.2.2.1 ≥ q.MAX_PENDING_DEPOSITS_PER_EPOCH) :
     depBodyP q apd fs avail neU.toNat (absPendingDeposit d) acc =
       depContP apd avail (absPendingDeposit d) acc (ppdStatus e d neU).2 (ppdStatus e d neU).1 := by
   unfold depBodyP ppdStatus
-  rw [if_neg hs, if_neg hm, hstate, absEState_validators, findIdx_pubkey]
+  rw [if_neg hs, if_neg hm, hstate, toSpecState_validators, findIdx_pubkey]
   simp only [absPendingDeposit]
   by_cases hin : d.pubkey ∈ (e.validators.toList.map absValidator).map (·.pubkey)
   · rw [if_pos hin, if_pos hin]
@@ -391,7 +385,7 @@ theorem depBody_status (q : Spec.Preset)
   · rw [if_neg hin, if_neg hin]
 
 forkonly Gloas
-theorem processPendingDeposits_run (e e' : EState)
+theorem processPendingDeposits_run (e e' : EtheoremState)
     (sc : EthCLSpecs.Gloas.DepositScan)
     (hloop : (fuelLoop (e.pendingDeposits.toArray.size + 1) {} {}
       (ppdStep e.pendingDeposits.toArray
@@ -414,7 +408,7 @@ theorem processPendingDeposits_run (e e' : EState)
 end forkonly
 
 forkonly Fulu
-theorem processPendingDeposits_run (e e' : EState)
+theorem processPendingDeposits_run (e e' : EtheoremState)
     (sc : EthCLSpecs.Fulu.DepositScan)
     (hloop : (fuelLoop (e.pendingDeposits.toArray.size + 1) {} {}
       (ppdStep e.pendingDeposits.toArray
@@ -443,7 +437,7 @@ include hp hq
 forkonly Gloas
 theorem ppdStep_ok (o : Spec.Oracle) (ho : OracleAgrees o)
     (deposits : Array EthCLSpecs.Gloas.PendingDeposit) (fsU availU neU : UInt64)
-    (e0 e : EState) (k : Nat) (hk : k < deposits.size) (acc : Spec.DepAcc)
+    (e0 e : EtheoremState) (k : Nat) (hk : k < deposits.size) (acc : Spec.DepAcc)
     (sc : EthCLSpecs.Gloas.DepositScan) (hrel : DepRel e0 acc sc e) (hndi : sc.ndi = k)
     (hch : sc.churnReached = false)
     (hroom : e0.validators.val.size + EthCLSpecs.Gloas.Const.maxPendingDepositsPerEpoch ≤
@@ -540,10 +534,10 @@ theorem ppdStep_ok (o : Spec.Oracle) (ho : OracleAgrees o)
     · dsimp only; omega
 
 theorem ppdLoop_fuel (o : Spec.Oracle) (ho : OracleAgrees o)
-    (deposits : Array EthCLSpecs.Gloas.PendingDeposit) (fsU availU neU : UInt64) (e0 : EState)
+    (deposits : Array EthCLSpecs.Gloas.PendingDeposit) (fsU availU neU : UInt64) (e0 : EtheoremState)
     (hroom : e0.validators.val.size + EthCLSpecs.Gloas.Const.maxPendingDepositsPerEpoch ≤
       EthCLSpecs.Gloas.Const.validatorRegistryLimit) :
-    ∀ (j k : Nat) (acc : Spec.DepAcc) (sc : EthCLSpecs.Gloas.DepositScan) (e : EState)
+    ∀ (j k : Nat) (acc : Spec.DepAcc) (sc : EthCLSpecs.Gloas.DepositScan) (e : EtheoremState)
       {racc : Spec.DepAcc}, k + j = deposits.size → DepRel e0 acc sc e → sc.ndi = k →
       sc.churnReached = false →
       forIn ((deposits.toList.drop k).map absPendingDeposit) acc
@@ -591,16 +585,16 @@ theorem ppdLoop_fuel (o : Spec.Oracle) (ho : OracleAgrees o)
         exact ih (k + 1) acc' sc' e1 (by omega) hrel1 hndi1 hch1 h
 
 /-- The reference `process_pending_deposits` equals Etheorem's. -/
-theorem process_pending_deposits_etheorem (o : Spec.Oracle) (ho : OracleAgrees o) (e : EState)
+theorem process_pending_deposits_etheorem (o : Spec.Oracle) (ho : OracleAgrees o) (e : EtheoremState)
     {tab : Nat} {s' : Spec.BeaconState}
-    (htab : Spec.get_total_active_balance p (absEState e) = .ok tab) (hlens : LensEq e)
+    (htab : Spec.get_total_active_balance p (toSpecState e) = .ok tab) (hlens : LensEq e)
     (hroom : e.validators.val.size + EthCLSpecs.Gloas.Const.maxPendingDepositsPerEpoch ≤
       EthCLSpecs.Gloas.Const.validatorRegistryLimit)
-    (h : Spec.process_pending_deposits p tab (Spec.apply_pending_deposit p o) (absEState e) =
+    (h : Spec.process_pending_deposits p tab (Spec.apply_pending_deposit p o) (toSpecState e) =
       .ok s') :
-    ∃ e' : EState,
+    ∃ e' : EtheoremState,
       (EthCLSpecs.Gloas.processPendingDeposits (StateTransition := GloasRun)).run (pureState e) =
-        .ok ((), pureState e') ∧ s' = absEState e' := by
+        .ok ((), pureState e') ∧ s' = toSpecState e' := by
   have htab' := get_total_active_balance_ok hp e htab
   rw [process_pending_deposits_eqP] at h
   rw [get_current_epoch_eq hp] at h
@@ -613,17 +607,17 @@ theorem process_pending_deposits_etheorem (o : Spec.Oracle) (ho : OracleAgrees o
   rw [← htab'] at hcl
   have hcl' := get_activation_churn_limit_ok hp e hcl
   obtain ⟨av, hav, h⟩ := Spec.specM_bind_ok h
-  rw [absEState_deposit_balance_to_consume, ← hcl'] at hav
+  rw [toSpecState_deposit_balance_to_consume, ← hcl'] at hav
   have hav' := uint64Add_ok hav
   obtain ⟨fs, hfs, h⟩ := Spec.specM_bind_ok h
   have hfs' := compute_start_slot_at_epoch_ok hp _ hfs
   obtain ⟨racc, hloop, h⟩ := Spec.specM_bind_ok h
   generalize hdeps : e.pendingDeposits.toArray = deposits
-  have hpd : (absEState e).pending_deposits = (deposits.toList.drop 0).map absPendingDeposit := by
+  have hpd : (toSpecState e).pending_deposits = (deposits.toList.drop 0).map absPendingDeposit := by
     simp [← hdeps, SSZList.toArray, SSZList.toList]
   rw [hpd, ← hne', ← hav', ← hfs'] at hloop
   have hsize : deposits.size = e.pendingDeposits.val.size := by rw [← hdeps]
-  have hrel0 : DepRel e ⟨[], false, 0, 0, absEState e⟩ {} e :=
+  have hrel0 : DepRel e ⟨[], false, 0, 0, toSpecState e⟩ {} e :=
     ⟨rfl, rfl, rfl, rfl, rfl, hlens, .refl e, by simp, by simp⟩
   obtain ⟨sc, e1, hrun, hrel, hndi⟩ := ppdLoop_fuel hp hq o ho deposits _ _ _ e hroom
     deposits.size 0 _ {} e (by omega) hrel0 rfl rfl hloop
@@ -640,11 +634,11 @@ theorem process_pending_deposits_etheorem (o : Spec.Oracle) (ho : OracleAgrees o
   refine ⟨_, hrun', ?_⟩
   unfold Spec.depFinish at h
   rw [hstate] at h
-  have hpend : (absEState e1).pending_deposits.drop racc.2.2.1 ++ racc.1 = ((sszOfArray (e.pendingDeposits.toArray.extract sc.ndi
+  have hpend : (toSpecState e1).pending_deposits.drop racc.2.2.1 ++ racc.1 = ((sszOfArray (e.pendingDeposits.toArray.extract sc.ndi
           e.pendingDeposits.toArray.size ++ sc.postpone) : SSZList _
             EthCLSpecs.Gloas.Const.pendingDepositsLimit).toList.map absPendingDeposit) := by
     simp only [sszOfArray, harr, dif_pos, SSZList.toList, Array.toList_append, List.map_append,
-      hpost, hn, absEState_pending_deposits, he1pd]
+      hpost, hn, toSpecState_pending_deposits, he1pd]
     simp [SSZList.toArray, Array.toList_extract, List.map_drop]
     rw [List.take_of_length_le (by simp)]
   by_cases hc : sc.churnReached = true
@@ -670,7 +664,7 @@ end forkonly
 forkonly Fulu
 theorem ppdStep_ok (o : Spec.Oracle) (ho : OracleAgrees o)
     (deposits : Array EthCLSpecs.Fulu.PendingDeposit) (fsU availU neU : UInt64)
-    (e0 e : EState) (k : Nat) (hk : k < deposits.size) (acc : Spec.DepAcc)
+    (e0 e : EtheoremState) (k : Nat) (hk : k < deposits.size) (acc : Spec.DepAcc)
     (sc : EthCLSpecs.Fulu.DepositScan) (hrel : DepRel e0 acc sc e) (hndi : sc.ndi = k)
     (hch : sc.churnReached = false)
     (hroom : e0.validators.val.size + deposits.size ≤ EthCLSpecs.Fulu.Const.validatorRegistryLimit)
@@ -766,9 +760,9 @@ theorem ppdStep_ok (o : Spec.Oracle) (ho : OracleAgrees o)
     · dsimp only; omega
 
 theorem ppdLoop_fuel (o : Spec.Oracle) (ho : OracleAgrees o)
-    (deposits : Array EthCLSpecs.Fulu.PendingDeposit) (fsU availU neU : UInt64) (e0 : EState)
+    (deposits : Array EthCLSpecs.Fulu.PendingDeposit) (fsU availU neU : UInt64) (e0 : EtheoremState)
     (hroom : e0.validators.val.size + deposits.size ≤ EthCLSpecs.Fulu.Const.validatorRegistryLimit) :
-    ∀ (j k : Nat) (acc : Spec.DepAcc) (sc : EthCLSpecs.Fulu.DepositScan) (e : EState)
+    ∀ (j k : Nat) (acc : Spec.DepAcc) (sc : EthCLSpecs.Fulu.DepositScan) (e : EtheoremState)
       {racc : Spec.DepAcc}, k + j = deposits.size → DepRel e0 acc sc e → sc.ndi = k →
       sc.churnReached = false →
       forIn ((deposits.toList.drop k).map absPendingDeposit) acc
@@ -817,15 +811,15 @@ theorem ppdLoop_fuel (o : Spec.Oracle) (ho : OracleAgrees o)
 
 /-- The reference `process_pending_deposits` equals Etheorem's. -/
 theorem process_pending_deposits_etheorem {f : Spec.FuluConfig} (hf : FuluChurnAgrees p f)
-    (o : Spec.Oracle) (ho : OracleAgrees o) (e : EState) {tab : Nat} {s' : Spec.BeaconState}
-    (htab : Spec.get_total_active_balance p (absEState e) = .ok tab) (hlens : LensEq e)
+    (o : Spec.Oracle) (ho : OracleAgrees o) (e : EtheoremState) {tab : Nat} {s' : Spec.BeaconState}
+    (htab : Spec.get_total_active_balance p (toSpecState e) = .ok tab) (hlens : LensEq e)
     (hroom : e.validators.val.size + e.pendingDeposits.val.size ≤
       EthCLSpecs.Fulu.Const.validatorRegistryLimit)
     (h : Spec.process_pending_deposits p (Spec.fuluTab p f tab) (Spec.apply_pending_deposit p o)
-      (absEState e) = .ok s') :
-    ∃ e' : EState,
+      (toSpecState e) = .ok s') :
+    ∃ e' : EtheoremState,
       (EthCLSpecs.Fulu.processPendingDeposits (StateTransition := FuluRun)).run (pureState e) =
-        .ok ((), pureState e') ∧ s' = absEState e' := by
+        .ok ((), pureState e') ∧ s' = toSpecState e' := by
   have htab' := get_total_active_balance_ok hp e htab
   rw [process_pending_deposits_eqP] at h
   rw [get_current_epoch_eq hp] at h
@@ -838,17 +832,17 @@ theorem process_pending_deposits_etheorem {f : Spec.FuluConfig} (hf : FuluChurnA
   rw [← htab'] at hcl
   have hcl' := get_activation_churn_limit_ok hp hf e hcl
   obtain ⟨av, hav, h⟩ := Spec.specM_bind_ok h
-  rw [absEState_deposit_balance_to_consume, ← hcl'] at hav
+  rw [toSpecState_deposit_balance_to_consume, ← hcl'] at hav
   have hav' := uint64Add_ok hav
   obtain ⟨fs, hfs, h⟩ := Spec.specM_bind_ok h
   have hfs' := compute_start_slot_at_epoch_ok hp _ hfs
   obtain ⟨racc, hloop, h⟩ := Spec.specM_bind_ok h
   generalize hdeps : e.pendingDeposits.toArray = deposits
-  have hpd : (absEState e).pending_deposits = (deposits.toList.drop 0).map absPendingDeposit := by
+  have hpd : (toSpecState e).pending_deposits = (deposits.toList.drop 0).map absPendingDeposit := by
     simp [← hdeps, SSZList.toArray, SSZList.toList]
   rw [hpd, ← hne', ← hav', ← hfs'] at hloop
   have hsize : deposits.size = e.pendingDeposits.val.size := by rw [← hdeps]
-  have hrel0 : DepRel e ⟨[], false, 0, 0, absEState e⟩ {} e :=
+  have hrel0 : DepRel e ⟨[], false, 0, 0, toSpecState e⟩ {} e :=
     ⟨rfl, rfl, rfl, rfl, rfl, hlens, .refl e, by simp, by simp⟩
   obtain ⟨sc, e1, hrun, hrel, hndi⟩ := ppdLoop_fuel hp hq o ho deposits _ _ _ e (by omega)
     deposits.size 0 _ {} e (by omega) hrel0 rfl rfl hloop
@@ -865,11 +859,11 @@ theorem process_pending_deposits_etheorem {f : Spec.FuluConfig} (hf : FuluChurnA
   refine ⟨_, hrun', ?_⟩
   unfold Spec.depFinish at h
   rw [hstate] at h
-  have hpend : (absEState e1).pending_deposits.drop racc.2.2.1 ++ racc.1 = ((sszOfArray (e.pendingDeposits.toArray.extract sc.ndi
+  have hpend : (toSpecState e1).pending_deposits.drop racc.2.2.1 ++ racc.1 = ((sszOfArray (e.pendingDeposits.toArray.extract sc.ndi
           e.pendingDeposits.toArray.size ++ sc.postpone) : SSZList _
             EthCLSpecs.Fulu.Const.pendingDepositsLimit).toList.map absPendingDeposit) := by
     simp only [sszOfArray, harr, dif_pos, SSZList.toList, Array.toList_append, List.map_append,
-      hpost, hn, absEState_pending_deposits, he1pd]
+      hpost, hn, toSpecState_pending_deposits, he1pd]
     simp [SSZList.toArray, Array.toList_extract, List.map_drop]
     rw [List.take_of_length_le (by simp)]
   by_cases hc : sc.churnReached = true

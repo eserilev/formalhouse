@@ -84,8 +84,6 @@ import EpochProofs.Equiv.FuluRegistry
 import EpochProofs.Sanity.FuluSinglePass
 import EpochProofs.Sanity.FuluEpoch
 import EpochProofs.Sanity.Invariants.FuluOrder
-import EpochProofs.Formalhouse
-import EpochProofs.FormalhouseFulu
 import EpochProofs.Sanity.Block.FuluBlock
 import EpochProofs.Sanity.FuluTransition
 import EpochProofs.Sanity.Block.FuluEffects
@@ -96,16 +94,13 @@ import EpochProofs.Sanity.Invariants.FuluConsolidations
 import EpochProofs.Sanity.Invariants.FuluExits
 import EpochProofs.Sanity.Invariants.FuluBalance
 import EpochProofs.Sanity.Invariants.FuluReachable
-import EpochProofs.FormalhouseFuluReachable
 import EpochProofs.Sanity.Invariants.ForkUpgrade
 import EpochProofs.Equiv.Upgrade
 import EpochProofs.Equiv.SinglePassLoopModel
 import EpochProofs.Equiv.DepositWrites
 import EpochProofs.Equiv.ListWrites
-import EpochProofs.FormalhouseFinal
 import EpochProofs.Trusted.CacheUpkeep
 import EpochProofs.CacheBridge.Upkeep
-import EpochProofs.FormalhouseUpkeep
 import EpochProofs.Equiv.EpochContexts
 import EpochProofs.Equiv.StepContext
 import EpochProofs.Equiv.PendingDepositsLen
@@ -114,10 +109,9 @@ import EpochProofs.CacheBridge.BuildPath
 import EpochProofs.Equiv.ConsolidationTable
 import EpochProofs.Equiv.Onboarding
 import EpochProofs.Sanity.GlueBounds
-import EpochProofs.FormalhouseRust
 import EpochProofs.NonVacuity
+import EpochProofs.Assumptions
 import EpochProofs.HeadlinePresets
-import EpochProofs.NonVacuityReadable
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -242,15 +236,15 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.state_transition_rowsOk
 #print axioms EpochProofs.Spec.reachable_inv
 #print axioms EpochProofs.Spec.reachable_boundaryOk
-#print axioms EpochProofs.Spec.reachable_state_transition_sameOk'
-#print axioms EpochProofs.Spec.process_epoch_lh_sameOk'
-#print axioms EpochProofs.Spec.lighthouse_state_transition_sameOk
+#print axioms EpochProofs.Spec.reachable_state_transition_sameResultOrBothFail'
+#print axioms EpochProofs.Spec.process_epoch_lh_sameResultOrBothFail'
+#print axioms EpochProofs.Spec.lighthouse_state_transition_sameResultOrBothFail
 #print axioms EpochProofs.Spec.state_transition_pubkeysUnique
 #print axioms EpochProofs.Spec.state_transition_inRange
 #print axioms EpochProofs.Spec.state_transition_withdrawableU64
-#print axioms EpochProofs.Spec.reachable_state_transition_sameOk'''
-#print axioms EpochProofs.Spec.process_epoch_lh_full_sameOk'
-#print axioms EpochProofs.Spec.lighthouse_full_epoch_state_transition_sameOk
+#print axioms EpochProofs.Spec.reachable_state_transition_sameResultOrBothFail'''
+#print axioms EpochProofs.Spec.process_epoch_lh_full_sameResultOrBothFail'
+#print axioms EpochProofs.Spec.lighthouse_full_epoch_state_transition_sameResultOrBothFail
 #print axioms EpochProofs.Etheorem.eth1_data_reset_etheorem
 #print axioms EpochProofs.Etheorem.slashings_reset_etheorem
 #print axioms EpochProofs.Etheorem.randao_mixes_reset_etheorem
@@ -311,8 +305,8 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Etheorem.apply_pending_deposit_etheorem
 #print axioms EpochProofs.Etheorem.process_pending_deposits_etheorem
 #print axioms EpochProofs.Etheorem.process_pending_consolidations_etheorem
-#print axioms EpochProofs.Etheorem.epochPresetAgrees_mainnet
-#print axioms EpochProofs.Etheorem.epochPresetAgrees_minimal
+#print axioms EpochProofs.Etheorem.presetMatchesEtheorem_mainnet
+#print axioms EpochProofs.Etheorem.presetMatchesEtheorem_minimal
 #print axioms EpochProofs.Etheorem.StepsOk.run_seq
 #print axioms EpochProofs.Etheorem.processEpoch_eq
 #print axioms EpochProofs.Etheorem.builder_pending_payments_etheorem'
@@ -329,8 +323,8 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Etheorem.lighthouse_epoch_etheorem_reachable
 #print axioms EpochProofs.finalize_step_equiv
 #print axioms EpochProofs.weigh_justification_equiv
-#print axioms EpochProofs.Spec.lhWeigh_sameOk
-#print axioms EpochProofs.Spec.lhJustificationAndFinalization_sameOk
+#print axioms EpochProofs.Spec.lhWeigh_sameResultOrBothFail
+#print axioms EpochProofs.Spec.lhJustificationAndFinalization_sameResultOrBothFail
 #print axioms EpochProofs.Spec.compute_shuffled_permutation_eq
 #print axioms EpochProofs.Spec.compute_shuffled_index_eq
 #print axioms EpochProofs.compute_shuffled_index_with_eq
@@ -357,10 +351,10 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.lhRandaoMixesReset_eq
 #print axioms EpochProofs.Spec.lhHistoricalSummariesUpdate_eq
 #print axioms EpochProofs.Spec.specOrder_lhOrder
-#print axioms EpochProofs.Spec.lhAfterPassOrder_sameOk
-#print axioms EpochProofs.Spec.process_epoch_lh_order_sameOk
-#print axioms EpochProofs.Spec.reachable_state_transition_sameOk_last
-#print axioms EpochProofs.Spec.lighthouse_order_epoch_state_transition_sameOk
+#print axioms EpochProofs.Spec.lhAfterPassOrder_sameResultOrBothFail
+#print axioms EpochProofs.Spec.process_epoch_lighthouse_sameResultOrBothFail
+#print axioms EpochProofs.Spec.reachable_state_transition_sameResultOrBothFail_last
+#print axioms EpochProofs.Spec.lighthouse_order_epoch_state_transition_sameResultOrBothFail
 #print axioms EpochProofs.Etheorem.lighthouse_order_epoch_etheorem
 #print axioms EpochProofs.Etheorem.lighthouse_order_epoch_etheorem_reachable
 #print axioms EpochProofs.Spec.process_justification_and_finalization_total
@@ -383,11 +377,11 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.rewardsRowStep_total
 #print axioms EpochProofs.Spec.registryRowStep_total
 #print axioms EpochProofs.Spec.slashingsRowStep_total
-#print axioms EpochProofs.Spec.midOk_of_rowBounds
-#print axioms EpochProofs.Spec.depOk_of_rowBounds
+#print axioms EpochProofs.Spec.midOk_of_physicalLimits
+#print axioms EpochProofs.Spec.depOk_of_physicalLimits
 #print axioms EpochProofs.Spec.regSlash_total_g
-#print axioms EpochProofs.Spec.midCore_of_rowBounds
-#print axioms EpochProofs.Spec.depCore_of_rowBounds
+#print axioms EpochProofs.Spec.midCore_of_physicalLimits
+#print axioms EpochProofs.Spec.depCore_of_physicalLimits
 #print axioms EpochProofs.Spec.process_epoch_total_rows
 #print axioms EpochProofs.max_effective_balance_electra_equiv
 #print axioms EpochProofs.deposit_effective_balance_equiv
@@ -468,8 +462,8 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.spec_passes_eq_rows_tab
 #print axioms EpochProofs.Spec.separate_passes_eq_single_pass_tab
 #print axioms EpochProofs.Spec.lighthouse_single_pass_eq_spec_fulu
-#print axioms EpochProofs.Spec.get_next_sync_committee_fulu_sameOk
-#print axioms EpochProofs.Spec.process_sync_committee_updates_fulu_sameOk
+#print axioms EpochProofs.Spec.get_next_sync_committee_fulu_sameResultOrBothFail
+#print axioms EpochProofs.Spec.process_sync_committee_updates_fulu_sameResultOrBothFail
 #print axioms EpochProofs.Spec.process_epoch_fulu_eq_tab
 #print axioms EpochProofs.Spec.process_proposer_lookahead_fulu_eq
 #print axioms EpochProofs.Spec.plFuluNew_congr
@@ -499,23 +493,21 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Etheorem.Fulu.get_beacon_proposer_indices_ok
 #print axioms EpochProofs.Etheorem.Fulu.process_proposer_lookahead_etheorem
 #print axioms EpochProofs.Etheorem.Fulu.process_sync_committee_updates_fulu_etheorem
-#print axioms EpochProofs.Etheorem.Fulu.epochPresetAgrees_mainnet
-#print axioms EpochProofs.Etheorem.Fulu.epochPresetAgrees_minimal
+#print axioms EpochProofs.Etheorem.Fulu.presetMatchesEtheorem_mainnet
+#print axioms EpochProofs.Etheorem.Fulu.presetMatchesEtheorem_minimal
 #print axioms EpochProofs.Etheorem.Fulu.process_epoch_fulu_etheorem
-#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch
 #print axioms EpochProofs.Spec.lhFullTailG_nf
 #print axioms EpochProofs.Spec.specRest_nf
-#print axioms EpochProofs.Spec.specFourStepsFulu_sameOk
+#print axioms EpochProofs.Spec.specFourStepsFulu_sameResultOrBothFail
 #print axioms EpochProofs.Spec.epochRestFulu_specTail
 #print axioms EpochProofs.Spec.lighthouse_single_pass_eq_spec_supply_fulu
 #print axioms EpochProofs.Spec.lighthouse_single_pass_eq_spec_genesis_fulu
 #print axioms EpochProofs.Spec.epochRestFulu_nf
 #print axioms EpochProofs.Spec.process_epoch_lh_full_fulu_genesis
-#print axioms EpochProofs.Spec.process_epoch_lh_full_fulu_sameOk'
-#print axioms EpochProofs.Spec.lhRestOrderFulu_sameOk
-#print axioms EpochProofs.Spec.process_epoch_lh_order_fulu_sameOk
-#print axioms EpochProofs.Spec.lighthouse_fulu_epoch_sameOk
-#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch
+#print axioms EpochProofs.Spec.process_epoch_lh_full_fulu_sameResultOrBothFail'
+#print axioms EpochProofs.Spec.lhRestOrderFulu_sameResultOrBothFail
+#print axioms EpochProofs.Spec.process_epoch_lighthouse_fulu_sameResultOrBothFail
+#print axioms EpochProofs.Spec.lighthouse_fulu_epoch_sameResultOrBothFail
 #print axioms EpochProofs.Spec.process_operations_fulu_deposits
 #print axioms EpochProofs.Spec.process_operations_fulu_ok_deposits
 #print axioms EpochProofs.Spec.apply_withdrawals_fulu_ok
@@ -677,13 +669,12 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.process_operations_fulu_exitDelay
 #print axioms EpochProofs.Spec.state_transition_fulu_exitDelay
 #print axioms EpochProofs.Spec.fuluTabM_lt
-#print axioms EpochProofs.Spec.midOkFulu_of_rowBounds
+#print axioms EpochProofs.Spec.midOkFulu_of_physicalLimits
 #print axioms EpochProofs.Spec.compute_proposer_indices_total
 #print axioms EpochProofs.Spec.get_beacon_proposer_indices_fulu_total
 #print axioms EpochProofs.Spec.process_proposer_lookahead_fulu_total
 #print axioms EpochProofs.Spec.committeesOkFulu_of
 #print axioms EpochProofs.Spec.process_epoch_fulu_total
-#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_total
 #print axioms EpochProofs.Spec.FuluBalanceSanity.saturating_sub_eq
 #print axioms EpochProofs.Spec.FuluBalanceSanity.withdraw_fits
 #print axioms EpochProofs.Spec.FuluBalanceSanity.uint64Sub_ok'
@@ -718,9 +709,6 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.SlotReachFulu.loopInv
 #print axioms EpochProofs.Spec.SlotReachFulu.tail
 #print axioms EpochProofs.Spec.fulu_reachable_invariants
-#print axioms EpochProofs.Formalhouse.fuluEpochInput_ok
-#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_reachable
-#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_total_reachable
 #print axioms EpochProofs.Spec.onboard_builders_rel
 #print axioms EpochProofs.Spec.onboard_builders_frame
 #print axioms EpochProofs.Spec.upgrade_to_gloas_frame
@@ -735,7 +723,7 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.upgrade_to_gloas_vectorLengths
 #print axioms EpochProofs.Spec.fulu_fork_state_startOk
 #print axioms EpochProofs.Spec.fulu_gloas_fork_startOk
-#print axioms EpochProofs.Spec.fulu_then_gloas_sameOk
+#print axioms EpochProofs.Spec.fulu_then_gloas_sameResultOrBothFail
 #print axioms EpochProofs.Spec.SlotReachG.loopInv
 #print axioms EpochProofs.Spec.gloas_reachable_invariants
 #print axioms EpochProofs.Spec.fulu_then_gloas_reachable_invariants
@@ -780,9 +768,6 @@ open EpochProofs.Spec
 #print axioms EpochProofs.ptc_window_writes_spec
 #print axioms EpochProofs.update_effective_balances_at_loop_spec
 #print axioms EpochProofs.update_effective_balances_at_spec
-#print axioms EpochProofs.Formalhouse.gloasEpochConds_of_run
-#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_final
-#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_final
 #print axioms EpochProofs.participation_increments_ok
 #print axioms EpochProofs.participation_increments_ok_preset
 #print axioms EpochProofs.hysteresis_thresholds_ok_mainnet
@@ -801,7 +786,6 @@ open EpochProofs.Spec
 #print axioms EpochProofs.CacheBridge.epoch_cache_total_carry
 #print axioms EpochProofs.CacheBridge.activeAgree_of_epochInv
 #print axioms EpochProofs.CacheBridge.pubkey_cache_carry
-#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_at_input
 #print axioms EpochProofs.Spec.consolidationStep_table
 #print axioms EpochProofs.Spec.consolidationStep_full_ok
 #print axioms EpochProofs.Spec.consolidationStep_count
@@ -835,10 +819,6 @@ open EpochProofs.Spec
 #print axioms EpochProofs.CacheBridge.cachePresetOf_mainnet
 #print axioms EpochProofs.CacheBridge.cachePresetOf_minimal
 #print axioms EpochProofs.CacheBridge.committeePresetLink_P
-#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_final_mainnet
-#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_final_minimal
-#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_final_mainnet
-#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_final_minimal
 #print axioms EpochProofs.Spec.glue_epoch_add_fits
 #print axioms EpochProofs.Spec.glue_lookahead_slot_fits
 #print axioms EpochProofs.Spec.glue_seed_mix_index
@@ -852,7 +832,6 @@ open EpochProofs.Spec
 #print axioms EpochProofs.CacheBridge.PBStep.coherent
 #print axioms EpochProofs.CacheBridge.PBTrace.coherent
 #print axioms EpochProofs.CacheBridge.coherent_of_upkeep
-#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_final_upkeep
 #print axioms EpochProofs.Spec.lhFullTailWith_order_eq
 #print axioms EpochProofs.Spec.forIn_keep
 #print axioms EpochProofs.Spec.foldlM_keep
@@ -899,12 +878,6 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Compose.lookahead_spec_fulu
 #print axioms EpochProofs.Compose.singlePassFulu_spec
 #print axioms EpochProofs.Compose.epochFulu_spec
-#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_rust
-#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_rust_mainnet
-#print axioms EpochProofs.Formalhouse.formalhouse_gloas_epoch_rust_minimal
-#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_rust
-#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_rust_mainnet
-#print axioms EpochProofs.Formalhouse.formalhouse_fulu_epoch_rust_minimal
 #print axioms EpochProofs.Spec.process_epoch_committees
 #print axioms EpochProofs.Spec.epochToCommittees_parts
 #print axioms EpochProofs.Spec.epochToCommittees_total
@@ -923,16 +896,14 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Witness.witnessEtheoremFulu_abs
 #print axioms EpochProofs.Witness.oracle_witness
 #print axioms EpochProofs.Witness.fulu_oracle_witness
-#print axioms EpochProofs.Witness.gloasFinalHypotheses_witness
-#print axioms EpochProofs.Witness.fuluFinalHypotheses_witness
 #print axioms EpochProofs.Formalhouse.GloasEpochRun.invariants
 #print axioms EpochProofs.Formalhouse.GloasEpochRun.atEpochBoundary
 #print axioms EpochProofs.Formalhouse.FuluEpochRun.invariants
 #print axioms EpochProofs.Formalhouse.FuluEpochRun.atEpochBoundary
+#print axioms EpochProofs.Formalhouse.GloasChainAssumptions.atCommitteeStepState
+#print axioms EpochProofs.Formalhouse.FuluChainAssumptions.atCommitteeStepState
 #print axioms EpochProofs.Formalhouse.lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants
 #print axioms EpochProofs.Formalhouse.rewards_overflow_example
-#print axioms EpochProofs.Formalhouse.gloasFinalHypotheses_of
-#print axioms EpochProofs.Formalhouse.fuluFinalHypotheses_of
 #print axioms EpochProofs.Formalhouse.ptc_committees_from_cache
 #print axioms EpochProofs.Formalhouse.lighthouse_model_gloas_epoch_eq_etheorem_upkeep
 #print axioms EpochProofs.Formalhouse.lighthouse_model_gloas_epoch_eq_etheorem_at_input

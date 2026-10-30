@@ -6,29 +6,29 @@ import EpochProofs.Spec.PresetBounds
 # The per-validator epoch steps and the pending deposits succeed
 
 `process_epoch_total` takes two step facts, `MidOk` and `DepOk`. This file proves both on
-mainnet, from the facts at the epoch input and `RowBounds`.
+mainnet, from the facts at the epoch input and `PhysicalLimits`.
 
 The four per-validator steps (inactivity, rewards, registry, slashings) run as passes over rows.
 Each row step returns `ok` when its row and the pass state have small values, and keeps them
 small for the next row.
 
 Error sources and why they do not fire:
-- Inactivity: `score + INACTIVITY_SCORE_BIAS`. `RowBounds.scores` keeps scores below `2^22`.
+- Inactivity: `score + INACTIVITY_SCORE_BIAS`. `PhysicalLimits.scores` keeps scores below `2^22`.
 - Rewards: `base_reward * weight * participating_increments`. The base reward is at most
   `2048 * 2023907` Gwei because the total active balance is at least `10^9`, and the
-  participating increments are at most `2^57 / 10^9` (`RowBounds.supply`). The inactivity
+  participating increments are at most `2^57 / 10^9` (`PhysicalLimits.supply`). The inactivity
   penalty `effective_balance * inactivity_score` stays below `2^64` for the same reason as
   the scores (F5).
 - Registry: `compute_exit_epoch_and_update_churn`. An ejected validator has at most
   `EJECTION_BALANCE` and the exit churn is at least `MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA`, so
-  each exit adds one epoch at most. `RowBounds.churn` and `RowBounds.count` keep the earliest
+  each exit adds one epoch at most. `PhysicalLimits.churn` and `PhysicalLimits.count` keep the earliest
   exit epoch below `2^63`.
 - Slashings: `penalty_per_increment * increments`. The penalty per increment is at most
   `2 * 10^9`.
-- Pending deposits: the churn sums and `increase_balance`. `RowBounds.funds` bounds the
+- Pending deposits: the churn sums and `increase_balance`. `PhysicalLimits.funds` bounds the
   balances, the pending deposits and `deposit_balance_to_consume` together.
 
-`RowBounds.participation` bounds the reward sum: each flag's participating increments are at
+`PhysicalLimits.participation` bounds the reward sum: each flag's participating increments are at
 most `1024` times the active increments.
 -/
 
@@ -710,7 +710,7 @@ deposits need. Each one is a time or supply bound; the pyspec raises without the
 - `participation`: each flag's participating increments of the previous epoch are at most
   `1024` times the active increments of the current epoch. Exits are churn limited, so the
   active balance cannot drop by that factor in one epoch unless almost nothing is staked. -/
-structure RowBounds [PresetCfg] (t : BeaconState) : Prop where
+structure PhysicalLimits [PresetCfg] (t : BeaconState) : Prop where
   scores : ∀ x ∈ t.inactivity_scores, @LT.lt Nat _ x (2 ^ 22)
   supply : totalEffectiveBalance t < 2 ^ 57
   funds : t.balances.sum + (t.pending_deposits.map (·.amount)).sum +
@@ -767,7 +767,7 @@ theorem trw_sum_map_mul (l : List Row) (g : Row → Nat) (k : Nat) :
 
 theorem post_of_regSlash [PresetCfg] (t s1 s3 s5 : BeaconState) (hrl : t.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
     (hsll : t.slashings.length = P.EPOCHS_PER_SLASHINGS_VECTOR)
-    (heb : EBOk P t) (hcons : ConsolidationsInRange t) (hrb : RowBounds t)
+    (heb : EBOk P t) (hcons : ConsolidationsInRange t) (hrb : PhysicalLimits t)
     (hfin0 : s1.finalized_checkpoint.epoch ≤ t.slot / P.SLOTS_PER_EPOCH) (h3 : S3Facts t s1 s3)
     (h5 : RegSlashOut s3 s5) : TailFrame t s5 ∧ DepFrame t s5 := by
   obtain ⟨ys, E, B, rfl, hr⟩ := h5
@@ -859,13 +859,13 @@ def MidCore [PresetCfg] (g : Gwei → Gwei) (t : BeaconState) : Prop :=
       process_slashings P tab s4) (fun s => TailFrame t s ∧ DepFrame t s)
 
 /-- On mainnet, the inactivity, rewards, registry and slashings steps succeed after
-justification and finalization, under `RowBounds`, for any churn total `g tab` below `2^60`. -/
-theorem midCore_of_rowBounds [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (g : Gwei → Gwei) (hg : ∀ x, x < 2 ^ 57 → g x < 2 ^ 60)
+justification and finalization, under `PhysicalLimits`, for any churn total `g tab` below `2^60`. -/
+theorem midCore_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (g : Gwei → Gwei) (hg : ∀ x, x < 2 ^ 57 → g x < 2 ^ 60)
     (t : BeaconState) (hrows : RowsOk t) (hslot : t.slot + 8192 < 2 ^ 64)
     (heb : EBOk P t) (hrl : t.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
     (hsll : t.slashings.length = P.EPOCHS_PER_SLASHINGS_VECTOR)
     (hcons : ConsolidationsInRange t) (hsl : t.slashings.sum * 3 < 2 ^ 64)
-    (hrb : RowBounds t) : MidCore g t := by
+    (hrb : PhysicalLimits t) : MidCore g t := by
   intro s1 hshape hfin0 hfin tab htab
   obtain ⟨cp1, cp2, cp3, bits, hs1⟩ := hshape
   have hv1 : s1.validators = t.validators := by rw [hs1]
@@ -1028,13 +1028,13 @@ theorem midCore_of_rowBounds [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (g : 
       exact hb3
 
 /-- On mainnet, the inactivity, rewards, registry and slashings steps succeed after
-justification and finalization, under `RowBounds`. -/
-theorem midOk_of_rowBounds [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (t : BeaconState) (hrows : RowsOk t) (hslot : t.slot + 8192 < 2 ^ 64)
+justification and finalization, under `PhysicalLimits`. -/
+theorem midOk_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (t : BeaconState) (hrows : RowsOk t) (hslot : t.slot + 8192 < 2 ^ 64)
     (heb : EBOk P t) (hvec : t.VectorLengths P)
     (hcons : ConsolidationsInRange t) (hsl : t.slashings.sum * 3 < 2 ^ 64)
-    (hrb : RowBounds t) : MidOk t := by
+    (hrb : PhysicalLimits t) : MidOk t := by
   intro s1 hshape hfin0 hfin
-  have hcore := midCore_of_rowBounds id (fun x hx => Nat.lt_trans hx (by decide)) t hrows hslot
+  have hcore := midCore_of_physicalLimits id (fun x hx => Nat.lt_trans hx (by decide)) t hrows hslot
     heb hvec.2.2.1 hvec.2.2.2.1 hcons hsl hrb s1 hshape hfin0 hfin
   obtain ⟨cp1, cp2, cp3, bits, hs1⟩ := hshape
   have hrows1 : RowsOk s1 := by rw [hs1]; exact hrows
@@ -1050,7 +1050,7 @@ theorem midOk_of_rowBounds [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (t : Be
     (by show @LT.lt Nat _ (t.slot / P.SLOTS_PER_EPOCH + 1 + 4) (2 ^ 64); omega)
   have hfar : t.slot / P.SLOTS_PER_EPOCH < FAR_FUTURE_EPOCH := by
     show @LT.lt Nat _ (t.slot / P.SLOTS_PER_EPOCH) (2 ^ 64 - 1); omega
-  have hsame := specFourSteps_sameOk P s1 tab htab hrows1 (t.slot / P.SLOTS_PER_EPOCH) _ hcur
+  have hsame := specFourSteps_sameResultOrBothFail P s1 tab htab hrows1 (t.slot / P.SLOTS_PER_EPOCH) _ hcur
     hact hfar
   obtain ⟨v, hv, hp⟩ := hcore tab htab
   exact ⟨v, (hsame v).mpr hv, hp⟩
@@ -1159,8 +1159,8 @@ def DepCore [PresetCfg] (g : Gwei → Gwei) (o : Oracle) (t : BeaconState) : Pro
     OkWith (process_pending_deposits P (g tab) (apply_pending_deposit P o)
       s) (TailFrame t)
 
-theorem depCore_of_rowBounds [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (g : Gwei → Gwei) (o : Oracle) (t : BeaconState)
-    (hslot0 : t.slot + 8192 < 2 ^ 64) (hrb : RowBounds t) : DepCore g o t := by
+theorem depCore_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (g : Gwei → Gwei) (o : Oracle) (t : BeaconState)
+    (hslot0 : t.slot + 8192 < 2 ^ 64) (hrb : PhysicalLimits t) : DepCore g o t := by
   intro s tab hf hd htab
   have hteb : @LT.lt Nat _ (totalEffectiveBalance t) (2 ^ 57) := hrb.supply
   have hfunds : @LT.lt Nat _ (t.balances.sum + (t.pending_deposits.map (·.amount)).sum +
@@ -1299,24 +1299,24 @@ theorem depCore_of_rowBounds [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (g : 
       exact OkWith.pure (hframe _ rfl rfl rfl rfl rfl rfl rfl rfl rfl)
     · exact OkWith.pure (hframe _ rfl rfl rfl rfl rfl rfl rfl rfl rfl)
 
-theorem depOk_of_rowBounds [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : Oracle) (t : BeaconState) (hslot0 : t.slot + 8192 < 2 ^ 64)
-    (hrb : RowBounds t) : DepOk o t :=
-  depCore_of_rowBounds id o t hslot0 hrb
+theorem depOk_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : Oracle) (t : BeaconState) (hslot0 : t.slot + 8192 < 2 ^ 64)
+    (hrb : PhysicalLimits t) : DepOk o t :=
+  depCore_of_physicalLimits id o t hslot0 hrb
 
 /-! ## The whole epoch -/
 
 /-- `process_epoch_total` with the per-validator steps and the pending deposits proved: on
-mainnet, the spec `process_epoch` succeeds from the facts at its input, `RowBounds`, and the
+mainnet, the spec `process_epoch` succeeds from the facts at its input, `PhysicalLimits`, and the
 committee steps (`CommitteesOk`). -/
 theorem process_epoch_total_rows [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
     (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % P.SLOTS_PER_EPOCH = 0)
     (hvec : t.VectorLengths P) (hffg : FfgInvariant P t)
     (heb : EBOk P t) (hcons : ConsolidationsInRange t)
-    (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : RowBounds t) (hcomm : CommitteesOk o t) :
+    (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : PhysicalLimits t) (hcomm : CommitteesOk o t) :
     ∃ s', process_epoch P o t = .ok s' :=
   process_epoch_total o t hrows hslot hlast hvec hffg
     (Nat.lt_trans hrb.supply (by decide))
-    (midOk_of_rowBounds t hrows hslot heb hvec hcons hsl hrb)
-    (depOk_of_rowBounds o t hslot hrb) hcomm
+    (midOk_of_physicalLimits t hrows hslot heb hvec hcons hsl hrb)
+    (depOk_of_physicalLimits o t hslot hrb) hcomm
 
 end EpochProofs.Spec

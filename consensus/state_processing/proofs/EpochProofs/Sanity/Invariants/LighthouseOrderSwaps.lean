@@ -108,27 +108,27 @@ theorem swap_shapes {α β : Type} (X Y : BeaconState → SpecM BeaconState)
     (hYG : ∀ v, xNew s = .ok v → yNew (G v s) = yNew s)
     (hXH : ∀ w, yNew s = .ok w → xNew (H w s) = xNew s)
     (hGH : ∀ v w, G v (H w s) = H w (G v s)) :
-    SameOk (X s >>= Y) (Y s >>= X) := by
+    SameResultOrBothFail (X s >>= Y) (Y s >>= X) := by
   rw [hX s, hY s]
   cases hx : xNew s with
   | error e =>
     cases hy : yNew s with
-    | error e' => exact SameOk.errors
+    | error e' => exact SameResultOrBothFail.errors
     | ok w =>
-      show SameOk (Except.error e) (X (H w s))
+      show SameResultOrBothFail (Except.error e) (X (H w s))
       rw [hX, hXH w hy, hx]
-      exact SameOk.errors
+      exact SameResultOrBothFail.errors
   | ok v =>
-    show SameOk (Y (G v s)) _
+    show SameResultOrBothFail (Y (G v s)) _
     rw [hY, hYG v hx]
     cases hy : yNew s with
-    | error e' => exact SameOk.errors
+    | error e' => exact SameResultOrBothFail.errors
     | ok w =>
-      show SameOk (Except.ok (H w (G v s))) (X (H w s))
+      show SameResultOrBothFail (Except.ok (H w (G v s))) (X (H w s))
       rw [hX, hXH w hy, hx]
-      show SameOk (Except.ok (H w (G v s))) (Except.ok (G v (H w s)))
+      show SameResultOrBothFail (Except.ok (H w (G v s))) (Except.ok (G v (H w s)))
       rw [hGH]
-      exact SameOk.refl _
+      exact SameResultOrBothFail.refl _
 
 /-! ## The proposer lookahead -/
 

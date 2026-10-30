@@ -11,7 +11,7 @@ start of the epoch, on mainnet.
 - Proved from the reachable-state invariants (`EpochInputOk''`): the finalized epoch is below
   `FAR_FUTURE_EPOCH` before the registry update, and the registry lists have equal lengths
   before the pending deposits and the pending consolidations.
-- Moved to the epoch start by frame lemmas (`EpochCondsIn`): room for the pending deposits,
+- Moved to the epoch start by frame lemmas (`GloasEtheoremDivergenceAssumptions`): room for the pending deposits,
   room in the builder withdrawals and in the historical summaries (F6). The steps before each of these reads do not write the fields it reads.
 
 F2 is fixed on the Etheorem fork that this project requires (`eserilev/etheorem`, branch
@@ -269,35 +269,19 @@ variable [EthCLSpecs.Gloas.Preset] [EthCLSpecs.Gloas.Config]
 /-! ## Facts about the map -/
 
 /-- `RowsOk` of the mapped state gives `LensEq`. -/
-theorem lensEq_of_rowsOk {e : EState} (h : Spec.RowsOk (absEState e)) : LensEq e := by
+theorem lensEq_of_rowsOk {e : EtheoremState} (h : Spec.RowsOk (toSpecState e)) : LensEq e := by
   obtain ⟨r1, r2, r3, r4⟩ := h
-  simp only [absEState_balances, absEState_validators, absEState_inactivity_scores,
-    absEState_previous_epoch_participation, absEState_current_epoch_participation,
+  simp only [toSpecState_balances, toSpecState_validators, toSpecState_inactivity_scores,
+    toSpecState_previous_epoch_participation, toSpecState_current_epoch_participation,
     length_map_toList] at r1 r2 r3 r4
   exact ⟨r1, by simpa using r3, by simpa using r4, r2⟩
 
 /-! ## The conditions at the epoch start -/
 
-/-- Facts about the state at the epoch start. The steps before each read do not write these
-fields, so each fact still holds when its step reads it.
-
-- `depositRoom`: Etheorem's registry limit `2^40` has room for `MAX_PENDING_DEPOSITS_PER_EPOCH`
-  new validators, the most that one epoch adds. Etheorem drops a new validator past this limit
-  (F10). Beta.4 has no registry limit. Lighthouse keeps the `2^40` limit.
-- `builderRoom`: the builder withdrawals have room for `SLOTS_PER_EPOCH` more items under
-  Etheorem's alpha.11 limit (F6). Beta.4 has no limit.
-
-The historical summaries room is not here: beta.4 keeps the `HISTORICAL_ROOTS_LIMIT` cap, so it
-is a spec condition. `process_epoch_etheorem_in` takes it as `hhist`. -/
-structure EpochCondsIn (e : EState) : Prop where
-  depositRoom : (absEState e).validators.length +
-    EthCLSpecs.Gloas.Const.maxPendingDepositsPerEpoch ≤ EthCLSpecs.Gloas.Const.validatorRegistryLimit
-  builderRoom : (absEState e).builder_pending_withdrawals.length +
-      EthCLSpecs.Gloas.Const.slotsPerEpoch ≤ EthCLSpecs.Gloas.Const.builderPendingWithdrawalsLimit
 
 variable [HasherTag] [CryptoBackend]
 
-theorem qualifyingBuilderWithdrawals_length (e : EState) :
+theorem qualifyingBuilderWithdrawals_length (e : EtheoremState) :
     (qualifyingBuilderWithdrawals e).length ≤ EthCLSpecs.Gloas.Const.slotsPerEpoch := by
   unfold qualifyingBuilderWithdrawals
   simp only [List.length_map]
@@ -311,14 +295,14 @@ the finalized epoch condition and the equal list lengths. `hin` holds the facts 
 lemmas carry to the step that reads them. `hhist`: the historical summaries are below
 `HISTORICAL_ROOTS_LIMIT`, a cap that beta.4 keeps. -/
 theorem process_epoch_etheorem_in [Spec.PresetCfg] [Spec.PresetCfg.Ok]
-    (hpa : EpochPresetAgrees Spec.P) (o : Spec.Oracle) (ho : OracleAgrees o)
-    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState)
-    (hb0 : Spec.BoundaryOk (absEState e)) (hslot : (absEState e).slot < 2 ^ 64)
-    (hin : EpochCondsIn e)
-    (hhist : (absEState e).historical_summaries.length < EthCLSpecs.Gloas.Const.historicalRootsLimit)
-    {s' : Spec.BeaconState} (h : Spec.process_epoch Spec.P o (absEState e) = .ok s') :
+    (hpa : PresetMatchesEtheorem Spec.P) (o : Spec.Oracle) (ho : OracleAgrees o)
+    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EtheoremState)
+    (hb0 : Spec.BoundaryOk (toSpecState e)) (hslot : (toSpecState e).slot < 2 ^ 64)
+    (hin : GloasEtheoremDivergenceAssumptions e)
+    (hhist : (toSpecState e).historical_summaries.length < EthCLSpecs.Gloas.Const.historicalRootsLimit)
+    {s' : Spec.BeaconState} (h : Spec.process_epoch Spec.P o (toSpecState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processEpoch (StateTransition := GloasRun)).run (pureState e) =
-      .ok ((), pureState e') ∧ absEState e' = s' := by
+      .ok ((), pureState e') ∧ toSpecState e' = s' := by
   have hp := hpa
   have hpp := hp.passes
   have hb := hp.base
@@ -350,14 +334,14 @@ theorem process_epoch_etheorem_in [Spec.PresetCfg] [Spec.PresetCfg.Ok]
   obtain ⟨e3, r3, rfl⟩ := rewards_etheorem hpp e2 h3
   have b3 : StepsOk (epochSteps.take 3) e e3 := b2.snoc r3
   -- 4. registry updates
-  have hfin : (absEState e3).finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH := by
+  have hfin : (toSpecState e3).finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH := by
     have hf := j1.2.1
     rw [← c2.2.1, ← c3.2.1, ← c2.1, ← c3.1] at hf
-    have hs : (absEState e3).slot = (absEState e).slot := by rw [c3.1, c2.1, sl1]
+    have hs : (toSpecState e3).slot = (toSpecState e).slot := by rw [c3.1, c2.1, sl1]
     rw [hs] at hf
-    have h6 := Spec.P_epoch_le_div6 (absEState e).slot
-    have hslot' : @LT.lt Nat _ (absEState e).slot (2 ^ 64) := hslot
-    have hlt : @LT.lt Nat _ ((absEState e).slot / Spec.P.SLOTS_PER_EPOCH) (2 ^ 64 - 1) := by omega
+    have h6 := Spec.P_epoch_le_div6 (toSpecState e).slot
+    have hslot' : @LT.lt Nat _ (toSpecState e).slot (2 ^ 64) := hslot
+    have hlt : @LT.lt Nat _ ((toSpecState e).slot / Spec.P.SLOTS_PER_EPOCH) (2 ^ 64 - 1) := by omega
     unfold Spec.FAR_FUTURE_EPOCH
     exact Nat.lt_of_le_of_lt hf hlt
   obtain ⟨t4, ht4, h⟩ := Spec.specM_bind_ok h
@@ -383,16 +367,16 @@ theorem process_epoch_etheorem_in [Spec.PresetCfg] [Spec.PresetCfg.Ok]
   obtain ⟨e6, r6, rfl⟩ := eth1_data_reset_etheorem hb hp.tail e5 h6
   have b6 : StepsOk (epochSteps.take 6) e e6 := b5.snoc r6
   -- 7. pending deposits
-  have F6 : Spec.PFrame (absEState e) (absEState e6) :=
+  have F6 : Spec.PFrame (toSpecState e) (toSpecState e6) :=
     f1.trans (f2.trans (f3.trans (f4.trans (f5.trans f6))))
-  have L6 : Spec.LenStep (absEState e) (absEState e6) :=
+  have L6 : Spec.LenStep (toSpecState e) (toSpecState e6) :=
     l1.trans (l2.trans (l3.trans (l4.trans (l5.trans l6))))
-  have rows6 : Spec.RowsOk (absEState e6) := L6.rowsOk hb0.2.1
+  have rows6 : Spec.RowsOk (toSpecState e6) := L6.rowsOk hb0.2.1
   have hroom : e6.validators.val.size + EthCLSpecs.Gloas.Const.maxPendingDepositsPerEpoch ≤
       EthCLSpecs.Gloas.Const.validatorRegistryLimit := by
     have hv := L6.1
     have hr := hin.depositRoom
-    simp only [absEState_validators, length_map_toList] at hv hr
+    simp only [toSpecState_validators, length_map_toList] at hv hr
     omega
   obtain ⟨t7, ht7, h⟩ := Spec.specM_bind_ok h
   obtain ⟨s7, h7, h⟩ := Spec.specM_bind_ok h
@@ -404,20 +388,20 @@ theorem process_epoch_etheorem_in [Spec.PresetCfg] [Spec.PresetCfg.Ok]
   -- 8. pending consolidations
   have hlens7 : e7.balances.val.size = e7.validators.val.size := by
     have := rows7.1
-    simp only [absEState_balances, absEState_validators, length_map_toList] at this
+    simp only [toSpecState_balances, toSpecState_validators, length_map_toList] at this
     exact this
   obtain ⟨s8, h8, h⟩ := Spec.specM_bind_ok h
   have f8 := Spec.process_pending_consolidations_pframe _ _ _ h8
   obtain ⟨e8, r8, rfl⟩ := process_pending_consolidations_etheorem hb e7 hlens7 h8
   have b8 : StepsOk (epochSteps.take 8) e e8 := b7.snoc r8
   -- 9. builder pending payments
-  have Q8 : Spec.QFrame (absEState e) (absEState e8) := F6.1.trans (q7.trans f8.1)
+  have Q8 : Spec.QFrame (toSpecState e) (toSpecState e8) := F6.1.trans (q7.trans f8.1)
   have hbroom : e8.builderPendingWithdrawals.val.size + (qualifyingBuilderWithdrawals e8).length ≤
       EthCLSpecs.Gloas.Const.builderPendingWithdrawalsLimit := by
     have hw := congrArg List.length Q8.2.2.1
     have hr := hin.builderRoom
     have hq := qualifyingBuilderWithdrawals_length e8
-    simp only [absEState_builder_pending_withdrawals, length_map_toList] at hw hr
+    simp only [toSpecState_builder_pending_withdrawals, length_map_toList] at hw hr
     omega
   obtain ⟨t9, ht9, h⟩ := Spec.specM_bind_ok h
   have := get_total_active_balance_ok hb e8 ht9
@@ -444,11 +428,11 @@ theorem process_epoch_etheorem_in [Spec.PresetCfg] [Spec.PresetCfg.Ok]
   have b12 : StepsOk (epochSteps.take 12) e e12 := b11.snoc r12
   -- 13. historical summaries
   have hsroom : e12.historicalSummaries.val.size < EthCLSpecs.Gloas.Const.historicalRootsLimit := by
-    have heq : (absEState e12).historical_summaries = (absEState e).historical_summaries := by
+    have heq : (toSpecState e12).historical_summaries = (toSpecState e).historical_summaries := by
       rw [f12.1.2.2.2, f11.1.2.2.2, f10.1.2.2.2, hs9, Q8.2.2.2]
     have hw := congrArg List.length heq
     have hr := hhist
-    simp only [absEState_historical_summaries, length_map_toList] at hw hr
+    simp only [toSpecState_historical_summaries, length_map_toList] at hw hr
     omega
   obtain ⟨s13, h13, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e13, r13, rfl⟩ :=
@@ -476,22 +460,22 @@ theorem process_epoch_etheorem_in [Spec.PresetCfg] [Spec.PresetCfg.Ok]
 /-- Lighthouse's epoch processing equals Etheorem's Gloas `processEpoch` at each epoch boundary
 of a reachable run, on mainnet.
 
-`hin` is the fact that `reachable_state_transition_sameOk'''` proves at each epoch boundary.
+`hin` is the fact that `reachable_state_transition_sameResultOrBothFail'''` proves at each epoch boundary.
 The conditions that remain:
 - `hcond`: room in the registry for the new validators of one epoch (F10), and room in the
   builder withdrawals (F6). Each is a fact about the epoch start state.
 - `hhist`: the historical summaries are below `HISTORICAL_ROOTS_LIMIT`. Beta.4 keeps this cap.
 - `ho`, `hsha`: the oracle is Etheorem's hash and BLS functions, and SHA-256 returns 32 bytes. -/
 theorem lighthouse_epoch_etheorem_reachable [Spec.PresetCfg] [Spec.PresetCfg.Ok]
-    (hpa : EpochPresetAgrees Spec.P) (o : Spec.Oracle) (ho : OracleAgrees o)
-    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState)
-    (hin : Spec.EpochInputOk'' Spec.EpochSupply (absEState e)) (hcond : EpochCondsIn e)
-    (hhist : (absEState e).historical_summaries.length < EthCLSpecs.Gloas.Const.historicalRootsLimit)
-    {s' : Spec.BeaconState} (h : Spec.process_epoch_lh_full o (absEState e) = .ok s') :
+    (hpa : PresetMatchesEtheorem Spec.P) (o : Spec.Oracle) (ho : OracleAgrees o)
+    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EtheoremState)
+    (hin : Spec.ReachableInvariants (toSpecState e)) (hcond : GloasEtheoremDivergenceAssumptions e)
+    (hhist : (toSpecState e).historical_summaries.length < EthCLSpecs.Gloas.Const.historicalRootsLimit)
+    {s' : Spec.BeaconState} (h : Spec.process_epoch_lh_full o (toSpecState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processEpoch (StateTransition := GloasRun)).run (pureState e) =
-      .ok ((), pureState e') ∧ absEState e' = s' := by
+      .ok ((), pureState e') ∧ toSpecState e' = s' := by
   obtain ⟨⟨⟨hb, hslot, heb, hexit, hsup⟩, _, hcons⟩, _, hvalid⟩ := hin
-  have hsame := Spec.process_epoch_lh_full_sameOk' o (absEState e) hb hslot heb hexit hsup hvalid
+  have hsame := Spec.process_epoch_lh_full_sameResultOrBothFail' o (toSpecState e) hb hslot heb hexit hsup hvalid
     hcons
   exact process_epoch_etheorem_in hpa o ho hsha e hb hslot hcond hhist ((hsame s').mp h)
 

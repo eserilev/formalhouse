@@ -16,7 +16,7 @@ The differences:
   (`MidCore`, `DepCore` with `g = fuluTabM`).
 - No builder payments and no PTC window.
 - The sync committee update is the Electra loop. It gives the same `ok` results as the Gloas
-  selection (`process_sync_committee_updates_fulu_sameOk`).
+  selection (`process_sync_committee_updates_fulu_sameResultOrBothFail`).
 - The proposer lookahead draws from every active validator, with no slashed filter, and runs the
   Electra loop. A Gloas selection that returns gives the same proposers
   (`compute_proposer_indices_ok_fulu`).
@@ -62,13 +62,13 @@ def MidOkFulu [PresetCfg] [FuluCfg] (t : BeaconState) : Prop :=
     (t.slot / P.SLOTS_PER_EPOCH ≠ 0 → s1.finalized_checkpoint.epoch + 1 ≤ t.slot / P.SLOTS_PER_EPOCH) →
     OkWith (specFourStepsFulu s1) (fun s => TailFrame t s ∧ DepFrame t s)
 
-theorem midOkFulu_of_rowBounds [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] [FuluCfg] (t : BeaconState) (hrows : RowsOk t)
+theorem midOkFulu_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] [FuluCfg] (t : BeaconState) (hrows : RowsOk t)
     (hslot : t.slot + 8192 < 2 ^ 64) (heb : EBOk P t)
     (hrl : t.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR) (hsll : t.slashings.length = P.EPOCHS_PER_SLASHINGS_VECTOR)
-    (hcons : ConsolidationsInRange t) (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : RowBounds t) :
+    (hcons : ConsolidationsInRange t) (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : PhysicalLimits t) :
     MidOkFulu t := by
   intro s1 hshape hfin0 hfin
-  have hcore := midCore_of_rowBounds fuluTabM fuluTabM_lt t hrows hslot heb hrl hsll hcons hsl
+  have hcore := midCore_of_physicalLimits fuluTabM fuluTabM_lt t hrows hslot heb hrl hsll hcons hsl
     hrb s1 hshape hfin0 hfin
   obtain ⟨cp1, cp2, cp3, bits, hs1⟩ := hshape
   have hrows1 : RowsOk s1 := by rw [hs1]; exact hrows
@@ -84,7 +84,7 @@ theorem midOkFulu_of_rowBounds [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] [Fu
     (by show @LT.lt Nat _ (t.slot / P.SLOTS_PER_EPOCH + 1 + 4) (2 ^ 64); omega)
   have hfar : t.slot / P.SLOTS_PER_EPOCH < FAR_FUTURE_EPOCH := by
     show @LT.lt Nat _ (t.slot / P.SLOTS_PER_EPOCH) (2 ^ 64 - 1); omega
-  have hsame := specFourStepsFulu_sameOk s1 tab htab hrows1 (t.slot / P.SLOTS_PER_EPOCH) _ hcur hact hfar
+  have hsame := specFourStepsFulu_sameResultOrBothFail s1 tab htab hrows1 (t.slot / P.SLOTS_PER_EPOCH) _ hcur hact hfar
   obtain ⟨v, hv, hp⟩ := hcore tab htab
   exact ⟨v, (hsame v).mpr hv, hp⟩
 
@@ -268,7 +268,7 @@ theorem committeesOkFulu_of [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] [FuluC
   have hs : s.slot + 8192 < 2 ^ 64 := hf.slot ▸ hslot
   obtain ⟨s1, h1, e1s, e1v, e1r, e1l, -⟩ := process_sync_committee_updates_total o s hs hf.randao
     hc.regLen hc.ebMax hc.keys hp.syncActive hp.selSync
-  have h1f := ((process_sync_committee_updates_fulu_sameOk P o s P_sync_pos) s1).mpr
+  have h1f := ((process_sync_committee_updates_fulu_sameResultOrBothFail P o s P_sync_pos) s1).mpr
     h1
   rw [h1f, tot_bind_ok]
   have hsel1 : ∀ seed, SelFin P o s1
@@ -284,17 +284,17 @@ theorem committeesOkFulu_of [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] [FuluC
 /-! ## The whole Fulu epoch -/
 
 /-- The Fulu steps before the committee steps succeed on mainnet at the last slot of an epoch,
-from the reachable-state facts at the epoch input and `RowBounds`, and keep `CommFrame`. -/
+from the reachable-state facts at the epoch input and `PhysicalLimits`, and keep `CommFrame`. -/
 theorem epochToCommitteesFulu_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] [FuluCfg]
     [FuluCfg.Ok] (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
     (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % P.SLOTS_PER_EPOCH = 0)
     (hvec : t.FuluVectorLengths P) (hffg : FfgInvariant P t)
     (heb : EBOk P t) (hcons : ConsolidationsInRange t)
-    (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : RowBounds t) :
+    (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : PhysicalLimits t) :
     ∃ s, epochToCommitteesFulu P FC o t = .ok s ∧ CommFrame t s := by
   have hsup : totalEffectiveBalance t < 2 ^ 60 := Nat.lt_trans hrb.supply (by decide)
-  have hmid := midOkFulu_of_rowBounds t hrows hslot heb hvec.2.2.1 hvec.2.2.2.1 hcons hsl hrb
-  have hdep := depCore_of_rowBounds fuluTabM o t hslot hrb
+  have hmid := midOkFulu_of_physicalLimits t hrows hslot heb hvec.2.2.1 hvec.2.2.2.1 hcons hsl hrb
+  have hdep := depCore_of_physicalLimits fuluTabM o t hslot hrb
   have hslot64 : t.slot < 2 ^ 64 := Nat.lt_of_le_of_lt (Nat.le_add_right _ _) hslot
   obtain ⟨hbr, -, -, -, hbits, -⟩ := hvec
   have hcp := tot_cp hffg.1.2 hffg.2 hslot64
@@ -367,13 +367,13 @@ theorem epochToCommitteesFulu_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds
       k13.2.2⟩⟩
 
 /-- The Fulu spec `process_epoch` succeeds on mainnet at the last slot of an epoch, from the
-reachable-state facts at its input, `RowBounds`, and the Fulu committee steps. -/
+reachable-state facts at its input, `PhysicalLimits`, and the Fulu committee steps. -/
 theorem process_epoch_fulu_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] [FuluCfg]
     [FuluCfg.Ok] (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
     (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % P.SLOTS_PER_EPOCH = 0)
     (hvec : t.FuluVectorLengths P) (hffg : FfgInvariant P t)
     (heb : EBOk P t) (hcons : ConsolidationsInRange t)
-    (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : RowBounds t) (hcomm : CommitteesOkFulu o t) :
+    (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : PhysicalLimits t) (hcomm : CommitteesOkFulu o t) :
     ∃ s', process_epoch_fulu P FC o t = .ok s' := by
   obtain ⟨s, hs, hf⟩ := epochToCommitteesFulu_total o t hrows hslot hlast hvec hffg heb hcons hsl
     hrb

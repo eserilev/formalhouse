@@ -8,7 +8,7 @@ import EpochProofs.Sanity.Invariants.LighthouseFuluOrder
 `epochFulu` is Lighthouse's Fulu `process_epoch`: the Gloas composition without the builder
 payments and the PTC window, with the Fulu registry constants and the Fulu proposer candidates
 (every active validator). `epochFulu_spec` shows that, under `EpochLinksFulu`, it returns the
-state of the model `process_epoch_lh_order_fulu` whenever the model returns `ok`.
+state of the model `process_epoch_lighthouse_fulu` whenever the model returns `ok`.
 -/
 
 namespace EpochProofs.Spec
@@ -297,7 +297,7 @@ structure EpochLinksFulu (G : EpochGlueFulu σ E) (o : Spec.Oracle)
     resets G.tail st3 = ok (some st5) → SyncN1 G.tail st5
 
 /-- The composed Fulu epoch returns the state of the model: when
-`process_epoch_lh_order_fulu` returns `ok`, the Rust returns `Ok` with a state whose view is the
+`process_epoch_lighthouse_fulu` returns `ok`, the Rust returns `Ok` with a state whose view is the
 model's. -/
 theorem epochFulu_spec [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds] [Spec.FuluCfg.Ok]
     (G : EpochGlueFulu σ E) (o : Spec.Oracle) (view : σ → Spec.BeaconState) (st : σ)
@@ -305,16 +305,16 @@ theorem epochFulu_spec [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds] [Spec.FuluCfg
     (hjb : (view st).justification_bits.length = Spec.JUSTIFICATION_BITS_LENGTH)
     (hpl : (view st).proposer_lookahead.length =
       (Spec.P.MIN_SEED_LOOKAHEAD + 1) * Spec.P.SLOTS_PER_EPOCH)
-    (s' : Spec.BeaconState) (h : Spec.process_epoch_lh_order_fulu o (view st) = .ok s') :
+    (s' : Spec.BeaconState) (h : Spec.process_epoch_lighthouse_fulu o (view st) = .ok s') :
     ∃ st', epochFulu G st = ok (some st') ∧ view st' = s' := by
-  unfold Spec.process_epoch_lh_order_fulu at h
+  unfold Spec.process_epoch_lighthouse_fulu at h
   obtain ⟨s1, h1, h⟩ := Spec.specM_bind_ok h
   rw [Spec.lhFullTailWithFulu_order_eq] at h
   obtain ⟨T, hT, h⟩ := Spec.specM_bind_ok h
   rw [Spec.lhRestOrderFulu_eq] at h
   obtain ⟨t1, ht1, h⟩ := Spec.specM_bind_ok h
   obtain ⟨a, b, c, d, hs1⟩ := Spec.process_justification_and_finalization_shape _ _ _
-    ((Spec.lhJustificationAndFinalization_sameOk _ _ s1).mp h1)
+    ((Spec.lhJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1)
   obtain ⟨st1, hj, hv1⟩ := justification_spec G.justification view st hL.justification hjb s1 h1
   obtain ⟨st2, hsp, hv2⟩ := singlePassFulu_spec G.singlePass o view st1 (hL.singlePass st1 hj)
     hL.registryConstants hL.registryConstantsFulu (by rw [hv1, hs1]; exact hslot) T

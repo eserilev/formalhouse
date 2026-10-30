@@ -65,7 +65,7 @@ theorem genesis_passes_eq_single_pass (p : Preset) (total_active_balance : Gwei)
     (htarget : GENESIS_EPOCH + p.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE)
     (adjusted per : Gwei)
     (hpre : slashingsPreamble p total_active_balance state.slashings = .ok (adjusted, per)) :
-    SameOk (do
+    SameResultOrBothFail (do
       let s1 ← process_inactivity_updates p state
       let s2 ← process_rewards_and_penalties p total_active_balance s1
       let s3 ← process_registry_updates p total_active_balance s2
@@ -79,9 +79,9 @@ theorem genesis_passes_eq_single_pass (p : Preset) (total_active_balance : Gwei)
   simp only [bind, Except.bind]
   rw [process_rewards_and_penalties_genesis p total_active_balance state hcurrent]
   dsimp only
-  refine SameOk.trans ?_ (passM_seq_bothSteps _ _ _ () (rowsOf state)
+  refine SameResultOrBothFail.trans ?_ (passM_seq_bothSteps _ _ _ () (rowsOf state)
     (fun c y => pure (state.withRowsChurn c y.2)))
-  apply SameOk.bind_map (process_registry_updates_rows p total_active_balance state
+  apply SameResultOrBothFail.bind_map (process_registry_updates_rows p total_active_balance state
     GENESIS_EPOCH activation_epoch hrows hcurrent hactivation)
   intro y3 hy3
   have hk3 : y3.2.map rowKey = (rowsOf state).map rowKey :=
@@ -91,10 +91,10 @@ theorem genesis_passes_eq_single_pass (p : Preset) (total_active_balance : Gwei)
   have hR3 : rowsOf (state.withRowsChurn y3.1 y3.2) = y3.2 := rowsOf_withRows state y3.2 hk3
   have hok3 : RowsOk (state.withRowsChurn y3.1 y3.2) :=
     rowsOk_withRows_of_key state y3.2 hrows hk3
-  have h4 := process_slashings_rows_sameOk p total_active_balance
+  have h4 := process_slashings_rows_sameResultOrBothFail p total_active_balance
     (state.withRowsChurn y3.1 y3.2) GENESIS_EPOCH hcurrent htarget adjusted per hpre hok3
   rw [hR3] at h4
-  refine SameOk.trans h4 (SameOk.of_eq ?_)
+  refine SameResultOrBothFail.trans h4 (SameResultOrBothFail.of_eq ?_)
   simp only [Functor.map, Except.map, bind, Except.bind, pure, Except.pure]
   cases passM (slashingsRowStep p (GENESIS_EPOCH + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) ()
     y3.2 <;> rfl
@@ -115,7 +115,7 @@ theorem lighthouse_single_pass_eq_spec_genesis [PresetCfg] [PresetCfg.Ok] (total
       .ok (adjusted, per))
     (hfinalized : state.finalized_checkpoint.epoch ≤ GENESIS_EPOCH)
     (base_reward : Row → Gwei) :
-    SameOk (do
+    SameResultOrBothFail (do
       let s1 ← process_inactivity_updates P state
       let s2 ← process_rewards_and_penalties P total_active_balance s1
       let s3 ← process_registry_updates P total_active_balance s2
@@ -124,8 +124,8 @@ theorem lighthouse_single_pass_eq_spec_genesis [PresetCfg] [PresetCfg.Ok] (total
       passM (fun churn r => lhRowStep P
           (lhContextOf state total_active_balance GENESIS_EPOCH rctx per) (base_reward r) churn r)
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
-  refine SameOk.trans (genesis_passes_eq_single_pass P total_active_balance state
-    hrows hcurrent activation_epoch hactivation (P_slashings_target_lt (by decide)) adjusted per hpre) (SameOk.of_eq ?_)
+  refine SameResultOrBothFail.trans (genesis_passes_eq_single_pass P total_active_balance state
+    hrows hcurrent activation_epoch hactivation (P_slashings_target_lt (by decide)) adjusted per hpre) (SameResultOrBothFail.of_eq ?_)
   have hstep : ∀ churn r, r ∈ rowsOf state →
       lhRowStep P (lhContextOf state total_active_balance GENESIS_EPOCH rctx per)
         (base_reward r) churn r =

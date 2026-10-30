@@ -172,18 +172,18 @@ theorem process_slashings_rows (p : Preset) (total_active_balance : Gwei) (state
     simp only [Functor.map, Except.map, pure, Except.pure, List.nil_append,
       BeaconState.withRows, hv, hs]
 
-/-- `process_slashings_rows` in `SameOk` form, for the single pass proof. -/
-theorem process_slashings_rows_sameOk (p : Preset) (total_active_balance : Gwei)
+/-- `process_slashings_rows` in `SameResultOrBothFail` form, for the single pass proof. -/
+theorem process_slashings_rows_sameResultOrBothFail (p : Preset) (total_active_balance : Gwei)
     (state : BeaconState) (epoch : Epoch) (hepoch : get_current_epoch p state = .ok epoch)
     (htarget : epoch + p.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE)
     (adjusted per : Gwei)
     (hpre : slashingsPreamble p total_active_balance state.slashings = .ok (adjusted, per))
     (hrows : RowsOk state) :
-    SameOk (process_slashings p total_active_balance state)
+    SameResultOrBothFail (process_slashings p total_active_balance state)
       ((fun x => state.withRows x.2) <$>
         passM (slashingsRowStep p (epoch + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) ()
           (rowsOf state)) :=
-  SameOk.of_eq (process_slashings_rows p total_active_balance state epoch hepoch htarget
+  SameResultOrBothFail.of_eq (process_slashings_rows p total_active_balance state epoch hepoch htarget
     adjusted per hpre hrows)
 
 end EpochProofs.Spec

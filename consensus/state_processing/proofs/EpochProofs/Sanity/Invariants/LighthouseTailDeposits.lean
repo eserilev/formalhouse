@@ -433,7 +433,7 @@ theorem process_pending_deposits_decide [PresetCfg] (o : Oracle) (total_active_b
     (s : BeaconState) (current_epoch : Epoch)
     (hcurrent : get_current_epoch P s = .ok current_epoch)
     (hfar : current_epoch + 1 ≤ FAR_FUTURE_EPOCH) :
-    SameOk (process_pending_deposits P total_active_balance
+    SameResultOrBothFail (process_pending_deposits P total_active_balance
         (apply_pending_deposit P o) s)
       (do
         let finalized_slot ←

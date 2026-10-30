@@ -145,6 +145,8 @@ import EpochProofs.Equiv.SinglePassLoopModel
 import EpochProofs.Trusted.EpochTail
 import EpochProofs.Equiv.DepositWrites
 import EpochProofs.Equiv.ListWrites
+import EpochProofs.Assumptions.Etheorem
+import EpochProofs.Assumptions
 import EpochProofs.Axioms
 import EpochProofs.Caches
 import EpochProofs.CacheBridge.ProgressiveBalances
@@ -162,10 +164,8 @@ import EpochProofs.Sanity.FuluSinglePass
 import EpochProofs.Spec.FuluEpoch
 import EpochProofs.Sanity.FuluEpoch
 import EpochProofs.Sanity.Invariants.FuluOrder
-import EpochProofs.Formalhouse
 import EpochProofs.Sanity.Invariants.LighthouseFulu
 import EpochProofs.Sanity.Invariants.LighthouseFuluOrder
-import EpochProofs.FormalhouseFulu
 import EpochProofs.Sanity.Invariants.FuluSteps
 import EpochProofs.Sanity.Invariants.FuluLengths
 import EpochProofs.Sanity.Invariants.FuluPubkeys
@@ -173,14 +173,11 @@ import EpochProofs.Sanity.Invariants.FuluConsolidations
 import EpochProofs.Sanity.Invariants.FuluExits
 import EpochProofs.Sanity.Invariants.FuluBalance
 import EpochProofs.Sanity.Invariants.FuluReachable
-import EpochProofs.FormalhouseFuluReachable
 import EpochProofs.Spec.Block.Upgrade
 import EpochProofs.Sanity.Invariants.ForkUpgrade
 import EpochProofs.Equiv.Upgrade
-import EpochProofs.FormalhouseFinal
 import EpochProofs.Trusted.CacheUpkeep
 import EpochProofs.CacheBridge.Upkeep
-import EpochProofs.FormalhouseUpkeep
 import EpochProofs.Equiv.EpochContexts
 import EpochProofs.Equiv.StepContext
 import EpochProofs.Equiv.PendingDepositsLen
@@ -200,9 +197,6 @@ import EpochProofs.Compose.Committees
 import EpochProofs.Compose.Tail
 import EpochProofs.Compose.Epoch
 import EpochProofs.Compose.Fulu
-import EpochProofs.FormalhouseRust
 import EpochProofs.NonVacuity
-import EpochProofs.FormalhouseReadable
 import EpochProofs.Headline
 import EpochProofs.HeadlinePresets
-import EpochProofs.NonVacuityReadable

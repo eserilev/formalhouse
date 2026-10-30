@@ -108,35 +108,12 @@ section WithPreset
 
 variable [EthCLSpecs.Gloas.Preset] [HasherTag]
 
-open EthCLSpecs.Gloas in
-/-- The preset values that the passes read, beyond `PresetAgrees`. -/
-structure PassesPresetAgrees [EthCLSpecs.Gloas.Config] (p : Spec.Preset) : Prop
-    extends PresetAgrees p where
-  minEpochsToInactivityPenalty :
-    Const.minEpochsToInactivityPenalty.toNat = p.MIN_EPOCHS_TO_INACTIVITY_PENALTY
-  inactivityScoreBias : Const.inactivityScoreBias.toNat = p.INACTIVITY_SCORE_BIAS
-  inactivityScoreRecoveryRate :
-    Const.inactivityScoreRecoveryRate.toNat = p.INACTIVITY_SCORE_RECOVERY_RATE
-  inactivityPenaltyQuotientBellatrix :
-    Const.inactivityPenaltyQuotientBellatrix = p.INACTIVITY_PENALTY_QUOTIENT_BELLATRIX
-  epochsPerSlashingsVector : Const.epochsPerSlashingsVector = p.EPOCHS_PER_SLASHINGS_VECTOR
-  proportionalSlashingMultiplierBellatrix :
-    Const.proportionalSlashingMultiplierBellatrix = p.PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX
-  slotsPerHistoricalRoot : Const.slotsPerHistoricalRoot = p.SLOTS_PER_HISTORICAL_ROOT
-  slotsPerEpochTwo : 2 ≤ p.SLOTS_PER_EPOCH
-  epochsPerSlashingsVectorLt : p.EPOCHS_PER_SLASHINGS_VECTOR < 2 ^ 63
-  proportionalSlashingMultiplierLt : p.PROPORTIONAL_SLASHING_MULTIPLIER_BELLATRIX < 2 ^ 64
-  /-- The increment and the base reward factor of mainnet and minimal. With them the base reward is
-  at most `1 / 256` of the effective balance (`rewardsBaseReward_bound`), so Etheorem's product
-  `base_reward * weight` fits in `uint64`. -/
-  effectiveBalanceIncrementEq : p.EFFECTIVE_BALANCE_INCREMENT = 1000000000
-  baseRewardFactorEq : p.BASE_REWARD_FACTOR = 64
 
 /-- A loop that writes a plain state on each step runs as a fold over plain states. -/
-theorem forIn_pureState {α : Type} (G : α → EState → EState)
+theorem forIn_pureState {α : Type} (G : α → EtheoremState → EtheoremState)
     (body : α → EthCLSpecs.Gloas.State → Id (ForInStep EthCLSpecs.Gloas.State))
     (hb : ∀ a w, body a (pureState w) = pure (ForInStep.yield (pureState (G a w)))) :
-    ∀ (l : List α) (v : EState), forIn l (pureState v) body = pure (pureState (l.foldl (fun w a => G a w) v)) := by
+    ∀ (l : List α) (v : EtheoremState), forIn l (pureState v) body = pure (pureState (l.foldl (fun w a => G a w) v)) := by
   intro l
   induction l with
   | nil => intro v; rfl
@@ -144,12 +121,12 @@ theorem forIn_pureState {α : Type} (G : α → EState → EState)
 
 /-- A monadic loop over plain states runs as a fold, while each step succeeds. `I` holds on every
 state the fold reaches. -/
-theorem forIn_run_pureState {α : Type} (s0 : EthCLSpecs.Gloas.State) (G : α → EState → EState)
-    (I : EState → Prop) (body : α → EthCLSpecs.Gloas.State → GloasRun (ForInStep EthCLSpecs.Gloas.State))
+theorem forIn_run_pureState {α : Type} (s0 : EthCLSpecs.Gloas.State) (G : α → EtheoremState → EtheoremState)
+    (I : EtheoremState → Prop) (body : α → EthCLSpecs.Gloas.State → GloasRun (ForInStep EthCLSpecs.Gloas.State))
     (l : List α) (hI : ∀ a ∈ l, ∀ w, I w → I (G a w))
     (hb : ∀ a ∈ l, ∀ w, I w →
       (body a (pureState w)).run s0 = .ok (ForInStep.yield (pureState (G a w)), s0))
-    (v : EState) (hv : I v) :
+    (v : EtheoremState) (hv : I v) :
     (forIn l (pureState v) body).run s0 = .ok (pureState (l.foldl (fun w a => G a w) v), s0) := by
   induction l generalizing v with
   | nil => rfl
@@ -159,25 +136,25 @@ theorem forIn_run_pureState {α : Type} (s0 : EthCLSpecs.Gloas.State) (G : α �
       (fun b hb' w hw => hb b (by simp [hb']) w hw) _ (hI a (by simp) v hv)
 
 /-- The pure box is the uncached constructor, so a `match` on it reduces. -/
-theorem pureState_eq (w : EState) :
+theorem pureState_eq (w : EtheoremState) :
     pureState w = SizzLean.Cache.SSZ.Box.uncached ⟨w⟩ := rfl
 
 /-- The participation list that Etheorem reads for `epoch`. -/
-def eParticipation (e : EState) (epoch : UInt64) :
+def eParticipation (e : EtheoremState) (epoch : UInt64) :
     SSZList EthCLSpecs.Gloas.ParticipationFlags EthCLSpecs.Gloas.Const.validatorRegistryLimit :=
   if epoch == EthCLSpecs.Gloas.computeEpochAtSlot e.slot then e.currentEpochParticipation
   else e.previousEpochParticipation
 
 /-- The participating indices of `flag` that Etheorem returns, when every participation read is
 in bounds. -/
-def eUnslashed (e : EState) (flag : Nat) (epoch : UInt64) : Array UInt64 :=
+def eUnslashed (e : EtheoremState) (flag : Nat) (epoch : UInt64) : Array UInt64 :=
   (EthCLSpecs.Gloas.getActiveValidatorIndices (pureState e) epoch).filter
     (fun i => hasFlag (eParticipation e epoch)[i.toNat]! flag && !(e.validators[i.toNat]!).slashed)
 
 /-- Etheorem's `getUnslashedParticipatingIndices` returns `eUnslashed` when the participation
 list covers every active index. Etheorem reads `epoch_participation[i]` with `sszGetIdx`, which
 rejects past the end, as the spec's `IndexError` does. -/
-theorem getUnslashedParticipatingIndices_ok (e : EState) (flag : Nat) (epoch : UInt64)
+theorem getUnslashedParticipatingIndices_ok (e : EtheoremState) (flag : Nat) (epoch : UInt64)
     (hlt : ∀ i ∈ (EthCLSpecs.Gloas.getActiveValidatorIndices (pureState e) epoch).toList,
       i.toNat < (eParticipation e epoch).val.size) :
     EthCLSpecs.Gloas.getUnslashedParticipatingIndices (pureState e) flag epoch =
@@ -205,7 +182,7 @@ theorem getUnslashedParticipatingIndices_ok (e : EState) (flag : Nat) (epoch : U
     split <;> rfl
 
 /-- Every validator active in the previous epoch is eligible. -/
-theorem active_prev_mem_eligible (e : EState) (i : UInt64)
+theorem active_prev_mem_eligible (e : EtheoremState) (i : UInt64)
     (hi : i ∈ (EthCLSpecs.Gloas.getActiveValidatorIndices (pureState e)
       (EthCLSpecs.Gloas.previousEpochOf (pureState e))).toList) :
     i ∈ (EthCLSpecs.Gloas.getEligibleValidatorIndices (pureState e)).toList := by
@@ -220,7 +197,7 @@ theorem active_prev_mem_eligible (e : EState) (i : UInt64)
 variable [EthCLSpecs.Gloas.Config] {p : Spec.Preset} (hp : PresetAgrees p)
 include hp
 
-theorem active_lt (e : EState) (epoch : UInt64) :
+theorem active_lt (e : EtheoremState) (epoch : UInt64) :
     ∀ i ∈ (EthCLSpecs.Gloas.getActiveValidatorIndices (pureState e) epoch).toList,
       i.toNat < e.validators.val.size := by
   have hsize : e.validators.val.size < 2 ^ 64 :=
@@ -236,9 +213,9 @@ theorem active_lt (e : EState) (epoch : UInt64) :
 
 /-- `get_unslashed_participating_indices` equals Etheorem's. The reference also raises when the
 epoch is not the previous or the current one. Etheorem has no such assert. -/
-theorem get_unslashed_participating_indices_ok (e : EState) (flag : Nat) (hflag : flag < 3)
+theorem get_unslashed_participating_indices_ok (e : EtheoremState) (flag : Nat) (hflag : flag < 3)
     (epoch : UInt64) {l : List Nat}
-    (h : Spec.get_unslashed_participating_indices p (absEState e) flag epoch.toNat = .ok l) :
+    (h : Spec.get_unslashed_participating_indices p (toSpecState e) flag epoch.toNat = .ok l) :
     EthCLSpecs.Gloas.getUnslashedParticipatingIndices (pureState e) flag epoch =
       .ok (eUnslashed e flag epoch) ∧
     l = (eUnslashed e flag epoch).toList.map UInt64.toNat := by
@@ -250,7 +227,7 @@ theorem get_unslashed_participating_indices_ok (e : EState) (flag : Nat) (hflag 
   rw [get_active_validator_indices_eq hp] at h
   simp only [pure, Except.pure] at h
   generalize hpart : (if (epoch.toNat == UInt64.toNat (EthCLSpecs.Gloas.currentEpochOf (pureState e))) = true then
-      (absEState e).current_epoch_participation else (absEState e).previous_epoch_participation) = part at h
+      (toSpecState e).current_epoch_participation else (toSpecState e).previous_epoch_participation) = part at h
   rw [Spec.forIn_yield_eq_foldlM (step := Spec.filterStep
       (fun i => do Spec.has_flag (← Spec.listGet part i) flag) id)] at h
   rotate_left
@@ -270,15 +247,15 @@ theorem get_unslashed_participating_indices_ok (e : EState) (flag : Nat) (hflag 
   rw [h1] at h
   dsimp only at h
   rw [Spec.forIn_yield_eq_foldlM (step := Spec.filterStep
-      (fun i => do pure !(← Spec.listGet (absEState e).validators i).slashed) id)] at h
+      (fun i => do pure !(← Spec.listGet (toSpecState e).validators i).slashed) id)] at h
   rotate_left
   · intro i acc
     simp only [Spec.filterStep, bind, Except.bind, pure, Except.pure]
-    cases Spec.listGet (absEState e).validators i with
+    cases Spec.listGet (toSpecState e).validators i with
     | error err => rfl
     | ok v => dsimp only; cases v.slashed <;> rfl
   cases h2 : l1.foldlM
-      (Spec.filterStep (fun i => do pure !(← Spec.listGet (absEState e).validators i).slashed) id) [] with
+      (Spec.filterStep (fun i => do pure !(← Spec.listGet (toSpecState e).validators i).slashed) id) [] with
   | error err => rw [h2] at h; cases h
   | ok l2 =>
   rw [h2] at h
@@ -311,9 +288,9 @@ theorem get_unslashed_participating_indices_ok (e : EState) (flag : Nat) (hflag 
   apply List.filter_congr
   intro i hi
   have hlt := active_lt hp e epoch i hi
-  have hP2 : okValue (do pure !(← Spec.listGet (absEState e).validators i.toNat).slashed) =
+  have hP2 : okValue (do pure !(← Spec.listGet (toSpecState e).validators i.toNat).slashed) =
       !(e.validators[i.toNat]!).slashed := by
-    have hg : Spec.listGet (absEState e).validators i.toNat =
+    have hg : Spec.listGet (toSpecState e).validators i.toNat =
         .ok (absValidator e.validators.val[i.toNat]!) := by
       simp [Spec.listGet, hlt, pure, Except.pure]
     simp only [hg, okValue, bind, Except.bind, absValidator, pure, Except.pure, sszList_getElem!_val]
@@ -357,8 +334,8 @@ theorem validatorEligible_eq (v : EthCLSpecs.Gloas.Validator) (E : UInt64) {b : 
     · rw [if_neg hs] at h; cases h; simp [ha, hs]
 
 /-- `get_eligible_validator_indices` equals Etheorem's. -/
-theorem get_eligible_validator_indices_ok (e : EState) {l : List Nat}
-    (h : Spec.get_eligible_validator_indices p (absEState e) = .ok l) :
+theorem get_eligible_validator_indices_ok (e : EtheoremState) {l : List Nat}
+    (h : Spec.get_eligible_validator_indices p (toSpecState e) = .ok l) :
     l = (EthCLSpecs.Gloas.getEligibleValidatorIndices (pureState e)).toList.map UInt64.toNat := by
   have hsize : e.validators.val.size < 2 ^ 64 :=
     Nat.lt_of_le_of_lt e.validators.property hp.validatorRegistryLimit
@@ -367,7 +344,7 @@ theorem get_eligible_validator_indices_ok (e : EState) {l : List Nat}
   unfold EthCLSpecs.Gloas.getEligibleValidatorIndices
   simp only [view_uncachedBox, SSZList.toArray]
   rw [indicesWhere_toList, List.map_map]
-  simp only [List.nil_append, absEState_validators, SSZList.toList] at hQ ⊢
+  simp only [List.nil_append, toSpecState_validators, SSZList.toList] at hQ ⊢
   rw [zipIdx_map_eq, List.filter_map, List.map_map]
   rw [zipIdx_map_eq] at hQ
   have hfilter : ∀ i ∈ List.range e.validators.val.size,
@@ -390,14 +367,14 @@ theorem get_eligible_validator_indices_ok (e : EState) {l : List Nat}
 omit hp in
 /-- `is_in_inactivity_leak` equals Etheorem's. Etheorem's subtraction wraps only where the
 reference raises. -/
-theorem is_in_inactivity_leak_ok (hpp : PassesPresetAgrees p) (e : EState) {b : Bool}
-    (h : Spec.is_in_inactivity_leak p (absEState e) = .ok b) :
+theorem is_in_inactivity_leak_ok (hpp : PassesPresetAgrees p) (e : EtheoremState) {b : Bool}
+    (h : Spec.is_in_inactivity_leak p (toSpecState e) = .ok b) :
     b = EthCLSpecs.Gloas.isInInactivityLeak (pureState e) := by
   unfold Spec.is_in_inactivity_leak Spec.get_finality_delay at h
   rw [get_previous_epoch_eq hpp.toPresetAgrees] at h
   simp only [bind, Except.bind] at h
   cases hd : Spec.uint64Sub (EthCLSpecs.Gloas.previousEpochOf (pureState e)).toNat
-      (absEState e).finalized_checkpoint.epoch with
+      (toSpecState e).finalized_checkpoint.epoch with
   | error err => rw [hd] at h; cases h
   | ok d =>
     rw [hd] at h
