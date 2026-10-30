@@ -200,3 +200,4 @@ import EpochProofs.Compose.Fulu
 import EpochProofs.NonVacuity
 import EpochProofs.Headline
 import EpochProofs.HeadlinePresets
+import EpochProofs.AgreesEtheorem.Presets
