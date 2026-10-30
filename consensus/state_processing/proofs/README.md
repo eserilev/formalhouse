@@ -49,6 +49,14 @@ of it (`EpochProofs/Spec/`), not the Python itself.
 | `lighthouse_rust_fulu_epoch_eq_etheorem` | `FuluRustEqualsEtheorem` | as above, and `FuluRustGlueFacts` |
 | `lighthouse_model_gloas_epoch_agrees_pyspec` | `SameResultOrBothFail`: the model and the transcription's `process_epoch` give the same state, or both fail | `GloasEpochRun`, `HistoricalSummariesBelowLimit` |
 | `lighthouse_model_fulu_epoch_agrees_pyspec` | the same for Fulu | `FuluEpochRun`, `HistoricalSummariesBelowLimit` |
+| `lighthouse_model_gloas_epoch_agrees_etheorem` | `SameResultOrBothFail` of the model and Etheorem's `processEpoch` (`etheoremProcessEpoch`): the same state, or both fail. No pyspec precondition | `GloasEquivalenceAssumptions` (state facts of the input), `GloasEtheoremDivergenceAssumptions`, `GloasOracleMatchesEtheorem` |
+| `lighthouse_model_fulu_epoch_agrees_etheorem` | the same for Fulu | `FuluEquivalenceAssumptions`, `FuluEtheoremBridgeConditions`, `FuluOracleMatchesEtheorem` |
+| `lighthouse_rust_gloas_epoch_of_etheorem_ok` (`_fulu_`) | when Etheorem succeeds, the composed Rust returns `Ok` with the same state | as above, and the glue facts |
+
+The `_agrees_etheorem` theorems and their proofs are in `EpochProofs/AgreesEtheorem/`, with their
+own state bundles and their mainnet and minimal versions (`Presets.lean`). They take facts about
+the epoch input, not the run; `GloasEpochRun.invariants` and `GloasEpochRun.atEpochBoundary`
+give the first two on every reachable input. Each field of the bundles says why it is needed.
 
 `lighthouse_model_gloas_epoch_eq_etheorem_upkeep` and
 `lighthouse_model_gloas_epoch_eq_etheorem_at_input` differ only in the cache facts
