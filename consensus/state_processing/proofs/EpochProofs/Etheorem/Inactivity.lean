@@ -10,7 +10,8 @@ Etheorem raises on a score read past the end and on an overflow of
 `score + INACTIVITY_SCORE_BIAS`, as the reference does.
 -/
 
-namespace EpochProofs.Etheorem
+forkproof EpochEtheorem
+
 open EthCLLib.Spec EthCLLib.Proofs SizzLean.Repr SizzLean.Proofs EthCLSpecs.Proofs.Gloas
 
 variable [EthCLSpecs.Gloas.Preset] [HasherTag]
@@ -417,4 +418,5 @@ theorem inactivity_updates_etheorem (e : EState) {s' : Spec.BeaconState}
 
 end Inactivity
 
-end EpochProofs.Etheorem
+end forkproof
+

@@ -741,7 +741,8 @@ where the spec succeeds.
 | `EpochProofs/Trusted/` | The Rust contracts and glue facts. |
 | `EpochProofs/Spec/` | The transcription of the pyspec (v1.7.0-beta.4). |
 | `EpochProofs/Sanity/` | Facts about the transcription, the reachable-state invariants and the order proofs. |
-| `EpochProofs/Etheorem/` | The transcription's epoch equals Etheorem's. |
+| `EpochProofs/Etheorem/` | The transcription's epoch equals Etheorem's, for Gloas and Fulu. |
+| `ForkReplay.lean` | `forkproof`: a proof written once and elaborated for each fork. |
 | `EpochProofs/CacheBridge/` | The cache reads equal the spec values. |
 | `EpochProofs/FormalhouseFinal.lean` | The final theorems. |
 | `EpochProofs/FormalhouseReadable.lean` | Named conclusions and hypothesis bundles, the restated theorems. |

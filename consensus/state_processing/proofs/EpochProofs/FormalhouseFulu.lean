@@ -1,4 +1,4 @@
-import EpochProofs.Etheorem.Fulu.Epoch
+import EpochProofs.Etheorem.Epoch
 import EpochProofs.Sanity.Invariants.LighthouseFuluOrder
 import EpochProofs.Sanity.Invariants.TotalityFulu
 

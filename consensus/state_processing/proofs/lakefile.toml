@@ -30,5 +30,10 @@ path = "../../types/proofs"
 [leanOptions]
 maxHeartbeats = 1000000
 
+# The fork-replay commands (`fork_family`, `forkproof`): a proof written once and elaborated for
+# each fork. Its own library, so other proof folders and packages can depend on it.
+[[lean_lib]]
+name = "ForkReplay"
+
 [[lean_lib]]
 name = "EpochProofs"

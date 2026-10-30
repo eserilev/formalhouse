@@ -3,6 +3,8 @@ import EpochProofs.Spec.Epoch
 import EpochProofs.Sanity.RewardsBound
 import EpochProofs.Sanity.Invariants.BalanceFloor
 import EthCLSpecs.Gloas.EpochProcessing
+import EthCLSpecs.Fulu.EpochProcessing
+import EpochProofs.Sanity.FuluRegistry
 
 /-!
 # Shared helpers: the reference equals Etheorem
@@ -14,10 +16,15 @@ Etheorem's `UInt64` arithmetic wraps. The reference raises on overflow, as pyspe
 lemma about arithmetic has the form "if the reference returns `n`, then Etheorem's value reads
 as `n`". A wrap in Etheorem happens only where the reference raises.
 
-`PresetAgrees p` says that the Etheorem preset and config hold the values of `p`.
+`PresetAgrees p` says that the Etheorem preset and config hold the values of `p`. Fulu's churn
+limits are the Electra ones, and `FuluChurnAgrees p f` says that Etheorem's Fulu config holds
+them.
+
+Each proof here holds for Gloas and for Fulu. `forkproof EpochEtheorem` (see `Forks.lean`)
+elaborates the shared text once per fork, and `forkonly` holds the parts that differ.
 -/
 
-namespace EpochProofs.Etheorem
+forkproof EpochEtheorem
 
 open EthCLLib.Spec EthCLLib.Proofs SizzLean.Repr SizzLean.Proofs
 
@@ -295,6 +302,7 @@ variable [EthCLSpecs.Gloas.Preset] [EthCLSpecs.Gloas.Config]
 
 /-! ## The preset -/
 
+forkonly Gloas
 open EthCLSpecs.Gloas in
 /-- The Etheorem preset and config hold the values of `p`. Each field is one constant that a
 helper below reads. `presetAgrees_mainnet` and `presetAgrees_minimal` prove it for the two
@@ -318,6 +326,37 @@ structure PresetAgrees (p : Spec.Preset) : Prop where
     Const.minValidatorWithdrawabilityDelay.toNat = p.MIN_VALIDATOR_WITHDRAWABILITY_DELAY
   validatorRegistryLimit : Const.validatorRegistryLimit < 2 ^ 64
   genesisForkVersion : Const.genesisForkVersion = p.GENESIS_FORK_VERSION
+end forkonly
+
+forkonly Fulu
+open EthCLSpecs.Fulu in
+/-- The Etheorem preset and config hold the values of `p`. Each field is one constant that a
+helper below reads. `presetAgrees_mainnet` and `presetAgrees_minimal` prove it for the two
+presets. -/
+structure PresetAgrees (p : Spec.Preset) : Prop where
+  slotsPerEpoch : Const.slotsPerEpoch = p.SLOTS_PER_EPOCH
+  effectiveBalanceIncrement : Const.effectiveBalanceIncrement = p.EFFECTIVE_BALANCE_INCREMENT
+  effectiveBalanceIncrementG : Const.effectiveBalanceIncrementG.toNat = p.EFFECTIVE_BALANCE_INCREMENT
+  baseRewardFactor : Const.baseRewardFactor = p.BASE_REWARD_FACTOR
+  maxSeedLookahead : Const.maxSeedLookahead.toNat = p.MAX_SEED_LOOKAHEAD
+  minSeedLookahead : Const.minSeedLookahead.toNat = p.MIN_SEED_LOOKAHEAD
+  epochsPerHistoricalVector : Const.epochsPerHistoricalVector = p.EPOCHS_PER_HISTORICAL_VECTOR
+  minPerEpochChurnLimitElectra :
+    Const.minPerEpochChurnLimitElectra.toNat = p.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA
+  minValidatorWithdrawabilityDelay :
+    Const.minValidatorWithdrawabilityDelay.toNat = p.MIN_VALIDATOR_WITHDRAWABILITY_DELAY
+  validatorRegistryLimit : Const.validatorRegistryLimit < 2 ^ 64
+  genesisForkVersion : Const.genesisForkVersion = p.GENESIS_FORK_VERSION
+
+open EthCLSpecs.Fulu in
+/-- The Etheorem Fulu churn config holds the values of the Fulu config `f`, and `f` relates to
+`p` as `fuluTab` needs. Then the Fulu churn of a total is the Gloas churn at `fuluTab`. -/
+structure FuluChurnAgrees (p : Spec.Preset) (f : Spec.FuluConfig) : Prop where
+  compat : Spec.FuluCompat p f
+  churnLimitQuotient : Const.churnLimitQuotient.toNat = f.CHURN_LIMIT_QUOTIENT
+  maxPerEpochActivationExitChurnLimit :
+    Const.maxPerEpochActivationExitChurnLimit.toNat = f.MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT
+end forkonly
 
 /-! ## Epochs and slots -/
 
@@ -550,6 +589,7 @@ theorem get_base_reward_per_increment_ok (e : EState) {n : Nat}
     · cases h
     · rw [← hm']; exact (Except.ok.inj h)
 
+forkonly Gloas
 theorem get_exit_churn_limit_ok (e : EState) {n : Nat}
     (h : Spec.get_exit_churn_limit p (etheoremTotalActiveBalance e) = .ok n) :
     (EthCLSpecs.Gloas.getExitChurnLimit (pureState e)).toNat = n := by
@@ -603,6 +643,57 @@ theorem get_activation_churn_limit_ok (e : EState) {n : Nat}
         have hc := uint64Sub_ok hs
         simp only [pure, Except.pure, Except.ok.injEq] at h
         rw [umin_toNat, hc, hp.maxPerEpochActivationChurnLimitGloas, h]
+end forkonly
+
+forkonly Fulu
+theorem get_activation_exit_churn_limit_ok {f : Spec.FuluConfig} (hf : FuluChurnAgrees p f)
+    (e : EState) {n : Nat}
+    (h : Spec.get_activation_exit_churn_limit p f (etheoremTotalActiveBalance e) = .ok n) :
+    (EthCLSpecs.Fulu.getActivationExitChurnLimit (pureState e)).toNat = n := by
+  unfold Spec.get_activation_exit_churn_limit Spec.get_balance_churn_limit at h
+  unfold EthCLSpecs.Fulu.getActivationExitChurnLimit EthCLSpecs.Fulu.getBalanceChurnLimit
+  rw [← hf.churnLimitQuotient] at h
+  cases hd : Spec.uint64Div (EthCLSpecs.Fulu.getTotalActiveBalance (pureState e)).toNat
+      EthCLSpecs.Fulu.Const.churnLimitQuotient.toNat with
+  | error err => rw [hd] at h; cases h
+  | ok d =>
+    rw [hd] at h
+    have hd' := uint64Div_ok hd
+    simp only [bind, Except.bind] at h
+    rw [← hp.minPerEpochChurnLimitElectra, ← hd', ← umax_toNat, ← hp.effectiveBalanceIncrementG] at h
+    cases hm : Spec.uint64Mod (umax EthCLSpecs.Fulu.Const.minPerEpochChurnLimitElectra
+        (EthCLSpecs.Fulu.getTotalActiveBalance (pureState e) /
+          EthCLSpecs.Fulu.Const.churnLimitQuotient)).toNat
+        EthCLSpecs.Fulu.Const.effectiveBalanceIncrementG.toNat with
+    | error err => rw [hm] at h; cases h
+    | ok m =>
+      rw [hm] at h
+      rw [← uint64Mod_ok hm] at h
+      dsimp only at h
+      split at h
+      · cases h
+      · rename_i c hs
+        have hc := uint64Sub_ok hs
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        rw [umin_toNat, hc, hf.maxPerEpochActivationExitChurnLimit, h]
+
+/-- The Gloas exit churn at `fuluTab` reads as Etheorem's Fulu churn. -/
+theorem get_exit_churn_limit_ok {f : Spec.FuluConfig} (hf : FuluChurnAgrees p f) (e : EState)
+    {n : Nat}
+    (h : Spec.get_exit_churn_limit p (Spec.fuluTab p f (etheoremTotalActiveBalance e)) = .ok n) :
+    (EthCLSpecs.Fulu.getActivationExitChurnLimit (pureState e)).toNat = n := by
+  rw [← Spec.fulu_exit_churn_eq p f hf.compat] at h
+  exact get_activation_exit_churn_limit_ok hp hf e h
+
+/-- The Gloas activation churn at `fuluTab` reads as Etheorem's Fulu churn. -/
+theorem get_activation_churn_limit_ok {f : Spec.FuluConfig} (hf : FuluChurnAgrees p f)
+    (e : EState) {n : Nat}
+    (h : Spec.get_activation_churn_limit p (Spec.fuluTab p f (etheoremTotalActiveBalance e)) =
+      .ok n) :
+    (EthCLSpecs.Fulu.getActivationExitChurnLimit (pureState e)).toNat = n := by
+  rw [← Spec.fulu_activation_churn_eq p f hf.compat] at h
+  exact get_activation_exit_churn_limit_ok hp hf e h
+end forkonly
 
 end Rewards
 
@@ -727,6 +818,7 @@ include hp
 
 open EthCLSpecs.Proofs.Gloas (GloasRun)
 
+forkonly Gloas
 omit hp in
 /-- Etheorem's `computeExitEpochAndUpdateChurn` on a plain state, as one value. -/
 theorem computeExitEpochAndUpdateChurn_run (e : EState) (b : UInt64) :
@@ -849,6 +941,132 @@ theorem compute_exit_epoch_and_update_churn_etheorem (e : EState) (b : UInt64) {
     refine ⟨_, _, rfl, by simp only [hEn], ?_⟩
     simp only [absEState]
     rw [hf', hEn]
+end forkonly
+
+forkonly Fulu
+omit hp in
+/-- Etheorem's `computeExitEpochAndUpdateChurn` on a plain state, as one value. -/
+theorem computeExitEpochAndUpdateChurn_run (e : EState) (b : UInt64) :
+    (EthCLSpecs.Fulu.computeExitEpochAndUpdateChurn (StateTransition := FuluRun) b).run
+        (pureState e) =
+      (let earliest := umax e.earliestExitEpoch
+          (EthCLSpecs.Fulu.computeActivationExitEpoch (EthCLSpecs.Fulu.computeEpochAtSlot e.slot))
+       let per := EthCLSpecs.Fulu.getActivationExitChurnLimit (pureState e)
+       let consume := if e.earliestExitEpoch < earliest then per else e.exitBalanceToConsume
+       let r := EthCLSpecs.Fulu.reserveChurn b consume per earliest
+       .ok (r.1, pureState { e with exitBalanceToConsume := r.2 - b, earliestExitEpoch := r.1 })) :=
+  rfl
+
+/-- `compute_exit_epoch_and_update_churn` equals Etheorem's. Both write the same two churn
+fields and return the same exit epoch. -/
+theorem compute_exit_epoch_and_update_churn_etheorem {f : Spec.FuluConfig}
+    (hf : FuluChurnAgrees p f) (e : EState) (b : UInt64) {ep : Nat} {s' : Spec.BeaconState}
+    (h : Spec.compute_exit_epoch_and_update_churn p (Spec.fuluTab p f (etheoremTotalActiveBalance e))
+      (absEState e) b.toNat = .ok (ep, s')) :
+    ∃ ee ebtc : UInt64,
+      (EthCLSpecs.Fulu.computeExitEpochAndUpdateChurn (StateTransition := FuluRun) b).run
+          (pureState e) =
+        .ok (ee, pureState { e with exitBalanceToConsume := ebtc, earliestExitEpoch := ee }) ∧
+      ep = ee.toNat ∧
+      s' = absEState { e with exitBalanceToConsume := ebtc, earliestExitEpoch := ee } := by
+  rw [computeExitEpochAndUpdateChurn_run]
+  unfold Spec.compute_exit_epoch_and_update_churn at h
+  rw [get_current_epoch_eq hp] at h
+  simp only [bind, Except.bind, absEState_earliest_exit_epoch,
+    absEState_exit_balance_to_consume] at h
+  generalize hc : EthCLSpecs.Fulu.currentEpochOf (pureState e) = c at h
+  have hc' : EthCLSpecs.Fulu.computeEpochAtSlot e.slot = c := hc
+  rw [hc']
+  split at h
+  · cases h
+  next cae hcae =>
+  have hcae' := compute_activation_exit_epoch_ok hp c hcae
+  split at h
+  · cases h
+  next per hper =>
+  have hper' := get_exit_churn_limit_ok hp hf e hper
+  generalize hE : umax e.earliestExitEpoch (EthCLSpecs.Fulu.computeActivationExitEpoch c) = E
+  have hEn : E.toNat = max e.earliestExitEpoch.toNat cae := by rw [← hE, umax_toNat, hcae']
+  generalize hP : EthCLSpecs.Fulu.getActivationExitChurnLimit (pureState e) = P at hper'
+  generalize hC : (if e.earliestExitEpoch < E then P else e.exitBalanceToConsume) = C
+  have hCn : C.toNat = (if e.earliestExitEpoch.toNat < max e.earliestExitEpoch.toNat cae then per
+      else e.exitBalanceToConsume.toNat) := by
+    rw [← hC, ← hEn]
+    split
+    · rename_i hlt; rw [if_pos (UInt64.lt_iff_toNat_lt.mp hlt), hper']
+    · rename_i hlt; rw [if_neg (fun h' => hlt (UInt64.lt_iff_toNat_lt.mpr h'))]
+  rw [← hCn, ← hEn] at h
+  unfold EthCLSpecs.Fulu.reserveChurn
+  dsimp only
+  rw [hC]
+  split at h
+  · rename_i hgt
+    have hgt' : b > C := UInt64.lt_iff_toNat_lt.mpr hgt
+    rw [if_pos hgt']
+    split at h
+    · cases h
+    next btp hbtp =>
+    split at h
+    · cases h
+    next x hx =>
+    split at h
+    · cases h
+    next d hd =>
+    split at h
+    · cases h
+    next add hadd =>
+    split at h
+    · cases h
+    next E' hE' =>
+    split at h
+    · cases h
+    next m hm =>
+    split at h
+    · cases h
+    next C' hC' =>
+    split at h
+    · cases h
+    next _ _ =>
+    split at h
+    · cases h
+    next f hf =>
+    simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+    have hbtp' := uint64Sub_ok hbtp
+    rw [← hbtp'] at hx
+    have hx' := uint64Sub_ok (b := 1) (by simpa using hx)
+    rw [← hx', ← hper'] at hd
+    have hd' := uint64Div_ok hd
+    rw [← hd'] at hadd
+    have hadd' := uint64Add_ok (a := (b - C - 1) / P) (b := 1)
+      (by rw [UInt64.toNat_one]; exact hadd)
+    rw [← hadd'] at hE'
+    have hE'' := uint64Add_ok hE'
+    rw [← hadd', ← hper'] at hm
+    have hm' := uint64Mul_ok hm
+    rw [← hm'] at hC'
+    have hC'' := uint64Add_ok hC'
+    rw [← hC''] at hf
+    have hf' := uint64Sub_ok hf
+    refine ⟨_, _, rfl, hE''.symm, ?_⟩
+    simp only [absEState]
+    rw [hf', hE'']
+  · rename_i hle
+    have hle' : ¬ b > C := fun h' => hle (UInt64.lt_iff_toNat_lt.mp h')
+    rw [if_neg hle']
+    split at h
+    · cases h
+    next _ _ =>
+    split at h
+    · cases h
+    next f hf =>
+    simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+    have hf' := uint64Sub_ok hf
+    refine ⟨_, _, rfl, by simp only [hEn], ?_⟩
+    simp only [absEState]
+    rw [hf', hEn]
+end forkonly
 
 omit [EthCLSpecs.Gloas.Preset] [EthCLSpecs.Gloas.Config] [HasherTag] hp in
 theorem checkedAdd_run_ok {σ : Type} (a b : UInt64) (d : String) (st : σ)
@@ -859,6 +1077,7 @@ theorem checkedAdd_run_ok {σ : Type} (a b : UInt64) (d : String) (st : σ)
   simp only [checkedAdd, hcarry, if_false]
   rfl
 
+forkonly Gloas
 /-- `initiate_validator_exit` equals Etheorem's `initiateValidatorExit`. -/
 theorem initiate_validator_exit_etheorem (e : EState) (i : UInt64) {s' : Spec.BeaconState}
     (h : Spec.initiate_validator_exit p (etheoremTotalActiveBalance e) (absEState e) i.toNat =
@@ -943,6 +1162,95 @@ theorem initiate_validator_exit_etheorem (e : EState) (i : UInt64) {s' : Spec.Be
     rw [if_pos hlen] at hvs
     cases hvs
     simp only [absEState, map_toList_set!, sszList_getElem!_val, absValidator, hep, ← hw']
+end forkonly
+
+forkonly Fulu
+/-- `initiate_validator_exit` equals Etheorem's `initiateValidatorExit`. -/
+theorem initiate_validator_exit_etheorem {f : Spec.FuluConfig} (hf : FuluChurnAgrees p f)
+    (e : EState) (i : UInt64) {s' : Spec.BeaconState}
+    (h : Spec.initiate_validator_exit p (Spec.fuluTab p f (etheoremTotalActiveBalance e))
+      (absEState e) i.toNat = .ok s') :
+    ∃ e' : EState,
+      (EthCLSpecs.Fulu.initiateValidatorExit (StateTransition := FuluRun) i).run (pureState e) =
+        .ok ((), pureState e') ∧ s' = absEState e' := by
+  unfold Spec.initiate_validator_exit at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · cases h
+  next v hv =>
+  rw [absEState_validators] at hv
+  obtain ⟨hi, rfl⟩ := listGet_map_ok e.validators.val absValidator i.toNat hv
+  have hsome : e.validators.val[i.toNat]? = some e.validators.val[i.toNat]! := by simp [hi]
+  unfold EthCLSpecs.Fulu.initiateValidatorExit
+  simp only [run_bind]
+  rw [show (get : FuluRun _).run (pureState e) = .ok (pureState e, pureState e) from rfl,
+    except_bind_ok]
+  simp only [view_uncachedBox]
+  rw [run_sszGetIdx_some _ _ _ hsome, except_bind_ok]
+  dsimp only
+  have hfar : (EthCLSpecs.Fulu.Const.farFutureEpoch).toNat = Spec.FAR_FUTURE_EPOCH := rfl
+  by_cases hx : (absValidator e.validators.val[i.toNat]!).exit_epoch != Spec.FAR_FUTURE_EPOCH
+  · rw [if_pos hx] at h
+    cases h
+    have hx' : (!EthCLSpecs.Fulu.hasNotInitiatedExit e.validators.val[i.toNat]!) = true := by
+      simp only [EthCLSpecs.Fulu.hasNotInitiatedExit, Bool.not_eq_true']
+      simp only [absValidator, bne_iff_ne, ne_eq] at hx
+      simp only [beq_eq_false_iff_ne, ne_eq]
+      intro heq; apply hx; rw [heq, hfar]
+    rw [if_pos hx']
+    exact ⟨e, rfl, rfl⟩
+  · rw [if_neg hx] at h
+    have hx' : ¬ (!EthCLSpecs.Fulu.hasNotInitiatedExit e.validators.val[i.toNat]!) = true := by
+      simp only [EthCLSpecs.Fulu.hasNotInitiatedExit, Bool.not_eq_true', Bool.not_eq_false,
+        beq_iff_eq]
+      simp only [absValidator, bne_iff_ne, ne_eq, Decidable.not_not] at hx
+      apply UInt64.toNat_inj.mp
+      rw [hx, hfar]
+    rw [if_neg hx']
+    split at h
+    · cases h
+    next _ _ =>
+    split at h
+    · cases h
+    next r hr =>
+    obtain ⟨ep, s1⟩ := r
+    obtain ⟨ee, ebtc, hrun, hep, hs1⟩ :=
+      compute_exit_epoch_and_update_churn_etheorem hp hf e (e.validators.val[i.toNat]!).effectiveBalance hr
+    simp only [run_bind]
+    rw [hrun, except_bind_ok]
+    split at h
+    · cases h
+    next w hw =>
+    rw [← hp.minValidatorWithdrawabilityDelay, hep] at hw
+    have hsum : ee.toNat + EthCLSpecs.Fulu.Const.minValidatorWithdrawabilityDelay.toNat < 2 ^ 64 := by
+      unfold Spec.uint64Add at hw
+      split at hw
+      · simpa [Spec.UINT64_SIZE] using ‹_›
+      · cases hw
+    have hw' := uint64Add_ok hw
+    rw [checkedAdd_run_ok _ _ _ _ hsum, except_bind_ok]
+    split at h
+    · cases h
+    next vs hvs =>
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    refine ⟨{ e with
+        exitBalanceToConsume := ebtc
+        earliestExitEpoch := ee
+        validators := e.validators.set! i.toNat
+          { e.validators[i.toNat]! with
+            exitEpoch := ee
+            withdrawableEpoch := ee + EthCLSpecs.Fulu.Const.minValidatorWithdrawabilityDelay } },
+      rfl, ?_⟩
+    subst hs1
+    unfold Spec.listSet at hvs
+    have hlen : i.toNat <
+        (absEState { e with exitBalanceToConsume := ebtc, earliestExitEpoch := ee }).validators.length := by
+      simpa using hi
+    rw [if_pos hlen] at hvs
+    cases hvs
+    simp only [absEState, map_toList_set!, sszList_getElem!_val, absValidator, hep, ← hw']
+end forkonly
 
 end Exits
 
@@ -950,6 +1258,7 @@ end WithPreset
 
 /-! ## The two presets -/
 
+forkonly Gloas
 section
 attribute [local instance] EthCLSpecs.Gloas.mainnet EthCLSpecs.Gloas.mainnetConfig
 theorem presetAgrees_mainnet : PresetAgrees Spec.Preset.mainnet := by
@@ -961,5 +1270,25 @@ attribute [local instance] EthCLSpecs.Gloas.minimal EthCLSpecs.Gloas.minimalConf
 theorem presetAgrees_minimal : PresetAgrees Spec.Preset.minimal := by
   constructor <;> first | rfl | decide
 end
+end forkonly
 
-end EpochProofs.Etheorem
+forkonly Fulu
+section
+attribute [local instance] EthCLSpecs.Fulu.mainnet EthCLSpecs.Fulu.mainnetConfig
+theorem presetAgrees_mainnet : PresetAgrees Spec.Preset.mainnet := by
+  constructor <;> first | rfl | decide
+theorem fuluChurnAgrees_mainnet : FuluChurnAgrees Spec.Preset.mainnet Spec.FuluConfig.mainnet :=
+  ⟨Spec.fuluCompat_mainnet, rfl, rfl⟩
+end
+
+section
+attribute [local instance] EthCLSpecs.Fulu.minimal EthCLSpecs.Fulu.minimalConfig
+theorem presetAgrees_minimal : PresetAgrees Spec.Preset.minimal := by
+  constructor <;> first | rfl | decide
+theorem fuluChurnAgrees_minimal : FuluChurnAgrees Spec.Preset.minimal Spec.FuluConfig.minimal :=
+  ⟨Spec.fuluCompat_minimal, rfl, rfl⟩
+end
+end forkonly
+
+end forkproof
+

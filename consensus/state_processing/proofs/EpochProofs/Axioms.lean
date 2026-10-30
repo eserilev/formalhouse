@@ -84,7 +84,6 @@ import EpochProofs.Equiv.FuluRegistry
 import EpochProofs.Sanity.FuluSinglePass
 import EpochProofs.Sanity.FuluEpoch
 import EpochProofs.Sanity.Invariants.FuluOrder
-import EpochProofs.Etheorem.Fulu.Epoch
 import EpochProofs.Formalhouse
 import EpochProofs.FormalhouseFulu
 import EpochProofs.Sanity.Block.FuluBlock

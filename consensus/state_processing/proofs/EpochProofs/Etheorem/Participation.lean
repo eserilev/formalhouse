@@ -10,7 +10,8 @@ indices and the leak flag. This file proves each one equal to its Etheorem copy.
 `PassesPresetAgrees p` adds the preset values that the passes read to `PresetAgrees p`.
 -/
 
-namespace EpochProofs.Etheorem
+forkproof EpochEtheorem
+
 open EthCLLib.Spec EthCLLib.Proofs SizzLean.Repr SizzLean.Proofs EthCLSpecs.Proofs.Gloas
 
 set_option maxRecDepth 20000 in
@@ -446,4 +447,5 @@ theorem passesPresetAgrees_minimal : PassesPresetAgrees Spec.Preset.minimal wher
   baseRewardFactorEq := rfl
 end
 
-end EpochProofs.Etheorem
+end forkproof
+

@@ -12,6 +12,7 @@ import EpochProofs.Etheorem.Deposits
 import EpochProofs.Etheorem.Consolidations
 import EthCLSpecs.Gloas.Transition
 import EpochProofs.Sanity.Invariants.Capstone
+import EthCLSpecs.Fulu.Transition
 
 /-!
 # The whole epoch equals Etheorem
@@ -27,14 +28,23 @@ Each step theorem has its own conditions. `EtheoremEpochConds e` collects them. 
 on a later step reads the Etheorem state right before that step: `Before k e e'` says that
 Etheorem runs the first `k` steps from `e` and reaches `e'`. Most conditions are facts about
 the state.
+
+For Fulu, `process_epoch_fulu_etheorem` states the same for the reference Fulu `process_epoch`
+and Etheorem's Fulu `processEpoch`. The two run 15 steps. The reference registry update and
+pending deposits are the Gloas functions at `fuluTab` (`process_epoch_fulu_eq_tab`), so the proof
+runs the Fulu copies of the step theorems. `FuluEpochConds p o e` collects the conditions.
+
+Each proof here holds for Gloas and for Fulu. `forkproof EpochEtheorem` (see `Forks.lean`)
+elaborates the shared text once per fork, and `forkonly` holds the parts that differ.
 -/
 
-namespace EpochProofs.Etheorem
+forkproof EpochEtheorem
 
 open EthCLLib.Spec EthCLLib.Proofs SizzLean.Proofs EthCLSpecs.Proofs.Gloas
 
 section Preset
 
+forkonly Gloas
 /-- All the preset facts the 17 steps read. -/
 structure EpochPresetAgrees [EthCLSpecs.Gloas.Preset] [EthCLSpecs.Gloas.Config]
     (p : Spec.Preset) : Prop where
@@ -59,6 +69,39 @@ theorem epochPresetAgrees_minimal : EpochPresetAgrees Spec.Preset.minimal :=
   ⟨presetAgrees_minimal, tailPresetAgrees_minimal, passesPresetAgrees_minimal,
     queuesPresetAgrees_minimal, committeePresetAgrees_minimal, by decide, by decide⟩
 end
+end forkonly
+
+forkonly Fulu
+/-- All the preset and config facts the 15 Fulu steps read. -/
+structure EpochPresetAgrees [EthCLSpecs.Fulu.Preset] [EthCLSpecs.Fulu.Config]
+    (p : Spec.Preset) (f : Spec.FuluConfig) : Prop where
+  base : PresetAgrees p
+  churn : FuluChurnAgrees p f
+  tail : TailPresetAgrees p
+  passes : PassesPresetAgrees p
+  queues : QueuesPresetAgrees p
+  committee : CommitteePresetAgrees p
+  epochsPerSyncCommitteePeriodLt : p.EPOCHS_PER_SYNC_COMMITTEE_PERIOD < 2 ^ 64
+  syncCommitteeSizePos : 0 < p.SYNC_COMMITTEE_SIZE
+
+section
+attribute [local instance] EthCLSpecs.Fulu.mainnet EthCLSpecs.Fulu.mainnetConfig
+theorem epochPresetAgrees_mainnet :
+    EpochPresetAgrees Spec.Preset.mainnet Spec.FuluConfig.mainnet :=
+  ⟨presetAgrees_mainnet, fuluChurnAgrees_mainnet, tailPresetAgrees_mainnet,
+    passesPresetAgrees_mainnet, queuesPresetAgrees_mainnet, committeePresetAgrees_mainnet,
+    by decide, by decide⟩
+end
+
+section
+attribute [local instance] EthCLSpecs.Fulu.minimal EthCLSpecs.Fulu.minimalConfig
+theorem epochPresetAgrees_minimal :
+    EpochPresetAgrees Spec.Preset.minimal Spec.FuluConfig.minimal :=
+  ⟨presetAgrees_minimal, fuluChurnAgrees_minimal, tailPresetAgrees_minimal,
+    passesPresetAgrees_minimal, queuesPresetAgrees_minimal, committeePresetAgrees_minimal,
+    by decide, by decide⟩
+end
+end forkonly
 
 end Preset
 
@@ -99,6 +142,7 @@ theorem StepsOk.run_seq {l : List (GloasRun Unit)} {e e' : EState} (h : StepsOk 
 
 variable [EthCLSpecs.Gloas.Config] [CryptoBackend]
 
+forkonly Gloas
 /-- Etheorem's 17 epoch steps, in `processEpoch` order. -/
 def epochSteps : List (GloasRun Unit) :=
   [EthCLSpecs.Gloas.processJustificationAndFinalization,
@@ -118,6 +162,27 @@ def epochSteps : List (GloasRun Unit) :=
    EthCLSpecs.Gloas.processSyncCommitteeUpdates,
    EthCLSpecs.Gloas.processProposerLookahead,
    EthCLSpecs.Gloas.processPtcWindow]
+end forkonly
+
+forkonly Fulu
+/-- Etheorem's 15 Fulu epoch steps, in `processEpoch` order. -/
+def epochSteps : List (FuluRun Unit) :=
+  [EthCLSpecs.Fulu.processJustificationAndFinalization,
+   EthCLSpecs.Fulu.processInactivityUpdates,
+   EthCLSpecs.Fulu.processRewardsAndPenalties,
+   EthCLSpecs.Fulu.processRegistryUpdates,
+   EthCLSpecs.Fulu.processSlashings,
+   EthCLSpecs.Fulu.processEth1DataReset,
+   EthCLSpecs.Fulu.processPendingDeposits,
+   EthCLSpecs.Fulu.processPendingConsolidations,
+   EthCLSpecs.Fulu.processEffectiveBalanceUpdates,
+   EthCLSpecs.Fulu.processSlashingsReset,
+   EthCLSpecs.Fulu.processRandaoMixesReset,
+   EthCLSpecs.Fulu.processHistoricalSummariesUpdate,
+   EthCLSpecs.Fulu.processParticipationFlagUpdates,
+   EthCLSpecs.Fulu.processSyncCommitteeUpdates,
+   EthCLSpecs.Fulu.processProposerLookahead]
+end forkonly
 
 theorem processEpoch_eq :
     (EthCLSpecs.Gloas.processEpoch (StateTransition := GloasRun)) = seqSteps epochSteps := rfl
@@ -127,6 +192,7 @@ def Before (k : Nat) (e e' : EState) : Prop := StepsOk (epochSteps.take k) e e'
 
 /-! ## The conditions -/
 
+forkonly Gloas
 /-- The conditions of the 17 step theorems, for an epoch that starts at `e`.
 
 State facts:
@@ -175,9 +241,39 @@ theorem builder_pending_payments_etheorem' {p : Spec.Preset} (hp : PresetAgrees 
     rw [h2] at hspec; cases hspec; rfl
   subst this
   rw [hs'', absEState_set_builderPayments, ← hpay, ← hwd]
+end forkonly
+
+forkonly Fulu
+/-- The conditions of the 15 Fulu step theorems, for an epoch that starts at `e`.
+
+State facts:
+- `finalized`: the finalized epoch is below `FAR_FUTURE_EPOCH` before the registry update.
+- `depositLens`, `depositRoom`: before the pending deposits, the registry lists have the same
+  length, and each pending deposit has room for a new validator.
+- `consolidationLens`: one balance for each validator before the pending consolidations.
+- `summariesRoom`: the historical summaries list has room for one more item.
+
+Facts about the hash values:
+- `proposerFin`: each Electra proposer loop of the lookahead ends before its last pass
+  (`Spec.ProposerFin`). The last pass needs `2**64 - 1` rejected candidates before it. -/
+structure FuluEpochConds (p : Spec.Preset) (o : Spec.Oracle) (e : EState) : Prop where
+  finalized : ∀ e', Before 3 e e' →
+    (absEState e').finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH
+  depositLens : ∀ e', Before 6 e e' → LensEq e'
+  depositRoom : ∀ e', Before 6 e e' → e'.validators.val.size + e'.pendingDeposits.val.size ≤
+    EthCLSpecs.Fulu.Const.validatorRegistryLimit
+  consolidationLens : ∀ e', Before 7 e e' → e'.balances.val.size = e'.validators.val.size
+  summariesRoom : ∀ e', Before 11 e e' →
+    e'.historicalSummaries.val.size < EthCLSpecs.Fulu.Const.historicalRootsLimit
+  proposerFin : ∀ e', Before 14 e e' → ∀ s, Spec.ProposerFin p o (absEState e')
+    (Spec.get_active_validator_indices (absEState e')
+      (EthCLSpecs.Fulu.currentEpochOf (pureState e') + EthCLSpecs.Fulu.Const.minSeedLookahead +
+        1).toNat) s
+end forkonly
 
 /-! ## The whole epoch -/
 
+forkonly Gloas
 variable {p : Spec.Preset} (hp : EpochPresetAgrees p)
 include hp
 
@@ -282,9 +378,106 @@ theorem process_epoch_etheorem (o : Spec.Oracle) (ho : OracleAgrees o)
   obtain ⟨e17, r17, rfl⟩ := process_ptc_window_etheorem hb hp.committee o ho.hash hsha e16 h
   have b17 : StepsOk epochSteps e e17 := b16.snoc r17
   exact ⟨e17, by rw [processEpoch_eq]; exact b17.run_seq, rfl⟩
+end forkonly
+
+forkonly Fulu
+variable {p : Spec.Preset} {f : Spec.FuluConfig} (hp : EpochPresetAgrees p f)
+include hp
+
+/-- The reference Fulu `process_epoch` equals Etheorem's Fulu `processEpoch`.
+
+If the reference returns `s'`, Etheorem's run succeeds and `absEState` of its result is `s'`.
+`ho`: the oracle fields equal Etheorem's functions. `hsha`: `sha` returns 32 bytes
+(`sha_size_pure` proves it for the pure SHA-256). `hc`: the step conditions. -/
+theorem process_epoch_fulu_etheorem (o : Spec.Oracle) (ho : OracleAgrees o)
+    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EState) (hc : FuluEpochConds p o e)
+    {s' : Spec.BeaconState} (h : Spec.process_epoch_fulu p f o (absEState e) = .ok s') :
+    ∃ e', (EthCLSpecs.Fulu.processEpoch (StateTransition := FuluRun)).run (pureState e) =
+      .ok ((), pureState e') ∧ absEState e' = s' := by
+  have hpp := hp.passes
+  have hb := hp.base
+  rw [Spec.process_epoch_fulu_eq_tab p f hp.churn.compat] at h
+  -- 1. justification and finalization
+  obtain ⟨s1, h1, h⟩ := Spec.specM_bind_ok h
+  obtain ⟨e1, r1, rfl⟩ := justification_etheorem hpp e h1
+  have b1 : StepsOk (epochSteps.take 1) e e1 := .cons r1 (.nil _)
+  -- 2. inactivity
+  obtain ⟨s2, h2, h⟩ := Spec.specM_bind_ok h
+  obtain ⟨r2, rfl⟩ := inactivity_updates_etheorem hpp e1 h2
+  have b2 : StepsOk (epochSteps.take 2) e (inactivityUpdatesE e1) := b1.snoc r2
+  generalize inactivityUpdatesE e1 = e2 at *
+  -- 3. rewards and penalties
+  obtain ⟨t3, ht3, h⟩ := Spec.specM_bind_ok h
+  have := get_total_active_balance_ok hb e2 ht3
+  subst this
+  obtain ⟨s3, h3, h⟩ := Spec.specM_bind_ok h
+  obtain ⟨e3, r3, rfl⟩ := rewards_etheorem hpp e2 h3
+  have b3 : StepsOk (epochSteps.take 3) e e3 := b2.snoc r3
+  -- 4. registry updates, at `fuluTab`
+  obtain ⟨t4, ht4, h⟩ := Spec.specM_bind_ok h
+  obtain ⟨s4, h4, h⟩ := Spec.specM_bind_ok h
+  obtain ⟨e4, r4, rfl⟩ :=
+    process_registry_updates_etheorem hb hp.queues hp.churn e3 ht4 (hc.finalized e3 b3) h4
+  have b4 : StepsOk (epochSteps.take 4) e e4 := b3.snoc r4
+  -- 5. slashings
+  obtain ⟨t5, ht5, h⟩ := Spec.specM_bind_ok h
+  have := get_total_active_balance_ok hb e4 ht5
+  subst this
+  obtain ⟨s5, h5, h⟩ := Spec.specM_bind_ok h
+  obtain ⟨r5, rfl⟩ := slashings_etheorem hpp e4 h5
+  have b5 : StepsOk (epochSteps.take 5) e (slashingsE e4) := b4.snoc r5
+  generalize slashingsE e4 = e5 at *
+  -- 6. eth1 data reset
+  obtain ⟨s6, h6, h⟩ := Spec.specM_bind_ok h
+  obtain ⟨e6, r6, rfl⟩ := eth1_data_reset_etheorem hb hp.tail e5 h6
+  have b6 : StepsOk (epochSteps.take 6) e e6 := b5.snoc r6
+  -- 7. pending deposits, at `fuluTab`
+  obtain ⟨t7, ht7, h⟩ := Spec.specM_bind_ok h
+  obtain ⟨s7, h7, h⟩ := Spec.specM_bind_ok h
+  obtain ⟨e7, r7, rfl⟩ := process_pending_deposits_etheorem hb hp.queues hp.churn o ho e6 ht7
+    (hc.depositLens e6 b6) (hc.depositRoom e6 b6) h7
+  have b7 : StepsOk (epochSteps.take 7) e e7 := b6.snoc r7
+  -- 8. pending consolidations
+  obtain ⟨s8, h8, h⟩ := Spec.specM_bind_ok h
+  obtain ⟨e8, r8, rfl⟩ :=
+    process_pending_consolidations_etheorem hb e7 (hc.consolidationLens e7 b7) h8
+  have b8 : StepsOk (epochSteps.take 8) e e8 := b7.snoc r8
+  -- 9. effective balance updates
+  obtain ⟨s9, h9, h⟩ := Spec.specM_bind_ok h
+  obtain ⟨e9, r9, rfl⟩ := effective_balance_updates_etheorem hb hp.tail e8 h9
+  have b9 : StepsOk (epochSteps.take 9) e e9 := b8.snoc r9
+  -- 10. slashings reset
+  obtain ⟨s10, h10, h⟩ := Spec.specM_bind_ok h
+  obtain ⟨e10, r10, rfl⟩ := slashings_reset_etheorem hb hp.tail e9 h10
+  have b10 : StepsOk (epochSteps.take 10) e e10 := b9.snoc r10
+  -- 11. randao mixes reset
+  obtain ⟨s11, h11, h⟩ := Spec.specM_bind_ok h
+  obtain ⟨e11, r11, rfl⟩ := randao_mixes_reset_etheorem hb e10 h11
+  have b11 : StepsOk (epochSteps.take 11) e e11 := b10.snoc r11
+  -- 12. historical summaries
+  obtain ⟨s12, h12, h⟩ := Spec.specM_bind_ok h
+  obtain ⟨e12, r12, rfl⟩ :=
+    historical_summaries_update_etheorem hb hp.tail ho e11 (hc.summariesRoom e11 b11) h12
+  have b12 : StepsOk (epochSteps.take 12) e e12 := b11.snoc r12
+  -- 13. participation flags
+  obtain ⟨e13, r13, h13⟩ := participation_flag_updates_etheorem e12
+  have b13 : StepsOk (epochSteps.take 13) e e13 := b12.snoc r13
+  rw [← h13] at h
+  -- 14. sync committees, with the Electra loop
+  obtain ⟨s14, h14, h⟩ := Spec.specM_bind_ok h
+  obtain ⟨e14, r14, rfl⟩ := process_sync_committee_updates_fulu_etheorem hb hp.committee o ho
+    hp.epochsPerSyncCommitteePeriodLt hp.syncCommitteeSizePos e13 h14
+  have b14 : StepsOk (epochSteps.take 14) e e14 := b13.snoc r14
+  -- 15. proposer lookahead, with the Electra loop
+  obtain ⟨e15, r15, rfl⟩ := process_proposer_lookahead_etheorem hb hp.committee o ho.hash hsha
+    e14 (hc.proposerFin e14 b14) h
+  have b15 : StepsOk epochSteps e e15 := b14.snoc r15
+  exact ⟨e15, by rw [processEpoch_eq]; exact b15.run_seq, rfl⟩
+end forkonly
 
 end Main
 
+forkonly Gloas
 /-! ## Lighthouse equals Etheorem -/
 
 section Lighthouse
@@ -313,5 +506,7 @@ theorem lighthouse_epoch_etheorem [EpochProofs.Spec.PresetCfg] [EpochProofs.Spec
   exact process_epoch_etheorem hpa o ho hsha e hc ((hsame s').mp h)
 
 end Lighthouse
+end forkonly
 
-end EpochProofs.Etheorem
+end forkproof
+

@@ -14,7 +14,21 @@ products `* 3` and `* 2`, as the reference does, and `weigh_etheorem` reads the 
 reference run that returns.
 -/
 
-namespace EpochProofs.Etheorem
+set_option hygiene false in
+/-- Close a `modifyState` run on a pure box against a plain closed form, case by case. The fork's
+`modifyState` comes in as `m`. The macro is defined outside the `forkproof` block, since the block
+parses before any command in it runs. `hygiene false` lets `jfWeighE` and the other names resolve
+where the tactic runs, in each fork's namespace. -/
+local macro "finish_weigh " m:ident : tactic => `(tactic| (
+  unfold $m:ident
+  simp only [modifyThe, MonadStateOf.modifyGet, StateT.modifyGet, StateT.run, if_true, if_false,
+    Bool.false_eq_true, jfWeighE, jfFinalize, jfJustify, jfShift, pureState_eq,
+    SizzLean.Cache.SSZ.Box.view]
+  repeat' split
+  all_goals first | rfl | contradiction))
+
+forkproof EpochEtheorem
+
 open EthCLLib.Spec EthCLLib.Proofs SizzLean.Repr SizzLean.Proofs EthCLSpecs.Proofs.Gloas
 
 /-! ## Justification bits -/
@@ -87,15 +101,6 @@ def jfWeighE (e : EState) (jp jc : Bool) (pr cr : EthCLSpecs.Gloas.Root) : EStat
     (bitGet bits 0 && bitGet bits 1 && bitGet bits 2 && oldCurr.epoch + 2 == currEpoch) oldCurr
   jfFinalize s6 (bitGet bits 0 && bitGet bits 1 && oldCurr.epoch + 1 == currEpoch) oldCurr
 
-/-- Close a `modifyState` run on a pure box against a plain closed form, case by case. -/
-local macro "finish_weigh" : tactic => `(tactic| (
-  unfold EthCLSpecs.Gloas.modifyState
-  simp only [modifyThe, MonadStateOf.modifyGet, StateT.modifyGet, StateT.run, if_true, if_false,
-    Bool.false_eq_true, jfWeighE, jfFinalize, jfJustify, jfShift, pureState_eq,
-    SizzLean.Cache.SSZ.Box.view]
-  repeat' split
-  all_goals first | rfl | contradiction))
-
 theorem weigh_run (e : EState) (tot pt ct : UInt64) (pr cr : EthCLSpecs.Gloas.Root)
     (hov : tot.toNat * 2 < 2 ^ 64 ∧ pt.toNat * 3 < 2 ^ 64 ∧ ct.toNat * 3 < 2 ^ 64)
     (hpr : pt.toNat * 3 ≥ tot.toNat * 2 →
@@ -129,26 +134,25 @@ theorem weigh_run (e : EState) (tot pt ct : UInt64) (pr cr : EthCLSpecs.Gloas.Ro
   · rw [if_pos hp, run_bind, hpr hp, except_bind_ok,
       if_pos hc, run_bind, hcr hc, except_bind_ok]
     simp only [hp, hc, decide_true]
-    finish_weigh
+    finish_weigh EthCLSpecs.Gloas.modifyState
   · rw [if_pos hp, run_bind, hpr hp, except_bind_ok,
       if_neg hc, run_bind, run_pure, except_bind_ok]
     simp only [hp, hc, decide_true, decide_false]
-    finish_weigh
+    finish_weigh EthCLSpecs.Gloas.modifyState
   · rw [if_neg hp, run_bind, run_pure, except_bind_ok,
       if_pos hc, run_bind, hcr hc, except_bind_ok]
     simp only [hp, hc, decide_true, decide_false]
-    finish_weigh
+    finish_weigh EthCLSpecs.Gloas.modifyState
   · rw [if_neg hp, run_bind, run_pure, except_bind_ok,
       if_neg hc, run_bind, run_pure, except_bind_ok]
     simp only [hp, hc, decide_false]
-    finish_weigh
+    finish_weigh EthCLSpecs.Gloas.modifyState
 
 end Plain
 
 variable [EthCLSpecs.Gloas.Preset] [HasherTag] [EthCLSpecs.Gloas.Config]
 variable {p : Spec.Preset} (hpp : PassesPresetAgrees p)
 include hpp
-
 
 theorem get_block_root_etheorem (e : EState) (s0 : EthCLSpecs.Gloas.State) (epoch : UInt64)
     {r : Spec.Root} (h : Spec.get_block_root p (absEState e) epoch.toNat = .ok r) :
@@ -406,4 +410,5 @@ theorem justification_etheorem (e : EState) {s' : Spec.BeaconState}
       (fun hc => get_block_root_etheorem hpp e (pureState e) _ (hpr hc))
       (fun hc => get_block_root_etheorem hpp e (pureState e) _ (hcr hc)), rfl⟩
 
-end EpochProofs.Etheorem
+end forkproof
+
