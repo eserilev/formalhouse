@@ -108,7 +108,12 @@ the glue.
 
 The proofs take the bundles as they are: there is no second set of hypothesis structures. Two
 facts are proved from the run instead of assumed: unique pubkeys, and the first two parts of
-`AtEpochBoundary` (the last slot of an epoch, the next slot in `u64`).
+`AtEpochBoundary` (the last slot of an epoch, the next slot in `u64`). Three facts that the
+committee steps read are proved from the epoch input (`EpochProofs/CommitteeStepFacts.lean`):
+the SSZ vector lengths, because the input is the image of an Etheorem state, whose vectors have
+fixed sizes; the lengths of `proposer_lookahead` and `ptc_window` at the committee step state,
+which is again such an image; and each effective balance there at most 2048 ETH, carried from
+`EBOk` at the input through the steps before the committee steps.
 
 The `_agrees_pyspec` theorems compare with the hand-written transcription of the pyspec, not with
 Etheorem. The transcription is reviewed against the pyspec but not run against the EF vectors,
@@ -184,7 +189,7 @@ and the glue facts of the `_rust` theorems have no witness.
 
 ### Axiom audit
 
-`EpochProofs/Axioms.lean` prints the axioms of 817 theorems, including all the headline ones. Each
+`EpochProofs/Axioms.lean` prints the axioms of 833 theorems, including all the headline ones. Each
 depends only on `propext`, `Classical.choice` and `Quot.sound`, so none rests on `sorry`
 (`sorryAx`) or `native_decide` (`Lean.ofReduceBool`). CI rebuilds the proofs on every change and
 fails if any audited theorem reports another axiom.
@@ -384,7 +389,8 @@ about Etheorem and the oracle.
 These and the committee state facts below are stated at the state that the epoch passes to the
 committee steps (`Spec.AtCommitteeStepState`, `Spec.FuluAtCommitteeStepState`), which is a
 function of the epoch input. In the chain bundles they are the fields `pyspecPreconditions`,
-`selectionsEnd` (hash outputs) and `committeeStepStateFacts`.
+`selectionsEnd` (hash outputs), `registrySizeAtCommitteeStepState` and
+`pubkeysValidAtCommitteeStepState`.
 
 - Gloas: an unslashed validator is active two epochs ahead (F4).
 - Gloas: at least `SLOTS_PER_EPOCH` validators are active two epochs ahead (F12). With fewer, the
@@ -411,8 +417,7 @@ function of the epoch input. In the chain bundles they are the fields `pyspecPre
 invariant proofs cover most of the state, but not yet these fields:
 
 - validator pubkeys pass `KeyValidate`. For Gloas, that they are unique follows from the run;
-- the SSZ vectors, `proposer_lookahead` and `ptc_window` have their lengths;
-- at most `2^40` validators, and each effective balance is at most 2048 ETH;
+- at most `2^40` validators;
 - `_rust` only: the new validators of the epoch fit under `2^40`, where Lighthouse's validator
   list fails (`SinglePassLinks.depositRoom`). This state fact sits inside the glue bundle
   (`EpochLinks`), because it is stated at the state after justification. It is the Lighthouse

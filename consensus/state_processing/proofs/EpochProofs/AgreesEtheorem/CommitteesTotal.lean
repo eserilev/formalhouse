@@ -56,8 +56,8 @@ structure SelFacts [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
 
 /-- The part of `SelFacts` that the epoch steps before the committee steps do not give: the
 registry limit `2^40`, effective balances of at most `MAX_EFFECTIVE_BALANCE_ELECTRA` (2048 ETH),
-and valid public keys. Each is an invariant of reachable states that this project does not yet
-carry to the committee steps. -/
+and valid public keys. Each is an invariant of reachable states. The effective balance cap is
+carried from the epoch input (`epochToCommittees_ebMax`); the other two are not yet. -/
 structure SelectionStateFacts (o : Oracle) (s : BeaconState) : Prop where
   regLen : s.validators.length ≤ 2 ^ 40
   ebMax : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000

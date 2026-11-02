@@ -151,14 +151,15 @@ structure GloasChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop 
   slotFarFromOverflow : s.slot + 8192 < 2 ^ 64
   /-- Physical limit: fewer than `2^24` historical summaries, Lighthouse's list limit. -/
   historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit s
-  /-- Reachable-state fact not yet carried to the epoch: the SSZ vectors have their lengths. The
-  Lean state holds them as lists. -/
-  vectorLengths : s.VectorLengths Spec.P
-  /-- Reachable-state facts not yet carried to the epoch, at `t` (`CommitteeStepFacts`): at most
-  `2^40` validators, effective balances at most 2048 ETH, the lookahead and PTC window lengths,
-  valid pubkeys. -/
-  committeeStepStateFacts : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →
-    Spec.CommitteeStepFacts o t
+  /-- Reachable-state fact not yet carried to the epoch: at most `2^40` validators at `t`. The
+  other facts of `CommitteeStepFacts` there follow from the epoch input
+  (`committeeStepFacts_of_etheorem`). -/
+  registrySizeAtCommitteeStepState : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →
+    t.validators.length ≤ 2 ^ 40
+  /-- Reachable-state fact not yet carried to the epoch: each pubkey at `t` passes
+  `KeyValidate`. -/
+  pubkeysValidAtCommitteeStepState : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →
+    ∀ v ∈ t.validators, o.bls_KeyValidate v.pubkey = true
 
 variable [Spec.FuluCfg]
 
@@ -189,12 +190,14 @@ structure FuluChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop w
   slotFarFromOverflow : s.slot + 8192 < 2 ^ 64
   /-- Physical limit: fewer than `2^24` historical summaries. -/
   historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit s
-  /-- Reachable-state fact not yet carried: the Fulu SSZ vectors have their lengths. -/
-  vectorLengths : s.FuluVectorLengths Spec.P
-  /-- Reachable-state facts not yet carried, at `t` (`FuluCommitteeStepFacts`): registry size,
-  effective balances, lookahead length, valid pubkeys. -/
-  committeeStepStateFacts : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t →
-    Spec.FuluCommitteeStepFacts o t
+  /-- Reachable-state fact not yet carried: at most `2^40` validators at `t`. The other facts of
+  `FuluCommitteeStepFacts` there follow from the epoch input
+  (`fuluCommitteeStepFacts_of_etheorem`). -/
+  registrySizeAtCommitteeStepState : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t →
+    t.validators.length ≤ 2 ^ 40
+  /-- Reachable-state fact not yet carried: each pubkey at `t` passes `KeyValidate`. -/
+  pubkeysValidAtCommitteeStepState : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t →
+    ∀ v ∈ t.validators, o.bls_KeyValidate v.pubkey = true
 
 end Chain
 

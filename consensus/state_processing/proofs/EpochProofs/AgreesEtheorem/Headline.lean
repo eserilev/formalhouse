@@ -1,6 +1,7 @@
 import EpochProofs.AgreesEtheorem.Epoch
 import EpochProofs.Compose.Epoch
 import EpochProofs.Compose.Fulu
+import EpochProofs.CommitteeStepFacts
 
 /-!
 # Lighthouse and Etheorem: the same state, or both fail
@@ -55,12 +56,16 @@ structure GloasEquivalenceAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) :
   physicalLimits : Spec.PhysicalLimits s
   /-- Physical limit: the slot is `8192` below `2^64`. As `physicalLimits`. -/
   slotFarFromOverflow : s.slot + 8192 < 2 ^ 64
-  /-- At the state `t` that the epoch passes to the committee steps: at most `2^40` validators,
-  effective balances of at most 2048 ETH, valid pubkeys (`SelectionStateFacts`). The pyspec
-  raises without them where Etheorem does not: `eth_aggregate_pubkeys` asserts `KeyValidate`,
-  and the pyspec checks `uint64` products that Etheorem computes in `Nat`. -/
-  committeeStepStateFacts : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →
-    Spec.SelectionStateFacts o t
+  /-- At the state `t` that the epoch passes to the committee steps: at most `2^40` validators.
+  The pyspec checks `uint64` products there that Etheorem computes in `Nat`. With the effective
+  balance cap, which follows from `reachableInvariants` (`epochToCommittees_ebMax`), and
+  `pubkeysValidAtCommitteeStepState`, this is `SelectionStateFacts`. -/
+  registrySizeAtCommitteeStepState : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →
+    t.validators.length ≤ 2 ^ 40
+  /-- At the same state `t`: each pubkey passes `KeyValidate`. The pyspec raises without it
+  where Etheorem does not: `eth_aggregate_pubkeys` asserts `KeyValidate`. -/
+  pubkeysValidAtCommitteeStepState : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →
+    ∀ v ∈ t.validators, o.bls_KeyValidate v.pubkey = true
 
 variable [Spec.FuluCfg]
 
@@ -74,10 +79,13 @@ structure FuluEquivalenceAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : 
   physicalLimits : Spec.PhysicalLimits s
   /-- As `GloasEquivalenceAssumptions.slotFarFromOverflow`. -/
   slotFarFromOverflow : s.slot + 8192 < 2 ^ 64
-  /-- As `GloasEquivalenceAssumptions.committeeStepStateFacts`, at the state that the Fulu
-  epoch passes to its committee steps. -/
-  committeeStepStateFacts : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t →
-    Spec.SelectionStateFacts o t
+  /-- As `GloasEquivalenceAssumptions.registrySizeAtCommitteeStepState`, at the state that the
+  Fulu epoch passes to its committee steps. -/
+  registrySizeAtCommitteeStepState : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t →
+    t.validators.length ≤ 2 ^ 40
+  /-- As `GloasEquivalenceAssumptions.pubkeysValidAtCommitteeStepState`. -/
+  pubkeysValidAtCommitteeStepState : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t →
+    ∀ v ∈ t.validators, o.bls_KeyValidate v.pubkey = true
 
 end Bundles
 
@@ -103,7 +111,10 @@ theorem lighthouse_model_gloas_epoch_agrees_etheorem (hpreset : PresetMatchesEth
       (etheoremProcessEpoch e) :=
   lighthouse_epoch_agrees_etheorem hpreset hhistLimit oracle horacle.agrees horacle.sha32 e
     hstate.reachableInvariants hstate.atEpochBoundary hetheorem hstate.slotFarFromOverflow
-    hstate.physicalLimits hstate.committeeStepStateFacts
+    hstate.physicalLimits fun t ht =>
+      ⟨hstate.registrySizeAtCommitteeStepState t ht,
+        Spec.epochToCommittees_ebMax oracle _ _ ht hstate.reachableInvariants.1.1.2.2.1,
+        hstate.pubkeysValidAtCommitteeStepState t ht⟩
 
 /-- Gloas, for the composed Rust: when Etheorem's `processEpoch` succeeds, `Compose.epoch`
 returns `Ok` on a Rust state that views as the epoch input, and its state equals Etheorem's. -/
@@ -152,7 +163,10 @@ theorem lighthouse_model_fulu_epoch_agrees_etheorem
       (etheoremProcessEpoch e) :=
   lighthouse_fulu_epoch_agrees_etheorem hpreset oracle horacle.agrees horacle.sha32 e hetheorem
     hstate.reachableInvariants hstate.atEpochBoundary hstate.slotFarFromOverflow
-    hstate.physicalLimits hstate.committeeStepStateFacts
+    hstate.physicalLimits fun t ht =>
+      ⟨hstate.registrySizeAtCommitteeStepState t ht,
+        Spec.epochToCommitteesFulu_ebMax oracle _ _ ht hstate.reachableInvariants.1.1.2.2.1,
+        hstate.pubkeysValidAtCommitteeStepState t ht⟩
 
 /-- Fulu, for the composed Rust: when Etheorem's Fulu `processEpoch` succeeds,
 `Compose.epochFulu` returns `Ok`, and its state equals Etheorem's. -/
