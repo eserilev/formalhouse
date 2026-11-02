@@ -112,6 +112,7 @@ import EpochProofs.Sanity.GlueBounds
 import EpochProofs.NonVacuity
 import EpochProofs.Assumptions
 import EpochProofs.HeadlinePresets
+import EpochProofs.AgreesEtheorem.Presets
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -925,6 +926,18 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Formalhouse.lighthouse_rust_fulu_epoch_eq_etheorem_minimal
 #print axioms EpochProofs.Formalhouse.lighthouse_model_gloas_epoch_agrees_pyspec_minimal
 #print axioms EpochProofs.Formalhouse.lighthouse_model_fulu_epoch_agrees_pyspec_minimal
+#print axioms EpochProofs.Etheorem.process_epoch_of_etheorem
+#print axioms EpochProofs.Etheorem.lighthouse_epoch_agrees_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.process_epoch_fulu_of_etheorem
+#print axioms EpochProofs.Etheorem.Fulu.lighthouse_fulu_epoch_agrees_etheorem
+#print axioms EpochProofs.Formalhouse.lighthouse_model_gloas_epoch_agrees_etheorem
+#print axioms EpochProofs.Formalhouse.lighthouse_rust_gloas_epoch_of_etheorem_ok
+#print axioms EpochProofs.Formalhouse.lighthouse_model_fulu_epoch_agrees_etheorem
+#print axioms EpochProofs.Formalhouse.lighthouse_rust_fulu_epoch_of_etheorem_ok
+#print axioms EpochProofs.Formalhouse.lighthouse_model_gloas_epoch_agrees_etheorem_mainnet
+#print axioms EpochProofs.Formalhouse.lighthouse_model_fulu_epoch_agrees_etheorem_mainnet
+#print axioms EpochProofs.Formalhouse.lighthouse_model_gloas_epoch_agrees_etheorem_minimal
+#print axioms EpochProofs.Formalhouse.lighthouse_model_fulu_epoch_agrees_etheorem_minimal
 #print axioms EpochProofs.Witness.agrees_pyspec_hyps_at_witness
 #print axioms EpochProofs.Witness.agrees_pyspec_hyps_at_witness_fulu
 #print axioms EpochProofs.Witness.lighthouse_model_gloas_epoch_agrees_pyspec_at_witness
