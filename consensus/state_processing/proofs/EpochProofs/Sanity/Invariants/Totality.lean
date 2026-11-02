@@ -802,37 +802,6 @@ def DepOk [PresetCfg] (o : Oracle) (t : BeaconState) : Prop :=
     OkWith (process_pending_deposits P tab (apply_pending_deposit P o) s)
       (TailFrame t)
 
-/-- The steps of `process_epoch` before the three committee steps. Its result is the state that
-`process_sync_committee_updates` reads. -/
-def epochToCommittees (p : Preset) (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
-  let state ← process_justification_and_finalization p state
-  let state ← process_inactivity_updates p state
-  let state ← process_rewards_and_penalties p (← get_total_active_balance p state) state
-  let state ← process_registry_updates p (← get_total_active_balance p state) state
-  let state ← process_slashings p (← get_total_active_balance p state) state
-  let state ← process_eth1_data_reset p state
-  let state ←
-    process_pending_deposits p (← get_total_active_balance p state) (apply_pending_deposit p o)
-      state
-  let state ← process_pending_consolidations p state
-  let state ← process_builder_pending_payments p (← get_total_active_balance p state) state
-  let state ← process_effective_balance_updates p state
-  let state ← process_slashings_reset p state
-  let state ← process_randao_mixes_reset p state
-  let state ← process_historical_summaries_update p o state
-  pure (process_participation_flag_updates state)
-
-/-- The three committee steps of `process_epoch`. -/
-def committeeSteps (p : Preset) (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
-  let state ← process_sync_committee_updates p o state
-  let state ← process_proposer_lookahead p o state
-  process_ptc_window p o state
-
-/-- `process_epoch` is `epochToCommittees`, then the committee steps. -/
-theorem process_epoch_committees (p : Preset) (o : Oracle) (s : BeaconState) :
-    process_epoch p o s = epochToCommittees p o s >>= committeeSteps p o := by
-  simp only [process_epoch, epochToCommittees, committeeSteps, bind_assoc, pure_bind]
-
 /-- The steps of `epochRest` before the committee steps. -/
 def epochRestToCommittees (p : Preset) (o : Oracle) (state : BeaconState) :
     SpecM BeaconState := do

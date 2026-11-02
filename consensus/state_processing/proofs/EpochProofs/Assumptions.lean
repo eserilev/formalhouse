@@ -151,14 +151,10 @@ structure GloasChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop 
   slotFarFromOverflow : s.slot + 8192 < 2 ^ 64
   /-- Physical limit: fewer than `2^24` historical summaries, Lighthouse's list limit. -/
   historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit s
-  /-- Reachable-state fact not yet carried to the epoch: the SSZ vectors have their lengths. The
-  Lean state holds them as lists. -/
-  vectorLengths : s.VectorLengths Spec.P
-  /-- Reachable-state facts not yet carried to the epoch, at `t` (`CommitteeStepFacts`): at most
-  `2^40` validators, effective balances at most 2048 ETH, the lookahead and PTC window lengths,
-  valid pubkeys. -/
+  /-- Reachable-state facts not yet carried to the epoch, at `t` (`SelectionStateFacts`): at most
+  `2^40` validators, valid pubkeys. -/
   committeeStepStateFacts : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →
-    Spec.CommitteeStepFacts o t
+    Spec.SelectionStateFacts o t
 
 variable [Spec.FuluCfg]
 
@@ -189,12 +185,10 @@ structure FuluChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop w
   slotFarFromOverflow : s.slot + 8192 < 2 ^ 64
   /-- Physical limit: fewer than `2^24` historical summaries. -/
   historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit s
-  /-- Reachable-state fact not yet carried: the Fulu SSZ vectors have their lengths. -/
-  vectorLengths : s.FuluVectorLengths Spec.P
-  /-- Reachable-state facts not yet carried, at `t` (`FuluCommitteeStepFacts`): registry size,
-  effective balances, lookahead length, valid pubkeys. -/
+  /-- Reachable-state facts not yet carried, at `t` (`SelectionStateFacts`): registry size,
+  valid pubkeys. -/
   committeeStepStateFacts : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t →
-    Spec.FuluCommitteeStepFacts o t
+    Spec.SelectionStateFacts o t
 
 end Chain
 

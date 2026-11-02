@@ -330,14 +330,45 @@ theorem process_effective_balance_updates_le_max (p : Preset) (hp : EBPresetOk p
 
 /-! ## `process_epoch` -/
 
-/-- On mainnet, `process_epoch` keeps `EBOk` and ends with `EffectiveBalanceFloor`: each
-validator has a balance, and each effective balance is a multiple of the increment, at most
-`MAX_EFFECTIVE_BALANCE_ELECTRA` and at most `4/3` of the balance. -/
-theorem process_epoch_effective_balances [PresetCfg] (o : Oracle) (s s' : BeaconState)
-    (h : process_epoch P o s = .ok s') (hs : EBOk P s) :
-    EBOk P s' ∧ EffectiveBalanceFloor P s' := by
+/-- The steps of `process_epoch` before the three committee steps. Its result is the state that
+`process_sync_committee_updates` reads. -/
+def epochToCommittees (p : Preset) (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
+  let state ← process_justification_and_finalization p state
+  let state ← process_inactivity_updates p state
+  let state ← process_rewards_and_penalties p (← get_total_active_balance p state) state
+  let state ← process_registry_updates p (← get_total_active_balance p state) state
+  let state ← process_slashings p (← get_total_active_balance p state) state
+  let state ← process_eth1_data_reset p state
+  let state ←
+    process_pending_deposits p (← get_total_active_balance p state) (apply_pending_deposit p o)
+      state
+  let state ← process_pending_consolidations p state
+  let state ← process_builder_pending_payments p (← get_total_active_balance p state) state
+  let state ← process_effective_balance_updates p state
+  let state ← process_slashings_reset p state
+  let state ← process_randao_mixes_reset p state
+  let state ← process_historical_summaries_update p o state
+  pure (process_participation_flag_updates state)
+
+/-- The three committee steps of `process_epoch`. -/
+def committeeSteps (p : Preset) (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
+  let state ← process_sync_committee_updates p o state
+  let state ← process_proposer_lookahead p o state
+  process_ptc_window p o state
+
+/-- `process_epoch` is `epochToCommittees`, then the committee steps. -/
+theorem process_epoch_committees (p : Preset) (o : Oracle) (s : BeaconState) :
+    process_epoch p o s = epochToCommittees p o s >>= committeeSteps p o := by
+  simp only [process_epoch, epochToCommittees, committeeSteps, bind_assoc, pure_bind]
+
+/-- On mainnet, the steps of `process_epoch` before the committee steps keep `EBOk` and end with
+`EffectiveBalanceFloor`: each validator has a balance, and each effective balance is a multiple
+of the increment, at most `MAX_EFFECTIVE_BALANCE_ELECTRA` and at most `4/3` of the balance. -/
+theorem epochToCommittees_effective_balances [PresetCfg] (o : Oracle) (s t : BeaconState)
+    (h : epochToCommittees P o s = .ok t) (hs : EBOk P s) :
+    EBOk P t ∧ EffectiveBalanceFloor P t := by
   have hp := ebPresetOk_mainnet
-  unfold process_epoch at h
+  unfold epochToCommittees at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
   obtain ⟨s2, h2, h⟩ := specM_bind_ok h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
@@ -356,8 +387,7 @@ theorem process_epoch_effective_balances [PresetCfg] (o : Oracle) (s s' : Beacon
   obtain ⟨s11, h11, h⟩ := specM_bind_ok h
   obtain ⟨s12, h12, h⟩ := specM_bind_ok h
   obtain ⟨s13, h13, h⟩ := specM_bind_ok h
-  obtain ⟨s14, h14, h⟩ := specM_bind_ok h
-  obtain ⟨s15, h15, h⟩ := specM_bind_ok h
+  have ht : process_participation_flag_updates s13 = t := by simpa [pure, Except.pure] using h
   have e1 : EBOk _ s1 :=
     hs.of_validators (process_justification_and_finalization_frame _ _ _ h1).1.1
   have e2 : EBOk _ s2 := e1.of_validators (process_inactivity_updates_validators _ _ _ h2)
@@ -376,15 +406,33 @@ theorem process_epoch_effective_balances [PresetCfg] (o : Oracle) (s s' : Beacon
   have e10 : EBOk _ s10 := fun v hv => by
     obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hv
     exact ⟨(hfloor.2 i hi).1, hmax _ hv⟩
-  have f : RegistryFrame s10 s' :=
+  have f : RegistryFrame s10 t := ht ▸
     (process_slashings_reset_frame _ _ _ h11).1.trans
     ((process_randao_mixes_reset_frame _ _ _ h12).1.trans
     ((process_historical_summaries_update_frame _ o _ _ h13).1.trans
-    ((process_participation_flag_updates_frame _).1.trans
-    ((process_sync_committee_updates_frame _ o _ _ h14).1.trans
-    ((process_proposer_lookahead_frame _ o _ _ h15).1.trans
-    (process_ptc_window_frame _ o _ _ h).1)))))
+    (process_participation_flag_updates_frame _).1))
   refine ⟨e10.of_validators f.1, ?_⟩
+  obtain ⟨hvs, hbs, -⟩ := f
+  unfold EffectiveBalanceFloor
+  rw [hvs, hbs]
+  exact hfloor
+
+/-- On mainnet, `process_epoch` keeps `EBOk` and ends with `EffectiveBalanceFloor`
+(`epochToCommittees_effective_balances`; the committee steps leave the registry alone). -/
+theorem process_epoch_effective_balances [PresetCfg] (o : Oracle) (s s' : BeaconState)
+    (h : process_epoch P o s = .ok s') (hs : EBOk P s) :
+    EBOk P s' ∧ EffectiveBalanceFloor P s' := by
+  rw [process_epoch_committees] at h
+  obtain ⟨t, ht, h⟩ := specM_bind_ok h
+  obtain ⟨he, hfloor⟩ := epochToCommittees_effective_balances o s t ht hs
+  unfold committeeSteps at h
+  obtain ⟨u1, h1, h⟩ := specM_bind_ok h
+  obtain ⟨u2, h2, h⟩ := specM_bind_ok h
+  have f : RegistryFrame t s' :=
+    (process_sync_committee_updates_frame _ o _ _ h1).1.trans
+    ((process_proposer_lookahead_frame _ o _ _ h2).1.trans
+    (process_ptc_window_frame _ o _ _ h).1)
+  refine ⟨he.of_validators f.1, ?_⟩
   obtain ⟨hvs, hbs, -⟩ := f
   unfold EffectiveBalanceFloor
   rw [hvs, hbs]

@@ -55,8 +55,8 @@ structure GloasEquivalenceAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) :
   physicalLimits : Spec.PhysicalLimits s
   /-- Physical limit: the slot is `8192` below `2^64`. As `physicalLimits`. -/
   slotFarFromOverflow : s.slot + 8192 < 2 ^ 64
-  /-- At the state `t` that the epoch passes to the committee steps: at most `2^40` validators,
-  effective balances of at most 2048 ETH, valid pubkeys (`SelectionStateFacts`). The pyspec
+  /-- At the state `t` that the epoch passes to the committee steps: at most `2^40` validators
+  and valid pubkeys (`SelectionStateFacts`). The pyspec
   raises without them where Etheorem does not: `eth_aggregate_pubkeys` asserts `KeyValidate`,
   and the pyspec checks `uint64` products that Etheorem computes in `Nat`. -/
   committeeStepStateFacts : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →

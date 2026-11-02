@@ -529,13 +529,46 @@ theorem process_block_fulu_budget_mainnet [PresetCfg] [PresetCfg.Ok] [FuluCfg] [
 
 /-! ## The Fulu epoch -/
 
-/-- On mainnet, the Fulu `process_epoch` keeps `EBOk` and ends with `EffectiveBalanceFloor`. -/
-theorem process_epoch_fulu_effective_balances [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (s s' : BeaconState)
-    (h : process_epoch_fulu P FC o s = .ok s')
-    (hs : EBOk P s) :
-    EBOk P s' ∧ EffectiveBalanceFloor P s' := by
+/-- The steps of the Fulu `process_epoch` before the two committee steps. Its result is the state
+that `process_sync_committee_updates_fulu` reads. -/
+def epochToCommitteesFulu (p : Preset) (f : FuluConfig) (o : Oracle) (state : BeaconState) :
+    SpecM BeaconState := do
+  let state ← process_justification_and_finalization p state
+  let state ← process_inactivity_updates p state
+  let state ← process_rewards_and_penalties p (← get_total_active_balance p state) state
+  let state ← process_registry_updates_fulu p f (← get_total_active_balance p state) state
+  let state ← process_slashings p (← get_total_active_balance p state) state
+  let state ← process_eth1_data_reset p state
+  let state ← process_pending_deposits_fulu p f (← get_total_active_balance p state)
+    (apply_pending_deposit p o) state
+  let state ← process_pending_consolidations p state
+  let state ← process_effective_balance_updates p state
+  let state ← process_slashings_reset p state
+  let state ← process_randao_mixes_reset p state
+  let state ← process_historical_summaries_update p o state
+  pure (process_participation_flag_updates state)
+
+/-- The two committee steps of the Fulu `process_epoch`. -/
+def committeeStepsFulu (p : Preset) (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
+  let state ← process_sync_committee_updates_fulu p o state
+  process_proposer_lookahead_fulu p o state
+
+/-- The Fulu `process_epoch` is `epochToCommitteesFulu`, then the committee steps. -/
+theorem process_epoch_fulu_committees (p : Preset) (f : FuluConfig) (o : Oracle)
+    (s : BeaconState) :
+    process_epoch_fulu p f o s = epochToCommitteesFulu p f o s >>= committeeStepsFulu p o := by
+  simp only [process_epoch_fulu, epochToCommitteesFulu, committeeStepsFulu, bind_assoc,
+    pure_bind]
+
+/-- On mainnet, the steps of the Fulu `process_epoch` before the committee steps keep `EBOk` and
+end with `EffectiveBalanceFloor`. -/
+theorem epochToCommitteesFulu_effective_balances [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle)
+    (s t : BeaconState) (h : epochToCommitteesFulu P FC o s = .ok t) (hs : EBOk P s) :
+    EBOk P t ∧ EffectiveBalanceFloor P t := by
   have hp := ebPresetOk_mainnet
-  rw [process_epoch_fulu_eq_tab _ _ fuluCompat] at h
+  unfold epochToCommitteesFulu at h
+  simp only [process_registry_updates_fulu_eq P FC fuluCompat,
+    process_pending_deposits_fulu_tab_eq P FC fuluCompat] at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
   obtain ⟨s2, h2, h⟩ := specM_bind_ok h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
@@ -552,7 +585,7 @@ theorem process_epoch_fulu_effective_balances [PresetCfg] [FuluCfg] [FuluCfg.Ok]
   obtain ⟨s10, h10, h⟩ := specM_bind_ok h
   obtain ⟨s11, h11, h⟩ := specM_bind_ok h
   obtain ⟨s12, h12, h⟩ := specM_bind_ok h
-  obtain ⟨s13, h13, h⟩ := specM_bind_ok h
+  have ht : process_participation_flag_updates s12 = t := by simpa [pure, Except.pure] using h
   have e1 : EBOk _ s1 :=
     hs.of_validators (process_justification_and_finalization_frame _ _ _ h1).1.1
   have e2 : EBOk _ s2 := e1.of_validators (process_inactivity_updates_validators _ _ _ h2)
@@ -569,18 +602,30 @@ theorem process_epoch_fulu_effective_balances [PresetCfg] [FuluCfg] [FuluCfg.Ok]
   have e9 : EBOk _ s9 := fun v hv => by
     obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hv
     exact ⟨(hfloor.2 i hi).1, hmax _ hv⟩
-  obtain ⟨_, _, rfl⟩ := process_sync_committee_updates_fulu_shape _ o _ _ h13
-  obtain ⟨_, rfl⟩ := process_proposer_lookahead_fulu_shape _ o _ _ h
-  have f : RegistryFrame s9 (process_participation_flag_updates s12) :=
+  have f : RegistryFrame s9 t := ht ▸
     (process_slashings_reset_frame _ _ _ h10).1.trans
     ((process_randao_mixes_reset_frame _ _ _ h11).1.trans
     ((process_historical_summaries_update_frame _ o _ _ h12).1.trans
     (process_participation_flag_updates_frame _).1))
+  refine ⟨e9.of_validators f.1, ?_⟩
   obtain ⟨hvs, hbs, -⟩ := f
-  refine ⟨e9.of_validators hvs, ?_⟩
   unfold EffectiveBalanceFloor
-  simp only
   rw [hvs, hbs]
   exact hfloor
+
+/-- On mainnet, the Fulu `process_epoch` keeps `EBOk` and ends with `EffectiveBalanceFloor`
+(`epochToCommitteesFulu_effective_balances`; the committee steps leave the registry alone). -/
+theorem process_epoch_fulu_effective_balances [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (s s' : BeaconState)
+    (h : process_epoch_fulu P FC o s = .ok s')
+    (hs : EBOk P s) :
+    EBOk P s' ∧ EffectiveBalanceFloor P s' := by
+  rw [process_epoch_fulu_committees] at h
+  obtain ⟨t, ht, h⟩ := specM_bind_ok h
+  obtain ⟨he, hfloor⟩ := epochToCommitteesFulu_effective_balances o s t ht hs
+  unfold committeeStepsFulu at h
+  obtain ⟨u1, h1, h⟩ := specM_bind_ok h
+  obtain ⟨_, _, rfl⟩ := process_sync_committee_updates_fulu_shape _ o _ _ h1
+  obtain ⟨_, rfl⟩ := process_proposer_lookahead_fulu_shape _ o _ _ h
+  exact ⟨he.of_validators rfl, hfloor⟩
 
 end EpochProofs.Spec
