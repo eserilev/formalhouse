@@ -901,10 +901,6 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Formalhouse.GloasEpochRun.atEpochBoundary
 #print axioms EpochProofs.Formalhouse.FuluEpochRun.invariants
 #print axioms EpochProofs.Formalhouse.FuluEpochRun.atEpochBoundary
-#print axioms EpochProofs.Spec.epochToCommittees_ebMax
-#print axioms EpochProofs.Spec.epochToCommitteesFulu_ebMax
-#print axioms EpochProofs.Etheorem.committeeStepFacts_of_etheorem
-#print axioms EpochProofs.Etheorem.Fulu.fuluCommitteeStepFacts_of_etheorem
 #print axioms EpochProofs.Formalhouse.GloasChainAssumptions.atCommitteeStepState
 #print axioms EpochProofs.Formalhouse.FuluChainAssumptions.atCommitteeStepState
 #print axioms EpochProofs.Formalhouse.lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants

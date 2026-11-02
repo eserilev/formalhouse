@@ -963,6 +963,13 @@ structure CommitteeStepFacts [PresetCfg] (o : Oracle) (s : BeaconState) : Prop w
   ptcLen : s.ptc_window.length = 3 * P.SLOTS_PER_EPOCH
   keys : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true
 
+/-- The part of `CommitteeStepFacts` that is not yet carried from the epoch input: the registry
+limit `2^40` and valid public keys. The effective balance cap is carried
+(`epochToCommittees_effective_balances`), and the two lengths hold on every Etheorem state. -/
+structure SelectionStateFacts (o : Oracle) (s : BeaconState) : Prop where
+  regLen : s.validators.length ≤ 2 ^ 40
+  keys : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true
+
 /-- The committee conditions at the epoch input `t`: the state conditions and the pyspec
 preconditions hold at the state that the epoch passes to the committee steps
 (`epochToCommittees`). That state is a function of `t`, so this is one fact about one state.

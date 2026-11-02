@@ -151,15 +151,10 @@ structure GloasChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop 
   slotFarFromOverflow : s.slot + 8192 < 2 ^ 64
   /-- Physical limit: fewer than `2^24` historical summaries, Lighthouse's list limit. -/
   historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit s
-  /-- Reachable-state fact not yet carried to the epoch: at most `2^40` validators at `t`. The
-  other facts of `CommitteeStepFacts` there follow from the epoch input
-  (`committeeStepFacts_of_etheorem`). -/
-  registrySizeAtCommitteeStepState : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →
-    t.validators.length ≤ 2 ^ 40
-  /-- Reachable-state fact not yet carried to the epoch: each pubkey at `t` passes
-  `KeyValidate`. -/
-  pubkeysValidAtCommitteeStepState : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →
-    ∀ v ∈ t.validators, o.bls_KeyValidate v.pubkey = true
+  /-- Reachable-state facts not yet carried to the epoch, at `t` (`SelectionStateFacts`): at most
+  `2^40` validators, valid pubkeys. -/
+  committeeStepStateFacts : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →
+    Spec.SelectionStateFacts o t
 
 variable [Spec.FuluCfg]
 
@@ -190,14 +185,10 @@ structure FuluChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop w
   slotFarFromOverflow : s.slot + 8192 < 2 ^ 64
   /-- Physical limit: fewer than `2^24` historical summaries. -/
   historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit s
-  /-- Reachable-state fact not yet carried: at most `2^40` validators at `t`. The other facts of
-  `FuluCommitteeStepFacts` there follow from the epoch input
-  (`fuluCommitteeStepFacts_of_etheorem`). -/
-  registrySizeAtCommitteeStepState : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t →
-    t.validators.length ≤ 2 ^ 40
-  /-- Reachable-state fact not yet carried: each pubkey at `t` passes `KeyValidate`. -/
-  pubkeysValidAtCommitteeStepState : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t →
-    ∀ v ∈ t.validators, o.bls_KeyValidate v.pubkey = true
+  /-- Reachable-state facts not yet carried, at `t` (`SelectionStateFacts`): registry size,
+  valid pubkeys. -/
+  committeeStepStateFacts : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t →
+    Spec.SelectionStateFacts o t
 
 end Chain
 

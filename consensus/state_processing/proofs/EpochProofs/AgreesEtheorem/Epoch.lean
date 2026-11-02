@@ -277,6 +277,7 @@ theorem process_epoch_of_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok] [Spec.Pre
     (Spec.depOk_of_physicalLimits o _ hslot hrb)
   obtain ⟨e14, b14, rfl⟩ := epochToCommittees_etheorem hpa o ho e hb0 hslot64 hcond hhist hs
   have hf14 : Spec.SelFacts o (toSpecState e14) := Spec.SelFacts.of_frame hfr hslot (hsel _ hs)
+    fun v hv => ((Spec.epochToCommittees_effective_balances o _ _ hs heb).1 v hv).2
   rw [processEpoch_eq, ← List.take_append_drop 14 epochSteps,
     b14.run_seq_append (by simp [epochSteps])] at h
   change ((EthCLSpecs.Gloas.processSyncCommitteeUpdates >>= fun _ =>
@@ -489,6 +490,7 @@ theorem process_epoch_fulu_of_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok]
     hvec hb0.1 heb hcons hsup.2.2 hrb
   obtain ⟨e13, b13, rfl⟩ := epochToCommitteesFulu_etheorem hpa o ho e hc hs
   have hf13 : Spec.SelFacts o (toSpecState e13) := Spec.SelFacts.of_frame hfr hslot (hsel _ hs)
+    fun v hv => ((Spec.epochToCommitteesFulu_effective_balances o _ _ hs heb).1 v hv).2
   rw [processEpoch_eq, ← List.take_append_drop 13 epochSteps,
     b13.run_seq_append (by simp [epochSteps])] at h
   change ((EthCLSpecs.Fulu.processSyncCommitteeUpdates >>= fun _ =>

@@ -7,7 +7,7 @@ import EpochProofs.CacheBridge.Upkeep
 import EpochProofs.CachePubkey
 import EpochProofs.Sanity.Invariants.LighthouseFuluOrder
 import EpochProofs.Sanity.RewardsAndPenalties
-import EpochProofs.CommitteeStepFacts
+import EpochProofs.AgreesEtheorem.Epoch
 
 /-!
 # The headline theorems
@@ -107,19 +107,27 @@ variable [EthCLSpecs.Gloas.Preset] [EthCLSpecs.Gloas.Config] {e : EtheoremState}
 omit [Spec.FuluCfg] [Spec.FuluCfg.Ok] [Spec.PresetCfg.Bounds] in
 /-- The chain bundle and the epoch input give the committee conditions at the state that the
 epoch passes to the committee steps. The effective balance cap and the lookahead and PTC window
-lengths there follow from the input (`committeeStepFacts_of_etheorem`). -/
+lengths there follow from the input: the cap is carried from `EBOk`, and that state is the image
+of an Etheorem state, whose vectors have fixed sizes. -/
 theorem GloasChainAssumptions.atCommitteeStepState (hpreset : PresetMatchesEtheorem Spec.P)
     (hhistLimit : Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT ≤
       EthCLSpecs.Gloas.Const.historicalRootsLimit)
     (horacle : GloasOracleMatchesEtheorem oracle) (hin : Spec.ReachableInvariants (toSpecState e))
     (hetheorem : GloasEtheoremDivergenceAssumptions e)
     (h : GloasChainAssumptions oracle (toSpecState e)) :
-    Spec.AtCommitteeStepState oracle (toSpecState e) := fun t ht =>
-  ⟨committeeStepFacts_of_etheorem hpreset oracle horacle.agrees e hin.1.1.1 hin.1.1.2.1
-      hin.1.1.2.2.1 hetheorem (Nat.lt_of_lt_of_le h.historicalSummariesBelowLimit hhistLimit) ht
-      (h.registrySizeAtCommitteeStepState t ht) (h.pubkeysValidAtCommitteeStepState t ht),
-    ⟨h.syncCandidate t ht, h.proposerCandidate t ht, h.enoughActiveForPtc t ht,
-      h.syncSelectionEnds t ht, h.proposerSelectionEnds t ht, h.ptcSelectionEnds t ht⟩⟩
+    Spec.AtCommitteeStepState oracle (toSpecState e) := by
+  intro t ht
+  have hf := h.committeeStepStateFacts t ht
+  have heb := Spec.epochToCommittees_effective_balances oracle _ _ ht hin.1.1.2.2.1
+  refine ⟨?_, ⟨h.syncCandidate t ht, h.proposerCandidate t ht, h.enoughActiveForPtc t ht,
+    h.syncSelectionEnds t ht, h.proposerSelectionEnds t ht, h.ptcSelectionEnds t ht⟩⟩
+  obtain ⟨e14, -, rfl⟩ := epochToCommittees_etheorem hpreset oracle horacle.agrees e hin.1.1.1
+    hin.1.1.2.1 hetheorem (Nat.lt_of_lt_of_le h.historicalSummariesBelowLimit hhistLimit) ht
+  have hvec := vectorLengths_toSpecState hpreset e14
+  unfold Spec.BeaconState.VectorLengths at hvec
+  obtain ⟨-, -, -, -, -, -, -, hpl, -, -, hptc, -⟩ := hvec
+  rw [Spec.P_min_seed] at hpl hptc
+  exact ⟨hf.regLen, fun v hv => (heb.1 v hv).2, hpl, hptc, hf.keys⟩
 
 /-! ### Conclusions -/
 
@@ -322,16 +330,24 @@ variable [EthCLSpecs.Fulu.Preset] [EthCLSpecs.Fulu.Config] {e : EtheoremState}
 
 omit [Spec.PresetCfg.Bounds] in
 /-- The Fulu chain bundle and the epoch input give the committee conditions at the state that
-the epoch passes to the committee steps (`fuluCommitteeStepFacts_of_etheorem`). -/
+the epoch passes to the committee steps, as the Gloas one. -/
 theorem FuluChainAssumptions.atCommitteeStepState (hpreset : PresetMatchesEtheorem Spec.P Spec.FC)
     (horacle : FuluOracleMatchesEtheorem oracle) (hin : Spec.ReachableInvariants (toSpecState e))
     (hetheorem : FuluEtheoremBridgeConditions Spec.P oracle e)
     (h : FuluChainAssumptions oracle (toSpecState e)) :
-    Spec.FuluAtCommitteeStepState oracle (toSpecState e) := fun t ht =>
-  ⟨fuluCommitteeStepFacts_of_etheorem hpreset oracle horacle.agrees e hetheorem hin.1.1.2.2.1 ht
-      (h.registrySizeAtCommitteeStepState t ht) (h.pubkeysValidAtCommitteeStepState t ht),
-    ⟨h.syncCandidate t ht, h.proposerCandidate t ht, h.syncSelectionEnds t ht,
-      h.proposerSelectionEnds t ht⟩⟩
+    Spec.FuluAtCommitteeStepState oracle (toSpecState e) := by
+  intro t ht
+  have hf := h.committeeStepStateFacts t ht
+  have heb := Spec.epochToCommitteesFulu_effective_balances oracle _ _ ht hin.1.1.2.2.1
+  refine ⟨?_, ⟨h.syncCandidate t ht, h.proposerCandidate t ht, h.syncSelectionEnds t ht,
+    h.proposerSelectionEnds t ht⟩⟩
+  obtain ⟨e13, -, rfl⟩ := epochToCommitteesFulu_etheorem hpreset oracle horacle.agrees e
+    hetheorem ht
+  have hvec := fuluVectorLengths_toSpecState hpreset e13
+  unfold Spec.BeaconState.FuluVectorLengths at hvec
+  obtain ⟨-, -, -, -, -, -, -, hpl⟩ := hvec
+  rw [Spec.P_min_seed] at hpl
+  exact ⟨hf.regLen, fun v hv => (heb.1 v hv).2, hpl, hf.keys⟩
 
 /-- The Lean model of Lighthouse's Fulu epoch returns `ok s'`, Etheorem's Fulu `processEpoch`
 succeeds on the same state, and its result maps to `s'`. -/

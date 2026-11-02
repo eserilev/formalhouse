@@ -445,8 +445,7 @@ theorem gloas_bundles_at_witness
     physicalLimits := witnessState_physicalLimits
     slotFarFromOverflow := by decide +kernel
     historicalSummariesBelowLimit := witnessState_atEpochBoundary.2.2
-    registrySizeAtCommitteeStepState := fun t h => (hc t h).1.regLen
-    pubkeysValidAtCommitteeStepState := fun t h => (hc t h).1.keys },
+    committeeStepStateFacts := fun t h => ⟨(hc t h).1.regLen, (hc t h).1.keys⟩ },
     ⟨by rw [witnessEtheorem_abs]; decide +kernel, by decide +kernel⟩, ⟨ho, hsha⟩⟩
 
 end GloasEState
@@ -512,8 +511,7 @@ theorem fulu_bundles_at_witness
     physicalLimits := witnessStateFulu_physicalLimits
     slotFarFromOverflow := by decide +kernel
     historicalSummariesBelowLimit := witnessStateFulu_atEpochBoundary.2.2
-    registrySizeAtCommitteeStepState := fun t h => (hc t h).1.regLen
-    pubkeysValidAtCommitteeStepState := fun t h => (hc t h).1.keys }
+    committeeStepStateFacts := fun t h => ⟨(hc t h).1.regLen, (hc t h).1.keys⟩ }
 
 end FuluEState
 

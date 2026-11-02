@@ -197,7 +197,6 @@ import EpochProofs.Compose.Committees
 import EpochProofs.Compose.Tail
 import EpochProofs.Compose.Epoch
 import EpochProofs.Compose.Fulu
-import EpochProofs.CommitteeStepFacts
 import EpochProofs.NonVacuity
 import EpochProofs.Headline
 import EpochProofs.HeadlinePresets

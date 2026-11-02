@@ -54,20 +54,12 @@ structure SelFacts [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
   ebMax : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000
   keys : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true
 
-/-- The part of `SelFacts` that the epoch steps before the committee steps do not give: the
-registry limit `2^40`, effective balances of at most `MAX_EFFECTIVE_BALANCE_ELECTRA` (2048 ETH),
-and valid public keys. Each is an invariant of reachable states. The effective balance cap is
-carried from the epoch input (`epochToCommittees_ebMax`); the other two are not yet. -/
-structure SelectionStateFacts (o : Oracle) (s : BeaconState) : Prop where
-  regLen : s.validators.length ≤ 2 ^ 40
-  ebMax : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000
-  keys : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true
-
 /-- `SelFacts` at the state `s` that the epoch passes to the committee steps, from the epoch
 input `t`: the slot and RANDAO length come from `CommFrame`. -/
 theorem SelFacts.of_frame [PresetCfg] {o : Oracle} {t s : BeaconState} (hfr : CommFrame t s)
-    (hslot : t.slot + 8192 < 2 ^ 64) (h : SelectionStateFacts o s) : SelFacts o s :=
-  ⟨hfr.slot ▸ hslot, hfr.randao, h.regLen, h.ebMax, h.keys⟩
+    (hslot : t.slot + 8192 < 2 ^ 64) (h : SelectionStateFacts o s)
+    (hebMax : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000) : SelFacts o s :=
+  ⟨hfr.slot ▸ hslot, hfr.randao, h.regLen, hebMax, h.keys⟩
 
 /-- `SelFacts` reads the slot, the RANDAO mixes and the validators. -/
 theorem SelFacts.congr [PresetCfg] {o : Oracle} {s1 s2 : BeaconState} (hs : s1.slot = s2.slot)
