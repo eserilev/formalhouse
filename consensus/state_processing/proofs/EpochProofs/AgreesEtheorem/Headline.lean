@@ -16,7 +16,7 @@ Each hypothesis is a fact about the epoch input, not about the run that reached 
 - `hpreset`, `hhistLimit`, `horacle`: the preset and the oracle agree with Etheorem's
   (`Assumptions/Etheorem.lean`).
 - `hetheorem`: what Etheorem needs beyond the pyspec, because Etheorem diverges from it
-  (`GloasEtheoremDivergenceAssumptions`: alpha.11 list limits F6, F10;
+  (`GloasEtheoremDivergenceAssumptions`: registry room F10;
   `FuluEtheoremBridgeConditions`).
 - `hstate`: the state facts of `GloasEquivalenceAssumptions` (`FuluEquivalenceAssumptions`).
   `GloasEpochRun.invariants` and `GloasEpochRun.atEpochBoundary` (`Headline.lean`) prove the

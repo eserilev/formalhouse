@@ -409,11 +409,11 @@ def witnessEtheorem : EthCLSpecs.Gloas.BeaconState :=
     validators := ⟨#[witnessEtheoremValidator 0, witnessEtheoremValidator 1,
       witnessEtheoremValidator 2,
       witnessEtheoremValidator 3, witnessEtheoremValidator 4, witnessEtheoremValidator 5,
-      witnessEtheoremValidator 6, witnessEtheoremValidator 7], by decide⟩
-    balances := ⟨Array.replicate 8 2048000000000, by decide⟩
-    previousEpochParticipation := ⟨Array.replicate 8 0, by decide⟩
-    currentEpochParticipation := ⟨Array.replicate 8 0, by decide⟩
-    inactivityScores := ⟨Array.replicate 8 0, by decide⟩ }
+      witnessEtheoremValidator 6, witnessEtheoremValidator 7]⟩
+    balances := ⟨Array.replicate 8 2048000000000⟩
+    previousEpochParticipation := ⟨Array.replicate 8 0⟩
+    currentEpochParticipation := ⟨Array.replicate 8 0⟩
+    inactivityScores := ⟨Array.replicate 8 0⟩ }
 
 
 theorem witnessEtheorem_abs : Etheorem.toSpecState witnessEtheorem = witnessState := by decide +kernel
@@ -446,7 +446,7 @@ theorem gloas_bundles_at_witness
     slotFarFromOverflow := by decide +kernel
     historicalSummariesBelowLimit := witnessState_atEpochBoundary.2.2
     committeeStepStateFacts := fun t h => ⟨(hc t h).1.regLen, (hc t h).1.keys⟩ },
-    ⟨by rw [witnessEtheorem_abs]; decide +kernel, by decide +kernel⟩, ⟨ho, hsha⟩⟩
+    ⟨by rw [witnessEtheorem_abs]; decide +kernel⟩, ⟨ho, hsha⟩⟩
 
 end GloasEState
 

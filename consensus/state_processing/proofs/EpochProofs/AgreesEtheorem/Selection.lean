@@ -89,7 +89,7 @@ theorem selection_loop_of_cbwsAux (p : Spec.Preset) (o : Spec.Oracle)
     (heb : ∀ x ∈ effBals.toList, x ≤ p.MAX_EFFECTIVE_BALANCE_ELECTRA)
     (hmax : p.MAX_EFFECTIVE_BALANCE_ELECTRA ≤ 2 ^ 41) :
     ∀ (n i : Nat) (erb : ByteArray) (sel res : Array UInt64) (rb : Spec.Bytes32),
-      UInt64.size - i = n →
+      UInt64.size - i = n → i < 2 ^ 64 →
       (i % 16 ≠ 0 → erb = sha (vecToBytes seed ++ uint64ToBytes (UInt64.ofNat (i / 16)))) →
       (i % 16 ≠ 0 → rb = Spec.bwsBytes o seed i) →
       (∀ x ∈ sel.toList.map UInt64.toNat, x ∈ idxArr.toList.map UInt64.toNat) →
@@ -106,13 +106,12 @@ theorem selection_loop_of_cbwsAux (p : Spec.Preset) (o : Spec.Oracle)
   intro n
   induction n with
   | zero =>
-    intro i erb sel res rb hn _ _ _ h
-    rw [EthCLSpecs.Gloas.cbwsAux, if_pos (by omega)] at h
-    exact absurd h (by simp [throwArithmetic, liftErr, MonadExcept.ofExcept, Except.mapError])
+    intro i erb sel res rb hn hi _ _ _ h
+    simp only [UInt64.size] at hn
+    omega
   | succ m ih =>
-    intro i erb sel res rb hn herb hrb hsub h
-    have hi : i < 2 ^ 64 := by simp only [UInt64.size] at hn; omega
-    rw [EthCLSpecs.Gloas.cbwsAux, if_neg (cbws_counter_lt hi)] at h
+    intro i erb sel res rb hn hi herb hrb hsub h
+    rw [EthCLSpecs.Gloas.cbwsAux] at h
     split at h
     · -- `size` items selected: both loops stop.
       rename_i hge
@@ -121,11 +120,6 @@ theorem selection_loop_of_cbwsAux (p : Spec.Preset) (o : Spec.Oracle)
       rw [hfuel, Spec.compute_balance_weighted_selection_loop, if_neg (by simp; omega)]
       exact ⟨_, rfl, by simp; omega, hsub⟩
     · rename_i hlt
-      -- The next call does not throw, so `i + 1 < 2^64`.
-      have hi1 : i + 1 < 2 ^ 64 := by
-        by_contra hcon
-        rw [EthCLSpecs.Gloas.cbwsAux, if_pos (by simp only [UInt64.size]; omega)] at h
-        exact absurd h (by simp [throwArithmetic, liftErr, MonadExcept.ofExcept, Except.mapError])
       -- The random bytes of this pass.
       have hE : (if (i % 16 * 2 == 0) = true then
             sha (vecToBytes seed ++ uint64ToBytes (UInt64.ofNat (i / 16))) else erb) =
@@ -136,6 +130,14 @@ theorem selection_loop_of_cbwsAux (p : Spec.Preset) (o : Spec.Oracle)
           exact herb (by simp at h0; omega)
       simp only [] at h
       rw [hE] at h
+      -- The checked `i += 1` returns, so `i + 1 < 2^64`.
+      have hi1 : i + 1 < 2 ^ 64 := by
+        by_contra hcon
+        obtain ⟨err, herr⟩ := checkedSucc_bind_error (β := Array UInt64) i
+          "compute_balance_weighted_selection: i += 1 past 2**64 - 1" hcon (fun s => _)
+        rw [herr] at h
+        cases h
+      rw [checkedSucc_bind_ok _ _ hi1] at h
       generalize hH : sha (vecToBytes seed ++ uint64ToBytes (UInt64.ofNat (i / 16))) = H at h
       have hbytes : Spec.bwsBytes o seed i = bytesToRoot H := by
         rw [← hH]; exact bwsBytes_eq o ho seed i hi
@@ -196,7 +198,7 @@ theorem selection_loop_of_cbwsAux (p : Spec.Preset) (o : Spec.Oracle)
       by_cases ha : Spec.bwsAccept p o seed effBals.toList shuffle i = true
       · rw [if_pos ((hacc).mpr ha)] at h
         rw [if_pos ha, ← hpush]
-        refine ih (i + 1) H _ res _ (by simp only [UInt64.size] at hn ⊢; omega) herb1 hrb1 ?_ h
+        refine ih (i + 1) H _ res _ (by simp only [UInt64.size] at hn ⊢; omega) hi1 herb1 hrb1 ?_ h
         rw [hpush]
         intro x hx
         rcases List.mem_append.mp hx with hx | hx
@@ -204,7 +206,7 @@ theorem selection_loop_of_cbwsAux (p : Spec.Preset) (o : Spec.Oracle)
         · rw [List.mem_singleton.mp hx]; exact hmem
       · rw [if_neg (fun hh => ha ((hacc).mp hh))] at h
         rw [if_neg ha]
-        exact ih (i + 1) H _ res _ (by simp only [UInt64.size] at hn ⊢; omega) herb1 hrb1 hsub h
+        exact ih (i + 1) H _ res _ (by simp only [UInt64.size] at hn ⊢; omega) hi1 herb1 hrb1 hsub h
 
 /-- When Etheorem's selection returns, the reference selection over the same candidates returns
 at least `size` items, each one a candidate (`SelOk`).
@@ -249,7 +251,7 @@ theorem selOk_of_etheorem (p : Spec.Preset) (o : Spec.Oracle)
         rw [getElem!_pos e.validators.val j (by simpa using hjl)]
         rfl)
     rw [this]
-    simp [effBals, sszList_getElem!_val]
+    simp [effBals, regList_getElem!_val]
   have hlen : effBals.size = idxArr.size := by simp [effBals]
   have hebs : ∀ x ∈ effBals.toList, x ≤ p.MAX_EFFECTIVE_BALANCE_ELECTRA := by
     intro x hx
@@ -258,11 +260,11 @@ theorem selOk_of_etheorem (p : Spec.Preset) (o : Spec.Oracle)
     have hjl := hin vi.toNat (List.mem_map_of_mem hvi)
     have h1 := heb _ (List.getElem_mem hjl)
     simp only [toSpecState_validators, List.getElem_map, Array.getElem_toList] at h1 hjl
-    rw [sszList_getElem!_val, getElem!_pos e.validators.val _ (by simpa using hjl)]
+    rw [regList_getElem!_val, getElem!_pos e.validators.val _ (by simpa using hjl)]
     exact h1
   obtain ⟨r, hr, hsz, hmem⟩ := selection_loop_of_cbwsAux p o ho hc idxArr seed size shuffle
     effBals hlen htot hn40 hR hebs hmax _ 0 ByteArray.empty #[] res Spec.Bytes32.zero rfl
-    (by simp) (by simp) (by simp) h
+    (by decide) (by simp) (by simp) (by simp) h
   refine ⟨r, ?_, hsz, hmem⟩
   unfold Spec.compute_balance_weighted_selection
   rw [if_neg (by simp only [List.length_map, Array.length_toList]; omega)]

@@ -50,5 +50,5 @@ The full list, with counts, is the "Trusted base" section of
   for example `RowsContract` for the single-pass loop.
 - Glue facts: Rust expressions that Aeneas does not translate, each linked to the model.
 - Cache build facts, spec preconditions, supply and time bounds, probability facts and the
-  Etheorem list limits.
+  registry room that the Etheorem bridge needs.
 - The hash function and BLS, given as an Oracle.

@@ -129,9 +129,9 @@ State facts:
 - `depositLens`, `depositRoom`: before the pending deposits, the registry lists have the same
   length, and the registry has room for `MAX_PENDING_DEPOSITS_PER_EPOCH` new validators.
 - `consolidationLens`: one balance for each validator before the pending consolidations.
-- `builderRoom`: the new builder withdrawals fit under Etheorem's list limit (F6).
 - `summariesRoom`: the historical summaries list has room for one more item. Beta.4 keeps
-  this `HISTORICAL_ROOTS_LIMIT` cap. -/
+  this `HISTORICAL_ROOTS_LIMIT` cap.
+- `regBound`: the registry is under `VALIDATOR_REGISTRY_LIMIT` at each step (`RegBound`). -/
 structure EtheoremEpochConds (e : EtheoremState) : Prop where
   finalized : ∀ e', Before 3 e e' →
     (toSpecState e').finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH
@@ -139,26 +139,23 @@ structure EtheoremEpochConds (e : EtheoremState) : Prop where
   depositRoom : ∀ e', Before 6 e e' → e'.validators.val.size +
     EthCLSpecs.Gloas.Const.maxPendingDepositsPerEpoch ≤ EthCLSpecs.Gloas.Const.validatorRegistryLimit
   consolidationLens : ∀ e', Before 7 e e' → e'.balances.val.size = e'.validators.val.size
-  builderRoom : ∀ e', Before 8 e e' →
-    e'.builderPendingWithdrawals.val.size + (qualifyingBuilderWithdrawals e').length ≤
-      EthCLSpecs.Gloas.Const.builderPendingWithdrawalsLimit
   summariesRoom : ∀ e', Before 12 e e' →
     e'.historicalSummaries.val.size < EthCLSpecs.Gloas.Const.historicalRootsLimit
+  /-- The registry is under `VALIDATOR_REGISTRY_LIMIT` at each step. -/
+  regBound : ∀ k e', Before k e e' → RegBound e'
 
 /-! ## The builder payment step in the form of the other steps -/
 
 omit [CryptoBackend] in
 theorem builder_pending_payments_etheorem' {p : Spec.Preset} (hp : PresetAgrees p)
     (hslots6 : 6 ≤ p.SLOTS_PER_EPOCH) (e : EtheoremState)
-    (hfits : e.builderPendingWithdrawals.val.size + (qualifyingBuilderWithdrawals e).length ≤
-      EthCLSpecs.Gloas.Const.builderPendingWithdrawalsLimit)
     {s' : Spec.BeaconState}
     (h : Spec.process_builder_pending_payments p (etheoremTotalActiveBalance e) (toSpecState e) =
       .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processBuilderPendingPayments (StateTransition := GloasRun)).run
         (pureState e) = .ok ((), pureState e') ∧ toSpecState e' = s' := by
   obtain ⟨e', s'', hrun, hspec, ⟨hpay, hwd⟩, he', hs''⟩ :=
-    builder_pending_payments_etheorem p hp.slotsPerEpoch hslots6 e (toSpecState e) ⟨rfl, rfl⟩ hfits
+    builder_pending_payments_etheorem p hp.slotsPerEpoch hslots6 e (toSpecState e) ⟨rfl, rfl⟩
   have hbox := processBuilderPendingPayments_run e
   have hX := runPure_of_run_ok hbox
   rw [hX] at hrun
@@ -191,16 +188,19 @@ theorem process_epoch_etheorem (o : Spec.Oracle) (ho : OracleAgrees o)
       .ok ((), pureState e') ∧ toSpecState e' = s' := by
   have hpp := hp.passes
   have hb := hp.base
+  haveI : RegBound e := hc.regBound 0 e (.nil _)
   unfold Spec.process_epoch at h
   -- 1. justification and finalization
   obtain ⟨s1, h1, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e1, r1, rfl⟩ := justification_etheorem hpp e h1
   have b1 : StepsOk (epochSteps.take 1) e e1 := .cons r1 (.nil _)
+  haveI : RegBound e1 := hc.regBound 1 e1 b1
   -- 2. inactivity
   obtain ⟨s2, h2, h⟩ := Spec.specM_bind_ok h
   obtain ⟨r2, rfl⟩ := inactivity_updates_etheorem hpp e1 h2
   have b2 : StepsOk (epochSteps.take 2) e (inactivityUpdatesE e1) := b1.snoc r2
   generalize inactivityUpdatesE e1 = e2 at *
+  haveI : RegBound e2 := hc.regBound 2 e2 b2
   -- 3. rewards and penalties
   obtain ⟨t3, ht3, h⟩ := Spec.specM_bind_ok h
   have := get_total_active_balance_ok hb e2 ht3
@@ -208,12 +208,14 @@ theorem process_epoch_etheorem (o : Spec.Oracle) (ho : OracleAgrees o)
   obtain ⟨s3, h3, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e3, r3, rfl⟩ := rewards_etheorem hpp e2 h3
   have b3 : StepsOk (epochSteps.take 3) e e3 := b2.snoc r3
+  haveI : RegBound e3 := hc.regBound 3 e3 b3
   -- 4. registry updates
   obtain ⟨t4, ht4, h⟩ := Spec.specM_bind_ok h
   obtain ⟨s4, h4, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e4, r4, rfl⟩ :=
     process_registry_updates_etheorem hb hp.queues e3 ht4 (hc.finalized e3 b3) h4
   have b4 : StepsOk (epochSteps.take 4) e e4 := b3.snoc r4
+  haveI : RegBound e4 := hc.regBound 4 e4 b4
   -- 5. slashings
   obtain ⟨t5, ht5, h⟩ := Spec.specM_bind_ok h
   have := get_total_active_balance_ok hb e4 ht5
@@ -222,60 +224,72 @@ theorem process_epoch_etheorem (o : Spec.Oracle) (ho : OracleAgrees o)
   obtain ⟨r5, rfl⟩ := slashings_etheorem hpp e4 h5
   have b5 : StepsOk (epochSteps.take 5) e (slashingsE e4) := b4.snoc r5
   generalize slashingsE e4 = e5 at *
+  haveI : RegBound e5 := hc.regBound 5 e5 b5
   -- 6. eth1 data reset
   obtain ⟨s6, h6, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e6, r6, rfl⟩ := eth1_data_reset_etheorem hb hp.tail e5 h6
   have b6 : StepsOk (epochSteps.take 6) e e6 := b5.snoc r6
+  haveI : RegBound e6 := hc.regBound 6 e6 b6
   -- 7. pending deposits
   obtain ⟨t7, ht7, h⟩ := Spec.specM_bind_ok h
   obtain ⟨s7, h7, h⟩ := Spec.specM_bind_ok h
-  obtain ⟨e7, r7, rfl⟩ := process_pending_deposits_etheorem hb hp.queues o ho e6 ht7
+  obtain ⟨e7, r7, rfl, -⟩ := process_pending_deposits_etheorem hb hp.queues o ho e6 ht7
     (hc.depositLens e6 b6) (hc.depositRoom e6 b6) h7
   have b7 : StepsOk (epochSteps.take 7) e e7 := b6.snoc r7
+  haveI : RegBound e7 := hc.regBound 7 e7 b7
   -- 8. pending consolidations
   obtain ⟨s8, h8, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e8, r8, rfl⟩ :=
     process_pending_consolidations_etheorem hb e7 (hc.consolidationLens e7 b7) h8
   have b8 : StepsOk (epochSteps.take 8) e e8 := b7.snoc r8
+  haveI : RegBound e8 := hc.regBound 8 e8 b8
   -- 9. builder pending payments
   obtain ⟨t9, ht9, h⟩ := Spec.specM_bind_ok h
   have := get_total_active_balance_ok hb e8 ht9
   subst this
   obtain ⟨s9, h9, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e9, r9, rfl⟩ :=
-    builder_pending_payments_etheorem' hb hp.slotsPerEpochSix e8 (hc.builderRoom e8 b8) h9
+    builder_pending_payments_etheorem' hb hp.slotsPerEpochSix e8 h9
   have b9 : StepsOk (epochSteps.take 9) e e9 := b8.snoc r9
+  haveI : RegBound e9 := hc.regBound 9 e9 b9
   -- 10. effective balance updates
   obtain ⟨s10, h10, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e10, r10, rfl⟩ := effective_balance_updates_etheorem hb hp.tail e9 h10
   have b10 : StepsOk (epochSteps.take 10) e e10 := b9.snoc r10
+  haveI : RegBound e10 := hc.regBound 10 e10 b10
   -- 11. slashings reset
   obtain ⟨s11, h11, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e11, r11, rfl⟩ := slashings_reset_etheorem hb hp.tail e10 h11
   have b11 : StepsOk (epochSteps.take 11) e e11 := b10.snoc r11
+  haveI : RegBound e11 := hc.regBound 11 e11 b11
   -- 12. randao mixes reset
   obtain ⟨s12, h12, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e12, r12, rfl⟩ := randao_mixes_reset_etheorem hb e11 h12
   have b12 : StepsOk (epochSteps.take 12) e e12 := b11.snoc r12
+  haveI : RegBound e12 := hc.regBound 12 e12 b12
   -- 13. historical summaries
   obtain ⟨s13, h13, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e13, r13, rfl⟩ :=
     historical_summaries_update_etheorem hb hp.tail ho e12 (hc.summariesRoom e12 b12) h13
   have b13 : StepsOk (epochSteps.take 13) e e13 := b12.snoc r13
+  haveI : RegBound e13 := hc.regBound 13 e13 b13
   -- 14. participation flags
   obtain ⟨e14, r14, h14⟩ := participation_flag_updates_etheorem e13
   have b14 : StepsOk (epochSteps.take 14) e e14 := b13.snoc r14
+  haveI : RegBound e14 := hc.regBound 14 e14 b14
   rw [← h14] at h
   -- 15. sync committees
   obtain ⟨s15, h15, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e15, r15, rfl⟩ := process_sync_committee_updates_etheorem hb hp.committee o ho
     hp.epochsPerSyncCommitteePeriodLt e14 h15
   have b15 : StepsOk (epochSteps.take 15) e e15 := b14.snoc r15
+  haveI : RegBound e15 := hc.regBound 15 e15 b15
   -- 16. proposer lookahead
   obtain ⟨s16, h16, h⟩ := Spec.specM_bind_ok h
   obtain ⟨e16, r16, rfl⟩ := process_proposer_lookahead_etheorem hb hp.committee o ho.hash hsha
     e15 h16
   have b16 : StepsOk (epochSteps.take 16) e e16 := b15.snoc r16
+  haveI : RegBound e16 := hc.regBound 16 e16 b16
   -- 17. PTC window
   obtain ⟨e17, r17, rfl⟩ := process_ptc_window_etheorem hb hp.committee o ho.hash hsha e16 h
   have b17 : StepsOk epochSteps e e17 := b16.snoc r17

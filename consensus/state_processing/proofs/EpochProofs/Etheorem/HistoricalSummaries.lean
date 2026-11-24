@@ -7,9 +7,9 @@ import EpochProofs.Etheorem.Oracle
 The main theorem is `historical_summaries_update_etheorem`. The reference takes
 `hash_tree_root` from the `Oracle`. `OracleAgrees o` says that it equals Etheorem's `htr`.
 
-Etheorem pins alpha.11, where `historical_summaries` has the limit `HISTORICAL_ROOTS_LIMIT`.
+Beta.4 keeps the limit `HISTORICAL_ROOTS_LIMIT` on `historical_summaries`, and the append raises at it.
 Past the limit Etheorem's `SSZList.push` drops the new summary. In beta.4 the list has no limit.
-So the theorem assumes that the list is below the limit (finding F6).
+So the theorem assumes that the list is below the limit.
 -/
 
 forkproof EpochEtheorem
@@ -23,13 +23,16 @@ variable [EthCLSpecs.Gloas.Preset] [HasherTag]
 def etheoremSummary (e : EtheoremState) : EthCLSpecs.Gloas.HistoricalSummary :=
   { blockSummaryRoot := htr e.blockRoots, stateSummaryRoot := htr e.stateRoots }
 
-theorem processHistoricalSummariesUpdate_run (e : EtheoremState) :
+/-- The append raises when the list is full, so the run takes `hcap`, the room for one more
+item. -/
+theorem processHistoricalSummariesUpdate_run (e : EtheoremState)
+    (hcap : e.historicalSummaries.val.size < EthCLSpecs.Gloas.Const.historicalRootsLimit) :
     (EthCLSpecs.Gloas.processHistoricalSummariesUpdate (StateTransition := GloasRun)).run
         (pureState e) =
       .ok ((), pureState (if (EthCLSpecs.Gloas.computeEpochAtSlot e.slot + 1) %
           UInt64.ofNat (EthCLSpecs.Gloas.Const.slotsPerHistoricalRoot /
             EthCLSpecs.Gloas.Const.slotsPerEpoch) = 0
-        then { e with historicalSummaries := e.historicalSummaries.push (etheoremSummary e) }
+        then { e with historicalSummaries := e.historicalSummaries.push (etheoremSummary e) hcap }
         else e)) := by
   unfold EthCLSpecs.Gloas.processHistoricalSummariesUpdate EthCLSpecs.Gloas.getCurrentEpoch
   by_cases h : (EthCLSpecs.Gloas.computeEpochAtSlot e.slot + 1) %
@@ -37,7 +40,7 @@ theorem processHistoricalSummariesUpdate_run (e : EtheoremState) :
         EthCLSpecs.Gloas.Const.slotsPerEpoch) = 0
   · rw [if_pos h]
     simp [StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure,
-      StateT.pure, Except.pure, Except.bind, view_uncachedBox, h]
+      StateT.pure, Except.pure, Except.bind, view_uncachedBox, h, SSZList.push?, hcap]
     rfl
   · rw [if_neg h]
     simp [StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure,
@@ -46,14 +49,15 @@ theorem processHistoricalSummariesUpdate_run (e : EtheoremState) :
 omit [EthCLSpecs.Gloas.Preset] [HasherTag] in
 /-- `SSZList.push` below the limit appends. -/
 theorem sszList_push_toList {α : Type} {cap : Nat} (xs : SSZList α cap) (x : α)
-    (h : xs.val.size < cap) : (xs.push x).toList = xs.toList ++ [x] := by
-  simp [SSZList.push, h, SSZList.toList]
+    (h : xs.val.size < cap) : (xs.push x h).toList = xs.toList ++ [x] := by
+  simp [SSZList.push, SSZList.toList]
 
 variable [EthCLSpecs.Gloas.Config] [CryptoBackend]
 
 /-- `process_historical_summaries_update` equals Etheorem's.
 
-`hcap`: the list is below Etheorem's alpha.11 limit `HISTORICAL_ROOTS_LIMIT` (F6). -/
+`hcap`: the list is below `HISTORICAL_ROOTS_LIMIT`. Beta.4 keeps this cap, and the spec's
+append raises at it. -/
 theorem historical_summaries_update_etheorem {p : Spec.Preset} (hp : PresetAgrees p)
     (ht : TailPresetAgrees p) {o : Spec.Oracle} (ho : OracleAgrees o) (e : EtheoremState)
     (hcap : e.historicalSummaries.val.size < EthCLSpecs.Gloas.Const.historicalRootsLimit)
@@ -61,7 +65,7 @@ theorem historical_summaries_update_etheorem {p : Spec.Preset} (hp : PresetAgree
     (h : Spec.process_historical_summaries_update p o (toSpecState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processHistoricalSummariesUpdate (StateTransition := GloasRun)).run
         (pureState e) = .ok ((), pureState e') ∧ toSpecState e' = s' := by
-  refine ⟨_, processHistoricalSummariesUpdate_run e, ?_⟩
+  refine ⟨_, processHistoricalSummariesUpdate_run e hcap, ?_⟩
   have hlt := EthCLSpecs.Gloas.Const.slotsPerHistoricalRootLt
   have hper : (UInt64.ofNat (EthCLSpecs.Gloas.Const.slotsPerHistoricalRoot /
       EthCLSpecs.Gloas.Const.slotsPerEpoch)).toNat =

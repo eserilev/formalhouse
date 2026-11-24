@@ -118,9 +118,14 @@ theorem weigh_run (e : EtheoremState) (tot pt ct : UInt64) (pr cr : EthCLSpecs.G
     except_bind_ok]
   dsimp only
   obtain ⟨h2, h3p, h3c⟩ := hov
-  rw [run_bind, checkedMul_of_lt _ _ _ (by simpa using h2), run_pure, except_bind_ok,
-    run_bind, checkedMul_of_lt _ _ _ (by simpa using h3p), run_pure, except_bind_ok,
-    run_bind, checkedMul_of_lt _ _ _ (by simpa using h3c), run_pure, except_bind_ok]
+  -- The spec's order: `previous_epoch_target_balance * 3`, `total_active_balance * 2`, the
+  -- previous root read, then `current_epoch_target_balance * 3`. All three products are below
+  -- `2^64`, so the third one reads as the plain product in both branches of the first read.
+  rw [run_bind, checkedMul_of_lt _ _ _ (by simpa using h3p), run_pure, except_bind_ok,
+    run_bind, checkedMul_of_lt _ _ _ (by simpa using h2), run_pure, except_bind_ok]
+  dsimp only
+  rw [checkedMul_of_lt (m := GloasRun) ct 3 _ (by simpa using h3c)]
+  simp only [pure_bind]
   -- Below `2^64` the `uint64` products compare as the plain products.
   have hcmp : ∀ x : UInt64, x.toNat * 3 < 2 ^ 64 →
       (x * 3 ≥ tot * 2 ↔ x.toNat * 3 ≥ tot.toNat * 2) := by
@@ -136,15 +141,13 @@ theorem weigh_run (e : EtheoremState) (tot pt ct : UInt64) (pr cr : EthCLSpecs.G
     simp only [hp, hc, decide_true]
     finish_weigh EthCLSpecs.Gloas.modifyState
   · rw [if_pos hp, run_bind, hpr hp, except_bind_ok,
-      if_neg hc, run_bind, run_pure, except_bind_ok]
+      if_neg hc]
     simp only [hp, hc, decide_true, decide_false]
     finish_weigh EthCLSpecs.Gloas.modifyState
-  · rw [if_neg hp, run_bind, run_pure, except_bind_ok,
-      if_pos hc, run_bind, hcr hc, except_bind_ok]
+  · rw [if_neg hp, if_pos hc, run_bind, hcr hc, except_bind_ok]
     simp only [hp, hc, decide_true, decide_false]
     finish_weigh EthCLSpecs.Gloas.modifyState
-  · rw [if_neg hp, run_bind, run_pure, except_bind_ok,
-      if_neg hc, run_bind, run_pure, except_bind_ok]
+  · rw [if_neg hp, if_neg hc]
     simp only [hp, hc, decide_false]
     finish_weigh EthCLSpecs.Gloas.modifyState
 
@@ -363,7 +366,7 @@ theorem weigh_etheorem (e : EtheoremState) (tot pt ct : UInt64) {s' : Spec.Beaco
     Bool.and_assoc]
 
 /-- `process_justification_and_finalization` equals Etheorem's. -/
-theorem justification_etheorem (e : EtheoremState) {s' : Spec.BeaconState}
+theorem justification_etheorem (e : EtheoremState) [RegBound e] {s' : Spec.BeaconState}
     (h : Spec.process_justification_and_finalization p (toSpecState e) = .ok s') :
     ∃ e' : EtheoremState,
       (EthCLSpecs.Gloas.processJustificationAndFinalization (StateTransition := GloasRun)).run

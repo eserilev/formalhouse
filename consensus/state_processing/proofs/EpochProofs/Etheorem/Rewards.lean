@@ -105,7 +105,7 @@ def flagStepE (e : EtheoremState) (f : Nat) (acc : MProd (Array UInt64) (Array U
     EthCLSpecs.Gloas.Const.effectiveBalanceIncrement
   let br := baseRewardE e vi
   if unslashed.contains vi then
-    if !EthCLSpecs.Gloas.isInInactivityLeak (pureState e) then
+    if !leakE e then
       ⟨acc.1, acc.2.set! vi.toNat
         (UInt64.ofNat (br * weight * usi / (ai * EthCLSpecs.Gloas.Const.weightDenominator)))⟩
     else acc
@@ -122,11 +122,11 @@ def flagDeltasE (e : EtheoremState) (f : Nat) : Array UInt64 × Array UInt64 :=
 variable {p : Spec.Preset} (hpp : PassesPresetAgrees p)
 include hpp
 
-theorem eligible_lt (e : EtheoremState) :
+theorem eligible_lt (e : EtheoremState) [RegBound e] :
     ∀ i ∈ (EthCLSpecs.Gloas.getEligibleValidatorIndices (pureState e)).toList,
       i.toNat < e.validators.val.size := by
   have hsize : e.validators.val.size < 2 ^ 64 :=
-    Nat.lt_of_le_of_lt e.validators.property hpp.validatorRegistryLimit
+    Nat.lt_of_le_of_lt (RegBound.le (e := e)) hpp.validatorRegistryLimit
   intro i hi
   unfold EthCLSpecs.Gloas.getEligibleValidatorIndices at hi
   rw [indicesWhere_toList] at hi
@@ -136,12 +136,12 @@ theorem eligible_lt (e : EtheoremState) :
   rw [UInt64.toNat_ofNat_of_lt' (Nat.lt_trans hj' hsize)]
   exact hj'
 
-theorem get_base_reward_eq (e : EtheoremState) (a : Nat) (ha : a < e.validators.val.size) {br : Nat}
+theorem get_base_reward_eq (e : EtheoremState) [RegBound e] (a : Nat) (ha : a < e.validators.val.size) {br : Nat}
     (h : Spec.get_base_reward p (etheoremTotalActiveBalance e) (toSpecState e) a = .ok br) :
     br = baseRewardE e (UInt64.ofNat a) := by
   have hp := hpp.toPresetAgrees
   have hsize : e.validators.val.size < 2 ^ 64 :=
-    Nat.lt_of_le_of_lt e.validators.property hp.validatorRegistryLimit
+    Nat.lt_of_le_of_lt (RegBound.le (e := e)) hp.validatorRegistryLimit
   have haN : (UInt64.ofNat a).toNat = a := UInt64.toNat_ofNat_of_lt' (Nat.lt_trans ha hsize)
   unfold Spec.get_base_reward at h
   obtain ⟨v, hv, h⟩ := bind_ok_inv h
@@ -161,10 +161,10 @@ omit hpp in
 abbrev Eus (f : Nat) (e : EtheoremState) : Array UInt64 :=
   eUnslashed e f (EthCLSpecs.Gloas.previousEpochOf (pureState e))
 
-theorem eligible_nodup (e : EtheoremState) :
+theorem eligible_nodup (e : EtheoremState) [RegBound e] :
     ((EthCLSpecs.Gloas.getEligibleValidatorIndices (pureState e)).toList.map UInt64.toNat).Nodup := by
   have hsize : e.validators.val.size < 2 ^ 64 :=
-    Nat.lt_of_le_of_lt e.validators.property hpp.validatorRegistryLimit
+    Nat.lt_of_le_of_lt (RegBound.le (e := e)) hpp.validatorRegistryLimit
   unfold EthCLSpecs.Gloas.getEligibleValidatorIndices
   rw [indicesWhere_toList, List.map_map]
   rw [List.map_congr_left (g := id) (fun i hi => by
@@ -183,25 +183,30 @@ abbrev usiE (f : Nat) (e : EtheoremState) : Nat :=
 /-- Etheorem's `get_flag_index_deltas` returns `flagDeltasE` when its products fit in `uint64`.
 Etheorem computes `base_reward * weight` for every eligible index, and
 `base_reward * weight * unslashed_participating_increments` where the reference does. -/
-theorem getFlagIndexDeltas_eq (e : EtheoremState) (f : Nat)
+theorem getFlagIndexDeltas_eq (e : EtheoremState) [RegBound e] (f : Nat)
     (hus : EthCLSpecs.Gloas.getUnslashedParticipatingIndices (pureState e) f
       (EthCLSpecs.Gloas.previousEpochOf (pureState e)) = .ok (Eus f e))
     (hw : EthCLSpecs.Gloas.Const.participationFlagWeights[f]! < 2 ^ 64)
     (hb : ∀ vi ∈ (EthCLSpecs.Gloas.getEligibleValidatorIndices (pureState e)).toList,
       baseRewardE e vi < 2 ^ 64 ∧
       baseRewardE e vi * EthCLSpecs.Gloas.Const.participationFlagWeights[f]! < 2 ^ 64 ∧
-      ((Eus f e).contains vi = true → (!EthCLSpecs.Gloas.isInInactivityLeak (pureState e)) = true →
+      ((Eus f e).contains vi = true →
+        EthCLSpecs.Gloas.isInInactivityLeak (pureState e) = .ok (leakE e)) ∧
+      ((Eus f e).contains vi = true → (!leakE e) = true →
         baseRewardE e vi * EthCLSpecs.Gloas.Const.participationFlagWeights[f]! * usiE f e <
           2 ^ 64)) :
     EthCLSpecs.Gloas.getFlagIndexDeltas (pureState e) f = .ok (flagDeltasE e f) := by
   unfold EthCLSpecs.Gloas.getFlagIndexDeltas
   simp only [view_uncachedBox]
-  rw [hus, ok_bind, ← Array.forIn_toList, forIn_except_ok _ (fun vi acc => flagStepE e f acc vi)]
+  rw [liftErr_ok_of _ hus, ok_bind, ← Array.forIn_toList,
+    forIn_except_ok _ (fun vi acc => flagStepE e f acc vi)]
   · rfl
   · intro vi hvi acc
     have hlt := eligible_lt hpp e vi hvi
-    obtain ⟨hbr, hbw, hbwu⟩ := hb vi hvi
-    have hsome : e.validators.val[vi.toNat]? = some e.validators.val[vi.toNat]! := by
+    obtain ⟨hbr, hbw, hlk, hbwu⟩ := hb vi hvi
+    have hsome : EthCLLib.Spec.IdxRead.get? e.validators vi.toNat =
+        some e.validators.val[vi.toNat]! := by
+      show e.validators.val[vi.toNat]? = _
       rw [getElem!_pos e.validators.val _ hlt]; exact Array.getElem?_eq_getElem hlt
     have hgb : (liftErr (EthCLSpecs.Gloas.getBaseReward (pureState e) vi) :
         Except StateTransitionError Nat) = .ok (baseRewardE e vi) := by
@@ -215,18 +220,20 @@ theorem getFlagIndexDeltas_eq (e : EtheoremState) (f : Nat)
         UInt64.ofNat EthCLSpecs.Gloas.Const.participationFlagWeights[f]!).toNat =
         baseRewardE e vi * EthCLSpecs.Gloas.Const.participationFlagWeights[f]! := by
       rw [UInt64.toNat_mul, hwN, hbrN, Nat.mod_eq_of_lt (by simpa [UInt64.size] using hbw)]
-    rw [hgb, ok_bind, checkedMul_of_lt _ _ _ (by rw [hbrN, hwN]; exact hbw)]
-    simp only [pure, Except.pure, ok_bind]
+    rw [hgb, ok_bind]
     unfold flagStepE
-    split
-    · rename_i hin
-      split
-      · rename_i hl
+    by_cases hin : (Eus f e).contains vi = true
+    · simp only [hin, if_true]
+      rw [hlk hin, ok_bind]
+      by_cases hl : (!leakE e) = true
+      · simp only [hl, if_true]
         have husi : usiE f e < 2 ^ 64 := Nat.lt_of_le_of_lt (Nat.div_le_self _ _) (UInt64.toNat_lt _)
         have hprod := hbwu hin hl
+        rw [checkedMul_of_lt _ _ _ (by rw [hbrN, hwN]; exact hbw)]
+        simp only [pure, Except.pure, ok_bind]
         rw [checkedMul_of_lt _ _ _ (by
           rw [hweighted, UInt64.toNat_ofNat_of_lt' husi]; exact hprod)]
-        simp only [pure, Except.pure, ok_bind, hin, if_true]
+        simp only [pure, Except.pure, ok_bind]
         have hnum : (UInt64.ofNat (baseRewardE e vi) *
             UInt64.ofNat EthCLSpecs.Gloas.Const.participationFlagWeights[f]! *
             UInt64.ofNat (usiE f e)).toNat =
@@ -234,13 +241,19 @@ theorem getFlagIndexDeltas_eq (e : EtheoremState) (f : Nat)
           rw [UInt64.toNat_mul, hweighted, UInt64.toNat_ofNat_of_lt' husi,
             Nat.mod_eq_of_lt (by simpa [UInt64.size] using hprod)]
         rw [hnum]
-      · simp only [hin, if_true]
-    · rename_i hin
-      split
-      · simp only [hin, Bool.false_eq_true, if_false]
+      · simp only [Bool.not_eq_true'] at hl
+        simp only [hl, Bool.not_false, Bool.not_true, Bool.false_eq_true, if_false]
+        rfl
+    · simp only [Bool.not_eq_true] at hin
+      simp only [hin, Bool.false_eq_true, if_false]
+      by_cases hh : (f != EthCLSpecs.Gloas.Const.timelyHeadFlagIndex) = true
+      · simp only [hh, if_true]
+        rw [checkedMul_of_lt _ _ _ (by rw [hbrN, hwN]; exact hbw)]
+        simp only [pure, Except.pure, ok_bind]
         rw [hweighted]
-      · rename_i hh
-        simp only [hin, Bool.false_eq_true, if_false]
+      · simp only [Bool.not_eq_true] at hh
+        simp only [hh, Bool.false_eq_true, if_false]
+        rfl
 
 /-- Etheorem's total active balance is at least one increment. -/
 theorem inc_le_etheoremTotalActiveBalance (e : EtheoremState) :
@@ -273,7 +286,7 @@ theorem participationFlagWeights_le (f : Nat) (hf : f < 3) :
   rcases (show f = 0 ∨ f = 1 ∨ f = 2 by omega) with rfl | rfl | rfl <;> decide
 
 /-- `get_flag_index_deltas` equals Etheorem's. -/
-theorem flag_deltas_etheorem (e : EtheoremState) (f : Nat) (hf : f < 3) {R P : List Nat}
+theorem flag_deltas_etheorem (e : EtheoremState) [RegBound e] (f : Nat) (hf : f < 3) {R P : List Nat}
     (h : Spec.get_flag_index_deltas p (etheoremTotalActiveBalance e) (toSpecState e) f = .ok (R, P)) :
     EthCLSpecs.Gloas.getFlagIndexDeltas (pureState e) f = .ok (flagDeltasE e f) ∧
     R = (flagDeltasE e f).1.toList.map UInt64.toNat ∧
@@ -292,7 +305,7 @@ theorem flag_deltas_etheorem (e : EtheoremState) (f : Nat) (hf : f < 3) {R P : L
   simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
   obtain ⟨rfl, rfl⟩ := h
   have hsize : e.validators.val.size < 2 ^ 64 :=
-    Nat.lt_of_le_of_lt e.validators.property hp.validatorRegistryLimit
+    Nat.lt_of_le_of_lt (RegBound.le (e := e)) hp.validatorRegistryLimit
   -- The values the loop reads.
   have hel' := get_eligible_validator_indices_ok hp e hel
   obtain ⟨huspE, husp'⟩ := get_unslashed_participating_indices_ok hp e f hf _ husp
@@ -309,7 +322,9 @@ theorem flag_deltas_etheorem (e : EtheoremState) (f : Nat) (hf : f < 3) {R P : L
   let Good : Nat → Prop := fun a =>
     baseRewardE e (UInt64.ofNat a) * 26 < 2 ^ 64 ∧
     ((Eus f e).contains (UInt64.ofNat a) = true →
-      (!EthCLSpecs.Gloas.isInInactivityLeak (pureState e)) = true →
+      EthCLSpecs.Gloas.isInInactivityLeak (pureState e) = .ok (leakE e)) ∧
+    ((Eus f e).contains (UInt64.ofNat a) = true →
+      (!leakE e) = true →
       baseRewardE e (UInt64.ofNat a) * EthCLSpecs.Gloas.Const.participationFlagWeights[f]! *
         usiE f e < 2 ^ 64)
   let Rel' : List Nat → MProd (List Nat) (List Nat) → MProd (Array UInt64) (Array UInt64) →
@@ -325,9 +340,9 @@ theorem flag_deltas_etheorem (e : EtheoremState) (f : Nat) (hf : f < 3) {R P : L
     refine getFlagIndexDeltas_eq hpp e f huspE hw64 (fun vi hvi => ?_)
     have hG := hgood vi.toNat (by rw [hel']; exact List.mem_map_of_mem hvi) (by simp)
     simp only [Good, UInt64.ofNat_toNat] at hG
-    obtain ⟨h26, hG2⟩ := hG
+    obtain ⟨h26, hGl, hG2⟩ := hG
     have hwle := participationFlagWeights_le f hf
-    refine ⟨by omega, Nat.lt_of_le_of_lt (Nat.mul_le_mul_left _ hwle) h26, hG2⟩
+    refine ⟨by omega, Nat.lt_of_le_of_lt (Nat.mul_le_mul_left _ hwle) h26, hGl, hG2⟩
   · intro a rest b c st hrel' hbody
     obtain ⟨hrel, hga⟩ := hrel'
     have hG : Good a := by
@@ -336,16 +351,32 @@ theorem flag_deltas_etheorem (e : EtheoremState) (f : Nat) (hf : f < 3) {R P : L
       have hbr' := get_base_reward_eq hpp e a ha hbr
       have hsmall := get_base_reward_small hpp e a hbr
       rw [hbr'] at hsmall
-      refine ⟨hsmall, fun hin hl => ?_⟩
       have haN : (UInt64.ofNat a).toNat = a := UInt64.toNat_ofNat_of_lt'
-        (Nat.lt_trans ha (Nat.lt_of_le_of_lt e.validators.property hp.validatorRegistryLimit))
+        (Nat.lt_trans ha (Nat.lt_of_le_of_lt (RegBound.le (e := e)) hp.validatorRegistryLimit))
+      -- A participant's reference step reads the leak, so Etheorem's leak read returns.
+      have hleak : (Eus f e).contains (UInt64.ofNat a) = true →
+          ∃ lk, EthCLSpecs.Gloas.isInInactivityLeak (pureState e) = .ok lk ∧ lk = leakE e ∧
+            Spec.is_in_inactivity_leak p (toSpecState e) = .ok lk := by
+        intro hin
+        have hin' : a ∈ usp := by
+          rw [husp']
+          have := (mem_map_toNat_iff _ _).mpr hin
+          rwa [haN] at this
+        rw [if_pos hin'] at hbody
+        obtain ⟨lk, hlk, -⟩ := bind_ok_inv hbody
+        have hE := is_in_inactivity_leak_ok hpp e hlk
+        exact ⟨lk, hE, by unfold leakE; rw [hE], hlk⟩
+      refine ⟨hsmall, fun hin => ?_, fun hin hl => ?_⟩
+      · obtain ⟨lk, hE, hlkE, -⟩ := hleak hin
+        rw [hE, hlkE]
       have hin' : a ∈ usp := by
         rw [husp']
         have := (mem_map_toNat_iff _ _).mpr hin
         rwa [haN] at this
       rw [if_pos hin'] at hbody
       obtain ⟨lk, hlk, hbody⟩ := bind_ok_inv hbody
-      have hlk' := is_in_inactivity_leak_ok hpp e hlk
+      have hlk' : lk = leakE e := by
+        unfold leakE; rw [is_in_inactivity_leak_ok hpp e hlk]
       rw [if_pos (by rw [hlk']; exact hl)] at hbody
       obtain ⟨m1, hm1, hbody⟩ := bind_ok_inv hbody
       obtain ⟨rn, hrn, -⟩ := bind_ok_inv hbody
@@ -374,7 +405,8 @@ theorem flag_deltas_etheorem (e : EtheoremState) (f : Nat) (hf : f < 3) {R P : L
     · rw [if_pos hin] at hbody
       have hin' : (Eus f e).contains (UInt64.ofNat a) = true := hmem ▸ hin
       obtain ⟨lk, hlk, hbody⟩ := bind_ok_inv hbody
-      have hlk' := is_in_inactivity_leak_ok hpp e hlk
+      have hlk' : lk = leakE e := by
+        unfold leakE; rw [is_in_inactivity_leak_ok hpp e hlk]
       by_cases hl : (!lk) = true
       · rw [if_pos hl] at hbody
         obtain ⟨m1, hm1, hbody⟩ := bind_ok_inv hbody
@@ -406,7 +438,7 @@ theorem flag_deltas_etheorem (e : EtheoremState) (f : Nat) (hf : f < 3) {R P : L
           rfl
         have hXlt : rw' < 2 ^ 64 := by rw [hrwv]; exact Nat.lt_of_le_of_lt (Nat.div_le_self _ _) (by rw [hrnv]; exact hrnlt)
         have hsm' : sm = rw' := by rw [hsmv, hcurv]; simp
-        simp only [hin', hlk'.symm ▸ hl, if_true]
+        simp only [hin', show (!leakE e) = true by rw [← hlk']; exact hl, if_true]
         refine ⟨hb1, ?_, ?_, hnd'⟩
         · unfold Spec.listSet at hr1
           rw [if_pos (by simpa using hlta)] at hr1
@@ -421,7 +453,7 @@ theorem flag_deltas_etheorem (e : EtheoremState) (f : Nat) (hf : f < 3) {R P : L
         simp only [pure, Except.pure, ok_bind, Except.ok.injEq] at hbody
         subst hbody
         refine ⟨_, rfl, ?_⟩
-        simp only [hin', show (!EthCLSpecs.Gloas.isInInactivityLeak (pureState e)) = false by
+        simp only [hin', show (!leakE e) = false by
           rw [← hlk']; simpa using hl, if_true, Bool.false_eq_true, if_false]
         exact ⟨hb1, hb2, fun j hj => hz j (by simp [hj]), hnd'⟩
     · rw [if_neg hin] at hbody
@@ -508,7 +540,8 @@ theorem getInactivityPenaltyDeltas_eq (e : EtheoremState)
     EthCLSpecs.Gloas.getInactivityPenaltyDeltas (pureState e) = .ok (inactPenE e) := by
   unfold EthCLSpecs.Gloas.getInactivityPenaltyDeltas inactPenE
   simp only [view_uncachedBox]
-  rw [hmt, ok_bind, ← Array.forIn_toList, forIn_except_ok _ (fun vi acc => inactPenStepE e acc vi)]
+  rw [liftErr_ok_of _ hmt, ok_bind, ← Array.forIn_toList,
+    forIn_except_ok _ (fun vi acc => inactPenStepE e acc vi)]
   · rfl
   · intro vi hvi acc
     unfold inactPenStepE
@@ -518,8 +551,10 @@ theorem getInactivityPenaltyDeltas_eq (e : EtheoremState)
     · have hin' : (Eus EthCLSpecs.Gloas.Const.timelyTargetFlagIndex e).contains vi = false := by
         simpa using hin
       obtain ⟨hlt, hmul⟩ := hb vi hvi hin'
-      have hq : e.inactivityScores.val[vi.toNat]? = some e.inactivityScores[vi.toNat]! := by
-        rw [sszList_getElem!_val, getElem!_pos e.inactivityScores.val _ hlt]
+      have hq : EthCLLib.Spec.IdxRead.get? e.inactivityScores vi.toNat =
+          some e.inactivityScores[vi.toNat]! := by
+        show e.inactivityScores.val[vi.toNat]? = _
+        rw [regList_getElem!_val, getElem!_pos e.inactivityScores.val _ hlt]
         exact Array.getElem?_eq_getElem hlt
       simp only [hin', Bool.not_false, if_true]
       simp only [sszGetIdx, hq, liftErr, MonadExcept.ofExcept, Except.mapError]
@@ -529,13 +564,13 @@ theorem getInactivityPenaltyDeltas_eq (e : EtheoremState)
       rw [UInt64.toNat_mul, Nat.mod_eq_of_lt (by simpa [UInt64.size] using hmul)]
 
 /-- `get_inactivity_penalty_deltas` equals Etheorem's. -/
-theorem inact_deltas_etheorem (e : EtheoremState) {R P : List Nat}
+theorem inact_deltas_etheorem (e : EtheoremState) [RegBound e] {R P : List Nat}
     (h : Spec.get_inactivity_penalty_deltas p (toSpecState e) = .ok (R, P)) :
     EthCLSpecs.Gloas.getInactivityPenaltyDeltas (pureState e) = .ok (inactPenE e) ∧
     R = List.replicate e.validators.val.size 0 ∧ P = (inactPenE e).toList.map UInt64.toNat := by
   have hp := hpp.toPresetAgrees
   have hsize : e.validators.val.size < 2 ^ 64 :=
-    Nat.lt_of_le_of_lt e.validators.property hp.validatorRegistryLimit
+    Nat.lt_of_le_of_lt (RegBound.le (e := e)) hp.validatorRegistryLimit
   unfold Spec.get_inactivity_penalty_deltas at h
   rw [get_previous_epoch_eq hp] at h
   simp only [ok_bind] at h
@@ -589,7 +624,7 @@ theorem inact_deltas_etheorem (e : EtheoremState) {R P : List Nat}
       obtain ⟨num, hnum, -⟩ := bind_ok_inv hbody
       obtain ⟨-, hnumlt⟩ := uint64Mul_ok_lt hnum
       refine ⟨hlt, ?_⟩
-      rw [sszList_getElem!_val, sszList_getElem!_val]
+      rw [regList_getElem!_val, regList_getElem!_val]
       exact hnumlt
     suffices H : ∃ b', st = .yield b' ∧ Rel rest b' (inactPenStepE e c (UInt64.ofNat a)) by
       obtain ⟨b', h1, h2⟩ := H
@@ -645,7 +680,7 @@ theorem inact_deltas_etheorem (e : EtheoremState) {R P : List Nat}
           (EthCLSpecs.Gloas.Const.inactivityScoreBias.toNat *
             EthCLSpecs.Gloas.Const.inactivityPenaltyQuotientBellatrix) := by
         rw [hqv, hnumv, hdenv, hpp.inactivityScoreBias, hpp.inactivityPenaltyQuotientBellatrix,
-          sszList_getElem!_val, sszList_getElem!_val]
+          regList_getElem!_val, regList_getElem!_val]
         rfl
       have hXlt : q < 2 ^ 64 := by
         rw [hqv]; exact Nat.lt_of_le_of_lt (Nat.div_le_self _ _) (by rw [hnumv]; exact hnumlt)
@@ -715,17 +750,8 @@ theorem getElem?_map_toNat (xs : Array UInt64) (i : Nat) {v : Nat}
 omit hpp [EthCLSpecs.Gloas.Preset] [HasherTag] [EthCLSpecs.Gloas.Config] in
 theorem decreasedE_toNat (b d : UInt64) :
     (decreasedE b d).toNat = Spec.saturating_sub b.toNat d.toNat := by
-  unfold decreasedE Spec.saturating_sub
-  by_cases h : d > b
-  · have h' : b.toNat < d.toNat := UInt64.lt_iff_toNat_lt.mp h
-    rw [if_pos h, if_neg (show ¬ (d.toNat < b.toNat) by omega)]; simp
-  · rw [if_neg h]
-    have h' : d.toNat ≤ b.toNat := by rw [gt_iff_lt, UInt64.lt_iff_toNat_lt] at h; omega
-    rw [UInt64.toNat_sub_of_le _ _ (UInt64.le_iff_toNat_le.mpr h')]
-    by_cases h2 : b.toNat > d.toNat
-    · rw [if_pos h2]
-    · have h2' : ¬ d.toNat < b.toNat := h2
-      rw [if_neg h2]; omega
+  unfold decreasedE
+  exact saturatingSub_toNat b d
 
 omit hpp [HasherTag] [EthCLSpecs.Gloas.Config] in
 theorem applyStep_balances (rew pen : Array UInt64) (w : EtheoremState) (a : Nat) {n : Nat} (ha : a < n)
@@ -740,7 +766,7 @@ theorem applyStep_balances (rew pen : Array UInt64) (w : EtheoremState) (a : Nat
   have hsum : (w.balances.val[a]! + rew[a]!).toNat = v + rew[a]!.toNat := by
     rw [UInt64.toNat_add, hv', Nat.mod_eq_of_lt (by rw [← hv']; exact hfit)]
   unfold applyStepE
-  simp only [haN, map_toList_set!]
+  simp only [haN, map_regList_set!]
   rw [decreasedE_toNat, hsum]
 
 omit hpp [EthCLSpecs.Gloas.Config] in
@@ -803,16 +829,17 @@ theorem applyDeltas_run (s0 : EthCLSpecs.Gloas.State) (w0 : EtheoremState) (rew 
       rw [haN, getElem!_pos w.balances.val a hlt']; exact Array.getElem?_eq_getElem hlt'
     simp only [run_bind]
     unfold EthCLSpecs.Gloas.increaseBalance
-    rw [run_bind, view_uncachedBox, run_sszGetIdx_some _ _ _ hsome, except_bind_ok, run_bind,
+    rw [run_bind, view_uncachedBox, run_sszGetIdx_some w.balances _ _ hsome, except_bind_ok, run_bind,
       checkedAdd_run_ok _ _ _ _ hfit', except_bind_ok]
     simp only [run_pure, except_bind_ok]
     unfold EthCLSpecs.Gloas.decreaseBalance
     have hsome2 : (w.balances.set! (UInt64.ofNat a).toNat
         (w.balances.val[(UInt64.ofNat a).toNat]! + rew[a]!)).val[
         (UInt64.ofNat a).toNat]? = some (w.balances.val[(UInt64.ofNat a).toNat]! + rew[a]!) := by
-      simp [haN, hlt']
+      simp [haN, hlt', ProgressiveList.set!]
     rw [run_bind]
-    erw [run_sszGetIdx_some _ _ _ hsome2]
+    erw [run_sszGetIdx_some (w.balances.set! (UInt64.ofNat a).toNat
+      (w.balances.val[(UInt64.ofNat a).toNat]! + rew[a]!)) _ _ hsome2]
     rw [except_bind_ok]
     unfold applyStepE
     rfl
@@ -880,7 +907,7 @@ theorem mapM_three {α : Type} (f : Nat → Spec.SpecM α) {l : List α}
   exact ⟨a, b, c, ha, hb, hc, rfl⟩
 
 /-- `process_rewards_and_penalties` equals Etheorem's. -/
-theorem rewards_etheorem (e : EtheoremState) {s' : Spec.BeaconState}
+theorem rewards_etheorem (e : EtheoremState) [RegBound e] {s' : Spec.BeaconState}
     (h : Spec.process_rewards_and_penalties p (etheoremTotalActiveBalance e) (toSpecState e) =
       .ok s') :
     ∃ e' : EtheoremState,
@@ -891,7 +918,7 @@ theorem rewards_etheorem (e : EtheoremState) {s' : Spec.BeaconState}
   rw [get_current_epoch_eq hp] at h
   simp only [ok_bind] at h
   have hsize : e.validators.val.size < 2 ^ 64 :=
-    Nat.lt_of_le_of_lt e.validators.property hp.validatorRegistryLimit
+    Nat.lt_of_le_of_lt (RegBound.le (e := e)) hp.validatorRegistryLimit
   unfold EthCLSpecs.Gloas.processRewardsAndPenalties
   rw [run_bind, show (get : GloasRun _).run (pureState e) = .ok (pureState e, pureState e) from rfl,
     except_bind_ok]

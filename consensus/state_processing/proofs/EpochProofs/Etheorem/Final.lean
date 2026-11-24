@@ -26,8 +26,8 @@ Etheorem's (`hpa`).
 - `hin`: the reachable-state invariants at the epoch boundary (`EpochInputOk''`).
 - `hpre`: the epoch runs at the last slot, the next slot fits in a `u64`, and
   `historical_summaries` is below the Lighthouse limit (`AtEpochBoundary`).
-- `hcond`: room in the registry for the new validators of one epoch (F10), and room in the
-  builder withdrawals (F6), both at the epoch start (`GloasEtheoremDivergenceAssumptions`). The historical summaries
+- `hcond`: room in the registry for the new validators of one epoch (F10), at the epoch start
+  (`GloasEtheoremDivergenceAssumptions`). The historical summaries
   room comes from `hpre`.
 - `hhr`: Etheorem's `HISTORICAL_ROOTS_LIMIT` is at least Lighthouse's (both `2^24`).
 - `ho`, `hsha`: the oracle is Etheorem's hash and BLS functions, and SHA-256 returns 32 bytes. -/

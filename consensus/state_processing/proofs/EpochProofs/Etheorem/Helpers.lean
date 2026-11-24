@@ -253,6 +253,31 @@ theorem checkedMul_of_lt {m : Type → Type} {E : Type} [Monad m] [MonadExcept E
   rw [UInt64.toNat_div, UInt64.toNat_mul, Nat.mod_eq_of_lt (by simpa [UInt64.size] using h),
     Nat.mul_div_cancel_left _ (Nat.pos_of_ne_zero ha')]
 
+theorem checkedSub_of_le {m : Type → Type} {E : Type} [Monad m] [MonadExcept E m]
+    [EthCLLib.Spec.ErrorConv EthCLLib.Spec.StateTransitionError E] (a b : UInt64) (d : String)
+    (h : b.toNat ≤ a.toNat) :
+    (EthCLLib.Spec.checkedSub a b d : m UInt64) = pure (a - b) := by
+  unfold EthCLLib.Spec.checkedSub
+  rw [if_neg]
+  rw [gt_iff_lt, UInt64.lt_iff_toNat_lt]
+  omega
+
+/-- Etheorem's `saturatingSub` is the reference `saturating_sub`. -/
+theorem saturatingSub_toNat (x y : UInt64) :
+    (saturatingSub x y).toNat = Spec.saturating_sub x.toNat y.toNat := by
+  unfold saturatingSub Spec.saturating_sub
+  by_cases h : x > y
+  · have h' : y.toNat < x.toNat := by simpa [UInt64.lt_iff_toNat_lt] using h
+    rw [if_pos h, if_pos h', UInt64.toNat_sub_of_le _ _ (UInt64.le_of_lt h)]
+  · have h' : ¬ y.toNat < x.toNat := by simpa [UInt64.lt_iff_toNat_lt] using h
+    rw [if_neg h, if_neg h']
+    simp
+
+/-- `liftErr` of a successful `IndexError` read succeeds with the same value. -/
+theorem liftErr_ok_of {α : Type} {x : Except SizzLean.Cache.IndexError α} (a : α) (h : x = .ok a) :
+    (EthCLLib.Spec.liftErr x : Except EthCLLib.Spec.StateTransitionError α) = .ok a := by
+  subst h; rfl
+
 /-- A spec `uint64Add` that returns has no overflow. -/
 theorem uint64Add_lt {a b s : Nat} (h : Spec.uint64Add a b = .ok s) : a + b < 2 ^ 64 := by
   unfold Spec.uint64Add at h
@@ -336,21 +361,14 @@ theorem get_previous_epoch_eq (e : EtheoremState) :
   rw [get_current_epoch_eq hp]
   simp only [bind, Except.bind, pure, Except.pure, Except.ok.injEq, Spec.saturating_sub]
   generalize EthCLSpecs.Gloas.currentEpochOf (pureState e) = c
-  have hg : EthCLSpecs.Gloas.Const.genesisEpoch = 0 := rfl
-  rw [hg]
-  by_cases h0 : c = 0
-  · subst h0; simp
-  · have hc : 0 < c.toNat := by
-      rcases Nat.eq_zero_or_pos c.toNat with h | h
-      · exact absurd (UInt64.toNat_inj.mp (by simpa using h)) h0
-      · exact h
-    simp only [beq_iff_eq, h0, if_false]
-    rw [UInt64.toNat_sub_of_le _ _ (by rw [UInt64.le_iff_toNat_le]; simp; omega)]
-    simp only [UInt64.toNat_one]
-    rcases Nat.lt_or_ge 1 c.toNat with h1 | h1
-    · rw [if_pos h1]
-    · have h2 : c.toNat = 1 := by omega
-      rw [if_neg (Nat.not_lt.mpr h1), h2]
+  unfold saturatingSub
+  by_cases h1 : c > 1
+  · have h1' : 1 < c.toNat := by simpa [UInt64.lt_iff_toNat_lt] using h1
+    rw [if_pos h1, if_pos h1', UInt64.toNat_sub_of_le _ _ (UInt64.le_of_lt h1)]
+    rfl
+  · have h1' : ¬ 1 < c.toNat := by simpa [UInt64.lt_iff_toNat_lt] using h1
+    rw [if_neg h1, if_neg h1']
+    simp
 
 omit [HasherTag] in
 theorem compute_start_slot_at_epoch_ok (epoch : UInt64) {n : Nat}
@@ -393,14 +411,15 @@ section Active
 variable {p : Spec.Preset} (hp : PresetAgrees p) [HasherTag]
 include hp
 
-theorem get_active_validator_indices_eq (e : EtheoremState) (epoch : UInt64) :
+theorem get_active_validator_indices_eq (e : EtheoremState) [RegBound e] (epoch : UInt64) :
     Spec.get_active_validator_indices (toSpecState e) epoch.toNat =
       (EthCLSpecs.Gloas.getActiveValidatorIndices (pureState e) epoch).toList.map
         UInt64.toNat := by
   have hsize : e.validators.val.size < 2 ^ 64 :=
-    Nat.lt_of_le_of_lt e.validators.property hp.validatorRegistryLimit
+    Nat.lt_of_le_of_lt RegBound.le hp.validatorRegistryLimit
   unfold Spec.get_active_validator_indices EthCLSpecs.Gloas.getActiveValidatorIndices
-  simp only [view_uncachedBox, toSpecState_validators, SSZList.toList, SSZList.toArray]
+  simp only [view_uncachedBox, toSpecState_validators, SSZList.toList, SSZList.toArray,
+    ProgressiveList.toList, ProgressiveList.toArray]
   rw [indicesWhere_toList, zipIdx_map_eq, List.filter_map, List.map_map, List.map_map]
   simp only [Function.comp_def]
   apply List.map_congr_left
@@ -478,7 +497,7 @@ theorem get_total_balance_ok (e : EtheoremState) (indices : Array UInt64) {n : N
       have hsum' : (indices.toList.map fun i => (e.validators[i.toNat]!.effectiveBalance).toNat).sum
           = bs.sum := by
         rw [hbs, List.map_map]
-        simp [Function.comp_def, sszList_getElem!_val]
+        simp [Function.comp_def, regList_getElem!_val]
       rw [foldl_add_toNat _ _ _ (by simp only [hsum', UInt64.toNat_zero, Nat.zero_add]; exact hsum),
         hsum']
       simp [Nat.max_comm]
@@ -498,7 +517,7 @@ include hp
 abbrev etheoremTotalActiveBalance (e : EtheoremState) : Nat :=
   (EthCLSpecs.Gloas.getTotalActiveBalance (pureState e)).toNat
 
-theorem get_total_active_balance_ok (e : EtheoremState) {n : Nat}
+theorem get_total_active_balance_ok (e : EtheoremState) [RegBound e] {n : Nat}
     (h : Spec.get_total_active_balance p (toSpecState e) = .ok n) :
     etheoremTotalActiveBalance e = n := by
   unfold Spec.get_total_active_balance at h
@@ -687,7 +706,9 @@ theorem increase_balance_etheorem (state preState : EtheoremState) (i : EthCLSpe
       refine ⟨?_, ?_⟩
       · unfold EthCLSpecs.Gloas.increaseBalance sszGetIdx checkedAdd
         simp only [view_uncachedBox]
-        have hsome : state.balances.val[i.toNat]? = some state.balances.val[i.toNat]! := by
+        have hsome : EthCLLib.Spec.IdxRead.get? state.balances i.toNat =
+            some state.balances.val[i.toNat]! := by
+          show state.balances.val[i.toNat]? = _
           simp [hi]
         rw [hsome]
         simp [hcarry, EthCLLib.Spec.liftErr, Except.mapError, MonadExcept.ofExcept]
@@ -696,7 +717,7 @@ theorem increase_balance_etheorem (state preState : EtheoremState) (i : EthCLSpe
         unfold Spec.listSet at h
         rw [if_pos (by simpa using hi)] at h
         cases h
-        rw [map_toList_set!, hc]
+        rw [map_regList_set!, hc]
 
 omit [EthCLSpecs.Gloas.Config] in
 /-- `decrease_balance` equals Etheorem's `decreaseBalance`. -/
@@ -708,12 +729,10 @@ theorem decrease_balance_etheorem (state preState : EtheoremState) (i : EthCLSpe
         delta).run (pureState preState) =
       .ok (pureState { state with
           balances := state.balances.set! i.toNat
-            (if delta > state.balances.val[i.toNat]! then 0
-             else state.balances.val[i.toNat]! - delta) },
+            (saturatingSub state.balances.val[i.toNat]! delta) },
         pureState preState) ∧
     bs = (state.balances.set! i.toNat
-      (if delta > state.balances.val[i.toNat]! then 0
-       else state.balances.val[i.toNat]! - delta)).toList.map UInt64.toNat := by
+      (saturatingSub state.balances.val[i.toNat]! delta)).toList.map UInt64.toNat := by
   unfold Spec.decrease_balance at h
   cases hg : Spec.listGet (state.balances.toList.map UInt64.toNat) i.toNat with
   | error err => rw [hg] at h; cases h
@@ -723,7 +742,9 @@ theorem decrease_balance_etheorem (state preState : EtheoremState) (i : EthCLSpe
     refine ⟨?_, ?_⟩
     · unfold EthCLSpecs.Gloas.decreaseBalance sszGetIdx
       simp only [view_uncachedBox]
-      have hsome : state.balances.val[i.toNat]? = some state.balances.val[i.toNat]! := by
+      have hsome : EthCLLib.Spec.IdxRead.get? state.balances i.toNat =
+          some state.balances.val[i.toNat]! := by
+        show state.balances.val[i.toNat]? = _
         simp [hi]
       rw [hsome]
       simp [EthCLLib.Spec.liftErr, Except.mapError, MonadExcept.ofExcept]
@@ -732,24 +753,16 @@ theorem decrease_balance_etheorem (state preState : EtheoremState) (i : EthCLSpe
       unfold Spec.listSet at h
       rw [if_pos (by simpa using hi)] at h
       cases h
-      rw [map_toList_set!, hb]
+      rw [map_regList_set!, hb]
       congr 1
-      unfold Spec.saturating_sub
-      generalize hbal : state.balances.val[i.toNat]! = bal
-      split
-      · rename_i hgt
-        have hgt' : delta.toNat < bal.toNat := hgt
-        rw [if_neg (by rw [gt_iff_lt, UInt64.lt_iff_toNat_lt]; omega),
-          UInt64.toNat_sub_of_le _ _ (by rw [UInt64.le_iff_toNat_le]; omega)]
-      · rename_i hle
-        have hle' : bal.toNat ≤ delta.toNat := Nat.not_lt.mp hle
-        by_cases hd : delta > bal
-        · rw [if_pos hd]; simp
-        · rw [if_neg hd]
-          have hd' : delta.toNat ≤ bal.toNat := by
-            rw [gt_iff_lt, UInt64.lt_iff_toNat_lt] at hd; omega
-          rw [UInt64.toNat_sub_of_le _ _ (by rw [UInt64.le_iff_toNat_le]; omega)]
-          rw [Nat.sub_self, Nat.sub_eq_zero_of_le hle']
+      generalize state.balances.val[i.toNat]! = bal
+      unfold Spec.saturating_sub saturatingSub
+      by_cases hgt : bal > delta
+      · have hgt' : delta.toNat < bal.toNat := by simpa [UInt64.lt_iff_toNat_lt] using hgt
+        rw [if_pos hgt', if_pos hgt, UInt64.toNat_sub_of_le _ _ (UInt64.le_of_lt hgt)]
+      · have hgt' : ¬ delta.toNat < bal.toNat := by simpa [UInt64.lt_iff_toNat_lt] using hgt
+        rw [if_neg hgt', if_neg hgt]
+        simp
 
 end BalanceWrites
 
@@ -1105,7 +1118,7 @@ theorem initiate_validator_exit_etheorem (e : EtheoremState) (i : UInt64) {s' : 
       simpa using hi
     rw [if_pos hlen] at hvs
     cases hvs
-    simp only [toSpecState, map_toList_set!, sszList_getElem!_val, absValidator, hep, ← hw']
+    simp only [toSpecState, map_regList_set!, regList_getElem!_val, absValidator, hep, ← hw']
 end forkonly
 
 forkonly Fulu
@@ -1193,7 +1206,7 @@ theorem initiate_validator_exit_etheorem {f : Spec.FuluConfig} (hf : FuluChurnAg
       simpa using hi
     rw [if_pos hlen] at hvs
     cases hvs
-    simp only [toSpecState, map_toList_set!, sszList_getElem!_val, absValidator, hep, ← hw']
+    simp only [toSpecState, map_regList_set!, regList_getElem!_val, absValidator, hep, ← hw']
 end forkonly
 
 end Exits

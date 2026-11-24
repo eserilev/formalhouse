@@ -25,7 +25,7 @@ def slashCondE (epoch : UInt64) (v : EthCLSpecs.Gloas.Validator) : Bool :=
     v.withdrawableEpoch
 
 /-- The penalty that Etheorem's `decreaseBalance` writes. -/
-def decreasedE (b d : UInt64) : UInt64 := if d > b then 0 else b - d
+def decreasedE (b d : UInt64) : UInt64 := saturatingSub b d
 
 /-- One iteration of Etheorem's slashings loop on a plain state. -/
 def slashStepE (epoch ppi : UInt64) (w : EtheoremState) (i : Nat) : EtheoremState :=
@@ -99,7 +99,7 @@ theorem processSlashings_run (e : EtheoremState)
   · intro i hi w hw
     unfold slashStepE
     split
-    · exact ⟨hw.1, by simp [hw.2]⟩
+    · exact ⟨hw.1, by simp [hw.2, ProgressiveList.set!]⟩
     · exact hw
   · intro i hi w hw
     obtain ⟨hv, hb⟩ := hw
@@ -122,7 +122,7 @@ theorem processSlashings_run (e : EtheoremState)
       rw [run_pure, except_bind_ok]
       rw [run_bind]
       unfold EthCLSpecs.Gloas.decreaseBalance
-      rw [run_bind, view_uncachedBox, run_sszGetIdx_some _ _ _ hsome, except_bind_ok]
+      rw [run_bind, view_uncachedBox, run_sszGetIdx_some w.balances _ _ hsome, except_bind_ok]
       rfl
     · rw [if_neg hc]
       have hc' := hc
@@ -149,7 +149,7 @@ section Slashings
 variable {p : Spec.Preset} (hpp : PassesPresetAgrees p)
 include hpp
 
-theorem slashing_fold (e : EtheoremState) (epoch ppi : UInt64) {target per : Nat}
+theorem slashing_fold (e : EtheoremState) [RegBound e] (epoch ppi : UInt64) {target per : Nat}
     (htarget : (epoch + UInt64.ofNat EthCLSpecs.Gloas.Const.epochsPerSlashingsVector / 2).toNat = target)
     (hper : ppi.toNat = per) :
     ∀ (l : List Nat) (w : EtheoremState) {R : List Nat}, w.validators = e.validators →
@@ -161,7 +161,7 @@ theorem slashing_fold (e : EtheoremState) (epoch ppi : UInt64) {target per : Nat
           ppi.toNat * (e.validators[i]!.effectiveBalance /
             EthCLSpecs.Gloas.Const.effectiveBalanceIncrementG).toNat < 2 ^ 64 := by
   have hsize : e.validators.val.size < 2 ^ 64 :=
-    Nat.lt_of_le_of_lt e.validators.property hpp.validatorRegistryLimit
+    Nat.lt_of_le_of_lt RegBound.le hpp.validatorRegistryLimit
   intro l
   induction l with
   | nil => intro w R _ _ h; simp only [List.map_nil, List.foldlM_nil, pure, Except.pure] at h; cases h
@@ -180,7 +180,7 @@ theorem slashing_fold (e : EtheoremState) (epoch ppi : UInt64) {target per : Nat
         ((absValidator e.validators.val[i]!).slashed &&
           target == (absValidator e.validators.val[i]!).withdrawable_epoch) := by
       unfold slashCondE
-      rw [sszList_getElem!_val]
+      rw [regList_getElem!_val]
       simp only [absValidator, ← htarget]
       congr 1
       rw [Bool.eq_iff_iff]
@@ -223,12 +223,12 @@ theorem slashing_fold (e : EtheoremState) (epoch ppi : UInt64) {target per : Nat
           rw [hiN, hpen]; exact hstep
         obtain ⟨-, hB⟩ := decrease_balance_etheorem w w (UInt64.ofNat i) _ hstep'
         refine ⟨?_, fun _ => ⟨?_, ?_⟩⟩
-        · rw [hB, sszList_getElem!_val, hv]; rfl
+        · rw [hB, regList_getElem!_val, hv]; rfl
         · unfold Spec.decrease_balance at hstep'
           cases hg : Spec.listGet (w.balances.toList.map UInt64.toNat) (UInt64.ofNat i).toNat with
           | error err => rw [hg] at hstep'; cases hstep'
           | ok b => exact (listGet_map_ok _ _ _ hg).1
-        · rw [sszList_getElem!_val]; exact uint64Mul_lt hm
+        · rw [regList_getElem!_val]; exact uint64Mul_lt hm
       · rename_i hc
         rw [← hcond] at hc
         rw [if_neg hc]
@@ -248,7 +248,7 @@ theorem slashing_fold (e : EtheoremState) (epoch ppi : UInt64) {target per : Nat
       refine ⟨?_, h2⟩
       unfold slashStepE at h1
       split at h1
-      · simpa using h1
+      · simpa [ProgressiveList.set!] using h1
       · exact h1
 
 omit [HasherTag] in
@@ -380,7 +380,7 @@ theorem slashingsPreamble_bounds (e : EtheoremState) {adj per : Nat}
   exact uint64Mul_lt hmu
 
 /-- `process_slashings` equals Etheorem's. -/
-theorem slashings_etheorem (e : EtheoremState) {s' : Spec.BeaconState}
+theorem slashings_etheorem (e : EtheoremState) [RegBound e] {s' : Spec.BeaconState}
     (h : Spec.process_slashings p (etheoremTotalActiveBalance e) (toSpecState e) = .ok s') :
     (EthCLSpecs.Gloas.processSlashings (StateTransition := GloasRun)).run (pureState e) =
         .ok ((), pureState (slashingsE e)) ∧
@@ -398,7 +398,7 @@ theorem slashings_etheorem (e : EtheoremState) {s' : Spec.BeaconState}
   dsimp only at h
   have hppi := slashPpiE_toNat hpp e hpre
   have hsize : e.validators.val.size < 2 ^ 64 :=
-    Nat.lt_of_le_of_lt e.validators.property hp.validatorRegistryLimit
+    Nat.lt_of_le_of_lt RegBound.le hp.validatorRegistryLimit
   cases hf : (toSpecState e).validators.zipIdx.foldlM
       (Spec.slashingLoopStep p ((EthCLSpecs.Gloas.currentEpochOf (pureState e)).toNat +
         p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) (toSpecState e).balances with
@@ -407,7 +407,9 @@ theorem slashings_etheorem (e : EtheoremState) {s' : Spec.BeaconState}
   rw [hf] at h
   simp only [pure, Except.pure, Except.ok.injEq] at h
   subst h
-  rw [toSpecState_validators, toSpecState_balances, SSZList.toList, zipIdx_map_eq,
+  simp only [toSpecState_validators, toSpecState_balances, SSZList.toList,
+    ProgressiveList.toList] at hf
+  rw [zipIdx_map_eq,
     List.range_eq_range'] at hf
   obtain ⟨hR, hidx⟩ := slashing_fold hpp e (EthCLSpecs.Gloas.currentEpochOf (pureState e)) (slashPpiE e)
     (slashings_target_toNat hpp _ htgt) hppi (List.range' 0 e.validators.val.size) e rfl

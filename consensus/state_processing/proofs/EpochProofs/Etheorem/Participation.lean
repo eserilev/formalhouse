@@ -141,7 +141,7 @@ theorem pureState_eq (w : EtheoremState) :
 
 /-- The participation list that Etheorem reads for `epoch`. -/
 def eParticipation (e : EtheoremState) (epoch : UInt64) :
-    SSZList EthCLSpecs.Gloas.ParticipationFlags EthCLSpecs.Gloas.Const.validatorRegistryLimit :=
+    RegList EthCLSpecs.Gloas.ParticipationFlags :=
   if epoch == EthCLSpecs.Gloas.computeEpochAtSlot e.slot then e.currentEpochParticipation
   else e.previousEpochParticipation
 
@@ -150,6 +150,12 @@ in bounds. -/
 def eUnslashed (e : EtheoremState) (flag : Nat) (epoch : UInt64) : Array UInt64 :=
   (EthCLSpecs.Gloas.getActiveValidatorIndices (pureState e) epoch).filter
     (fun i => hasFlag (eParticipation e epoch)[i.toNat]! flag && !(e.validators[i.toNat]!).slashed)
+
+/-- Etheorem's `is_in_inactivity_leak` as a `Bool`. A step reads it only where it returns. -/
+def leakE (e : EtheoremState) : Bool :=
+  match EthCLSpecs.Gloas.isInInactivityLeak (pureState e) with
+  | .ok b => b
+  | .error _ => false
 
 /-- Etheorem's `getUnslashedParticipatingIndices` returns `eUnslashed` when the participation
 list covers every active index. Etheorem reads `epoch_participation[i]` with `sszGetIdx`, which
@@ -173,10 +179,16 @@ theorem getUnslashedParticipatingIndices_ok (e : EtheoremState) (flag : Nat) (ep
     simp
   · intro i hi r
     have hget : (sszGetIdx (eParticipation e epoch) i.toNat :
-        Except StateTransitionError EthCLSpecs.Gloas.ParticipationFlags) =
+        Except SizzLean.Cache.IndexError EthCLSpecs.Gloas.ParticipationFlags) =
         .ok (eParticipation e epoch)[i.toNat]! := by
       have hl := hlt i hi
-      simp [sszGetIdx, liftErr, MonadExcept.ofExcept, Except.mapError, hl]
+      have hq : EthCLLib.Spec.IdxRead.get? (eParticipation e epoch) i.toNat =
+          some (eParticipation e epoch)[i.toNat]! := by
+        show (eParticipation e epoch).val[i.toNat]? = _
+        rw [regList_getElem!_val]
+        simp [hl]
+      unfold sszGetIdx liftErr
+      rw [hq]
       rfl
     rw [hget, ok_bind]
     split <;> rfl
@@ -197,11 +209,11 @@ theorem active_prev_mem_eligible (e : EtheoremState) (i : UInt64)
 variable [EthCLSpecs.Gloas.Config] {p : Spec.Preset} (hp : PresetAgrees p)
 include hp
 
-theorem active_lt (e : EtheoremState) (epoch : UInt64) :
+theorem active_lt (e : EtheoremState) [RegBound e] (epoch : UInt64) :
     ∀ i ∈ (EthCLSpecs.Gloas.getActiveValidatorIndices (pureState e) epoch).toList,
       i.toNat < e.validators.val.size := by
   have hsize : e.validators.val.size < 2 ^ 64 :=
-    Nat.lt_of_le_of_lt e.validators.property hp.validatorRegistryLimit
+    Nat.lt_of_le_of_lt RegBound.le hp.validatorRegistryLimit
   intro i hi
   unfold EthCLSpecs.Gloas.getActiveValidatorIndices at hi
   rw [indicesWhere_toList] at hi
@@ -213,7 +225,7 @@ theorem active_lt (e : EtheoremState) (epoch : UInt64) :
 
 /-- `get_unslashed_participating_indices` equals Etheorem's. The reference also raises when the
 epoch is not the previous or the current one. Etheorem has no such assert. -/
-theorem get_unslashed_participating_indices_ok (e : EtheoremState) (flag : Nat) (hflag : flag < 3)
+theorem get_unslashed_participating_indices_ok (e : EtheoremState) [RegBound e] (flag : Nat) (hflag : flag < 3)
     (epoch : UInt64) {l : List Nat}
     (h : Spec.get_unslashed_participating_indices p (toSpecState e) flag epoch.toNat = .ok l) :
     EthCLSpecs.Gloas.getUnslashedParticipatingIndices (pureState e) flag epoch =
@@ -293,7 +305,7 @@ theorem get_unslashed_participating_indices_ok (e : EtheoremState) (flag : Nat) 
     have hg : Spec.listGet (toSpecState e).validators i.toNat =
         .ok (absValidator e.validators.val[i.toNat]!) := by
       simp [Spec.listGet, hlt, pure, Except.pure]
-    simp only [hg, okValue, bind, Except.bind, absValidator, pure, Except.pure, sszList_getElem!_val]
+    simp only [hg, okValue, bind, Except.bind, absValidator, pure, Except.pure, regList_getElem!_val]
     done
   have hP1 := hQ1 i.toNat (List.mem_map_of_mem hi)
   generalize hb : okValue (do Spec.has_flag (← Spec.listGet (eParticipation e epoch).val.toList i.toNat) flag) = b at hP1
@@ -307,7 +319,7 @@ theorem get_unslashed_participating_indices_ok (e : EtheoremState) (flag : Nat) 
       simp only [id] at hP1
       rw [has_flag_eq _ _ hflag] at hP1
       cases hP1
-      simp [sszList_getElem!_val]
+      simp [regList_getElem!_val]
   simp only [Function.comp_apply, hP2, hb, hval, Bool.and_comm]
 
 omit [HasherTag] [EthCLSpecs.Gloas.Config] hp in
@@ -334,11 +346,11 @@ theorem validatorEligible_eq (v : EthCLSpecs.Gloas.Validator) (E : UInt64) {b : 
     · rw [if_neg hs] at h; cases h; simp [ha, hs]
 
 /-- `get_eligible_validator_indices` equals Etheorem's. -/
-theorem get_eligible_validator_indices_ok (e : EtheoremState) {l : List Nat}
+theorem get_eligible_validator_indices_ok (e : EtheoremState) [RegBound e] {l : List Nat}
     (h : Spec.get_eligible_validator_indices p (toSpecState e) = .ok l) :
     l = (EthCLSpecs.Gloas.getEligibleValidatorIndices (pureState e)).toList.map UInt64.toNat := by
   have hsize : e.validators.val.size < 2 ^ 64 :=
-    Nat.lt_of_le_of_lt e.validators.property hp.validatorRegistryLimit
+    Nat.lt_of_le_of_lt RegBound.le hp.validatorRegistryLimit
   rw [Spec.get_eligible_validator_indices_eq p _ _ (get_previous_epoch_eq hp e)] at h
   obtain ⟨hQ, rfl⟩ := foldlM_filterStep_inv _ _ _ _ _ h
   unfold EthCLSpecs.Gloas.getEligibleValidatorIndices
@@ -365,11 +377,11 @@ theorem get_eligible_validator_indices_ok (e : EtheoremState) {l : List Nat}
   simp [UInt64.toNat_ofNat_of_lt' (Nat.lt_trans hi' hsize)]
 
 omit hp in
-/-- `is_in_inactivity_leak` equals Etheorem's. Etheorem's subtraction wraps only where the
-reference raises. -/
+/-- `is_in_inactivity_leak` equals Etheorem's. Etheorem's finality delay raises where the
+reference raises, so when the reference returns, Etheorem returns the same value. -/
 theorem is_in_inactivity_leak_ok (hpp : PassesPresetAgrees p) (e : EtheoremState) {b : Bool}
     (h : Spec.is_in_inactivity_leak p (toSpecState e) = .ok b) :
-    b = EthCLSpecs.Gloas.isInInactivityLeak (pureState e) := by
+    EthCLSpecs.Gloas.isInInactivityLeak (pureState e) = .ok b := by
   unfold Spec.is_in_inactivity_leak Spec.get_finality_delay at h
   rw [get_previous_epoch_eq hpp.toPresetAgrees] at h
   simp only [bind, Except.bind] at h
@@ -379,12 +391,20 @@ theorem is_in_inactivity_leak_ok (hpp : PassesPresetAgrees p) (e : EtheoremState
   | ok d =>
     rw [hd] at h
     cases h
+    have hle : e.finalizedCheckpoint.epoch.toNat ≤
+        (EthCLSpecs.Gloas.previousEpochOf (pureState e)).toNat := by
+      unfold Spec.uint64Sub at hd
+      split at hd
+      · rename_i hle; simpa [toSpecState, absCheckpoint] using hle
+      · cases hd
     have hd' := uint64Sub_ok (a := EthCLSpecs.Gloas.previousEpochOf (pureState e))
       (b := e.finalizedCheckpoint.epoch) hd
     unfold EthCLSpecs.Gloas.isInInactivityLeak EthCLSpecs.Gloas.getFinalityDelay
     simp only [view_uncachedBox]
+    rw [checkedSub_of_le _ _ _ hle]
+    simp only [pure_bind]
     rw [← hpp.minEpochsToInactivityPenalty, ← hd']
-    simp [UInt64.lt_iff_toNat_lt]
+    simp [UInt64.lt_iff_toNat_lt, pure, Except.pure]
 
 end WithPreset
 

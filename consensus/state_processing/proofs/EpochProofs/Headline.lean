@@ -121,7 +121,7 @@ theorem GloasChainAssumptions.atCommitteeStepState (hpreset : PresetMatchesEtheo
   have heb := Spec.epochToCommittees_effective_balances oracle _ _ ht hin.1.1.2.2.1
   refine ⟨?_, ⟨h.syncCandidate t ht, h.proposerCandidate t ht, h.enoughActiveForPtc t ht,
     h.syncSelectionEnds t ht, h.proposerSelectionEnds t ht, h.ptcSelectionEnds t ht⟩⟩
-  obtain ⟨e14, -, rfl⟩ := epochToCommittees_etheorem hpreset oracle horacle.agrees e hin.1.1.1
+  obtain ⟨e14, -, rfl, -⟩ := epochToCommittees_etheorem hpreset oracle horacle.agrees e hin.1.1.1
     hin.1.1.2.1 hetheorem (Nat.lt_of_lt_of_le h.historicalSummariesBelowLimit hhistLimit) ht
   have hvec := vectorLengths_toSpecState hpreset e14
   unfold Spec.BeaconState.VectorLengths at hvec

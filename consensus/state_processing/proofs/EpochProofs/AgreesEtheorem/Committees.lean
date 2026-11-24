@@ -64,7 +64,7 @@ theorem selOk_active_of_etheorem (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheo
 /-- When Etheorem's sync committee update succeeds, the reference update succeeds, and keeps the
 fields that the next committee steps read. -/
 theorem sync_committee_updates_of_etheorem (o : Spec.Oracle) (hoa : OracleAgrees o)
-    (hperiod : Spec.P.EPOCHS_PER_SYNC_COMMITTEE_PERIOD < 2 ^ 64) (e : EtheoremState)
+    (hperiod : Spec.P.EPOCHS_PER_SYNC_COMMITTEE_PERIOD < 2 ^ 64) (e : EtheoremState) [RegBound e]
     (hf : Spec.SelFacts o (toSpecState e)) {r : Unit × EthCLSpecs.Gloas.State}
     (h : (EthCLSpecs.Gloas.processSyncCommitteeUpdates (StateTransition := GloasRun)).run
       (pureState e) = .ok r) :
@@ -252,7 +252,7 @@ theorem lookahead_epoch_toNat (e : EtheoremState) (hslot : (toSpecState e).slot 
 forkonly Gloas
 omit [CryptoBackend] [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds] hc in
 /-- The reference proposer candidates are Etheorem's: active and not slashed. -/
-theorem unslashedActive_eq (e : EtheoremState) (ep : UInt64) :
+theorem unslashedActive_eq (e : EtheoremState) [RegBound e] (ep : UInt64) :
     Spec.unslashedActive (toSpecState e) ep.toNat =
       (proposerCandidates e ep).toList.map UInt64.toNat := by
   have hfil : (Spec.get_active_validator_indices (toSpecState e) ep.toNat).filterM
@@ -274,13 +274,13 @@ theorem unslashedActive_eq (e : EtheoremState) (ep : UInt64) :
     obtain ⟨-, rfl⟩ := listGet_map_ok e.validators.val absValidator v hval
     rfl
   rw [h2, List.filter_map]
-  simp [proposerCandidates, sszList_getElem!_val, Function.comp_def]
+  simp [proposerCandidates, regList_getElem!_val, Function.comp_def]
 
 omit [CryptoBackend] in
 /-- When Etheorem's proposer lookahead succeeds, the reference lookahead succeeds, and keeps the
 fields that the PTC window reads. -/
 theorem proposer_lookahead_of_etheorem (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d)
-    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EtheoremState)
+    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EtheoremState) [RegBound e]
     (hf : Spec.SelFacts o (toSpecState e)) {r : Unit × EthCLSpecs.Gloas.State}
     (h : (EthCLSpecs.Gloas.processProposerLookahead (StateTransition := GloasRun)).run
       (pureState e) = .ok r) :
@@ -344,7 +344,7 @@ theorem ptc_window_length (e : EtheoremState) :
 omit [CryptoBackend] [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds] in
 /-- The reference `ptcIndices` of `slot` are Etheorem's PTC candidates. -/
 theorem ptcIndices_eq_candidates (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d)
-    (e : EtheoremState) (slot : UInt64) {l : List Nat}
+    (e : EtheoremState) [RegBound e] (slot : UInt64) {l : List Nat}
     (h : Spec.ptcIndices Spec.P o (toSpecState e) (EthCLSpecs.Gloas.computeEpochAtSlot slot).toNat
       slot.toNat = .ok l) :
     l = (ptcCandidates e slot).toList.map UInt64.toNat := by
@@ -371,7 +371,7 @@ omit [CryptoBackend] in
 /-- When Etheorem's `compute_ptc` of `slot` succeeds, the reference PTC selection of `slot`
 returns (`PtcSelOk`). -/
 theorem ptcSelOk_of_etheorem (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d)
-    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EtheoremState)
+    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EtheoremState) [RegBound e]
     (hf : Spec.SelFacts o (toSpecState e)) (slot : UInt64)
     (hslot : slot.toNat / Spec.P.SLOTS_PER_EPOCH + Spec.P.EPOCHS_PER_HISTORICAL_VECTOR < 2 ^ 64)
     {v : Vector UInt64 EthCLSpecs.Gloas.Const.ptcSize}
@@ -440,7 +440,7 @@ theorem ptcSelOk_of_etheorem (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremH
 omit [CryptoBackend] in
 /-- When Etheorem's PTC window step succeeds, the reference step succeeds. -/
 theorem ptc_window_of_etheorem (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d)
-    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EtheoremState)
+    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EtheoremState) [RegBound e]
     (hf : Spec.SelFacts o (toSpecState e)) {r : Unit × EthCLSpecs.Gloas.State}
     (h : (EthCLSpecs.Gloas.processPtcWindow (StateTransition := GloasRun)).run (pureState e) =
       .ok r) :

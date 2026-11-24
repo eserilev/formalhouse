@@ -102,8 +102,7 @@ operations (`pubkeyMapOps`) and map (`pubkeyMap`).
 ```
 
 The hypothesis bundles follow the groups of [What is trusted](#what-is-trusted): the run with
-its supply bounds, the chain assumptions, what Etheorem needs because it differs from the pyspec
-(its alpha.11 list limits F6 and F10), the oracle, the cache provenance and, for `_rust`,
+its supply bounds, the chain assumptions, the registry room that the bridge to Etheorem needs (F10), the oracle, the cache provenance and, for `_rust`,
 the glue.
 
 The proofs take the bundles as they are: there is no second set of hypothesis structures. Two
@@ -149,12 +148,15 @@ processing spec and the fork upgrades (`EpochProofs/Spec/`), not by Etheorem. So
 transcription is trusted for which states count as reachable, though not for the epoch function
 itself.
 
-**Etheorem** is the fork `eserilev/etheorem`, branch `formalhouse-pin-cbws`, at the commit in
-`lakefile.toml`. It pins spec v1.7.0-alpha.11, plus the Fulu deposit change of alpha.9, a port
-to Lean v4.31.0, and three fixes that make Etheorem raise where the pyspec raises: the
-`assert total > 0` of `compute_balance_weighted_selection`, its `uint64` pass counter, and the
-checked `uint64` arithmetic and list reads of the epoch steps. The transcription follows v1.7.0-beta.4. The Gloas epoch functions have
-the same meaning in both versions. Only the list limits differ, and they are assumptions below.
+**Etheorem** is the fork `eserilev/etheorem`, branch `formalhouse-pin-beta4`, at the commit in
+`lakefile.toml`. It is upstream Etheorem `main`, which pins spec v1.7.0-beta.4, plus two
+changes: the checked `uint64` arithmetic and list reads of the epoch steps (eserilev/etheorem#8),
+and a port to Lean v4.31.0, the Lean version of Aeneas. The transcription also follows beta.4.
+Beta.4 stores the Gloas registry, participation, queue and builder lists as uncapped
+`ProgressiveList`s. Etheorem reads a registry position as a `uint64` validator index, so the
+Gloas step proofs take the registry bound `RegBound` (at most `VALIDATOR_REGISTRY_LIMIT`
+validators). `process_epoch_etheorem_in` derives it at each step from `depositRoom` and the
+length frames of the steps.
 
 **Equal** means `toSpecState` (`toSpecState`), the map from an Etheorem state to the
 transcription's state, sends Etheorem's result to the model's. It covers every field of the
@@ -440,10 +442,11 @@ genesis to the Fulu fork is not proved.
   end-to-end soundness claim.
 - `aeneas/discriminant-instance-name.patch`, which renames one generated instance and changes no
   definition.
-- Etheorem at the pin in `lakefile.toml`. It pins spec v1.7.0-alpha.11, whose lists have limits
-  that beta.4 removed. The theorems assume room under them: in `builder_pending_withdrawals`
-  (F6), in the registry (`validators + 16 <= 2^40`, F10), and for Fulu in
-  `historical_summaries`.
+- Etheorem at the pin in `lakefile.toml`, on spec v1.7.0-beta.4. The Gloas theorems assume room
+  in the registry for one epoch of deposits (`validators + 16 <= 2^40`, F10). Beta.4 has no
+  Gloas registry limit, but Etheorem reads a registry position as a `uint64` index, so the
+  bridge needs a bound. Lighthouse keeps the `2^40` limit. The Fulu theorems assume room in the
+  registry for each pending deposit and in `historical_summaries`.
 - The Oracle (`Spec/Oracle.lean`): BLS, SHA-256 and `hash_tree_root` are parameters, not
   axioms. The theorems hold for every Oracle that agrees with Etheorem.
 - The hand-written transcription of block processing and the fork upgrades in
