@@ -52,7 +52,7 @@ theorem pcStep_ok (cons : Array EthCLSpecs.Gloas.PendingConsolidation) (ne : UIn
         ((absPendingConsolidation cons[k]!).source_index,
           (absPendingConsolidation cons[k]!).target_index) = .ok r) :
     r.1.2 = (if r.2 then k else k + 1) ∧
-    ∃ B : SSZList UInt64 EthCLSpecs.Gloas.Const.validatorRegistryLimit,
+    ∃ B : RegList UInt64,
       (pcStep cons ne k).run (pureState e) =
         .ok ((if r.2 then Step.done k else Step.next (k + 1)), pureState { e with balances := B }) ∧
       B.toList.map UInt64.toNat = r.1.1 ∧ B.val.size = e.balances.val.size := by
@@ -105,7 +105,7 @@ theorem pcStep_ok (cons : Array EthCLSpecs.Gloas.PendingConsolidation) (ne : UIn
       .ok (e.balances.val[pc.sourceIndex.toNat]!).toNat := by
     simp [Spec.listGet, hsrcB, pure, Except.pure]
   rw [hgetB] at h
-  simp only [run_bind, run_sszGetIdx_some _ _ _ hbsome, except_bind_ok]
+  simp only [run_bind, run_sszGetIdx_some e.balances _ _ hbsome, except_bind_ok]
   generalize hb : e.balances.val[pc.sourceIndex.toNat]! = b at h ⊢
   have hamt : min b.toNat v.effectiveBalance.toNat = (umin b v.effectiveBalance).toNat :=
     (umin_toNat _ _).symm
@@ -131,8 +131,7 @@ theorem pcStep_ok (cons : Array EthCLSpecs.Gloas.PendingConsolidation) (ne : UIn
   subst h
   rw [hbs1] at hi
   generalize hnb : e.balances.set! pc.sourceIndex.toNat
-    (if umin b v.effectiveBalance > e.balances.val[pc.sourceIndex.toNat]! then 0
-     else e.balances.val[pc.sourceIndex.toNat]! - umin b v.effectiveBalance) = nb at hi ⊢
+    (saturatingSub e.balances.val[pc.sourceIndex.toNat]! (umin b v.effectiveBalance)) = nb at hi ⊢
   generalize he1 : ({ e with balances := nb } : EtheoremState) = e1 at hi
   obtain ⟨hirun, hbs2⟩ := increase_balance_etheorem e1 e pc.targetIndex _ (by
     rw [← he1]; exact hi)
@@ -140,7 +139,7 @@ theorem pcStep_ok (cons : Array EthCLSpecs.Gloas.PendingConsolidation) (ne : UIn
   subst he1
   refine ⟨by simp, _, rfl, ?_, ?_⟩
   · rw [hbs2]
-  · rw [← hnb]; simp
+  · rw [← hnb]; simp [ProgressiveList.set!]
 
 omit [EthCLSpecs.Gloas.Preset] [HasherTag] in
 /-- One turn of a fuel loop. -/
@@ -170,7 +169,7 @@ theorem pcLoop_fuel (cons : Array EthCLSpecs.Gloas.PendingConsolidation) (ne : U
       Spec.stepLoop (Spec.consolidationStep ((e.validators.toList.map absValidator).map
           Spec.globalLocal) ne.toNat) (e.balances.toList.map UInt64.toNat, k)
           ((cons.toList.drop k).map consPair) = .ok r →
-      ∃ B : SSZList UInt64 EthCLSpecs.Gloas.Const.validatorRegistryLimit,
+      ∃ B : RegList UInt64,
         (fuelLoop (j + 1) k cons.size (pcStep cons ne)).run (pureState e) =
           .ok (r.1.2, pureState { e with balances := B }) ∧
         B.toList.map UInt64.toNat = r.1.1 ∧ B.val.size = e.balances.val.size := by
@@ -256,7 +255,8 @@ theorem process_pending_consolidations_etheorem (e : EtheoremState) {s' : Spec.B
     rw [pcLoop_eq, hrun, except_bind_ok]
     rfl
   · rw [← hB]
-    simp [toSpecState, sszDrop, SSZList.toList, List.map_drop]
+    simp only [toSpecState, sszDrop, SszDrop.drop, ProgressiveList.drop, SSZList.toList,
+      ProgressiveList.toList, Array.toList_extract, List.extract, List.map_drop, List.map_take]
     rw [List.take_of_length_le (by simp)]
 
 end Main

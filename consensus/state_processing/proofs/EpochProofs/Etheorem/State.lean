@@ -57,6 +57,29 @@ theorem length_map_toList_le {α β : Type} {cap : Nat} (f : α → β) (xs : SS
     (xs.toList.map f).length ≤ cap := by
   simpa using xs.property
 
+/-! ## The same reads and writes on a `ProgressiveList` -/
+
+theorem progressiveList_getElem?_map_toList {α β : Type} (f : α → β) (xs : ProgressiveList α)
+    (i : Nat) : (xs.toList.map f)[i]? = xs.val[i]?.map f := by
+  simp
+
+/-- `ProgressiveList.set!` is `List.set` under the map. Past the end both leave the list
+unchanged. -/
+theorem map_progressiveList_set! {α β : Type} (f : α → β) (xs : ProgressiveList α) (i : Nat)
+    (a : α) : (xs.set! i a).toList.map f = (xs.toList.map f).set i (f a) := by
+  simp [ProgressiveList.set!, ProgressiveList.toList, List.map_set]
+
+/-- The total read `xs[i]!` on a `ProgressiveList` is the read on its array. -/
+theorem progressiveList_getElem!_val {α : Type} [Inhabited α] (xs : ProgressiveList α) (i : Nat) :
+    xs[i]! = xs.val[i]! := by
+  by_cases h : i < xs.val.size
+  · rw [getElem!_pos xs i h, getElem!_pos xs.val i h]; rfl
+  · rw [getElem!_neg xs i h, getElem!_neg xs.val i h]
+
+theorem length_map_progressiveList {α β : Type} (f : α → β) (xs : ProgressiveList α) :
+    (xs.toList.map f).length = xs.val.size := by
+  simp
+
 theorem absBits_length {n : Nat} (b : Bitvector n) : (absBits b).length = n := by
   simp [absBits]
 
@@ -74,6 +97,86 @@ end forkonly
 
 forkonly Fulu
 abbrev EtheoremState := EthCLSpecs.Fulu.BeaconState
+end forkonly
+
+/-! ## The list types of the state
+
+Gloas stores the registry lists and the pending queues as uncapped `ProgressiveList`s. Fulu stores
+them as `SSZList`s with the preset limits. A shared proof names the type through these
+abbreviations, so each fork gets its own type. -/
+
+forkonly Gloas
+/-- A list with one item for each validator. -/
+abbrev RegList (α : Type) := ProgressiveList α
+abbrev DepositList := ProgressiveList EthCLSpecs.Gloas.PendingDeposit
+abbrev ConsolidationList := ProgressiveList EthCLSpecs.Gloas.PendingConsolidation
+end forkonly
+
+/-! The reads and writes on the lists of `RegList`, `DepositList` and `ConsolidationList`. A
+shared proof cites these names, and each fork gets the lemmas of its own list type. -/
+
+forkonly Gloas
+theorem regList_getElem?_map {α β : Type} (f : α → β) (xs : ProgressiveList α) (i : Nat) :
+    (xs.toList.map f)[i]? = xs.val[i]?.map f := progressiveList_getElem?_map_toList f xs i
+theorem map_regList_set! {α β : Type} (f : α → β) (xs : ProgressiveList α) (i : Nat) (a : α) :
+    (xs.set! i a).toList.map f = (xs.toList.map f).set i (f a) := map_progressiveList_set! f xs i a
+theorem regList_getElem!_val {α : Type} [Inhabited α] (xs : ProgressiveList α) (i : Nat) :
+    xs[i]! = xs.val[i]! := progressiveList_getElem!_val xs i
+theorem length_map_regList {α β : Type} (f : α → β) (xs : ProgressiveList α) :
+    (xs.toList.map f).length = xs.val.size := length_map_progressiveList f xs
+theorem regList_ext {α : Type} {xs ys : ProgressiveList α} (h : xs.val = ys.val) : xs = ys := by
+  cases xs; cases ys; cases h; rfl
+/-- Append to a registry list. -/
+def regPush {α : Type} (xs : ProgressiveList α) (x : α) : ProgressiveList α := xs.push x
+theorem regPush_toList {α : Type} (xs : ProgressiveList α) (x : α)
+    (_ : xs.val.size < EthCLSpecs.Gloas.Const.validatorRegistryLimit) :
+    (regPush xs x).toList = xs.toList ++ [x] := by
+  simp [regPush, ProgressiveList.push, ProgressiveList.toList]
+theorem regPush_size {α : Type} (xs : ProgressiveList α) (x : α)
+    (_ : xs.val.size < EthCLSpecs.Gloas.Const.validatorRegistryLimit) :
+    (regPush xs x).val.size = xs.val.size + 1 := by
+  simp [regPush, ProgressiveList.push]
+theorem push?_regPush {α : Type} (xs : ProgressiveList α) (x : α)
+    (_ : xs.val.size < EthCLSpecs.Gloas.Const.validatorRegistryLimit) :
+    xs.push? x = some (regPush xs x) := rfl
+end forkonly
+
+forkonly Fulu
+theorem regList_getElem?_map {α β : Type} {cap : Nat} (f : α → β) (xs : SSZList α cap)
+    (i : Nat) : (xs.toList.map f)[i]? = xs.val[i]?.map f := getElem?_map_toList f xs i
+theorem map_regList_set! {α β : Type} {cap : Nat} (f : α → β) (xs : SSZList α cap) (i : Nat)
+    (a : α) : (xs.set! i a).toList.map f = (xs.toList.map f).set i (f a) := map_toList_set! f xs i a
+theorem regList_getElem!_val {α : Type} [Inhabited α] {cap : Nat} (xs : SSZList α cap) (i : Nat) :
+    xs[i]! = xs.val[i]! := sszList_getElem!_val xs i
+theorem length_map_regList {α β : Type} {cap : Nat} (f : α → β) (xs : SSZList α cap) :
+    (xs.toList.map f).length = xs.val.size := length_map_toList f xs
+theorem regList_ext {α : Type} {cap : Nat} {xs ys : SSZList α cap} (h : xs.val = ys.val) :
+    xs = ys := Subtype.ext h
+/-- Append to a registry list. Past the limit the list stays the same. -/
+def regPush {α : Type} (xs : SSZList α EthCLSpecs.Fulu.Const.validatorRegistryLimit) (x : α) :
+    SSZList α EthCLSpecs.Fulu.Const.validatorRegistryLimit :=
+  if h : xs.val.size < EthCLSpecs.Fulu.Const.validatorRegistryLimit then xs.push x h else xs
+theorem regPush_toList {α : Type} (xs : SSZList α EthCLSpecs.Fulu.Const.validatorRegistryLimit)
+    (x : α) (h : xs.val.size < EthCLSpecs.Fulu.Const.validatorRegistryLimit) :
+    (regPush xs x).toList = xs.toList ++ [x] := by
+  simp [regPush, h, SSZList.push, SSZList.toList]
+theorem regPush_size {α : Type} (xs : SSZList α EthCLSpecs.Fulu.Const.validatorRegistryLimit)
+    (x : α) (h : xs.val.size < EthCLSpecs.Fulu.Const.validatorRegistryLimit) :
+    (regPush xs x).val.size = xs.val.size + 1 := by
+  simp [regPush, h, SSZList.push]
+theorem push?_regPush {α : Type} (xs : SSZList α EthCLSpecs.Fulu.Const.validatorRegistryLimit)
+    (x : α) (h : xs.val.size < EthCLSpecs.Fulu.Const.validatorRegistryLimit) :
+    xs.push? x = some (regPush xs x) := by
+  simp [SSZList.push?, regPush, h]
+end forkonly
+
+forkonly Fulu
+/-- A list with one item for each validator. -/
+abbrev RegList (α : Type) := SSZList α EthCLSpecs.Fulu.Const.validatorRegistryLimit
+abbrev DepositList :=
+  SSZList EthCLSpecs.Fulu.PendingDeposit EthCLSpecs.Fulu.Const.pendingDepositsLimit
+abbrev ConsolidationList :=
+  SSZList EthCLSpecs.Fulu.PendingConsolidation EthCLSpecs.Fulu.Const.pendingConsolidationsLimit
 end forkonly
 
 def absValidator (v : EthCLSpecs.Gloas.Validator) : Spec.Validator :=
@@ -272,6 +375,29 @@ def toSpecState (e : EtheoremState) : Spec.BeaconState :=
     ptc_window := [] }
 end forkonly
 
+/-! ## The registry bound
+
+Etheorem reads a registry position `i` as the `uint64` index `UInt64.ofNat i`. This is the
+reference index only when the registry has fewer than `2^64` entries. A Fulu `SSZList` holds at
+most `VALIDATOR_REGISTRY_LIMIT` entries, so every Fulu state has a `RegBound` instance. A Gloas
+`ProgressiveList` has no limit, so a Gloas lemma that needs the bound takes `[RegBound e]`. It is a
+class so that `rw` and `simp` find it after they unify the state. -/
+
+forkonly Gloas
+/-- The registry has at most `VALIDATOR_REGISTRY_LIMIT` validators. -/
+class RegBound (e : EtheoremState) : Prop where
+  le : e.validators.val.size ≤ EthCLSpecs.Gloas.Const.validatorRegistryLimit
+end forkonly
+
+forkonly Fulu
+/-- The registry has at most `VALIDATOR_REGISTRY_LIMIT` validators. -/
+class RegBound (e : EtheoremState) : Prop where
+  le : e.validators.val.size ≤ EthCLSpecs.Fulu.Const.validatorRegistryLimit
+
+/-- The `SSZList` type holds the Fulu bound. -/
+instance (e : EtheoremState) : RegBound e := ⟨e.validators.property⟩
+end forkonly
+
 /-! ## Reading one field -/
 
 section Read
@@ -408,6 +534,14 @@ end forkonly
 
 end Read
 
+/-- The registry bound carries to a state with the same number of validators. -/
+theorem RegBound.of_length {e e1 : EtheoremState} [RegBound e]
+    (h : (toSpecState e1).validators.length = (toSpecState e).validators.length) : RegBound e1 :=
+  ⟨by
+    have hle := RegBound.le (e := e)
+    simp only [toSpecState_validators, length_map_regList] at h
+    omega⟩
+
 /-! ## Writing one field
 
 A write to an Etheorem field is the same write to the reference field. -/
@@ -416,24 +550,20 @@ section Write
 
 variable (e : EtheoremState)
 
-theorem toSpecState_set_balances (b : SSZList EthCLSpecs.Gloas.Gwei
-      EthCLSpecs.Gloas.Const.validatorRegistryLimit) :
+theorem toSpecState_set_balances (b : RegList EthCLSpecs.Gloas.Gwei) :
     toSpecState { e with balances := b } =
       { toSpecState e with balances := b.toList.map UInt64.toNat } := rfl
 
-theorem toSpecState_set_validators (v : SSZList EthCLSpecs.Gloas.Validator
-      EthCLSpecs.Gloas.Const.validatorRegistryLimit) :
+theorem toSpecState_set_validators (v : RegList EthCLSpecs.Gloas.Validator) :
     toSpecState { e with validators := v } =
       { toSpecState e with validators := v.toList.map absValidator } := rfl
 
-theorem toSpecState_set_inactivityScores (s : SSZList UInt64
-      EthCLSpecs.Gloas.Const.validatorRegistryLimit) :
+theorem toSpecState_set_inactivityScores (s : RegList UInt64) :
     toSpecState { e with inactivityScores := s } =
       { toSpecState e with inactivity_scores := s.toList.map UInt64.toNat } := rfl
 
 theorem toSpecState_set_participation
-    (prev cur : SSZList EthCLSpecs.Gloas.ParticipationFlags
-      EthCLSpecs.Gloas.Const.validatorRegistryLimit) :
+    (prev cur : RegList EthCLSpecs.Gloas.ParticipationFlags) :
     toSpecState { e with previousEpochParticipation := prev, currentEpochParticipation := cur } =
       { toSpecState e with previous_epoch_participation := prev.toList,
                            current_epoch_participation := cur.toList } := rfl
@@ -474,13 +604,11 @@ theorem toSpecState_set_ptcWindow (w : Vector (Vector EthCLSpecs.Gloas.Validator
       { toSpecState e with ptc_window := w.toList.map fun ptc => ptc.toList.map UInt64.toNat } := rfl
 end forkonly
 
-theorem toSpecState_set_pendingDeposits (d : SSZList EthCLSpecs.Gloas.PendingDeposit
-      EthCLSpecs.Gloas.Const.pendingDepositsLimit) :
+theorem toSpecState_set_pendingDeposits (d : DepositList) :
     toSpecState { e with pendingDeposits := d } =
       { toSpecState e with pending_deposits := d.toList.map absPendingDeposit } := rfl
 
-theorem toSpecState_set_pendingConsolidations (c : SSZList EthCLSpecs.Gloas.PendingConsolidation
-      EthCLSpecs.Gloas.Const.pendingConsolidationsLimit) :
+theorem toSpecState_set_pendingConsolidations (c : ConsolidationList) :
     toSpecState { e with pendingConsolidations := c } =
       { toSpecState e with pending_consolidations := c.toList.map absPendingConsolidation } := rfl
 
@@ -507,7 +635,7 @@ theorem toSpecState_set_churn (dbtc ebtc ebc : EthCLSpecs.Gloas.Gwei)
 
 forkonly Gloas
 theorem toSpecState_set_builderPayments (pay : Vector EPayment (2 * EthCLSpecs.Gloas.Const.slotsPerEpoch))
-    (wd : SSZList EWithdrawal EthCLSpecs.Gloas.Const.builderPendingWithdrawalsLimit) :
+    (wd : ProgressiveList EWithdrawal) :
     toSpecState { e with builderPendingPayments := pay, builderPendingWithdrawals := wd } =
       { toSpecState e with builder_pending_payments := pay.toList.map absPayment,
                            builder_pending_withdrawals := wd.toList.map absWithdrawal } := rfl

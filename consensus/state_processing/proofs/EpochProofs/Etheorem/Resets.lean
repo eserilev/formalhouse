@@ -58,7 +58,7 @@ theorem processEth1DataReset_run (e : EtheoremState) :
     (EthCLSpecs.Gloas.processEth1DataReset (StateTransition := GloasRun)).run (pureState e) =
       .ok ((), pureState (if (EthCLSpecs.Gloas.computeEpochAtSlot e.slot + 1) %
           UInt64.ofNat EthCLSpecs.Gloas.Const.epochsPerEth1VotingPeriod = 0
-        then { e with eth1DataVotes := sszOfArray #[] } else e)) := by
+        then { e with eth1DataVotes := sszOfArray #[] (by simp) } else e)) := by
   unfold EthCLSpecs.Gloas.processEth1DataReset EthCLSpecs.Gloas.getCurrentEpoch
   by_cases h : (EthCLSpecs.Gloas.computeEpochAtSlot e.slot + 1) %
       UInt64.ofNat EthCLSpecs.Gloas.Const.epochsPerEth1VotingPeriod = 0
@@ -95,18 +95,49 @@ theorem processRandaoMixesReset_run (e : EtheoremState) :
     StateT.pure, Except.pure, Except.bind, view_uncachedBox]
   rfl
 
+forkonly Gloas
+/-- The all-zero current participation list that the flag rotation writes, one entry for each
+validator. -/
+def zeroFlags (e : EtheoremState) : RegList EthCLSpecs.Gloas.ParticipationFlags :=
+  ⟨Array.replicate e.validators.val.size 0⟩
+
 omit [EthCLSpecs.Gloas.Config] in
 theorem processParticipationFlagUpdates_run (e : EtheoremState) :
     (EthCLSpecs.Gloas.processParticipationFlagUpdates (StateTransition := GloasRun)).run
         (pureState e) =
       .ok ((), pureState
         { e with previousEpochParticipation := e.currentEpochParticipation,
-                 currentEpochParticipation :=
-                   sszOfArray (Array.replicate e.validators.val.size 0) }) := by
+                 currentEpochParticipation := zeroFlags e }) := by
   unfold EthCLSpecs.Gloas.processParticipationFlagUpdates
   simp [StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure,
     Except.pure, Except.bind, view_uncachedBox]
   rfl
+end forkonly
+
+forkonly Fulu
+/-- The all-zero current participation list that the flag rotation writes, one entry for each
+validator. -/
+def zeroFlags (e : EtheoremState) : RegList EthCLSpecs.Fulu.ParticipationFlags :=
+  ⟨Array.replicate e.validators.val.size 0, by simpa using e.validators.property⟩
+
+omit [EthCLSpecs.Fulu.Config] in
+/-- The rebuilt list has one entry for each validator, so it fits under the registry limit and
+`sszOfArrayM` does not raise. -/
+theorem processParticipationFlagUpdates_run (e : EtheoremState) :
+    (EthCLSpecs.Fulu.processParticipationFlagUpdates (StateTransition := FuluRun)).run
+        (pureState e) =
+      .ok ((), pureState
+        { e with previousEpochParticipation := e.currentEpochParticipation,
+                 currentEpochParticipation := zeroFlags e }) := by
+  have hfit : (Array.replicate e.validators.val.size (0 : EthCLSpecs.Fulu.ParticipationFlags)).size ≤
+      EthCLSpecs.Fulu.Const.validatorRegistryLimit := by simpa using e.validators.property
+  have hsize : e.validators.size ≤ EthCLSpecs.Fulu.Const.validatorRegistryLimit :=
+    e.validators.property
+  unfold EthCLSpecs.Fulu.processParticipationFlagUpdates
+  simp [StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure,
+    Except.pure, Except.bind, view_uncachedBox, sszOfArrayM, SSZList.ofArray?, hfit, hsize]
+  rfl
+end forkonly
 
 /-! ## The reference equals Etheorem -/
 
@@ -250,9 +281,8 @@ theorem participation_flag_updates_etheorem (e : EtheoremState) :
     ∃ e', (EthCLSpecs.Gloas.processParticipationFlagUpdates (StateTransition := GloasRun)).run
         (pureState e) = .ok ((), pureState e') ∧ toSpecState e' = Spec.process_participation_flag_updates (toSpecState e) := by
   refine ⟨_, processParticipationFlagUpdates_run e, ?_⟩
-  have hcap := e.validators.property
   rw [toSpecState_set_participation]
-  simp [Spec.process_participation_flag_updates, sszOfArray, hcap, SSZList.toList]
+  simp [Spec.process_participation_flag_updates, zeroFlags, SSZList.toList, ProgressiveList.toList]
 
 end Steps
 

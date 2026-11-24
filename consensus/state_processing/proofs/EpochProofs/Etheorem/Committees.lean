@@ -92,7 +92,7 @@ include hp hc
 
 forkonly Gloas
 theorem get_beacon_proposer_indices_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d)
-    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EtheoremState) (epoch : UInt64) {r : List Nat}
+    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EtheoremState) [RegBound e] (epoch : UInt64) {r : List Nat}
     (h : Spec.get_beacon_proposer_indices p o (toSpecState e) epoch.toNat = .ok r) :
     ∃ props, EthCLSpecs.Gloas.getBeaconProposerIndices (pureState e) epoch = .ok props ∧
       r = props.toList.map UInt64.toNat := by
@@ -110,7 +110,7 @@ theorem get_beacon_proposer_indices_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d =
     rfl
   have hc2 : cands = (proposerCandidates e epoch).toList.map UInt64.toNat := by
     rw [hcands', List.filter_map]
-    simp [proposerCandidates, sszList_getElem!_val, Function.comp_def]
+    simp [proposerCandidates, regList_getElem!_val, Function.comp_def]
   subst hc2
   have hseed' := get_seed_ok hp o ho e _ _ EthCLSpecs.Gloas.Const.domainBeaconProposer rfl hseed
   subst hseed'
@@ -263,7 +263,7 @@ forkonly Gloas
 /-- `process_proposer_lookahead` equals Etheorem's. -/
 theorem process_proposer_lookahead_etheorem (o : Spec.Oracle)
     (ho : ∀ d, o.hash d = etheoremHash d) (hsha : ∀ b : ByteArray, (sha b).size = 32)
-    (e : EtheoremState)
+    (e : EtheoremState) [RegBound e]
     {s' : Spec.BeaconState} (h : Spec.process_proposer_lookahead p o (toSpecState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processProposerLookahead (StateTransition := GloasRun)).run (pureState e) =
       .ok ((), pureState e') ∧ toSpecState e' = s' := by
@@ -410,7 +410,7 @@ section Sync
 variable [CryptoBackend] {p : Spec.Preset} (hp : PresetAgrees p) (hc : CommitteePresetAgrees p)
 include hp hc
 
-theorem get_next_sync_committee_ok (o : Spec.Oracle) (hoa : OracleAgrees o) (e : EtheoremState)
+theorem get_next_sync_committee_ok (o : Spec.Oracle) (hoa : OracleAgrees o) (e : EtheoremState) [RegBound e]
     {c : Spec.SyncCommittee}
     (h : Spec.get_next_sync_committee p o (toSpecState e) = .ok c) :
     ∃ c', EthCLSpecs.Gloas.getNextSyncCommittee (pureState e) = .ok c' ∧
@@ -504,7 +504,7 @@ theorem processSyncCommitteeUpdates_run_skip (e : EtheoremState)
 forkonly Gloas
 /-- `process_sync_committee_updates` equals Etheorem's. -/
 theorem process_sync_committee_updates_etheorem (o : Spec.Oracle) (hoa : OracleAgrees o)
-    (hperiod : p.EPOCHS_PER_SYNC_COMMITTEE_PERIOD < 2 ^ 64) (e : EtheoremState)
+    (hperiod : p.EPOCHS_PER_SYNC_COMMITTEE_PERIOD < 2 ^ 64) (e : EtheoremState) [RegBound e]
     {s' : Spec.BeaconState}
     (h : Spec.process_sync_committee_updates p o (toSpecState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processSyncCommitteeUpdates (StateTransition := GloasRun)).run (pureState e) =
@@ -563,7 +563,7 @@ variable {p : Spec.Preset} (hp : PresetAgrees p) (hc : CommitteePresetAgrees p)
 include hp hc
 
 theorem compute_ptc_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d)
-    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EtheoremState) (slot : UInt64) {r : List Nat}
+    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EtheoremState) [RegBound e] (slot : UInt64) {r : List Nat}
     (h : Spec.compute_ptc p o (toSpecState e) slot.toNat = .ok r) :
     ∃ v, EthCLSpecs.Gloas.computePtc (pureState e) slot = .ok v ∧
       r = v.toList.map UInt64.toNat := by
@@ -653,7 +653,7 @@ theorem processPtcWindow_run (e : EtheoremState) (fresh : Array (Vector UInt64 E
 
 /-- `process_ptc_window` equals Etheorem's. -/
 theorem process_ptc_window_etheorem (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d)
-    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EtheoremState)
+    (hsha : ∀ b : ByteArray, (sha b).size = 32) (e : EtheoremState) [RegBound e]
     {s' : Spec.BeaconState} (h : Spec.process_ptc_window p o (toSpecState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processPtcWindow (StateTransition := GloasRun)).run (pureState e) =
       .ok ((), pureState e') ∧ toSpecState e' = s' := by

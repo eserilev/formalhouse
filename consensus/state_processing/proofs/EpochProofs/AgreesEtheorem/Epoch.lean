@@ -106,10 +106,15 @@ theorem epochToCommittees_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok]
     (hin : GloasEtheoremDivergenceAssumptions e)
     (hhist : (toSpecState e).historical_summaries.length < EthCLSpecs.Gloas.Const.historicalRootsLimit)
     {s : Spec.BeaconState} (h : Spec.epochToCommittees Spec.P o (toSpecState e) = .ok s) :
-    ∃ e14, StepsOk (epochSteps.take 14) e e14 ∧ toSpecState e14 = s := by
+    ∃ e14, StepsOk (epochSteps.take 14) e e14 ∧ toSpecState e14 = s ∧ RegBound e14 := by
   have hp := hpa
   have hpp := hp.passes
   have hb := hp.base
+  -- The registry bound at each step, as in `process_epoch_etheorem_in`.
+  haveI : RegBound e := ⟨by
+    have hr := hin.depositRoom
+    simp only [toSpecState_validators, length_map_regList] at hr
+    omega⟩
   unfold Spec.epochToCommittees at h
   -- 1. justification and finalization
   obtain ⟨s1, h1, h⟩ := Spec.specM_bind_ok h
@@ -119,6 +124,7 @@ theorem epochToCommittees_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok]
   have l1 := Spec.process_justification_and_finalization_len _ _ _ h1
   obtain ⟨e1, r1, rfl⟩ := justification_etheorem hpp e h1
   have b1 : StepsOk (epochSteps.take 1) e e1 := .cons r1 (.nil _)
+  haveI : RegBound e1 := RegBound.of_length (e := e) l1.1
   -- 2. inactivity
   obtain ⟨s2, h2, h⟩ := Spec.specM_bind_ok h
   have c2 := Spec.process_inactivity_updates_checkpointsStable _ _ _ h2
@@ -127,6 +133,7 @@ theorem epochToCommittees_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok]
   obtain ⟨r2, rfl⟩ := inactivity_updates_etheorem hpp e1 h2
   have b2 : StepsOk (epochSteps.take 2) e (inactivityUpdatesE e1) := b1.snoc r2
   generalize inactivityUpdatesE e1 = e2 at *
+  haveI : RegBound e2 := RegBound.of_length (e := e1) l2.1
   -- 3. rewards and penalties
   obtain ⟨t3, ht3, h⟩ := Spec.specM_bind_ok h
   have := get_total_active_balance_ok hb e2 ht3
@@ -137,6 +144,7 @@ theorem epochToCommittees_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok]
   have l3 := Spec.process_rewards_and_penalties_len _ _ _ _ h3
   obtain ⟨e3, r3, rfl⟩ := rewards_etheorem hpp e2 h3
   have b3 : StepsOk (epochSteps.take 3) e e3 := b2.snoc r3
+  haveI : RegBound e3 := RegBound.of_length (e := e2) l3.1
   -- 4. registry updates
   have hfin : (toSpecState e3).finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH := by
     have hf := j1.2.1
@@ -154,6 +162,7 @@ theorem epochToCommittees_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok]
   have l4 := Spec.process_registry_updates_len _ _ _ _ h4
   obtain ⟨e4, r4, rfl⟩ := process_registry_updates_etheorem hb hp.queues e3 ht4 hfin h4
   have b4 : StepsOk (epochSteps.take 4) e e4 := b3.snoc r4
+  haveI : RegBound e4 := RegBound.of_length (e := e3) l4.1
   -- 5. slashings
   obtain ⟨t5, ht5, h⟩ := Spec.specM_bind_ok h
   have := get_total_active_balance_ok hb e4 ht5
@@ -164,12 +173,14 @@ theorem epochToCommittees_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok]
   obtain ⟨r5, rfl⟩ := slashings_etheorem hpp e4 h5
   have b5 : StepsOk (epochSteps.take 5) e (slashingsE e4) := b4.snoc r5
   generalize slashingsE e4 = e5 at *
+  haveI : RegBound e5 := RegBound.of_length (e := e4) l5.1
   -- 6. eth1 data reset
   obtain ⟨s6, h6, h⟩ := Spec.specM_bind_ok h
   have f6 := Spec.process_eth1_data_reset_pframe _ _ _ h6
   have l6 := Spec.process_eth1_data_reset_len _ _ _ h6
   obtain ⟨e6, r6, rfl⟩ := eth1_data_reset_etheorem hb hp.tail e5 h6
   have b6 : StepsOk (epochSteps.take 6) e e6 := b5.snoc r6
+  haveI : RegBound e6 := RegBound.of_length (e := e5) l6.1
   -- 7. pending deposits
   have F6 : Spec.PFrame (toSpecState e) (toSpecState e6) :=
     f1.trans (f2.trans (f3.trans (f4.trans (f5.trans f6))))
@@ -180,73 +191,79 @@ theorem epochToCommittees_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok]
       EthCLSpecs.Gloas.Const.validatorRegistryLimit := by
     have hv := L6.1
     have hr := hin.depositRoom
-    simp only [toSpecState_validators, length_map_toList] at hv hr
+    simp only [toSpecState_validators, length_map_regList] at hv hr
     omega
   obtain ⟨t7, ht7, h⟩ := Spec.specM_bind_ok h
   obtain ⟨s7, h7, h⟩ := Spec.specM_bind_ok h
   have q7 := Spec.process_pending_deposits_qframe _ _ _ _ _ h7
   have rows7 := Spec.process_pending_deposits_rowsOk _ _ _ _ _ h7 rows6
-  obtain ⟨e7, r7, rfl⟩ := process_pending_deposits_etheorem hb hp.queues o ho e6 ht7
+  obtain ⟨e7, r7, rfl, hreg7⟩ := process_pending_deposits_etheorem hb hp.queues o ho e6 ht7
     (lensEq_of_rowsOk rows6) hroom h7
   have b7 : StepsOk (epochSteps.take 7) e e7 := b6.snoc r7
   -- 8. pending consolidations
   have hlens7 : e7.balances.val.size = e7.validators.val.size := by
     have := rows7.1
-    simp only [toSpecState_balances, toSpecState_validators, length_map_toList] at this
+    simp only [toSpecState_balances, toSpecState_validators, length_map_regList] at this
     exact this
   obtain ⟨s8, h8, h⟩ := Spec.specM_bind_ok h
   have f8 := Spec.process_pending_consolidations_pframe _ _ _ h8
+  have l8 := Spec.process_pending_consolidations_len _ _ _ h8
   obtain ⟨e8, r8, rfl⟩ := process_pending_consolidations_etheorem hb e7 hlens7 h8
   have b8 : StepsOk (epochSteps.take 8) e e8 := b7.snoc r8
+  haveI : RegBound e8 := RegBound.of_length (e := e7) l8.1
   -- 9. builder pending payments
   have Q8 : Spec.QFrame (toSpecState e) (toSpecState e8) := F6.1.trans (q7.trans f8.1)
-  have hbroom : e8.builderPendingWithdrawals.val.size + (qualifyingBuilderWithdrawals e8).length ≤
-      EthCLSpecs.Gloas.Const.builderPendingWithdrawalsLimit := by
-    have hw := congrArg List.length Q8.2.2.1
-    have hr := hin.builderRoom
-    have hq := qualifyingBuilderWithdrawals_length e8
-    simp only [toSpecState_builder_pending_withdrawals, length_map_toList] at hw hr
-    omega
   obtain ⟨t9, ht9, h⟩ := Spec.specM_bind_ok h
   have := get_total_active_balance_ok hb e8 ht9
   subst this
   obtain ⟨s9, h9, h⟩ := Spec.specM_bind_ok h
   have hs9 := Spec.process_builder_pending_payments_summaries _ _ _ _ h9
+  have l9 := Spec.process_builder_pending_payments_len _ _ _ _ h9
   obtain ⟨e9, r9, rfl⟩ :=
-    builder_pending_payments_etheorem' hb hp.slotsPerEpochSix e8 hbroom h9
+    builder_pending_payments_etheorem' hb hp.slotsPerEpochSix e8 h9
   have b9 : StepsOk (epochSteps.take 9) e e9 := b8.snoc r9
+  haveI : RegBound e9 := RegBound.of_length (e := e8) l9.1
   -- 10. effective balance updates
   obtain ⟨s10, h10, h⟩ := Spec.specM_bind_ok h
   have f10 := Spec.process_effective_balance_updates_pframe _ _ _ h10
+  have l10 := Spec.process_effective_balance_updates_len _ _ _ h10
   obtain ⟨e10, r10, rfl⟩ := effective_balance_updates_etheorem hb hp.tail e9 h10
   have b10 : StepsOk (epochSteps.take 10) e e10 := b9.snoc r10
+  haveI : RegBound e10 := RegBound.of_length (e := e9) l10.1
   -- 11. slashings reset
   obtain ⟨s11, h11, h⟩ := Spec.specM_bind_ok h
   have f11 := Spec.process_slashings_reset_pframe _ _ _ h11
+  have l11 := Spec.process_slashings_reset_len _ _ _ h11
   obtain ⟨e11, r11, rfl⟩ := slashings_reset_etheorem hb hp.tail e10 h11
   have b11 : StepsOk (epochSteps.take 11) e e11 := b10.snoc r11
+  haveI : RegBound e11 := RegBound.of_length (e := e10) l11.1
   -- 12. randao mixes reset
   obtain ⟨s12, h12, h⟩ := Spec.specM_bind_ok h
   have f12 := Spec.process_randao_mixes_reset_pframe _ _ _ h12
+  have l12 := Spec.process_randao_mixes_reset_len _ _ _ h12
   obtain ⟨e12, r12, rfl⟩ := randao_mixes_reset_etheorem hb e11 h12
   have b12 : StepsOk (epochSteps.take 12) e e12 := b11.snoc r12
+  haveI : RegBound e12 := RegBound.of_length (e := e11) l12.1
   -- 13. historical summaries
   have hsroom : e12.historicalSummaries.val.size < EthCLSpecs.Gloas.Const.historicalRootsLimit := by
     have heq : (toSpecState e12).historical_summaries = (toSpecState e).historical_summaries := by
       rw [f12.1.2.2.2, f11.1.2.2.2, f10.1.2.2.2, hs9, Q8.2.2.2]
     have hw := congrArg List.length heq
     have hr := hhist
-    simp only [toSpecState_historical_summaries, length_map_toList] at hw hr
+    simp only [toSpecState_historical_summaries, length_map_regList, length_map_toList] at hw hr
     omega
   obtain ⟨s13, h13, h⟩ := Spec.specM_bind_ok h
+  have l13 := Spec.process_historical_summaries_update_len _ _ _ _ h13
   obtain ⟨e13, r13, rfl⟩ :=
     historical_summaries_update_etheorem hb hp.tail ho e12 hsroom h13
   have b13 : StepsOk (epochSteps.take 13) e e13 := b12.snoc r13
+  haveI : RegBound e13 := RegBound.of_length (e := e12) l13.1
   -- 14. participation flags
   obtain ⟨e14, r14, h14⟩ := participation_flag_updates_etheorem e13
   have b14 : StepsOk (epochSteps.take 14) e e14 := b13.snoc r14
+  haveI : RegBound e14 := RegBound.of_length (e := e13) (by rw [h14]; rfl)
   rw [← h14] at h
-  exact ⟨e14, b14, (Except.ok.inj h)⟩
+  exact ⟨e14, b14, (Except.ok.inj h), inferInstance⟩
 
 /-- When Etheorem's Gloas `processEpoch` succeeds, the reference `process_epoch` succeeds.
 
@@ -275,7 +292,7 @@ theorem process_epoch_of_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok] [Spec.Pre
     hb0.1 (Nat.lt_trans hrb.supply (by decide))
     (Spec.midOk_of_physicalLimits _ hb0.2.1 hslot heb hvec hcons hsup.2.2 hrb)
     (Spec.depOk_of_physicalLimits o _ hslot hrb)
-  obtain ⟨e14, b14, rfl⟩ := epochToCommittees_etheorem hpa o ho e hb0 hslot64 hcond hhist hs
+  obtain ⟨e14, b14, rfl, hreg14⟩ := epochToCommittees_etheorem hpa o ho e hb0 hslot64 hcond hhist hs
   have hf14 : Spec.SelFacts o (toSpecState e14) := Spec.SelFacts.of_frame hfr hslot (hsel _ hs)
     fun v hv => ((Spec.epochToCommittees_effective_balances o _ _ hs heb).1 v hv).2
   rw [processEpoch_eq, ← List.take_append_drop 14 epochSteps,
@@ -291,12 +308,16 @@ theorem process_epoch_of_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok] [Spec.Pre
   | ok p15 =>
   obtain ⟨s15, hs15, f15s, f15v, f15r, -, -⟩ := sync_committee_updates_of_etheorem hb hc o ho
     hpa.epochsPerSyncCommitteePeriodLt e14 hf14 h15
+  have l15 : s15.validators.length = (toSpecState e14).validators.length := by
+    obtain ⟨_, _, hs⟩ := Spec.process_sync_committee_updates_shape _ _ _ _ hs15
+    rw [hs]
   obtain ⟨e15, r15, rfl⟩ := process_sync_committee_updates_etheorem hb hc o ho
     hpa.epochsPerSyncCommitteePeriodLt e14 hs15
   rw [h15] at r15
   cases r15
   rw [h15, except_bind_ok] at h
   have hf15 : Spec.SelFacts o (toSpecState e15) := hf14.congr f15s f15v f15r
+  haveI : RegBound e15 := RegBound.of_length (e := e14) l15
   -- 16. proposer lookahead
   rw [run_bind] at h
   cases h16 : (EthCLSpecs.Gloas.processProposerLookahead (StateTransition := GloasRun)).run
@@ -305,11 +326,15 @@ theorem process_epoch_of_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok] [Spec.Pre
   | ok p16 =>
   obtain ⟨s16, hs16, f16s, f16v, f16r, -⟩ := proposer_lookahead_of_etheorem hb hc o ho.hash hsha
     e15 hf15 h16
+  have l16 : s16.validators.length = (toSpecState e15).validators.length := by
+    obtain ⟨_, hs⟩ := Spec.process_proposer_lookahead_shape _ _ _ _ hs16
+    rw [hs]
   obtain ⟨e16, r16, rfl⟩ := process_proposer_lookahead_etheorem hb hc o ho.hash hsha e15 hs16
   rw [h16] at r16
   cases r16
   rw [h16, except_bind_ok] at h
   have hf16 : Spec.SelFacts o (toSpecState e16) := hf15.congr f16s f16v f16r
+  haveI : RegBound e16 := RegBound.of_length (e := e15) l16
   -- 17. PTC window
   obtain ⟨s17, hs17, -⟩ := ptc_window_of_etheorem hb hc o ho.hash hsha e16 hf16 h
   refine ⟨s17, ?_⟩
@@ -321,8 +346,8 @@ theorem process_epoch_of_etheorem [Spec.PresetCfg] [Spec.PresetCfg.Ok] [Spec.Pre
 state, or both fail.
 
 - `hin`, `hpre`: the reachable-state invariants at the epoch boundary and the boundary facts.
-- `hcond`: Etheorem's alpha.11 list limits have room (F6, F10). Etheorem diverges from the pyspec
-  there.
+- `hcond`: the registry has room for one epoch of deposits (F10). The bridge reads registry
+  positions as `uint64` indices.
 - `hslot`, `hrb`: the time and supply bounds. The proof gets the success of the steps before
   the committee steps from them. The SSZ vector lengths hold on every Etheorem state
   (`vectorLengths_toSpecState`).

@@ -98,15 +98,12 @@ Both runs succeed. Their results agree on the builder payment fields, and every 
 keeps its value.
 
 `hslots`: the two presets have the same `SLOTS_PER_EPOCH`. `hslots6`: `SLOTS_PER_EPOCH ≥ 6`
-(both presets), so the quorum does not overflow. `hfits`: the new withdrawals fit under the
-list limit. Etheorem's `SSZList.push` drops an item past the limit, and the spec raises an
-error. -/
+(both presets), so the quorum does not overflow. The builder withdrawals are a progressive list
+with no limit, so every qualifying withdrawal is appended. -/
 theorem builder_pending_payments_etheorem (p : Spec.Preset)
     (hslots : EthCLSpecs.Gloas.Const.slotsPerEpoch = p.SLOTS_PER_EPOCH)
     (hslots6 : 6 ≤ p.SLOTS_PER_EPOCH)
-    (e : EtheoremState) (s : Spec.BeaconState) (hagree : Agrees e s)
-    (hfits : e.builderPendingWithdrawals.val.size + (qualifyingBuilderWithdrawals e).length ≤
-      EthCLSpecs.Gloas.Const.builderPendingWithdrawalsLimit) :
+    (e : EtheoremState) (s : Spec.BeaconState) (hagree : Agrees e s) :
     ∃ e' s',
       runPure (EthCLSpecs.Gloas.processBuilderPendingPayments (StateTransition := GloasRun)) e =
           .ok ((), e') ∧
@@ -123,7 +120,7 @@ theorem builder_pending_payments_etheorem (p : Spec.Preset)
   have hq := quorum_toNat e (hslots ▸ hslots6)
   refine ⟨_, Spec.builderPendingPaymentsResult p
       (totalActiveBalance e / p.SLOTS_PER_EPOCH * 6 / 10) s,
-    processBuilderPendingPayments_run_of_fits e hfits, ?_, ?_, ?_, ?_⟩
+    processBuilderPendingPayments_run_appended e, ?_, ?_, ?_, ?_⟩
   · rw [Spec.process_builder_pending_payments_eq p _ s hwf,
       Spec.get_builder_payment_quorum_threshold_ok p _ hslots6 htab]
     rfl
@@ -151,9 +148,7 @@ theorem lighthouse_builder_pending_payments_etheorem (p : Spec.Preset)
     (hslots_lh : slots_per_epoch.val = p.SLOTS_PER_EPOCH) (hspe : spe.val = p.SLOTS_PER_EPOCH)
     (payments : Slice LhPayment) (withdrawals : List LhWithdrawal)
     (e : EtheoremState) (hagree : Agrees e (absState (withdrawals, payments.val)))
-    (htab : total_active_balance.val = totalActiveBalance e)
-    (hfits : e.builderPendingWithdrawals.val.size + (qualifyingBuilderWithdrawals e).length ≤
-      EthCLSpecs.Gloas.Const.builderPendingWithdrawalsLimit) :
+    (htab : total_active_balance.val = totalActiveBalance e) :
     lighthouseBuilderPendingPayments total_active_balance slots_per_epoch spe payments withdrawals
       ⦃ r => ∃ res e', r = .Ok res ∧
         runPure (EthCLSpecs.Gloas.processBuilderPendingPayments (StateTransition := GloasRun)) e =
@@ -164,7 +159,7 @@ theorem lighthouse_builder_pending_payments_etheorem (p : Spec.Preset)
     simp only [absState, List.length_map, Vector.length_toList] at h
     omega
   obtain ⟨e', s', hrun, hspec, hag, -, -⟩ :=
-    builder_pending_payments_etheorem p hslots hslots6 e _ hagree hfits
+    builder_pending_payments_etheorem p hslots hslots6 e _ hagree
   apply spec_mono (builder_pending_payments_equiv p total_active_balance slots_per_epoch spe
     hslots_lh hspe payments withdrawals hlen)
   intro r hr

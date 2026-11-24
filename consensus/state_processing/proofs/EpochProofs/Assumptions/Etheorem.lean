@@ -339,24 +339,20 @@ forkonly Gloas
 /-- Facts about the state at the epoch start. The steps before each read do not write these
 fields, so each fact still holds when its step reads it.
 
-- `depositRoom`: Etheorem's registry limit `2^40` has room for `MAX_PENDING_DEPOSITS_PER_EPOCH`
-  new validators, the most that one epoch adds. Etheorem drops a new validator past this limit
-  (F10). Beta.4 has no registry limit. Lighthouse keeps the `2^40` limit.
-- `builderRoom`: the builder withdrawals have room for `SLOTS_PER_EPOCH` more items under
-  Etheorem's alpha.11 limit (F6). Beta.4 has no limit.
+- `depositRoom`: the registry limit `2^40` has room for `MAX_PENDING_DEPOSITS_PER_EPOCH` new
+  validators, the most that one epoch adds. Beta.4 stores the registry as an uncapped
+  `ProgressiveList`. Etheorem reads a list position as a `uint64` validator index, so the proofs
+  need a bound on the registry size at each step. Lighthouse keeps the `2^40` limit.
 
 The historical summaries room is not here: beta.4 keeps the `HISTORICAL_ROOTS_LIMIT` cap, so it
 is a spec condition. `process_epoch_etheorem_in` takes it as `hhist`.
 
-These are the assumptions needed only because Etheorem diverges from the pyspec. Each is about
-the Etheorem state `e`, not the oracle. -/
+This bundle holds the facts about the Etheorem state `e` that the bridge needs and the run does
+not give. Each is about `e`, not the oracle. -/
 structure GloasEtheoremDivergenceAssumptions (e : EtheoremState) : Prop where
-  /-- F10: registry room for one epoch of deposits under Etheorem's `2^40` limit. -/
+  /-- Registry room for one epoch of deposits under the `2^40` limit. -/
   depositRoom : (toSpecState e).validators.length +
     EthCLSpecs.Gloas.Const.maxPendingDepositsPerEpoch ≤ EthCLSpecs.Gloas.Const.validatorRegistryLimit
-  /-- F6: room for `SLOTS_PER_EPOCH` builder withdrawals under Etheorem's alpha.11 limit. -/
-  builderRoom : (toSpecState e).builder_pending_withdrawals.length +
-      EthCLSpecs.Gloas.Const.slotsPerEpoch ≤ EthCLSpecs.Gloas.Const.builderPendingWithdrawalsLimit
 end forkonly
 
 forkonly Fulu
@@ -374,7 +370,8 @@ Facts about the hash values:
   (`Spec.ProposerFin`). The last pass needs `2**64 - 1` rejected candidates before it.
 
 These are the conditions of the bridge to Etheorem's Fulu epoch. Not all are about Etheorem: F10
-is Etheorem's alpha.11 registry limit, `summariesRoom` is a spec condition (beta.4 keeps the cap),
+is the Fulu registry limit, which Etheorem enforces and the transcription does not,
+`summariesRoom` is a spec condition (beta.4 keeps the cap),
 the list lengths are facts about the intermediate states, and `proposerFin` mentions the oracle,
 so this bundle takes `o` where the Gloas `GloasEtheoremDivergenceAssumptions` does not. -/
 structure FuluEtheoremBridgeConditions (p : Spec.Preset) (o : Spec.Oracle) (e : EtheoremState) :
@@ -384,7 +381,7 @@ structure FuluEtheoremBridgeConditions (p : Spec.Preset) (o : Spec.Oracle) (e : 
     (toSpecState e').finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH
   /-- Before the pending deposits, the registry lists have the same length. -/
   depositLens : ∀ e', Before 6 e e' → LensEq e'
-  /-- F10: before the pending deposits, Etheorem's registry limit has room for each pending
+  /-- F10: before the pending deposits, the Fulu registry limit has room for each pending
   deposit. -/
   depositRoom : ∀ e', Before 6 e e' → e'.validators.val.size + e'.pendingDeposits.val.size ≤
     EthCLSpecs.Fulu.Const.validatorRegistryLimit

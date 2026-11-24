@@ -664,10 +664,23 @@ theorem map_toNat_getElem!_all (A : Array UInt64) (k : Nat) :
 /-! ## The balance weighted selection -/
 
 omit [EthCLSpecs.Gloas.Preset] [HasherTag] in
-/-- The reference's `uint64` counter is below `UInt64.size`, so Etheorem's overflow guard at the
-top of `cbwsAux` does not fire. -/
-theorem cbws_counter_lt {i : Nat} (hi : i < 2 ^ 64) : ¬ UInt64.size ≤ i := by
-  simp only [UInt64.size]; omega
+/-- Etheorem's checked `i += 1` succeeds below `2^64 - 1` and passes `i + 1` on. -/
+theorem checkedSucc_bind_ok {β : Type} (i : Nat) (d : String) (h : i + 1 < 2 ^ 64)
+    (f : { j : Nat // j = i + 1 ∧ j < UInt64.size } → Except StateTransitionError β) :
+    (checkedSucc (m := Except StateTransitionError) i d >>= f) =
+      f ⟨i + 1, rfl, by simpa [UInt64.size] using h⟩ := by
+  unfold checkedSucc
+  rw [dif_pos (by simpa [UInt64.size] using h)]
+  rfl
+
+omit [EthCLSpecs.Gloas.Preset] [HasherTag] in
+/-- Etheorem's checked `i += 1` raises at `2^64 - 1`. -/
+theorem checkedSucc_bind_error {β : Type} (i : Nat) (d : String) (h : ¬ i + 1 < 2 ^ 64)
+    (f : { j : Nat // j = i + 1 ∧ j < UInt64.size } → Except StateTransitionError β) :
+    ∃ err, (checkedSucc (m := Except StateTransitionError) i d >>= f) = .error err := by
+  unfold checkedSucc
+  rw [dif_neg (by simpa [UInt64.size] using h)]
+  exact ⟨_, rfl⟩
 
 /-- The selection loop equals Etheorem's `cbwsAux`, one pass at a time. `ourFuel` is the
 reference's pass limit. Both loops count passes with the same `uint64` counter `i`, so when the
@@ -693,7 +706,7 @@ theorem selection_loop_lockstep (p : Spec.Preset) (o : Spec.Oracle)
   | succ g ih =>
     intro sel i rb erb r hi hinv h
     unfold Spec.compute_balance_weighted_selection_loop at h
-    rw [EthCLSpecs.Gloas.cbwsAux, if_neg (cbws_counter_lt hi)]
+    rw [EthCLSpecs.Gloas.cbwsAux]
     split at h
     · rename_i hlt
       simp only [List.length_map, Array.length_toList] at hlt
@@ -752,11 +765,13 @@ theorem selection_loop_lockstep (p : Spec.Preset) (o : Spec.Oracle)
               getElem!_pos (idxArr.map UInt64.toNat) _ (by simpa using hidx)]
             simp
           rw [hsel] at h
+          rw [checkedSucc_bind_ok _ _ hi1']
           exact ih _ _ _ _ _ hi1' (Or.inr rfl) h
         · rw [if_neg hge]
           simp only [except_bind_eq_ok] at h
           obtain ⟨i1, hi1, h⟩ := h
           obtain ⟨hh, hi1'⟩ := uint64Add_eq hi1; subst hh
+          rw [checkedSucc_bind_ok _ _ hi1']
           exact ih _ _ _ _ _ hi1' (Or.inr rfl) h
       · simp only [if_true] at h ⊢
         simp only [except_bind_eq_ok] at h
@@ -790,11 +805,13 @@ theorem selection_loop_lockstep (p : Spec.Preset) (o : Spec.Oracle)
               getElem!_pos (idxArr.map UInt64.toNat) _ (by simpa using hidx)]
             simp
           rw [hsel] at h
+          rw [checkedSucc_bind_ok _ _ hi1']
           exact ih _ _ _ _ _ hi1' (Or.inr rfl) h
         · rw [if_neg hge]
           simp only [except_bind_eq_ok] at h
           obtain ⟨i1, hi1, h⟩ := h
           obtain ⟨hh, hi1'⟩ := uint64Add_eq hi1; subst hh
+          rw [checkedSucc_bind_ok _ _ hi1']
           exact ih _ _ _ _ _ hi1' (Or.inr rfl) h
     · rename_i hlt
       simp only [List.length_map, Array.length_toList] at hlt
@@ -834,7 +851,7 @@ theorem compute_balance_weighted_selection_ok (p : Spec.Preset) (o : Spec.Oracle
   have heff : (idxArr.toList.map UInt64.toNat).map
       (fun v => (e.validators.val[v]!).effectiveBalance.toNat) =
       (idxArr.map (fun vi => (e.validators[vi.toNat]!).effectiveBalance.toNat)).toList := by
-    simp [sszList_getElem!_val]
+    simp [regList_getElem!_val]
   rw [heff] at h
   simp only [List.length_map, Array.length_toList] at h
   exact selection_loop_lockstep p o ho hc idxArr seed size shuffle _ _ #[] 0 _ _ r
@@ -843,7 +860,7 @@ theorem compute_balance_weighted_selection_ok (p : Spec.Preset) (o : Spec.Oracle
 /-- An `.ok` result of Etheorem's `cbwsAux` holds exactly `size` items, from a start with at most
 `size` items. The loop only returns once `size` items are selected, and each pass adds at most one
 item. `cbwsAux` recurses on `UInt64.size - i`, so the proof inducts on that measure and unfolds
-one pass through the equation lemma. -/
+one pass through the equation lemma. The last pass at `i = 2^64 - 1` raises on `i += 1`. -/
 theorem cbwsAux_ok_size (indices effBals : Array Nat) (perm : Array UInt64) (seed : ByteArray)
     (total size : Nat) (shuffle : Bool) :
     ∀ (n i : Nat) (rb : ByteArray) (sel res : Array UInt64), UInt64.size - i = n →
@@ -853,18 +870,33 @@ theorem cbwsAux_ok_size (indices effBals : Array Nat) (perm : Array UInt64) (see
   intro n
   induction n with
   | zero =>
-    intro i rb sel res hn _ h
-    rw [EthCLSpecs.Gloas.cbwsAux, if_pos (by omega)] at h
-    exact absurd h (by simp [throwArithmetic, liftErr, MonadExcept.ofExcept, Except.mapError])
+    intro i rb sel res hn hsel h
+    rw [EthCLSpecs.Gloas.cbwsAux] at h
+    split at h
+    · simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      omega
+    · obtain ⟨err, herr⟩ := checkedSucc_bind_error (β := Array UInt64) i
+        "compute_balance_weighted_selection: i += 1 past 2**64 - 1"
+        (by simp only [UInt64.size] at hn; omega) (fun s => _)
+      rw [herr] at h
+      cases h
   | succ m ih =>
     intro i rb sel res hn hsel h
-    rw [EthCLSpecs.Gloas.cbwsAux, if_neg (by omega)] at h
+    rw [EthCLSpecs.Gloas.cbwsAux] at h
     split at h
     · rename_i hge
       simp only [pure, Except.pure, Except.ok.injEq] at h
       subst h
       omega
     · rename_i hlt
+      by_cases hi1 : i + 1 < 2 ^ 64
+      case neg =>
+        obtain ⟨err, herr⟩ := checkedSucc_bind_error (β := Array UInt64) i
+          "compute_balance_weighted_selection: i += 1 past 2**64 - 1" hi1 (fun s => _)
+        rw [herr] at h
+        cases h
+      rw [checkedSucc_bind_ok _ _ hi1] at h
       refine ih (i + 1) _ _ res (by omega) ?_ h
       have hite : ∀ (c : Prop) [Decidable c] (x : UInt64),
           (if c then sel.push x else sel).size ≤ sel.size + 1 := by
@@ -929,7 +961,7 @@ theorem get_seed_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d) (e
   simp
 
 /-- `get_committee_count_per_slot` equals Etheorem's. -/
-theorem get_committee_count_per_slot_ok (hc : CommitteePresetAgrees p) (e : EtheoremState)
+theorem get_committee_count_per_slot_ok (hc : CommitteePresetAgrees p) (e : EtheoremState) [RegBound e]
     (epoch : UInt64) {c : Nat}
     (h : Spec.get_committee_count_per_slot p (toSpecState e) epoch.toNat = .ok c) :
     c = EthCLSpecs.Gloas.getCommitteeCountPerSlot (pureState e) epoch := by
@@ -981,7 +1013,7 @@ theorem compute_committee_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremH
 
 /-- `get_beacon_committee` equals Etheorem's `getBeaconCommittee`. -/
 theorem get_beacon_committee_ok (o : Spec.Oracle) (ho : ∀ d, o.hash d = etheoremHash d)
-    (hc : CommitteePresetAgrees p) (e : EtheoremState) (slot : UInt64) (index : Nat) {r : List Nat}
+    (hc : CommitteePresetAgrees p) (e : EtheoremState) [RegBound e] (slot : UInt64) (index : Nat) {r : List Nat}
     (h : Spec.get_beacon_committee p o (toSpecState e) slot.toNat index = .ok r) :
     r = (EthCLSpecs.Gloas.getBeaconCommittee (pureState e) slot index).toList.map
       UInt64.toNat := by

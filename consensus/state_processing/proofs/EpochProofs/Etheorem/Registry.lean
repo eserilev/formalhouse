@@ -151,7 +151,7 @@ forkonly Gloas
 variable {p : Spec.Preset} (hp : PresetAgrees p) (hq : QueuesPresetAgrees p)
 include hp hq
 
-theorem regBody_step (e : EtheoremState) (C : UInt64) (act tab idx : Nat)
+theorem regBody_step (e : EtheoremState) [RegBound e] (C : UInt64) (act tab idx : Nat)
     (hcur : Spec.get_current_epoch p (toSpecState e) = .ok C.toNat)
     (hact : Spec.compute_activation_exit_epoch p C.toNat = .ok act)
     (hCfar : C.toNat < Spec.FAR_FUTURE_EPOCH)
@@ -170,13 +170,13 @@ theorem regBody_step (e : EtheoremState) (C : UInt64) (act tab idx : Nat)
   rw [toSpecState_validators] at hv'
   obtain ⟨hi, rfl⟩ := listGet_map_ok e.validators.val absValidator idx hv'
   have hidx64 : idx < 2 ^ 64 :=
-    Nat.lt_of_lt_of_le hi (Nat.le_trans e.validators.property (Nat.le_of_lt hp.validatorRegistryLimit))
+    Nat.lt_of_lt_of_le hi (Nat.le_trans RegBound.le (Nat.le_of_lt hp.validatorRegistryLimit))
   have hofNat : (UInt64.ofNat idx).toNat = idx := UInt64.toNat_ofNat_of_lt' hidx64
   have hactC := compute_activation_exit_epoch_ok hp C hact
   have hact' := Spec.compute_activation_exit_epoch_ok p _ _ hact
   generalize hv : e.validators.val[idx]! = v at h
   have hv2 : e.validators.val[idx] = v := by rw [← hv, getElem!_pos e.validators.val idx hi]
-  have hvget : e.validators[idx]! = v := by rw [sszList_getElem!_val, hv]
+  have hvget : e.validators[idx]! = v := by rw [regList_getElem!_val, hv]
   unfold regBody
   simp only [run_bind, run_get_gloas, except_bind_ok, view_uncachedBox, hvget]
   rw [is_eligible_for_activation_queue_eq hq, is_active_validator_eq,
@@ -243,9 +243,9 @@ theorem regBody_step (e : EtheoremState) (C : UInt64) (act tab idx : Nat)
     · simp only [run_bind, modValidator_run, except_bind_ok, hofNat, hvget]
       rfl
     · rw [← hn']
-      simp only [toSpecState, map_toList_set!]
+      simp only [toSpecState, map_regList_set!]
       rfl
-    · rw [toSpecState_set_validators, map_toList_set!, toSpecState_validators]
+    · rw [toSpecState_set_validators, map_regList_set!, toSpecState_validators]
       apply map_set_of_key _ _ _ _ (by simpa using hi)
       simp [Spec.activeKey, absValidator, hv2, Spec.is_active_validator, v1]
   have hA' : EthCLSpecs.Gloas.isEligibleForActivationQueue v = false := by simpa using hA
@@ -303,10 +303,10 @@ theorem regBody_step (e : EtheoremState) (C : UInt64) (act tab idx : Nat)
       refine ⟨{ e with validators := e.validators.set! idx v1 }, ?_, ?_, rfl, rfl, ?_⟩
       · simp only [run_bind, run_pure, modValidator_run, except_bind_ok, hofNat, hvget]
         rfl
-      · simp only [toSpecState, map_toList_set!]
+      · simp only [toSpecState, map_regList_set!]
         rw [← hactC]
         rfl
-      · rw [toSpecState_set_validators, map_toList_set!, toSpecState_validators]
+      · rw [toSpecState_set_validators, map_regList_set!, toSpecState_validators]
         apply map_set_of_key _ _ _ _ (by simpa using hi)
         simp only [EthCLSpecs.Gloas.isEligibleForActivation, Bool.and_eq_true, decide_eq_true_eq,
           beq_iff_eq, view_uncachedBox] at hC
@@ -323,7 +323,7 @@ theorem regBody_step (e : EtheoremState) (C : UInt64) (act tab idx : Nat)
       simp only [hC', Bool.false_eq_true, if_false, run_bind, run_pure, except_bind_ok]
 
 /-- The reference `process_registry_updates` equals Etheorem's. -/
-theorem process_registry_updates_etheorem (e : EtheoremState) {tab : Nat} {s' : Spec.BeaconState}
+theorem process_registry_updates_etheorem (e : EtheoremState) [RegBound e] {tab : Nat} {s' : Spec.BeaconState}
     (htab : Spec.get_total_active_balance p (toSpecState e) = .ok tab)
     (hfin : (toSpecState e).finalized_checkpoint.epoch < Spec.FAR_FUTURE_EPOCH)
     (h : Spec.process_registry_updates p tab (toSpecState e) = .ok s') :
@@ -359,6 +359,9 @@ theorem process_registry_updates_etheorem (e : EtheoremState) {tab : Nat} {s' : 
           (pureState e1) = .ok (.yield PUnit.unit, pureState e') ∧
         r = .yield (toSpecState e') ∧ Inv e' := by
     intro i e1 r ⟨hs, hf, hk⟩ hr
+    haveI : RegBound e1 := RegBound.of_length (e := e) (by
+      have := congrArg List.length hk
+      simpa using this)
     have hcur1 : Spec.get_current_epoch p (toSpecState e1) = .ok C.toNat := by
       rw [← hcur]; simp only [Spec.get_current_epoch, hs]
     have htab1 : etheoremTotalActiveBalance e1 = tab := by
@@ -399,13 +402,13 @@ theorem regBody_step (e : EtheoremState) (C : UInt64) (act tab idx : Nat)
   rw [toSpecState_validators] at hv'
   obtain ⟨hi, rfl⟩ := listGet_map_ok e.validators.val absValidator idx hv'
   have hidx64 : idx < 2 ^ 64 :=
-    Nat.lt_of_lt_of_le hi (Nat.le_trans e.validators.property (Nat.le_of_lt hp.validatorRegistryLimit))
+    Nat.lt_of_lt_of_le hi (Nat.le_trans RegBound.le (Nat.le_of_lt hp.validatorRegistryLimit))
   have hofNat : (UInt64.ofNat idx).toNat = idx := UInt64.toNat_ofNat_of_lt' hidx64
   have hactC := compute_activation_exit_epoch_ok hp C hact
   have hact' := Spec.compute_activation_exit_epoch_ok p _ _ hact
   generalize hv : e.validators.val[idx]! = v at h
   have hv2 : e.validators.val[idx] = v := by rw [← hv, getElem!_pos e.validators.val idx hi]
-  have hvget : e.validators[idx]! = v := by rw [sszList_getElem!_val, hv]
+  have hvget : e.validators[idx]! = v := by rw [regList_getElem!_val, hv]
   unfold regBody
   simp only [run_bind, run_get_gloas, except_bind_ok, view_uncachedBox, hvget]
   rw [is_eligible_for_activation_queue_eq hq, is_active_validator_eq,
@@ -472,9 +475,9 @@ theorem regBody_step (e : EtheoremState) (C : UInt64) (act tab idx : Nat)
     · simp only [run_bind, modValidator_run, except_bind_ok, hofNat, hvget]
       rfl
     · rw [← hn']
-      simp only [toSpecState, map_toList_set!]
+      simp only [toSpecState, map_regList_set!]
       rfl
-    · rw [toSpecState_set_validators, map_toList_set!, toSpecState_validators]
+    · rw [toSpecState_set_validators, map_regList_set!, toSpecState_validators]
       apply map_set_of_key _ _ _ _ (by simpa using hi)
       simp [Spec.activeKey, absValidator, hv2, Spec.is_active_validator, v1]
   have hA' : EthCLSpecs.Fulu.isEligibleForActivationQueue v = false := by simpa using hA
@@ -533,10 +536,10 @@ theorem regBody_step (e : EtheoremState) (C : UInt64) (act tab idx : Nat)
       refine ⟨{ e with validators := e.validators.set! idx v1 }, ?_, ?_, rfl, rfl, ?_⟩
       · simp only [run_bind, run_pure, modValidator_run, except_bind_ok, hofNat, hvget]
         rfl
-      · simp only [toSpecState, map_toList_set!]
+      · simp only [toSpecState, map_regList_set!]
         rw [← hactC]
         rfl
-      · rw [toSpecState_set_validators, map_toList_set!, toSpecState_validators]
+      · rw [toSpecState_set_validators, map_regList_set!, toSpecState_validators]
         apply map_set_of_key _ _ _ _ (by simpa using hi)
         simp only [EthCLSpecs.Fulu.isEligibleForActivation, Bool.and_eq_true, decide_eq_true_eq,
           beq_iff_eq, view_uncachedBox] at hC

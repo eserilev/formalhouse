@@ -13,11 +13,11 @@ subDir = "backends/lean"
 
 # Etheorem: an executable Lean spec of the consensus specs that passes the EF vectors.
 # `EpochProofs/Etheorem/` proves our reference equal to it. Pinned to the fork branch
-# `formalhouse-pin-cbws`, which builds on our Lean version and carries the patches in README.md.
+# `formalhouse-pin-beta4`, which builds on our Lean version and carries the patches in README.md.
 [[require]]
 name = "EthCLSpecs"
 git = "https://github.com/eserilev/etheorem"
-rev = "c988913888f945619c2183769cc074590cca94d5"
+rev = "b2882a3a7113d094905848e27cc6137a92a5e4c6"
 subDir = "packages/EthCLSpecs"
 
 # The BeaconState cache proofs in `consensus/types/proofs`. The epoch proofs import them to

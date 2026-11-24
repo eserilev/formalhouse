@@ -153,8 +153,8 @@ theorem ebStepView_eq (s : EtheoremState) (i : Nat) (hi : i < 2 ^ 64) :
   · rename_i hc
     rw [ebNew_neg _ _ hc]
     have hset : s.validators.set! i s.validators[i]! = s.validators := by
-      apply Subtype.ext
-      rw [sszList_getElem!_val]
+      apply regList_ext
+      rw [regList_getElem!_val]
       change Array.set! s.validators.val i s.validators.val[i]! = s.validators.val
       by_cases hlt : i < s.validators.val.size
       · rw [Array.set!_eq_setIfInBounds, Array.setIfInBounds, dif_pos hlt,
@@ -167,7 +167,7 @@ omit [HasherTag] in
 /-- After `k` steps, Etheorem's loop has replaced the first `k` validators by `ebNew`. -/
 theorem ebFold (e : EtheoremState) (hn : e.validators.val.size < 2 ^ 64) :
     ∀ k, k ≤ e.validators.val.size →
-      ∃ V : SSZList EthCLSpecs.Gloas.Validator EthCLSpecs.Gloas.Const.validatorRegistryLimit,
+      ∃ V : RegList EthCLSpecs.Gloas.Validator,
         (List.range' 0 k).foldl ebStepView e = { e with validators := V } ∧
         V.val.toList = (List.range k).map (fun j => ebNew e.validators.val[j]! e.balances.val[j]!) ++
           e.validators.val.toList.drop k := by
@@ -181,7 +181,7 @@ theorem ebFold (e : EtheoremState) (hn : e.validators.val.size < 2 ^ 64) :
     have hP : ((List.range k).map (fun j => ebNew e.validators.val[j]! e.balances.val[j]!)).length = k := by
       simp
     have hVk : V[k]! = e.validators.val[k]! := by
-      rw [sszList_getElem!_val]
+      rw [regList_getElem!_val]
       have hsz : k < V.val.size := by
         rw [← Array.length_toList, hVl]; simp; omega
       rw [getElem!_pos V.val k hsz, getElem!_pos e.validators.val k (by omega), ← Array.getElem_toList,
@@ -193,7 +193,7 @@ theorem ebFold (e : EtheoremState) (hn : e.validators.val.size < 2 ^ 64) :
     · rw [List.range'_concat, List.foldl_append, hV]
       simp only [List.foldl_cons, List.foldl_nil, Nat.zero_add, Nat.one_mul]
       rw [ebStepView_eq _ _ (by omega)]
-      simp only [hVk, sszList_getElem!_val]
+      simp only [hVk, regList_getElem!_val]
     · change (V.val.set! k _).toList = _
       rw [Array.set!_eq_setIfInBounds, Array.toList_setIfInBounds, hVl,
         List.set_append_right _ _ (Nat.le_of_eq hP), hP, Nat.sub_self,
@@ -213,7 +213,7 @@ theorem ebFold_at (e : EtheoremState) (hn : e.validators.val.size < 2 ^ 64) (k :
   have hP : ((List.range k).map (fun j => ebNew e.validators.val[j]! e.balances.val[j]!)).length = k := by
     simp
   show V[k]! = e.validators[k]!
-  rw [sszList_getElem!_val, sszList_getElem!_val]
+  rw [regList_getElem!_val, regList_getElem!_val]
   have hsz : k < V.val.size := by
     rw [← Array.length_toList, hVl]; simp; omega
   rw [getElem!_pos V.val k hsz, getElem!_pos e.validators.val k hk, ← Array.getElem_toList,
@@ -246,7 +246,7 @@ theorem processEffectiveBalanceUpdates_run (e : EtheoremState) (hn : e.validator
   rw [← hbal] at hb1 hb2 hb3
   rw [← hval] at hb3
   have hbk : w.balances.val[k]? = some w.balances[k]! := by
-    rw [sszList_getElem!_val, getElem!_pos w.balances.val k hb1]
+    rw [regList_getElem!_val, getElem!_pos w.balances.val k hb1]
     exact Array.getElem?_eq_getElem hb1
   rw [run_bind, hget, except_bind_ok]
   simp only [view_uncachedBox]
@@ -444,7 +444,7 @@ theorem effectiveBalanceStep_cond (e : EtheoremState) (v : EthCLSpecs.Gloas.Vali
     have hi' : i < e.balances.val.size := by simpa using hi
     have hbv : (e.balances.toList.map UInt64.toNat)[i] = (e.balances[i]!).toNat := by
       simp only [SSZList.toList, List.getElem_map, Array.getElem_toList]
-      rw [sszList_getElem!_val, getElem!_pos e.balances.val i hi']
+      rw [regList_getElem!_val, getElem!_pos e.balances.val i hi']
     rw [hbv] at h
     cases hth : Spec.hysteresisThresholds p with
     | error err => rw [hth] at h; cases h
@@ -508,12 +508,12 @@ theorem mapM_effectiveBalanceStep_ok (e : EtheoremState) :
         rw [← h, effectiveBalanceStep_ok hp ht e _ i hs, ih ws hm, List.map_cons]
 
 /-- `process_effective_balance_updates` equals Etheorem's. -/
-theorem effective_balance_updates_etheorem (e : EtheoremState) {s' : Spec.BeaconState}
+theorem effective_balance_updates_etheorem (e : EtheoremState) [RegBound e] {s' : Spec.BeaconState}
     (h : Spec.process_effective_balance_updates p (toSpecState e) = .ok s') :
     ∃ e', (EthCLSpecs.Gloas.processEffectiveBalanceUpdates (StateTransition := GloasRun)).run
         (pureState e) = .ok ((), pureState e') ∧ toSpecState e' = s' := by
   have hn : e.validators.val.size < 2 ^ 64 :=
-    Nat.lt_of_le_of_lt e.validators.property hp.validatorRegistryLimit
+    Nat.lt_of_le_of_lt RegBound.le hp.validatorRegistryLimit
   obtain ⟨V, hV, hVl⟩ := ebFold e hn _ (Nat.le_refl _)
   rw [Spec.process_effective_balance_updates_eq] at h
   cases hm : (toSpecState e).validators.zipIdx.mapM
@@ -531,12 +531,12 @@ theorem effective_balance_updates_etheorem (e : EtheoremState) {s' : Spec.Beacon
       obtain ⟨w, hw⟩ := mapM_ok_each _ _ hm (absValidator e.validators.val[i]!, i)
         (List.mem_map.mpr ⟨i, List.mem_range.mpr hi, rfl⟩)
       have := effectiveBalanceStep_cond hp ht e _ i hw
-      rw [← sszList_getElem!_val] at this
+      rw [← regList_getElem!_val] at this
       exact this
     refine ⟨_, processEffectiveBalanceUpdates_run e hn hok, ?_⟩
     rw [hV, toSpecState_set_validators]
     have hvs := mapM_effectiveBalanceStep_ok hp ht e _ _ hm
-    rw [hvs, SSZList.toList, hVl, List.drop_eq_nil_of_le (by simp), List.append_nil, List.map_map]
+    rw [hvs, show V.toList = V.val.toList from rfl, hVl, List.drop_eq_nil_of_le (by simp), List.append_nil, List.map_map]
     rfl
 
 end Thresholds
