@@ -299,8 +299,8 @@ theorem fuluChain {checks : SignatureChecks} {oracle : Oracle}
     decide
 
 /-- The Fulu assumptions about the run, the supply, the chain, the room and the oracle hold
-together, for every fork schedule with Gloas after epoch 0. At that epoch input, the model and EthLib give the
-same state. -/
+together, for every fork schedule with Gloas after epoch 0. At that epoch input, the model and
+EthLib give the same state. -/
 theorem fulu_run_assumptions_hold_for_example (checks : SignatureChecks) (forkEpochs : ForkEpochs)
     (gloasLater : 1 ≤ forkEpochs.gloas.toNat) :
     ∃ (oracle : Oracle) (input : _root_.EthLib.Consensus.BeaconState Preset.minimal .fusaka),
