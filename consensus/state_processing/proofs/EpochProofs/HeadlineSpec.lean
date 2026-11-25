@@ -35,11 +35,12 @@ variable {oracle : Spec.Oracle} {fuluOracle : Spec.FuluOracle}
 (`fulu_then_gloas_reachable_invariants`). -/
 theorem GloasEpochRun.invariants (h : GloasEpochRun oracle fuluOracle blockConfig upgradeConfig
     fuluStart s) : Spec.ReachableInvariants s := by
-  obtain ⟨fs, t, t1, s2, g, slot, mbp, gfe, gs, u, slotG, hsupply, hr, hslot64, hreach, hlt, ht,
-    hz, he, hup, hsupplyG, hecon, hrg, hslotG, hreachG, hltG, hu, hzG⟩ := h.run
   exact Spec.fulu_then_gloas_reachable_invariants oracle fuluOracle blockConfig upgradeConfig
-    fuluStart h.start hsupply fs t t1 s2 g slot hr hslot64 hreach hlt ht hz he hup mbp gfe
-    hsupplyG Spec.EpochBalanceBounds hecon gs u s slotG hrg hslotG hreachG hltG hu hzG
+    fuluStart h.startInvariants h.fuluActiveBalance _ _ _ _ _ _ h.fulu.blocks
+    h.fulu.targetSlotFits h.fulu.slots h.fulu.beforeTarget h.fulu.lastSlot h.fulu.atEpochEnd
+    h.fulu.lastEpoch h.fulu.upgrade _ _ h.gloasActiveBalance _ h.gloasBalanceBounds _ _ _ _
+    h.gloas.blocks h.gloas.targetSlotFits h.gloas.slots h.gloas.beforeTarget h.gloas.lastSlot
+    h.gloas.atEpochEnd
 
 omit [Spec.PresetCfg.Ok] [Spec.FuluCfg.Ok] in
 /-- A Gloas epoch input is the last slot of an epoch, and the next slot fits in `u64`. With
@@ -47,26 +48,28 @@ omit [Spec.PresetCfg.Ok] [Spec.FuluCfg.Ok] in
 theorem GloasEpochRun.atEpochBoundary (h : GloasEpochRun oracle fuluOracle blockConfig
     upgradeConfig fuluStart s) (hhist : Spec.HistoricalSummariesBelowLimit s) :
     Spec.AtEpochBoundary s := by
-  obtain ⟨-, -, -, -, -, -, -, -, -, u, slotG, -, -, -, -, -, -, -, -, -, -, -, -, hslotG, -,
-    hltG, hu, hzG⟩ := h.run
-  have hs : s.slot = u.slot := (Spec.process_slot_frame _ oracle _ _ hu).2
-  exact ⟨hzG, by rw [hs]; exact Nat.lt_of_le_of_lt hltG hslotG, hhist⟩
+  have hs : s.slot = h.gloas.beforeLastSlot.slot :=
+    (Spec.process_slot_frame _ oracle _ _ h.gloas.lastSlot).2
+  exact ⟨h.gloas.atEpochEnd,
+    by rw [hs]; exact Nat.lt_of_le_of_lt h.gloas.beforeTarget h.gloas.targetSlotFits, hhist⟩
 
 /-- The reachable-state invariants at a Fulu epoch input (`fulu_reachable_invariants`). -/
 theorem FuluEpochRun.invariants (h : FuluEpochRun oracle fuluOracle blockConfig fuluStart s) :
     Spec.ReachableInvariants s := by
-  obtain ⟨fs, t, t1, slot, hr, hslot64, hreach, hlt, ht, hz, rfl⟩ := h.run
-  exact Spec.fulu_reachable_invariants oracle fuluOracle blockConfig fuluStart h.start
-    h.activeBalanceBound _ h.epochBalanceBounds fs t t1 slot hr hslot64 hreach hlt ht hz
+  obtain ⟨hstart, hactive, hbounds, path, rfl⟩ := h
+  exact Spec.fulu_reachable_invariants oracle fuluOracle blockConfig fuluStart hstart hactive _
+    hbounds _ _ _ _ path.blocks path.targetSlotFits path.slots path.beforeTarget path.lastSlot
+    path.atEpochEnd
 
 omit [Spec.PresetCfg.Ok] [Spec.FuluCfg.Ok] in
 /-- A Fulu epoch input is the last slot of an epoch, and the next slot fits in `u64`. -/
 theorem FuluEpochRun.atEpochBoundary (h : FuluEpochRun oracle fuluOracle blockConfig fuluStart s)
     (hhist : Spec.HistoricalSummariesBelowLimit s) : Spec.AtEpochBoundary s := by
-  obtain ⟨fs, t, t1, slot, -, hslot64, -, hlt, ht, hz, rfl⟩ := h.run
-  have hs : t1.state.slot = t.state.slot :=
-    (Spec.process_slot_fulu_frame _ oracle fuluOracle _ _ ht).2.1
-  exact ⟨hz, by rw [hs]; exact Nat.lt_of_le_of_lt hlt hslot64, hhist⟩
+  obtain ⟨-, -, -, path, rfl⟩ := h
+  have hs : path.epochInput.state.slot = path.beforeLastSlot.state.slot :=
+    (Spec.process_slot_fulu_frame _ oracle fuluOracle _ _ path.lastSlot).2.1
+  exact ⟨path.atEpochEnd,
+    by rw [hs]; exact Nat.lt_of_le_of_lt path.beforeTarget path.targetSlotFits, hhist⟩
 
 /-! ## The cache reads -/
 
