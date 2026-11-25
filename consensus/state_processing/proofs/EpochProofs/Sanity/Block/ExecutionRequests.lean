@@ -261,7 +261,6 @@ theorem initiate_validator_exit_cases (p : Preset) (tab : Gwei) (s s' : BeaconSt
   obtain ⟨v, hv, h⟩ := specM_bind_ok h
   by_cases hfar : v.exit_epoch = FAR_FUTURE_EPOCH
   · simp only [hfar, bne_self_eq_false, Bool.false_eq_true, if_false] at h
-    obtain ⟨_, -, h⟩ := specM_bind_ok h
     obtain ⟨⟨e, s1⟩, hx, h⟩ := specM_bind_ok h
     obtain ⟨w, hw, h⟩ := specM_bind_ok h
     obtain ⟨l, hl, h⟩ := specM_bind_ok h
@@ -314,6 +313,7 @@ theorem process_withdrawal_request_effect (p : Preset) (s s' : BeaconState)
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first
+    | exact initiate_validator_exit_effect h
     | (cases h; done)
     | (cases h; exact ⟨rfl, RequestEffect.refl p _⟩)
     | (cases h

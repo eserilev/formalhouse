@@ -164,8 +164,8 @@ theorem process_attester_slashing_cstep (p : Preset) (o : Oracle) (s s' : Beacon
   repeat' split at h
   all_goals first | (cases h; done) | skip
   cases h
-  refine forIn_ok_invariant_c (fun r : MProd Bool BeaconState => CStep s r.snd) _ ?_ _
-    (⟨false, s⟩ : MProd Bool BeaconState) _ (CStep.refl s) ‹forIn _ _ _ = _›
+  refine forIn_ok_invariant_c (fun r : Prod Bool BeaconState => CStep s r.snd) _ ?_ _
+    (⟨false, s⟩ : Prod Bool BeaconState) _ (CStep.refl s) ‹forIn _ _ _ = _›
   intro index r step hr hstep
   obtain ⟨_, -, hstep⟩ := specM_bind_ok hstep
   obtain ⟨_, -, hstep⟩ := specM_bind_ok hstep
@@ -296,8 +296,7 @@ theorem process_withdrawals_cstep (p : Preset) (s s' : BeaconState)
   split at h
   · cases h
     exact CStep.refl _
-  · obtain ⟨_, -, h⟩ := specM_bind_ok h
-    obtain ⟨s1, h1, h⟩ := specM_bind_ok h
+  · obtain ⟨s1, h1, h⟩ := specM_bind_ok h
     obtain ⟨s2, h2, h⟩ := specM_bind_ok h
     obtain ⟨s3, h3, h⟩ := specM_bind_ok h
     obtain ⟨s4, h4, h⟩ := specM_bind_ok h
@@ -459,7 +458,6 @@ private theorem request_loop_rstep {α : Type} {l : List α}
 local macro "loop_body" e:term : tactic => `(tactic| (
   intro _ _ _ hbody
   obtain ⟨_, h1, hbody⟩ := specM_bind_ok hbody
-  obtain ⟨_, -, hbody⟩ := specM_bind_ok hbody
   cases hbody
   exact $e h1))
 
@@ -668,7 +666,7 @@ theorem process_pending_deposits_dstep (p : Preset) (o : Oracle)
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨_, _, _, _, st⟩, hr, h⟩ := specM_bind_ok h
   have hP := forIn_ok_invariant_c
-    (fun r : MProd (List PendingDeposit) (MProd Bool (MProd Uint64 (MProd Uint64 BeaconState))) =>
+    (fun r : Prod Uint64 (Prod Uint64 (Prod (List PendingDeposit) (Prod Bool BeaconState))) =>
       DStep s r.2.2.2.2) _ ?_ _ _ _ ⟨rfl, Nat.le_refl _⟩ hr
   · simp only [bind, Except.bind, pure, Except.pure] at h
     repeat' split at h
@@ -694,7 +692,7 @@ theorem process_pending_consolidations_inRange (p : Preset) (s s' : BeaconState)
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨_, st⟩, hr, h⟩ := specM_bind_ok h
-  have hP := forIn_ok_invariant_c (fun r : MProd Nat BeaconState => CStep s r.snd) _ ?_
+  have hP := forIn_ok_invariant_c (fun r : Prod Nat BeaconState => CStep s r.snd) _ ?_
     _ _ _ (CStep.refl s) hr
   · cases h
     intro c hc

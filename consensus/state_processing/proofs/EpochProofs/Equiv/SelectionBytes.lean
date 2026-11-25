@@ -237,19 +237,19 @@ theorem le_bytes8_spec (x : U64) :
   have e0 : i.val = x.val / 256 ^ 0 % 256 := by
     rw [i_post]; exact cast_shift_byte64 x x 0 (by simp)
   have e1 : i2.val = x.val / 256 ^ 1 % 256 := by
-    rw [i2_post]; exact cast_shift_byte64 x i1 1 (by rw [i1_post1, Nat.shiftRight_eq_div_pow])
+    rw [i2_post]; exact cast_shift_byte64 x i1 1 (by rw [i1_post, Nat.shiftRight_eq_div_pow])
   have e2 : i4.val = x.val / 256 ^ 2 % 256 := by
-    rw [i4_post]; exact cast_shift_byte64 x i3 2 (by rw [i3_post1, Nat.shiftRight_eq_div_pow])
+    rw [i4_post]; exact cast_shift_byte64 x i3 2 (by rw [i3_post, Nat.shiftRight_eq_div_pow])
   have e3 : i6.val = x.val / 256 ^ 3 % 256 := by
-    rw [i6_post]; exact cast_shift_byte64 x i5 3 (by rw [i5_post1, Nat.shiftRight_eq_div_pow])
+    rw [i6_post]; exact cast_shift_byte64 x i5 3 (by rw [i5_post, Nat.shiftRight_eq_div_pow])
   have e4 : i8.val = x.val / 256 ^ 4 % 256 := by
-    rw [i8_post]; exact cast_shift_byte64 x i7 4 (by rw [i7_post1, Nat.shiftRight_eq_div_pow])
+    rw [i8_post]; exact cast_shift_byte64 x i7 4 (by rw [i7_post, Nat.shiftRight_eq_div_pow])
   have e5 : i10.val = x.val / 256 ^ 5 % 256 := by
-    rw [i10_post]; exact cast_shift_byte64 x i9 5 (by rw [i9_post1, Nat.shiftRight_eq_div_pow])
+    rw [i10_post]; exact cast_shift_byte64 x i9 5 (by rw [i9_post, Nat.shiftRight_eq_div_pow])
   have e6 : i12.val = x.val / 256 ^ 6 % 256 := by
-    rw [i12_post]; exact cast_shift_byte64 x i11 6 (by rw [i11_post1, Nat.shiftRight_eq_div_pow])
+    rw [i12_post]; exact cast_shift_byte64 x i11 6 (by rw [i11_post, Nat.shiftRight_eq_div_pow])
   have e7 : i14.val = x.val / 256 ^ 7 % 256 := by
-    rw [i14_post]; exact cast_shift_byte64 x i13 7 (by rw [i13_post1, Nat.shiftRight_eq_div_pow])
+    rw [i14_post]; exact cast_shift_byte64 x i13 7 (by rw [i13_post, Nat.shiftRight_eq_div_pow])
   simp [u8s, Array.make, Spec.uint_to_bytes, List.range_succ, e0, e1, e2, e3, e4, e5, e6, e7]
 
 theorem u8s_take_drop (b b0 : List U8) (n : Nat) (pre src : List U8)
@@ -279,7 +279,7 @@ theorem hash_with_u64_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracl
   have : b2.val = b1.val.take 32 ++ bytes.val := by
     have e : b2.val.take (32 + 8) = b2.val := List.take_of_length_le (by simp)
     rw [← e, h2]
-  simp only [Array.to_slice, this, hb1, u8s_append, hbytes]
+  simp only [Array.to_slice, Slice.from_val, this, hb1, u8s_append, hbytes]
 
 theorem compute_seed_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle)
     (hH : HashLink inst o) (domain : Array U8 4#usize) (epoch : U64) (mix : Array U8 32#usize) :
@@ -308,7 +308,7 @@ theorem compute_seed_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle
   have : b3.val = b2.val.take 12 ++ mix.val := by
     have e : b3.val.take (12 + 32) = b3.val := List.take_of_length_le (by simp)
     rw [← e, h3]
-  simp only [Array.to_slice, this, hb2, hb1, u8s_append, hbytes]
+  simp only [Array.to_slice, Slice.from_val, this, hb2, hb1, u8s_append, hbytes]
 
 theorem random_value_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle)
     (hH : HashLink inst o) (seed : Array U8 32#usize) (i : Usize) :
@@ -328,7 +328,7 @@ theorem random_value_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle
   have hoff30 : offset.val ≤ 30 := by omega
   have s1 := or_shift_step i5.val i7.val 8 (by rw [hc _ _ i5_post]; exact u8_lt i4) (u8_lt i7)
     (by norm_num)
-  rw [UScalar.val_or, i9_post1, hc _ _ i8_post, s1.1, hc _ _ i5_post, ← hrb, ← hoff]
+  rw [UScalar.val_or, i9_post, hc _ _ i8_post, s1.1, hc _ _ i5_post, ← hrb, ← hoff]
   have hlen : (u8s rb.val).length = 32 := by simp [u8s]
   rw [List.drop_eq_getElem_cons (by omega), List.drop_eq_getElem_cons (by rw [hlen]; omega)]
   simp [Spec.leNat, u8s, i4_post, i7_post, i6_post]

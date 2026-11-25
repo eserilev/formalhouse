@@ -57,7 +57,6 @@ private theorem request_loop_effect {α : Type} {p : Preset} {l : List α}
 local macro "loop_body" e:term : tactic => `(tactic| (
   intro _ _ _ hbody
   obtain ⟨_, h1, hbody⟩ := specM_bind_ok hbody
-  obtain ⟨_, -, hbody⟩ := specM_bind_ok hbody
   cases hbody
   exact $e h1))
 

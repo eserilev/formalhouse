@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Trusted.RegistryRows
 
 /-!

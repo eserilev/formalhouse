@@ -567,7 +567,7 @@ theorem consolidations_blind [PresetCfg] (t : BeaconState) (vs : List Validator)
       simp only [ok_bind']
 
       rw [forIn_sim_eq t.pending_consolidations _
-        (fun b : MProd Nat BeaconState => ⟨b.fst, { b.snd with validators := vs }⟩)
+        (fun b : Prod Nat BeaconState => ⟨b.fst, { b.snd with validators := vs }⟩)
         (fun b => b.snd.validators = t.validators) ?_ ?_ ⟨0, t⟩ _ rfl rfl]
       · refine map_bind_eq _ (fun r => ?_)
         rfl
@@ -645,7 +645,7 @@ theorem consolidations_frame [PresetCfg] (t t' : BeaconState)
     obtain ⟨_, -, h⟩ := specM_bind_ok h
     obtain ⟨_, -, h⟩ := specM_bind_ok h
     obtain ⟨⟨n, st⟩, hr, h⟩ := specM_bind_ok h
-    have hP := forIn_ok_inv (fun b : MProd Nat BeaconState => Fr b.snd) _ _ ?_
+    have hP := forIn_ok_inv (fun b : Prod Nat BeaconState => Fr b.snd) _ _ ?_
       ⟨0, t⟩ _ ⟨rfl, fun _ _ => rfl⟩ hr
     · cases h
       exact hP
@@ -718,8 +718,7 @@ theorem getElem?_idxOf {α : Type} [BEq α] [LawfulBEq α] {a : α} :
         · exact absurd h.symm hb
         · exact h
       have hbe : (b == a) = false := by simpa using hb
-      rw [hbe]
-      simp only [cond_false, List.getElem?_cons_succ]
+      simp only [hbe, Bool.false_eq_true, if_false, List.getElem?_cons_succ]
       exact getElem?_idxOf hm
 
 /-- `set_or_append_list` at the length appends. -/

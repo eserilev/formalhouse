@@ -152,22 +152,31 @@ theorem rewardsBaseReward_of_altair (p : EpochProofs.Spec.Preset)
     CacheProofs.Spec.EpochCache.get_base_reward_per_increment at hb
   rw [htotal] at hb
   simp only [CacheProofs.Spec.EpochCache.getValidator, hv, CacheProofs.Spec.EpochCache.uint64Mul,
-    CacheProofs.Spec.EpochCache.uint64Div, CacheProofs.Spec.UINT64_SIZE,
+    CacheProofs.Spec.EpochCache.uint64Div,
     CacheProofs.EpochCache.integer_squareroot_eq T hT64, Bind.bind, Except.bind, Pure.pure,
     Except.pure, ecValidator, hinc, hfactor] at hb
   unfold EpochProofs.Spec.rewardsBaseReward EpochProofs.Spec.get_base_reward_per_increment
   simp only [EpochProofs.Spec.uint64Mul, EpochProofs.Spec.uint64Div,
-    EpochProofs.Spec.UINT64_SIZE, integer_squareroot_eq_sqrt, Bind.bind, Except.bind, Pure.pure,
+    integer_squareroot_eq_sqrt, Bind.bind, Except.bind, Pure.pure,
     Except.pure]
-  simp only [Nat.reducePow] at hb ⊢
-  split_ifs at hb ⊢
-  all_goals
-    dsimp only at hb ⊢
-    generalize v.effective_balance / p.EFFECTIVE_BALANCE_INCREMENT *
-      (p.EFFECTIVE_BALANCE_INCREMENT * p.BASE_REWARD_FACTOR / Nat.sqrt T) = X at hb ⊢
-    by_cases hX : X < 18446744073709551616
-    · rw [if_pos hX] at hb ⊢; rw [Except.ok.inj hb]
-    · rw [if_neg hX] at hb; cases hb
+  by_cases h0 : p.EFFECTIVE_BALANCE_INCREMENT = 0
+  case pos => simp [h0, throw, throwThe, MonadExceptOf.throw] at hb
+  by_cases h1 : p.EFFECTIVE_BALANCE_INCREMENT * p.BASE_REWARD_FACTOR < CacheProofs.Spec.UINT64_SIZE
+  case neg => simp [h0, h1, throw, throwThe, MonadExceptOf.throw] at hb
+  have h1' : p.EFFECTIVE_BALANCE_INCREMENT * p.BASE_REWARD_FACTOR <
+    EpochProofs.Spec.UINT64_SIZE := h1
+  by_cases h2 : Nat.sqrt T = 0
+  case pos => simp [h0, h1, h2, throw, throwThe, MonadExceptOf.throw] at hb
+  by_cases h3 : v.effective_balance / p.EFFECTIVE_BALANCE_INCREMENT *
+      (p.EFFECTIVE_BALANCE_INCREMENT * p.BASE_REWARD_FACTOR / Nat.sqrt T) <
+      CacheProofs.Spec.UINT64_SIZE
+  case neg => simp [h0, h1, h2, h3, throw, throwThe, MonadExceptOf.throw] at hb
+  have h3' : v.effective_balance / p.EFFECTIVE_BALANCE_INCREMENT *
+      (p.EFFECTIVE_BALANCE_INCREMENT * p.BASE_REWARD_FACTOR / Nat.sqrt T) <
+      EpochProofs.Spec.UINT64_SIZE := h3
+  simp only [h0, h1, h2, h3, if_true, if_false] at hb
+  simp only [h0, h1', h2, h3', if_true, if_false]
+  rw [Except.ok.inj hb]
 
 open Aeneas Aeneas.Std Result in
 /-- The base reward that Lighthouse reads from the epoch cache equals `rewardsBaseReward` of the
@@ -202,8 +211,8 @@ theorem lh_base_reward_eq (p : EpochProofs.Spec.Preset) (s : EpochProofs.Spec.Be
   obtain ⟨r0, hr0, hspec0⟩ := CacheProofs.EpochCache.total_active_balance_equiv cfg vs cur
     (s.validators.map (·.effective_balance)) total inc hinc hebs' hinv
   obtain ⟨r1, hr1, hr1v⟩ := CacheProofs.EpochCache.floor_total_active_balance_spec total inc
-  rw [hr0] at hr1
-  cases hr1
+  rw [hr0, ok.injEq] at hr1
+  subst hr1
   have htotal : CacheProofs.Spec.EpochCache.get_total_active_balance cfg ⟨vs, cur⟩ =
       .ok (max inc.val total.val) := by rw [hspec0, hr1v]
   have hv' : vs[index.val]? = some (ecValidator v) := by simp [vs, hv]
@@ -215,7 +224,8 @@ theorem lh_base_reward_eq (p : EpochProofs.Spec.Preset) (s : EpochProofs.Spec.Be
   obtain ⟨r2, hr2, hT2⟩ := lh_total_active_balance_eq p s cur hcur
     (s.validators.map (·.effective_balance)) total inc hinc rfl hinv
   rw [hr0] at hr2
-  cases hr2
+  rw [ok.injEq] at hr2
+  subst hr2
   rw [hT] at hT2
   have hTv : T = max inc.val total.val := by
     have := Except.ok.inj hT2; rw [this, hr1v]

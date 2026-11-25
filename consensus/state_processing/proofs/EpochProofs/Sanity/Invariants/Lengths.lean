@@ -71,7 +71,6 @@ local macro "peel_ok" h:ident : tactic => `(tactic| repeat' first
 local macro "loop_body" e:term : tactic => `(tactic| (
   intro _ _ _ hbody
   obtain ⟨_, h1, hbody⟩ := specM_bind_ok hbody
-  obtain ⟨_, -, hbody⟩ := specM_bind_ok hbody
   cases hbody
   exact $e h1))
 
@@ -169,7 +168,7 @@ theorem process_attester_slashing_len (p : Preset) (o : Oracle) (s s' : BeaconSt
   len_split h
   all_goals
     cases h
-    refine forIn_ok_invariant (fun r : MProd Bool BeaconState => LenStep s r.snd) _ ?_ _ _ _
+    refine forIn_ok_invariant (fun r : Prod Bool BeaconState => LenStep s r.snd) _ ?_ _ _ _
       (LenStep.refl s) ‹forIn _ _ _ = _›
     intro _ ⟨_, st⟩ _ hst hb
     len_split hb
@@ -632,7 +631,7 @@ theorem process_pending_consolidations_len (p : Preset) (s s' : BeaconState)
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨_, st⟩, hr, h⟩ := specM_bind_ok h
-  have hP := forIn_ok_invariant (fun r : MProd Nat BeaconState => LenStep s r.snd) _ ?_
+  have hP := forIn_ok_invariant (fun r : Prod Nat BeaconState => LenStep s r.snd) _ ?_
     _ _ _ (LenStep.refl s) hr
   · cases h
     exact hP
@@ -744,7 +743,7 @@ theorem process_pending_deposits_rowsOk (p : Preset) (o : Oracle)
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨_, _, _, _, st⟩, hr, h⟩ := specM_bind_ok h
   have hP := forIn_ok_invariant
-    (fun r : MProd (List PendingDeposit) (MProd Bool (MProd Uint64 (MProd Uint64 BeaconState))) =>
+    (fun r : Prod Uint64 (Prod Uint64 (Prod (List PendingDeposit) (Prod Bool BeaconState))) =>
       RowsOk r.2.2.2.2) _ ?_ _ _ _ hs hr
   · simp only [bind, Except.bind, pure, Except.pure] at h
     repeat' split at h

@@ -1,4 +1,5 @@
 import EpochProofs.Headline
+import EpochProofs.HeadlinePresetsSpec
 
 /-!
 # The headline theorems on mainnet and minimal
@@ -92,26 +93,6 @@ theorem lighthouse_rust_fulu_epoch_eq_etheorem_mainnet [HasherTag] [CryptoBacken
     horacle hrust
 end
 
-/-- `lighthouse_model_gloas_epoch_agrees_pyspec` on mainnet. -/
-theorem lighthouse_model_gloas_epoch_agrees_pyspec_mainnet {oracle : Spec.Oracle}
-    {fuluOracle : Spec.FuluOracle} {blockConfig : Spec.FuluBlockConfig}
-    {upgradeConfig : Spec.UpgradeConfig} {fuluStart : Spec.FuluState} {s : Spec.BeaconState}
-    (hrun : GloasEpochRun oracle fuluOracle blockConfig upgradeConfig fuluStart s)
-    (hhistBelowLimit : Spec.HistoricalSummariesBelowLimit s) :
-    Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse oracle s)
-      (Spec.process_epoch Spec.P oracle s) :=
-  lighthouse_model_gloas_epoch_agrees_pyspec hrun hhistBelowLimit
-
-/-- `lighthouse_model_fulu_epoch_agrees_pyspec` on mainnet. -/
-theorem lighthouse_model_fulu_epoch_agrees_pyspec_mainnet {oracle : Spec.Oracle}
-    {fuluOracle : Spec.FuluOracle} {blockConfig : Spec.FuluBlockConfig}
-    {fuluStart : Spec.FuluState} {s : Spec.BeaconState}
-    (hrun : FuluEpochRun oracle fuluOracle blockConfig fuluStart s)
-    (hhistBelowLimit : Spec.HistoricalSummariesBelowLimit s) :
-    Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse_fulu oracle s)
-      (Spec.process_epoch_fulu Spec.P Spec.FC oracle s) :=
-  lighthouse_model_fulu_epoch_agrees_pyspec hrun hhistBelowLimit
-
 end Mainnet
 
 section Minimal
@@ -191,26 +172,6 @@ theorem lighthouse_rust_fulu_epoch_eq_etheorem_minimal [HasherTag] [CryptoBacken
   lighthouse_rust_fulu_epoch_eq_etheorem presetMatchesEtheorem_minimal hrun hchain hetheorem
     horacle hrust
 end
-
-/-- `lighthouse_model_gloas_epoch_agrees_pyspec` on minimal. -/
-theorem lighthouse_model_gloas_epoch_agrees_pyspec_minimal {oracle : Spec.Oracle}
-    {fuluOracle : Spec.FuluOracle} {blockConfig : Spec.FuluBlockConfig}
-    {upgradeConfig : Spec.UpgradeConfig} {fuluStart : Spec.FuluState} {s : Spec.BeaconState}
-    (hrun : GloasEpochRun oracle fuluOracle blockConfig upgradeConfig fuluStart s)
-    (hhistBelowLimit : Spec.HistoricalSummariesBelowLimit s) :
-    Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse oracle s)
-      (Spec.process_epoch Spec.P oracle s) :=
-  lighthouse_model_gloas_epoch_agrees_pyspec hrun hhistBelowLimit
-
-/-- `lighthouse_model_fulu_epoch_agrees_pyspec` on minimal. -/
-theorem lighthouse_model_fulu_epoch_agrees_pyspec_minimal {oracle : Spec.Oracle}
-    {fuluOracle : Spec.FuluOracle} {blockConfig : Spec.FuluBlockConfig}
-    {fuluStart : Spec.FuluState} {s : Spec.BeaconState}
-    (hrun : FuluEpochRun oracle fuluOracle blockConfig fuluStart s)
-    (hhistBelowLimit : Spec.HistoricalSummariesBelowLimit s) :
-    Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse_fulu oracle s)
-      (Spec.process_epoch_fulu Spec.P Spec.FC oracle s) :=
-  lighthouse_model_fulu_epoch_agrees_pyspec hrun hhistBelowLimit
 
 end Minimal
 

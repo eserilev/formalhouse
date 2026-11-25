@@ -14,29 +14,29 @@ apply the handled deposits that are not postponed, in queue order.
 namespace EpochProofs.Spec
 
 /-- The accumulator of the spec's deposit loop. -/
-abbrev DepAcc := MProd (List PendingDeposit) (MProd Bool (MProd Uint64 (MProd Uint64 BeaconState)))
+abbrev DepAcc := Prod Uint64 (Prod Uint64 (Prod (List PendingDeposit) (Prod Bool BeaconState)))
 
 /-- The part of the spec's loop body after the status: apply, postpone, or check the churn. -/
 def depCont [PresetCfg] (o : Oracle) (avail : Nat) (d : PendingDeposit) (r : DepAcc) (ex wd : Bool) :
     SpecM (ForInStep DepAcc) :=
   if wd = true then do
     let T ← apply_pending_deposit P o r.2.2.2.2 d
-    pure (.yield ⟨r.1, r.2.1, r.2.2.1 + 1, r.2.2.2.1, T⟩)
-  else if ex = true then pure (.yield ⟨r.1 ++ [d], r.2.1, r.2.2.1 + 1, r.2.2.2.1, r.2.2.2.2⟩)
+    pure (.yield ⟨r.1, r.2.1 + 1, r.2.2.1, r.2.2.2.1, T⟩)
+  else if ex = true then pure (.yield ⟨r.1, r.2.1 + 1, r.2.2.1 ++ [d], r.2.2.2.1, r.2.2.2.2⟩)
   else do
-    let x ← uint64Add r.2.2.2.1 d.amount
+    let x ← uint64Add r.1 d.amount
     if decide (x > avail) = true then
-      pure (.done ⟨r.1, decide (x > avail), r.2.2.1, r.2.2.2.1, r.2.2.2.2⟩)
+      pure (.done ⟨r.1, r.2.1, r.2.2.1, decide (x > avail), r.2.2.2.2⟩)
     else do
-      let proc ← uint64Add r.2.2.2.1 d.amount
+      let proc ← uint64Add r.1 d.amount
       let T ← apply_pending_deposit P o r.2.2.2.2 d
-      pure (.yield ⟨r.1, decide (x > avail), r.2.2.1 + 1, proc, T⟩)
+      pure (.yield ⟨proc, r.2.1 + 1, r.2.2.1, decide (x > avail), T⟩)
 
 /-- The body of the spec's deposit loop, with the status read from the loop state. -/
 def depBody [PresetCfg] (o : Oracle) (fs avail next : Nat) (d : PendingDeposit) (r : DepAcc) :
     SpecM (ForInStep DepAcc) :=
   if d.slot > fs then pure (.done r)
-  else if r.2.2.1 ≥ P.MAX_PENDING_DEPOSITS_PER_EPOCH then pure (.done r)
+  else if r.2.1 ≥ P.MAX_PENDING_DEPOSITS_PER_EPOCH then pure (.done r)
   else if d.pubkey ∈ r.2.2.2.2.validators.map (·.pubkey) then do
     let v ← listGet r.2.2.2.2.validators
       ((r.2.2.2.2.validators.map (·.pubkey)).idxOf d.pubkey)
@@ -47,9 +47,9 @@ def depBody [PresetCfg] (o : Oracle) (fs avail next : Nat) (d : PendingDeposit) 
 /-- The end of the spec's deposit function: write the queue and the balance to consume. -/
 def depFinish (avail : Nat) (r : DepAcc) : SpecM BeaconState :=
   let T := { r.2.2.2.2 with
-    pending_deposits := r.2.2.2.2.pending_deposits.drop r.2.2.1 ++ r.1 }
-  if r.2.1 = true then do
-    pure { T with deposit_balance_to_consume := ← uint64Sub avail r.2.2.2.1 }
+    pending_deposits := r.2.2.2.2.pending_deposits.drop r.2.1 ++ r.2.2.1 }
+  if r.2.2.2.1 = true then do
+    pure { T with deposit_balance_to_consume := ← uint64Sub avail r.1 }
   else pure { T with deposit_balance_to_consume := 0 }
 
 /-- The spec's `process_pending_deposits` with its loop body and its end named. -/
@@ -62,7 +62,7 @@ theorem process_pending_deposits_eq [PresetCfg] (o : Oracle) (total_active_balan
       let cl ← get_activation_churn_limit P total_active_balance
       let avail ← uint64Add s.deposit_balance_to_consume cl
       let fs ← compute_start_slot_at_epoch P s.finalized_checkpoint.epoch
-      let r ← forIn s.pending_deposits ⟨[], false, 0, 0, s⟩ (depBody o fs avail next_epoch)
+      let r ← forIn s.pending_deposits ⟨0, 0, [], false, s⟩ (depBody o fs avail next_epoch)
       depFinish avail r) := by
   rfl
 
@@ -167,7 +167,7 @@ theorem depBody_view [PresetCfg] (o : Oracle) (fs avail next : Nat) (s : BeaconS
     (hT : ValExt s r.2.2.2.2) :
     depBody o fs avail next d r =
       if d.slot > fs then pure (.done r)
-      else if r.2.2.1 ≥ P.MAX_PENDING_DEPOSITS_PER_EPOCH then pure (.done r)
+      else if r.2.1 ≥ P.MAX_PENDING_DEPOSITS_PER_EPOCH then pure (.done r)
       else depCont o avail d r (specDepositView s next d).is_exited
         (specDepositView s next d).is_withdrawn := by
   unfold depBody
@@ -219,14 +219,14 @@ def decideApplyLoop [PresetCfg] (o : Oracle) (fs avail : Nat) (view : PendingDep
 
 /-- The accumulator of the spec loop that a result of `decideApplyLoop` stands for. -/
 def decideApplyAcc (x : DepositLoopResult × List PendingDeposit × BeaconState) : DepAcc :=
-  ⟨x.2.1, x.1.churn_reached, x.1.state.next_deposit_index, x.1.state.processed_amount, x.2.2⟩
+  ⟨x.1.state.processed_amount, x.1.state.next_deposit_index, x.2.1, x.1.churn_reached, x.2.2⟩
 
 /-- The spec loop equals `decideApplyLoop` on the views of `s`. -/
 theorem forIn_depBody_decideApply [PresetCfg] (o : Oracle) (fs avail next : Nat) (s : BeaconState)
     (hnext : next ≤ FAR_FUTURE_EPOCH) :
     ∀ (l : List PendingDeposit) (ls : DepositLoopState) (post : List PendingDeposit)
       (T : BeaconState), ValExt s T →
-      forIn l (⟨post, false, ls.next_deposit_index, ls.processed_amount, T⟩ : DepAcc)
+      forIn l (⟨ls.processed_amount, ls.next_deposit_index, post, false, T⟩ : DepAcc)
           (depBody o fs avail next) =
         decideApplyAcc <$> decideApplyLoop o fs avail (specDepositView s next) ls post T l
   | [], ls, post, T, _ => rfl

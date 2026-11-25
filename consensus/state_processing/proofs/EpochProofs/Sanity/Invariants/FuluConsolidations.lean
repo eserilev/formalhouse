@@ -87,8 +87,8 @@ theorem process_attester_slashing_fulu_cstep (p : Preset) (o : Oracle) (f : Fulu
   repeat' split at h
   all_goals first | (cases h; done) | skip
   cases h
-  refine forIn_ok_invariant (fun r : MProd Bool BeaconState => CStep s r.snd) _ ?_ _
-    (⟨false, s⟩ : MProd Bool BeaconState) _ (CStep.refl s) ‹forIn _ _ _ = _›
+  refine forIn_ok_invariant (fun r : Prod Bool BeaconState => CStep s r.snd) _ ?_ _
+    (⟨false, s⟩ : Prod Bool BeaconState) _ (CStep.refl s) ‹forIn _ _ _ = _›
   intro index r step hr hstep
   obtain ⟨_, -, hstep⟩ := specM_bind_ok hstep
   obtain ⟨_, -, hstep⟩ := specM_bind_ok hstep

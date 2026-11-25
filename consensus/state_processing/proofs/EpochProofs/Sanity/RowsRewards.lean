@@ -606,13 +606,13 @@ private theorem flag_deltas_sameResultOrBothFail (p : Preset) (state : BeaconSta
     rw [eligible_ok p state _ hprevious Ev hEv]
     dsimp only
     have hinit : (⟨List.replicate state.validators.length 0,
-        List.replicate state.validators.length 0⟩ : MProd (List Gwei) (List Gwei)) =
+        List.replicate state.validators.length 0⟩ : Prod (List Gwei) (List Gwei)) =
         (fun ds : List (Gwei × Gwei) =>
-          (⟨ds.map (·.2), ds.map (·.1)⟩ : MProd (List Gwei) (List Gwei)))
+          (⟨ds.map (·.1), ds.map (·.2)⟩ : Prod (List Gwei) (List Gwei)))
           ([] ++ List.replicate (rowsOf state).length (0, 0)) := by
       simp [rowsOf_length]
     rw [hinit, forIn_filter_rows (fun ds : List (Gwei × Gwei) =>
-        (⟨ds.map (·.2), ds.map (·.1)⟩ : MProd (List Gwei) (List Gwei))) (0, 0)
+        (⟨ds.map (·.1), ds.map (·.2)⟩ : Prod (List Gwei) (List Gwei))) (0, 0)
         (· ∈ rowsOf state) (fun r => Ev r.validator) (flagCore p ctx weight flag_index increments)]
     · have hmap : (rowsOf state).mapM (flagRow p ctx weight flag_index increments) =
           (rowsOf state).mapM (fun r => if Ev r.validator then
@@ -1149,7 +1149,7 @@ private theorem spec_ok_iff (p : Preset) (state : BeaconState) (hrows : RowsOk s
   simp only [List.mapM_cons, List.mapM_nil, bind_ok_iff, pure, Except.pure, Except.ok.injEq]
   constructor
   · intro h
-    obtain ⟨_, -, fd, ⟨d0, h0, _, ⟨d1, h1, _, ⟨d2, h2, _, rfl, rfl⟩, rfl⟩, rfl⟩, di, hdi, bal,
+    obtain ⟨fd, ⟨d0, h0, _, ⟨d1, h1, _, ⟨d2, h2, _, rfl, rfl⟩, rfl⟩, rfl⟩, di, hdi, bal,
       hloop, rfl⟩ := h
     obtain ⟨m0, hm0, rfl⟩ := (map_ok_iff _ _ _).mp ((hF0 d0).mp h0)
     obtain ⟨m1, hm1, rfl⟩ := (map_ok_iff _ _ _).mp ((hF1 d1).mp h1)
@@ -1220,7 +1220,7 @@ private theorem spec_ok_iff (p : Preset) (state : BeaconState) (hrows : RowsOk s
     obtain ⟨hl1, hg1⟩ := mapM_ok_get _ _ _ hm1
     obtain ⟨hl2, hg2⟩ := mapM_ok_get _ _ _ hm2
     obtain ⟨hli, hgi⟩ := mapM_ok_get _ _ _ hmi
-    refine ⟨(), trivial, _,
+    refine ⟨_,
       ⟨(m0.map (·.1), m0.map (·.2)), (hF0 _).mpr (by rw [hm0]; rfl), _,
         ⟨(m1.map (·.1), m1.map (·.2)), (hF1 _).mpr (by rw [hm1]; rfl), _,
           ⟨(m2.map (·.1), m2.map (·.2)), (hF2 _).mpr (by rw [hm2]; rfl), _, rfl, rfl⟩, rfl⟩,
@@ -1344,7 +1344,7 @@ theorem process_rewards_and_penalties_context_error (p : Preset) (total_active_b
   simp only [hcurrent, ok_bind, hg, Bool.false_eq_true, if_false] at hv
   rw [show List.range PARTICIPATION_FLAG_WEIGHTS.length = [0, 1, 2] from rfl] at hv
   simp only [List.mapM_cons, List.mapM_nil, bind_ok_iff] at hv
-  obtain ⟨_, -, _, ⟨d0, h0, _, ⟨d1, h1, _, ⟨d2, h2, -⟩, -⟩, -⟩, -⟩ := hv
+  obtain ⟨_, ⟨d0, h0, _, ⟨d1, h1, _, ⟨d2, h2, -⟩, -⟩, -⟩, -⟩ := hv
   obtain ⟨⟨s, hs⟩, ⟨a, ha⟩⟩ := flag_deltas_ok_parts p total_active_balance state _ hprevious _ _ h0
   obtain ⟨⟨t, ht⟩, -⟩ := flag_deltas_ok_parts p total_active_balance state _ hprevious _ _ h1
   obtain ⟨⟨h, hh⟩, -⟩ := flag_deltas_ok_parts p total_active_balance state _ hprevious _ _ h2

@@ -331,7 +331,7 @@ theorem process_pending_deposits_fulu_checkpointsStable (p : Preset) (f : FuluCo
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨_, _, _, _, st⟩, hr, h⟩ := specM_bind_ok h
   have hP := forIn_ok_invariant
-    (fun r : MProd (List PendingDeposit) (MProd Bool (MProd Uint64 (MProd Uint64 BeaconState))) =>
+    (fun r : Prod Uint64 (Prod Uint64 (Prod (List PendingDeposit) (Prod Bool BeaconState))) =>
       CheckpointsStable s r.2.2.2.2) _ ?_ _ _ _ (CheckpointsStable.refl s) hr
   · simp only [bind, Except.bind, pure, Except.pure] at h
     repeat' split at h
@@ -526,7 +526,7 @@ theorem process_attester_slashing_fulu_checkpointsStable (p : Preset) (o : Oracl
   repeat' split at h
   all_goals first | (cases h; done) | skip
   cases h
-  refine forIn_ok_invariant (fun r : MProd Bool BeaconState => CheckpointsStable s r.snd) _ ?_
+  refine forIn_ok_invariant (fun r : Prod Bool BeaconState => CheckpointsStable s r.snd) _ ?_
     _ _ _ (CheckpointsStable.refl s) ‹forIn _ _ _ = _›
   intro index r step hr hstep
   obtain ⟨v, -, hstep⟩ := specM_bind_ok hstep

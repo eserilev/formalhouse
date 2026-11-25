@@ -135,7 +135,7 @@ theorem process_pending_consolidations_validators [PresetCfg] (p : Preset) (s s'
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨_, st⟩, hr, h⟩ := specM_bind_ok h
-  have hP := forIn_ok_invariant (fun r : MProd Nat BeaconState => r.snd.validators = s.validators)
+  have hP := forIn_ok_invariant (fun r : Prod Nat BeaconState => r.snd.validators = s.validators)
     _ ?_ _ _ _ rfl hr
   · cases h
     exact hP
@@ -279,7 +279,7 @@ theorem process_pending_deposits_ebOk [PresetCfg] (p : Preset) (o : Oracle) (hp 
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨_, _, _, _, st⟩, hr, h⟩ := specM_bind_ok h
   have hP := forIn_ok_invariant
-    (fun r : MProd (List PendingDeposit) (MProd Bool (MProd Uint64 (MProd Uint64 BeaconState))) =>
+    (fun r : Prod Uint64 (Prod Uint64 (Prod (List PendingDeposit) (Prod Bool BeaconState))) =>
       EBOk p r.2.2.2.2) _ ?_ _ _ _ hs hr
   · simp only [bind, Except.bind, pure, Except.pure] at h
     repeat' split at h

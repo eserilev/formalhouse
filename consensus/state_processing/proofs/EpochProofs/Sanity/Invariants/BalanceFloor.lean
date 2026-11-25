@@ -164,10 +164,10 @@ theorem process_attester_slashing_slashable (p : Preset) (o : Oracle) (s s' : Be
   all_goals first | (cases h; done) | skip
   cases h
   refine (SlashingsSanity.forIn_invariant
-    (fun r : MProd Bool BeaconState => r.snd.slot = s.slot ∧
+    (fun r : Prod Bool BeaconState => r.snd.slot = s.slot ∧
       ∀ (j : Nat) (v v' : Validator), s.validators[j]? = some v → r.snd.validators[j]? = some v' →
         v' = v ∨ s.slot / p.SLOTS_PER_EPOCH < v.withdrawable_epoch) _ ?_ _
-    (⟨false, s⟩ : MProd Bool BeaconState) _
+    (⟨false, s⟩ : Prod Bool BeaconState) _
     ⟨rfl, fun j v v' hv hv' => by rw [hv] at hv'; cases hv'; exact .inl rfl⟩
     ‹forIn _ _ _ = _›).2
   intro index r step ⟨hslot, hr⟩ hstep

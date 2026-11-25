@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.Slashings
 import EpochProofs.Sanity.RewardsAndPenalties
 
@@ -377,7 +378,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
   | Ok v9 =>
   obtain ⟨hv9, hfit9⟩ := h9.1 v9 rfl
   simp only [hv5] at hv9 hfit9
-  simp only [bind_tc_ok]
+  simp only [bind_tc_ok, lift]
   refine ⟨_, rfl, ?_⟩
   simp [absResult, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
         Spec.UINT64_SIZE, except_ok_bind, Pure.pure, Except.pure, throw,

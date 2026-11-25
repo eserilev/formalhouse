@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.ListWrites
 import EpochProofs.Sanity.GlueBounds
 import EpochProofs.Sanity.Invariants.LighthouseOrder

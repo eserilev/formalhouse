@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.EpochCommittees
 import EpochProofs.Sanity.Fulu
 
@@ -40,7 +41,7 @@ theorem exit_churn_limit_capped (p : Spec.Preset) (total_active_balance : U64)
   | Err e =>
     obtain ⟨rfl, hz⟩ := h1.2 e rfl
     rw [hq] at hz
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [Spec.get_activation_churn_limit, Spec.uint64Div, hz, absResult, absArithError,
       except_error_bind, throw, throwThe, MonadExceptOf.throw]
   | Ok q =>
@@ -56,7 +57,7 @@ theorem exit_churn_limit_capped (p : Spec.Preset) (total_active_balance : U64)
   | Err e =>
     obtain ⟨rfl, hz⟩ := h2.2 e rfl
     rw [hinc] at hz
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [Spec.get_activation_churn_limit, Spec.uint64Div, Spec.uint64Mod, hnz, ← hqv, hz,
       absResult, absArithError, except_ok_bind, except_error_bind, throw, throwThe,
       MonadExceptOf.throw, Pure.pure, Except.pure, core.convert.FromSame.from]
@@ -75,7 +76,7 @@ theorem exit_churn_limit_capped (p : Spec.Preset) (total_active_balance : U64)
   | Ok d =>
   obtain ⟨hd, _⟩ := h3.1 d rfl
   simp only [bind_tc_ok, core.cmp.min, liftFun2]
-  refine ⟨_, rfl, ?_⟩
+  refine ⟨_, by ok_rfl, ?_⟩
   have hmin' := core.cmp.impls.OrdU64.min_val c.exit_churn_cap d
   rw [hcap] at hmin'
   have hle : max p.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA q.val % p.EFFECTIVE_BALANCE_INCREMENT
@@ -224,7 +225,7 @@ theorem next_proposer_lookahead_spec_fulu {H B : Type} (inst : ShuffleHashInst H
       state.proposer_lookahead.drop p.SLOTS_PER_EPOCH := by
     rw [List.map_drop, hlook]
   rw [hwv, ← hfin', hspev, hd, hlesv.1]
-  simp only [alloc.vec.Vec.deref]
+  simp only [alloc.vec.Vec.deref, Slice.from_val]
   rw [hv, List.take_append_of_le_length (by simp)]
   rw [List.take_of_length_le (by simp)]
 

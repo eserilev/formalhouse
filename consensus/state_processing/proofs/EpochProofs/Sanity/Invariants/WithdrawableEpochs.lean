@@ -77,7 +77,6 @@ theorem initiate_validator_exit_withdrawableU64 {p : Preset} {tab : Gwei} {s s' 
   obtain ⟨v, hv, h⟩ := specM_bind_ok h
   by_cases hfar : v.exit_epoch = FAR_FUTURE_EPOCH
   · simp only [hfar, bne_self_eq_false, Bool.false_eq_true, if_false] at h
-    obtain ⟨_, -, h⟩ := specM_bind_ok h
     obtain ⟨⟨e, s1⟩, hx, h⟩ := specM_bind_ok h
     obtain ⟨w, hw, h⟩ := specM_bind_ok h
     obtain ⟨l, hl, h⟩ := specM_bind_ok h
@@ -131,8 +130,8 @@ theorem process_attester_slashing_withdrawableU64 (p : Preset) (o : Oracle) (s s
   all_goals first | (cases h; done) | skip
   cases h
   refine SlashingsSanity.forIn_invariant
-    (fun r : MProd Bool BeaconState => WithdrawableU64 r.snd) _ ?_ _
-    (⟨false, s⟩ : MProd Bool BeaconState) _ hs ‹forIn _ _ _ = _›
+    (fun r : Prod Bool BeaconState => WithdrawableU64 r.snd) _ ?_ _
+    (⟨false, s⟩ : Prod Bool BeaconState) _ hs ‹forIn _ _ _ = _›
   intro index r step hr hstep
   obtain ⟨_, -, hstep⟩ := specM_bind_ok hstep
   obtain ⟨_, -, hstep⟩ := specM_bind_ok hstep
@@ -242,7 +241,6 @@ private theorem request_loop_keeps {α : Type} (P : BeaconState → Prop) {l : L
 local macro "loop_body_p" e:term : tactic => `(tactic| (
   intro _ _ _ hbody hst
   obtain ⟨_, h1, hbody⟩ := specM_bind_ok hbody
-  obtain ⟨_, -, hbody⟩ := specM_bind_ok hbody
   cases hbody
   exact $e h1 hst))
 
@@ -415,7 +413,7 @@ theorem process_pending_deposits_withdrawableU64 (p : Preset) (o : Oracle)
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨_, _, _, _, st⟩, hr, h⟩ := specM_bind_ok h
   have hP := SlashingsSanity.forIn_invariant
-    (fun r : MProd (List PendingDeposit) (MProd Bool (MProd Uint64 (MProd Uint64 BeaconState))) =>
+    (fun r : Prod Uint64 (Prod Uint64 (Prod (List PendingDeposit) (Prod Bool BeaconState))) =>
       WithdrawableU64 r.2.2.2.2) _ ?_ _ _ _ hs hr
   · simp only [bind, Except.bind, pure, Except.pure] at h
     repeat' split at h

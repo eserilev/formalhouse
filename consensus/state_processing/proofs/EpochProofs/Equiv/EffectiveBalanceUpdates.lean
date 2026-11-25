@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.BuilderPendingPayments
 import EpochProofs.Sanity.EffectiveBalanceUpdates
 

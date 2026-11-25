@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.Justification
 import EpochProofs.Sanity.Invariants.LighthouseOrder
 
@@ -140,14 +141,12 @@ theorem justification_spec (G : JustificationGlue σ) (view : σ → Spec.Beacon
   obtain ⟨cur, hcur, h⟩ := Spec.specM_bind_ok h
   unfold justification
   rw [hL.early cur hcur]
-  simp only at h
   by_cases hc : cur ≤ Spec.GENESIS_EPOCH + 1
   · rw [if_pos hc] at h
     cases h
     exact ⟨st, by simp [hc], rfl⟩
   rw [if_neg hc] at h
   simp only [hc, decide_false, Bool.false_eq_true, if_false]
-  simp only [pure_bind] at h
   obtain ⟨prev, hprev, h⟩ := Spec.specM_bind_ok h
   obtain ⟨pi, hpi, h⟩ := Spec.specM_bind_ok h
   obtain ⟨cur', hcur', h⟩ := Spec.specM_bind_ok h

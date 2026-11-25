@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Trusted.EpochTail
 import EpochProofs.Spec.PresetCfg
 import EpochProofs.Equiv.DepositWrites
@@ -134,7 +135,7 @@ theorem apply_builder_pending_payments_spec [EpochProofs.Spec.PresetCfg] {S E : 
     rw [hv]
     simp only [bind_tc_ok]
     have hslice : alloc.vec.Vec.deref v = pslice := by
-      apply Subtype.ext
+      apply Slice.ext
       simp [alloc.vec.Vec.deref, hvv, hps]
     rw [hslice]
     obtain ⟨res, hres, h1, h2⟩ := spec_imp_exists
@@ -185,15 +186,15 @@ theorem apply_builder_pending_payments_equiv [EpochProofs.Spec.PresetCfg] {S E :
   rw [hps] at habs
   cases res with
   | Ok u =>
-    rw [hr] at h
-    cases h
+    simp only [hr, ok.injEq] at h
+    subst h
     rw [← habs]
     rfl
   | Err e =>
     cases e with
     | Arith e =>
-      rw [hr] at h
-      cases h
+      simp only [hr, ok.injEq] at h
+      subst h
       exact ⟨absArithError e, by rw [← habs]; rfl⟩
     | State e => exact h.elim
 
@@ -394,9 +395,9 @@ theorem ptc_window_writes_spec {W E : Type} (p : Spec.Preset) (o : Spec.Oracle)
     obtain ⟨rfl, rfl⟩ := hx
     refine ⟨_, rfl, ?_⟩
     rw [hc', hw, hv, hshift]
-    rfl
+    simp only [alloc.vec.Vec.deref, Slice.from_val, ptcsOf]
   · intro t ht
-    simp only [alloc.vec.Vec.deref] at ht
+    simp only [alloc.vec.Vec.deref, Slice.from_val] at ht
     obtain ⟨k, hk', rfl⟩ := List.getElem_of_mem ht
     have hkp : k < p.SLOTS_PER_EPOCH := by omega
     obtain ⟨hk2, hcp⟩ := hk k hkp

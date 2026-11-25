@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.RegistryUpdates
 import EpochProofs.Spec.PresetCfg
 import EpochProofs.Equiv.EffectiveBalanceUpdates

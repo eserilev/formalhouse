@@ -119,7 +119,7 @@ theorem process_attestation_loop_shape (p : Preset) (state : BeaconState)
   obtain ⟨⟨e, pa, n⟩, hr, h⟩ := specM_bind_ok h
   cases h
   refine forIn_ok_invariant
-    (fun r : MProd (List ParticipationFlags) (MProd BuilderPendingPayment Uint64) =>
+    (fun r : Prod (List ParticipationFlags) (Prod BuilderPendingPayment Uint64) =>
       r.fst.length = epoch_participation.length ∧ r.snd.fst.withdrawal = payment.withdrawal ∧
         r.snd.fst.proposer_index = payment.proposer_index ∧ payment.weight ≤ r.snd.fst.weight)
     _ ?_ attesting_indices ⟨epoch_participation, payment, 0⟩ _ ⟨rfl, rfl, rfl, Nat.le_refl _⟩ hr
@@ -127,7 +127,7 @@ theorem process_attestation_loop_shape (p : Preset) (state : BeaconState)
   obtain ⟨_, -, hr⟩ := specM_bind_ok hr
   obtain ⟨⟨e2, n2, w2⟩, hin, hr⟩ := specM_bind_ok hr
   have hlen := forIn_ok_invariant
-    (fun x : MProd (List ParticipationFlags) (MProd Uint64 Bool) => x.fst.length = b1.length)
+    (fun x : Prod (List ParticipationFlags) (Prod Uint64 Bool) => x.fst.length = b1.length)
     _ ?_ _ _ _ rfl hin
   · obtain ⟨hb1, hb2, hb3, hb4⟩ := hb
     simp only [bind, Except.bind, pure, Except.pure] at hr

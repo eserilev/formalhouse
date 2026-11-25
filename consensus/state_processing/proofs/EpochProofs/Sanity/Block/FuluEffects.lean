@@ -298,7 +298,7 @@ theorem process_attester_slashing_fulu_ok (p : Preset) (o : Oracle) (f : FuluCon
   all_goals first | (cases h; done) | skip
   cases h
   refine SlashingsSanity.forIn_invariant
-    (fun r : MProd Bool BeaconState => SlashEffect p s r.snd ∧ SlashFields p s r.snd) _ ?_ _ _ _
+    (fun r : Prod Bool BeaconState => SlashEffect p s r.snd ∧ SlashFields p s r.snd) _ ?_ _ _ _
     ⟨SlashEffect.refl p s, SlashFields.refl p s⟩ ‹forIn _ _ _ = _›
   intro index r step ⟨hr, hrf⟩ hstep
   obtain ⟨v, hv, hstep⟩ := specM_bind_ok hstep
@@ -397,6 +397,7 @@ theorem process_withdrawal_request_fulu_effect (p : Preset) (f : FuluConfig)
        exact exit_churn_effect ‹compute_exit_epoch_and_update_churn _ _ _ _ = .ok _›
          (fun t => { t with pending_partial_withdrawals := _ }) (fun _ => rfl) (fun _ => rfl)
          (fun _ => CheckpointsStable.refl _))
+    | exact initiate_validator_exit_effect h
     | (cases h; exact initiate_validator_exit_effect ‹initiate_validator_exit _ _ _ _ = .ok _›)
 
 /-- The Fulu `compute_consolidation_epoch_and_update_churn` returns an epoch at least

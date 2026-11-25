@@ -136,11 +136,11 @@ theorem source_preimage_spec (seed : Array U8 32#usize) (round : U8) (bucket : U
   have e0 : i.val = bucket.val / 256 ^ 0 % 256 := by
     rw [i_post]; exact cast_shift_byte bucket bucket 0 (by simp)
   have e1 : i2.val = bucket.val / 256 ^ 1 % 256 := by
-    rw [i2_post]; exact cast_shift_byte bucket i1 1 (by rw [i1_post1, Nat.shiftRight_eq_div_pow])
+    rw [i2_post]; exact cast_shift_byte bucket i1 1 (by rw [i1_post, Nat.shiftRight_eq_div_pow])
   have e2 : i4.val = bucket.val / 256 ^ 2 % 256 := by
-    rw [i4_post]; exact cast_shift_byte bucket i3 2 (by rw [i3_post1, Nat.shiftRight_eq_div_pow])
+    rw [i4_post]; exact cast_shift_byte bucket i3 2 (by rw [i3_post, Nat.shiftRight_eq_div_pow])
   have e3 : i6.val = bucket.val / 256 ^ 3 % 256 := by
-    rw [i6_post]; exact cast_shift_byte bucket i5 3 (by rw [i5_post1, Nat.shiftRight_eq_div_pow])
+    rw [i6_post]; exact cast_shift_byte bucket i5 3 (by rw [i5_post, Nat.shiftRight_eq_div_pow])
   simp only [r_post, buf5_post, buf4_post, buf3_post, buf2_post, Array.set_val_eq, hb]
   simp [Array.repeat, hs, List.range_succ, e0, e1, e2, e3]
 
@@ -181,33 +181,32 @@ theorem first_u64_spec (digest : Array U8 32#usize) :
   have h0 : i1.val < 2 ^ 8 := by rw [hc _ _ i1_post]; exact hb i
   have s1 := or_shift_step _ _ 8 h0 (hb i2) (by norm_num)
   have e1 : i5.val = i1.val + i2.val * 2 ^ 8 := by
-    rw [i5_post1, UScalar.val_or, i4_post1, hc _ _ i3_post]; exact s1.1
+    rw [i5_post, UScalar.val_or, i4_post, hc _ _ i3_post]; exact s1.1
   have s2 := or_shift_step _ _ 16 (e1 ▸ s1.2) (hb i6) (by norm_num)
   have e2 : i9.val = i5.val + i6.val * 2 ^ 16 := by
-    rw [i9_post1, UScalar.val_or, i8_post1, hc _ _ i7_post]; exact s2.1
+    rw [i9_post, UScalar.val_or, i8_post, hc _ _ i7_post]; exact s2.1
   have s3 := or_shift_step _ _ 24 (e2 ▸ s2.2) (hb i10) (by norm_num)
   have e3 : i13.val = i9.val + i10.val * 2 ^ 24 := by
-    rw [i13_post1, UScalar.val_or, i12_post1, hc _ _ i11_post]; exact s3.1
+    rw [i13_post, UScalar.val_or, i12_post, hc _ _ i11_post]; exact s3.1
   have s4 := or_shift_step _ _ 32 (e3 ▸ s3.2) (hb i14) (by norm_num)
   have e4 : i17.val = i13.val + i14.val * 2 ^ 32 := by
-    rw [i17_post1, UScalar.val_or, i16_post1, hc _ _ i15_post]; exact s4.1
+    rw [i17_post, UScalar.val_or, i16_post, hc _ _ i15_post]; exact s4.1
   have s5 := or_shift_step _ _ 40 (e4 ▸ s4.2) (hb i18) (by norm_num)
   have e5 : i21.val = i17.val + i18.val * 2 ^ 40 := by
-    rw [i21_post1, UScalar.val_or, i20_post1, hc _ _ i19_post]; exact s5.1
+    rw [i21_post, UScalar.val_or, i20_post, hc _ _ i19_post]; exact s5.1
   have s6 := or_shift_step _ _ 48 (e5 ▸ s5.2) (hb i22) (by norm_num)
   have e6 : i25.val = i21.val + i22.val * 2 ^ 48 := by
-    rw [i25_post1, UScalar.val_or, i24_post1, hc _ _ i23_post]; exact s6.1
+    rw [i25_post, UScalar.val_or, i24_post, hc _ _ i23_post]; exact s6.1
   have s7 := or_shift_step _ _ 56 (e6 ▸ s6.2) (hb i26) (by norm_num)
   have e7 : (i25 ||| i28).val = i25.val + i26.val * 2 ^ 56 := by
-    rw [UScalar.val_or, i28_post1, hc _ _ i27_post]; exact s7.1
+    rw [UScalar.val_or, i28_post, hc _ _ i27_post]; exact s7.1
   rw [e7, e6, e5, e4, e3, e2, e1, hc _ _ i1_post, leNat_take8 _ (by simp)]
   simp [i_post, i2_post, i6_post, i10_post, i14_post, i18_post, i22_post, i26_post]
-  rfl
 
 theorem hash_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle) (hH : HashLink inst o)
     (s : Slice U8) : inst.hash s ⦃ d => u8s d.val = (o.hash (u8s s.val)).toList ⦄ := by
   obtain ⟨d, hd, hdb⟩ := hH s
-  rw [hd]; exact hdb
+  rw [hd]; exact (spec_ok d).mpr hdb
 
 theorem u8s_append (a b : List U8) : u8s (a ++ b) = u8s a ++ u8s b := by simp [u8s]
 
@@ -243,7 +242,7 @@ theorem shuffle_round_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracl
   unfold swap_or_not_shuffle.compute_shuffled_index_with.shuffle_round
   step*
   step with hash_spec inst o hH as ⟨a1, ha1⟩
-  step*
+  step* 7
   case hmax =>
     have hi1 : i1.val = n.val := by rw [i1_post, cast_u64_of_usize]
     have hi2 : i2.val < n.val := by rw [i2_post, hi1]; exact Nat.mod_lt _ hn
@@ -255,55 +254,66 @@ theorem shuffle_round_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracl
   have hp : pivot.val = i2.val := by rw [pivot_post]; exact cast_usize_of_lt _ (by omega)
   have hpiv : pivot.val = Spec.pivotOf o (u8s seed.val) n.val round.val := by
     rw [hp, i2_post, hi1, i_post, ha1, s_post]
-    simp only [Spec.pivotOf, Array.to_slice, a_post, u8s_append]
+    simp only [Spec.pivotOf, Array.to_slice, Slice.from_val, a_post, u8s_append]
     rfl
   have hflip : flip.val = (Spec.pivotOf o (u8s seed.val) n.val round.val + n.val - index.val) % n.val := by
-    rw [flip_post, i4_post, hpiv, i3_post1]
+    rw [flip_post, i4_post, hpiv, i3_post]
     congr 1
     omega
-  obtain ⟨position, hposeq, hposv⟩ : ∃ q : Usize,
-      (if index < flip then ok flip else ok index : Result Usize) = ok q ∧
-        q.val = max index.val flip.val := by
-    split
-    · rename_i h
-      have : index.val < flip.val := by scalar_tac
-      exact ⟨flip, rfl, by omega⟩
-    · rename_i h
-      have : flip.val ≤ index.val := by scalar_tac
-      exact ⟨index, rfl, by omega⟩
-  rw [hposeq]
-  simp only [bind_tc_ok]
-  step*
-  case hy => rcases System.Platform.numBits_eq with h | h <;> simp [h]
-  step with hash_spec inst o hH as ⟨source, hsrc⟩
-  have hi5 : i5.val = position.val / 256 := by rw [i5_post1, Nat.shiftRight_eq_div_pow]
-  have hs1 : u8s s1.val = u8s seed.val ++ [UInt8.ofNat round.val] ++
-      Spec.uint_to_bytes 4 (position.val / 256) := by
-    rw [s1_post, ← hi5]; exact u8s_source seed round i5 a2.val a2_post
-  rw [hs1] at hsrc
-  have hsl : source.val.length = 32 := by simp
-  have hidx : position.val % 256 / 8 < 32 := by omega
-  have hbyte : (source.val[position.val % 256 / 8]'(by omega)).val =
-      ((o.hash (u8s seed.val ++ [UInt8.ofNat round.val] ++
-        Spec.uint_to_bytes 4 (position.val / 256))).toList.getD (position.val % 256 / 8) 0).toNat := by
-    rw [← hsrc]
-    simp [u8s, List.getD_eq_getElem?_getD, hidx]
-  have hbit : Spec.bitOf o (u8s seed.val) round.val position.val =
-      (source.val[position.val % 256 / 8]'(by omega)).val / 2 ^ (position.val % 8) % 2 := by
-    rw [hbyte]; rfl
-  step*
-  all_goals
-    have hb10 : i10.val = Spec.bitOf o (u8s seed.val) round.val position.val := by
-      rw [hbit, i10_post, i9_post1, i8_post, Nat.shiftRight_eq_div_pow]
-      simp only [byte_post, i7_post, i6_post]
-    have hlt2 : i10.val < 2 := by rw [i10_post]; exact Nat.mod_lt _ (by decide)
-    simp only [Spec.sigma, ← hflip, ← hposv, ← hb10]
-    rename_i hc
-  · have : i10.val = 1 := by rw [hc]; rfl
-    simp [this]
-  · have : i10.val ≠ 1 := fun h => hc (UScalar.eq_of_val_eq (by rw [h]; rfl))
-    have : i10.val = 0 := by omega
-    simp [this]
+  have tail : ∀ position : Usize, position.val = max index.val flip.val →
+      (do
+        let i5 ← position >>> 8#i32
+        let a2 ←
+          swap_or_not_shuffle.compute_shuffled_index_with.source_preimage seed round i5
+        let s1 ← lift (Array.to_slice a2)
+        let source ← inst.hash s1
+        let i6 ← position % 256#usize
+        let i7 ← i6 / 8#usize
+        let byte ← Array.index_usize source i7
+        let i8 ← position % 8#usize
+        let i9 ← byte >>> i8
+        let i10 ← i9 % 2#u8
+        if i10 = 1#u8 then ok flip else ok index) ⦃ r =>
+          r.val = Spec.sigma o (u8s seed.val) n.val round.val index.val ⦄ := by
+    intro position hposv
+    step*
+    case hy => rcases System.Platform.numBits_eq with h | h <;> simp [h]
+    step with hash_spec inst o hH as ⟨source, hsrc⟩
+    have hi5 : i5.val = position.val / 256 := by rw [i5_post, Nat.shiftRight_eq_div_pow]
+    have hs1 : u8s s1.val = u8s seed.val ++ [UInt8.ofNat round.val] ++
+        Spec.uint_to_bytes 4 (position.val / 256) := by
+      rw [s1_post, ← hi5, Array.to_slice, Slice.from_val]; exact u8s_source seed round i5 a2.val a2_post
+    rw [hs1] at hsrc
+    have hsl : source.val.length = 32 := by simp
+    have hidx : position.val % 256 / 8 < 32 := by omega
+    have hbyte : (source.val[position.val % 256 / 8]'(by omega)).val =
+        ((o.hash (u8s seed.val ++ [UInt8.ofNat round.val] ++
+          Spec.uint_to_bytes 4 (position.val / 256))).toList.getD (position.val % 256 / 8) 0).toNat := by
+      rw [← hsrc]
+      simp [u8s, List.getD_eq_getElem?_getD, hidx]
+    have hbit : Spec.bitOf o (u8s seed.val) round.val position.val =
+        (source.val[position.val % 256 / 8]'(by omega)).val / 2 ^ (position.val % 8) % 2 := by
+      rw [hbyte]; rfl
+    step*
+    all_goals
+      have hb10 : i10.val = Spec.bitOf o (u8s seed.val) round.val position.val := by
+        rw [hbit, i10_post, i9_post, i8_post, Nat.shiftRight_eq_div_pow]
+        simp only [byte_post, i7_post, i6_post]
+      have hlt2 : i10.val < 2 := by rw [i10_post]; exact Nat.mod_lt _ (by decide)
+      simp only [Spec.sigma, ← hflip, ← hposv, ← hb10]
+      rename_i hc
+    · have : i10.val = 1 := by rw [hc]; rfl
+      simp [this]
+    · have : i10.val ≠ 1 := fun h => hc (UScalar.eq_of_val_eq (by rw [h]; rfl))
+      have : i10.val = 0 := by omega
+      simp [this]
+  split
+  · rename_i h
+    have : index.val < flip.val := by scalar_tac
+    exact tail flip (by omega)
+  · rename_i h
+    have : flip.val ≤ index.val := by scalar_tac
+    exact tail index (by omega)
 
 theorem csiFold_succ (o : Spec.Oracle) (seed : List UInt8) (n r x : Nat) :
     Spec.csiFold o seed n (r + 1) x = Spec.sigma o seed n r (Spec.csiFold o seed n r x) := by
@@ -354,7 +364,7 @@ theorem compute_shuffled_index_with_spec {H : Type} (inst : ShuffleHashInst H)
     exfalso
     rename_i hc
     have : i1.val = 2 ^ 24 := by
-      rw [i1_post1, Nat.shiftLeft_eq]
+      rw [i1_post, Nat.shiftLeft_eq]
       apply Nat.mod_eq_of_lt
       rcases System.Platform.numBits_eq with hb | hb <;> simp [Usize.size, Usize.numBits, hb]
     scalar_tac

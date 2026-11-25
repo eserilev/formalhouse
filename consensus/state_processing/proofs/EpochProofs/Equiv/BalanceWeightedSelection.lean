@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.SelectionBytes
 import EpochProofs.Equiv.RegistryUpdates
 import EpochProofs.Equiv.EffectiveBalanceUpdates
@@ -333,7 +334,7 @@ theorem selection_loop_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EBIns
       (selected.val.map (·.val)) i.val rb = .ok res) :
     types.state.balance_weighted_selection.compute_balance_weighted_selection_loop inst ebi
       balances indices seed size shuffle R maxeb selected i ⦃ r =>
-        ∃ v : alloc.vec.Vec Usize, r = .Ok v ∧ v.val.map (·.val) = res ⦄ := by
+        r.2 = none ∧ r.1.val.map (·.val) = res ⦄ := by
   unfold types.state.balance_weighted_selection.compute_balance_weighted_selection_loop
   apply loop.spec_decr_nat
     (measure := fun (x : alloc.vec.Vec Usize × Usize) => Usize.max + 1 - x.2.val)
@@ -428,7 +429,7 @@ theorem selection_loop_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EBIns
       have hge' : ¬ (sel.val.map (·.val)).length < size.val := by rw [← hlenv]; scalar_tac
       rw [if_neg hge'] at hrun
       simp only [spec_ok]
-      exact ⟨sel, rfl, Except.ok.inj hrun⟩
+      exact ⟨trivial, Except.ok.inj hrun⟩
   · exact ⟨fuel, rb, hrb, hrun⟩
 
 theorem mapM_effective_balances (vals : List Spec.Validator) (indices : List Nat)
@@ -488,7 +489,7 @@ theorem compute_balance_weighted_selection_spec {H B : Type} (inst : ShuffleHash
     by_contra h0
     simp [h0, throw, throwThe, MonadExceptOf.throw, Bind.bind, Except.bind] at hspec
   simp only [gt_iff_lt, hn, not_true_eq_false, if_false, except_bind_ok_iff] at hspec
-  obtain ⟨_, _, ebs, hebs, hrun⟩ := hspec
+  obtain ⟨ebs, hebs, hrun⟩ := hspec
   obtain ⟨hebs', hreg0⟩ := mapM_effective_balances _ _ _ hebs
   subst hebs'
   have hreg : ∀ j ∈ indices.val, j.val < (state.validators.map (·.effective_balance)).length := by
@@ -502,8 +503,13 @@ theorem compute_balance_weighted_selection_spec {H B : Type} (inst : ShuffleHash
   step*
   have hreg' : ∀ j ∈ indices.val, j.val < (state.validators.map (·.effective_balance)).length :=
     hreg
-  exact selection_loop_spec inst ebi balances p o hH _ hEB indices seed seedSpec hseed shuffle R hR
-    maxeb hmaxeb hn hn24 hreg' size hus _ 0#usize Spec.Bytes32.zero Spec.UINT64_SIZE res
-    (by intro h; simp at h) (by simpa using hrun)
+  apply spec_bind (selection_loop_spec inst ebi balances p o hH _ hEB indices seed seedSpec hseed
+    shuffle R hR maxeb hmaxeb hn hn24 hreg' size hus _ 0#usize Spec.Bytes32.zero Spec.UINT64_SIZE
+    res (by intro h; simp at h) (by simpa using hrun))
+  rintro ⟨v, err⟩ ⟨herr, hv⟩
+  dsimp only at herr hv ⊢
+  subst herr
+  simp only [uncurry_apply_pair, bind_tc_ok, Bool.false_eq_true, if_false, spec_ok]
+  exact ⟨v, rfl, hv⟩
 
 end EpochProofs

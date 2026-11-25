@@ -193,7 +193,17 @@ theorem registrySpecBody_step (p : Preset) (total_active_balance : Gwei) (state 
     simp only [hset]
     rfl
   simp only [h2, ↓reduceIte]
-  split <;> rfl
+  have h2' : ¬ ((decide (row.validator.activation_epoch ≤ current_epoch) = true ∧
+      decide (current_epoch < row.validator.exit_epoch) = true) ∧
+      row.validator.effective_balance ≤ p.EJECTION_BALANCE) := by
+    simpa only [decide_eq_true_eq] using h2
+  split
+  · rename_i h3
+    erw [if_neg h2', if_pos h3]
+    rfl
+  · rename_i h3
+    erw [if_neg h2', if_neg h3]
+    rfl
 
 /-- The spec loop over the indices from `pre.length` is a `passM` over the rows. -/
 theorem registrySpecBody_forIn (p : Preset) (total_active_balance : Gwei) (state : BeaconState)

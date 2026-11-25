@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.PendingDeposits
 import EpochProofs.Spec.PresetCfg
 import EpochProofs.Sanity.Invariants.LighthouseTailDeposits

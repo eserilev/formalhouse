@@ -185,12 +185,12 @@ theorem process_pending_consolidations_eq (p : Preset) (state : BeaconState)
   | error e => rfl
   | ok next_epoch =>
   simp only
-  have hinit : (⟨0, state⟩ : MProd Nat BeaconState) =
-      (fun s : List Gwei × Nat => (⟨s.2, { state with balances := s.1 }⟩ : MProd Nat BeaconState))
+  have hinit : (⟨0, state⟩ : Prod Nat BeaconState) =
+      (fun s : List Gwei × Nat => (⟨s.2, { state with balances := s.1 }⟩ : Prod Nat BeaconState))
         (state.balances, 0) := by
     cases state; rfl
   rw [hinit, forIn_eq_stepLoop
-    (fun s : List Gwei × Nat => (⟨s.2, { state with balances := s.1 }⟩ : MProd Nat BeaconState))
+    (fun s : List Gwei × Nat => (⟨s.2, { state with balances := s.1 }⟩ : Prod Nat BeaconState))
     (fun s => s.1.length = state.validators.length) _
     (fun s c => consolidationStep (state.validators.map globalLocal) next_epoch s
       (c.source_index, c.target_index)), stepLoop_map]

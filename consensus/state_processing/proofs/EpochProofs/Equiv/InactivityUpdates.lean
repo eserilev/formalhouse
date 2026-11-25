@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.EffectiveBalanceUpdates
 import EpochProofs.Sanity.InactivityUpdates
 

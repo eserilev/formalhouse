@@ -121,7 +121,7 @@ theorem process_attester_slashing_fulu_len (p : Preset) (o : Oracle) (f : FuluCo
   len_split h
   all_goals
     cases h
-    refine forIn_ok_invariant (fun r : MProd Bool BeaconState => LenStep s r.snd) _ ?_ _ _ _
+    refine forIn_ok_invariant (fun r : Prod Bool BeaconState => LenStep s r.snd) _ ?_ _ _ _
       (LenStep.refl s) ‹forIn _ _ _ = _›
     intro _ ⟨_, st⟩ _ hst hb
     len_split hb
@@ -154,12 +154,12 @@ theorem process_attestation_loop_fulu_length (p : Preset) (state : BeaconState)
   obtain ⟨⟨e, n⟩, hr, h⟩ := specM_bind_ok h
   cases h
   refine forIn_ok_invariant
-    (fun r : MProd (List ParticipationFlags) Uint64 => r.fst.length = epoch_participation.length)
+    (fun r : Prod (List ParticipationFlags) Uint64 => r.fst.length = epoch_participation.length)
     _ ?_ attesting_indices ⟨epoch_participation, 0⟩ _ rfl hr
   intro index ⟨b1, b2⟩ r hb hr
   obtain ⟨⟨e2, n2⟩, hin, hr⟩ := specM_bind_ok hr
   have hlen := forIn_ok_invariant
-    (fun x : MProd (List ParticipationFlags) Uint64 => x.fst.length = b1.length)
+    (fun x : Prod (List ParticipationFlags) Uint64 => x.fst.length = b1.length)
     _ ?_ _ _ _ rfl hin
   · simp only [bind, Except.bind, pure, Except.pure] at hr
     cases hr

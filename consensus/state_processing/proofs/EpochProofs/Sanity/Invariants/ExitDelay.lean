@@ -508,7 +508,6 @@ private theorem request_loop_opStep {α : Type} {p : Preset} {l : List α}
 local macro "loop_body" e:term : tactic => `(tactic| (
   intro _ _ _ hbody
   obtain ⟨_, h1, hbody⟩ := specM_bind_ok hbody
-  obtain ⟨_, -, hbody⟩ := specM_bind_ok hbody
   cases hbody
   exact $e h1))
 
@@ -659,7 +658,7 @@ private theorem process_pending_consolidations_validators (p : Preset) (s s' : B
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨_, st⟩, hr, h⟩ := specM_bind_ok h
   have hP := SlashingsSanity.forIn_invariant
-    (fun r : MProd Nat BeaconState => r.snd.validators = s.validators) _ ?_ _ _ _ rfl hr
+    (fun r : Prod Nat BeaconState => r.snd.validators = s.validators) _ ?_ _ _ _ rfl hr
   · cases h
     exact hP
   · intro _ ⟨_, _⟩ r hst hb
@@ -776,7 +775,7 @@ theorem process_pending_deposits_exitDelay (p : Preset) (o : Oracle)
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨_, _, _, _, st⟩, hr, h⟩ := specM_bind_ok h
   have hP := SlashingsSanity.forIn_invariant
-    (fun r : MProd (List PendingDeposit) (MProd Bool (MProd Uint64 (MProd Uint64 BeaconState))) =>
+    (fun r : Prod Uint64 (Prod Uint64 (Prod (List PendingDeposit) (Prod Bool BeaconState))) =>
       ExitDelay p r.2.2.2.2) _ ?_ _ _ _ hd hr
   · simp only [bind, Except.bind, pure, Except.pure] at h
     repeat' split at h

@@ -1,4 +1,5 @@
 import EpochProofs.Caches
+import EpochProofs.Sanity.Invariants.PubkeysUnique
 
 /-!
 # Pubkey cache bridge

@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.RegistryUpdates
 import EpochProofs.Sanity.PendingDeposits
 
@@ -81,7 +82,7 @@ theorem deposits_loop_spec (p : Spec.Preset) (views : Slice LhDepositView)
       ((specViews p c current_epoch next_epoch views).take i.val) =
       .ok ⟨⟨processed.val, index.val, postponed.val⟩, false, false⟩) :
     per_epoch_processing.pending_deposits.process_pending_deposits_loop views finalized_slot
-      current_epoch next_epoch c available processed index postponed i ⦃ r =>
+      current_epoch next_epoch c available processed index false postponed i ⦃ r =>
         (r.2.2.2.1 = true → Spec.depositLoop p finalized_slot.val available.val ⟨0, 0, []⟩
             (specViews p c current_epoch next_epoch views) = .error .overflow)
         ∧ (r.2.2.2.1 = false → ∃ stopped, Spec.depositLoop p finalized_slot.val available.val
@@ -89,16 +90,18 @@ theorem deposits_loop_spec (p : Spec.Preset) (views : Slice LhDepositView)
               .ok ⟨⟨r.1.val, r.2.1.val, r.2.2.2.2.val⟩, stopped, r.2.2.1⟩) ⦄ := by
   unfold per_epoch_processing.pending_deposits.process_pending_deposits_loop
   apply loop.spec_decr_nat
-    (measure := fun (x : U64 × U64 × alloc.vec.Vec Bool × Usize) =>
-      views.val.length - x.2.2.2.val)
-    (inv := fun (x : U64 × U64 × alloc.vec.Vec Bool × Usize) =>
-      x.2.2.2.val ≤ views.val.length ∧ x.2.1.val ≤ x.2.2.2.val
-      ∧ x.2.2.1.val.length ≤ x.2.2.2.val
+    (measure := fun (x : U64 × U64 × Bool × alloc.vec.Vec Bool × Usize) =>
+      views.val.length - x.2.2.2.2.val)
+    (inv := fun (x : U64 × U64 × Bool × alloc.vec.Vec Bool × Usize) =>
+      x.2.2.1 = false ∧
+      x.2.2.2.2.val ≤ views.val.length ∧ x.2.1.val ≤ x.2.2.2.2.val
+      ∧ x.2.2.2.1.val.length ≤ x.2.2.2.2.val
       ∧ Spec.depositLoop p finalized_slot.val available.val ⟨0, 0, []⟩
-          ((specViews p c current_epoch next_epoch views).take x.2.2.2.val) =
-          .ok ⟨⟨x.1.val, x.2.1.val, x.2.2.1.val⟩, false, false⟩)
-  · rintro ⟨pa, idx, pp, j⟩ ⟨hj, hidxj, hppj, hstj⟩
-    dsimp only at hj hidxj hppj hstj
+          ((specViews p c current_epoch next_epoch views).take x.2.2.2.2.val) =
+          .ok ⟨⟨x.1.val, x.2.1.val, x.2.2.2.1.val⟩, false, false⟩)
+  · rintro ⟨pa, idx, rc, pp, j⟩ ⟨hrc, hj, hidxj, hppj, hstj⟩
+    dsimp only at hrc hj hidxj hppj hstj
+    subst hrc
     unfold per_epoch_processing.pending_deposits.process_pending_deposits_loop.body
     simp only [slice_get_any, lift, bind_tc_ok]
     split
@@ -183,7 +186,7 @@ theorem deposits_loop_spec (p : Spec.Preset) (views : Slice LhDepositView)
             · have hgt' : ¬ total > available := by simp [UScalar.lt_equiv]; omega
               simp only [hgt', if_false]
               step as ⟨pp1, hpp1⟩
-              refine ⟨by omega, by omega, by simp [hpp1]; omega, ?_, by omega⟩
+              refine ⟨by simpa using hgt, by omega, by omega, by simp [hpp1]; omega, ?_, by omega⟩
               rw [hca.2.1] at hgt
               simp only [hsat, hsat2, hpp1, hca.2.1]
               exact Spec.depositLoop_next_at p _ _ _ _ _ j.val _ hget hstj _
@@ -208,7 +211,7 @@ theorem deposits_loop_spec (p : Spec.Preset) (views : Slice LhDepositView)
       simp only [spec_ok]
       refine ⟨by simp, fun _ => ⟨false, ?_⟩⟩
       exact Spec.depositLoop_end p _ _ _ _ j.val (by simp [specViews]; omega) _ hstj
-  · exact ⟨hi, hidx, hpp, hst⟩
+  · exact ⟨rfl, hi, hidx, hpp, hst⟩
 
 def absDeposits :
     core.result.Result per_epoch_processing.pending_deposits.DepositsOutcome
@@ -230,7 +233,7 @@ theorem process_pending_deposits_equiv (p : Spec.Preset) (views : Slice LhDeposi
   cases r1 with
   | Err e =>
     obtain ⟨rfl, hov⟩ := h1.2 e rfl
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [Spec.depositDecisions, hov, absDeposits, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
       throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.UINT64_SIZE,
       
@@ -255,7 +258,7 @@ theorem process_pending_deposits_equiv (p : Spec.Preset) (views : Slice LhDeposi
     rw [hav] at hloop
     simp only [Bool.false_eq_true, if_false]
     cases reached
-    · refine ⟨_, rfl, ?_⟩
+    · refine ⟨_, by ok_rfl, ?_⟩
       simp [Spec.depositDecisions, hfit, hloop, absDeposits, except_ok_bind, Pure.pure, Except.pure,
       throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.UINT64_SIZE,
       
@@ -267,7 +270,7 @@ theorem process_pending_deposits_equiv (p : Spec.Preset) (views : Slice LhDeposi
       cases r2 with
       | Err e =>
         obtain ⟨rfl, hlt⟩ := h2.2 e rfl
-        refine ⟨_, rfl, ?_⟩
+        refine ⟨_, by ok_rfl, ?_⟩
         rw [hav] at hlt
         have hn : ¬ pa.val ≤ deposit_balance_to_consume.val + churn.val := by omega
         simp [Spec.depositDecisions, hfit, hloop, hn, absDeposits, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
@@ -277,7 +280,7 @@ theorem process_pending_deposits_equiv (p : Spec.Preset) (views : Slice LhDeposi
       core.convert.FromSame.from]
       | Ok d =>
         obtain ⟨hd, hle⟩ := h2.1 d rfl
-        refine ⟨_, rfl, ?_⟩
+        refine ⟨_, by ok_rfl, ?_⟩
         rw [hav] at hd hle
         simp [Spec.depositDecisions, hfit, hloop, hd, hle, absDeposits, except_ok_bind, Pure.pure, Except.pure,
       throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.UINT64_SIZE,
@@ -287,7 +290,7 @@ theorem process_pending_deposits_equiv (p : Spec.Preset) (views : Slice LhDeposi
   · have hloop := hpost.1 rfl
     rw [hav] at hloop
     simp only [if_true]
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [Spec.depositDecisions, hfit, hloop, absDeposits, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
       throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.UINT64_SIZE,
       

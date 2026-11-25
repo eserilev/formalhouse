@@ -187,7 +187,6 @@ theorem get_builder_withdrawals_loop_safe (p : Preset) (state : BeaconState)
       exact ⟨id, id⟩
     · obtain ⟨_, -, h⟩ := specM_bind_ok h
       obtain ⟨_, -, h⟩ := specM_bind_ok h
-      obtain ⟨_, -, h⟩ := specM_bind_ok h
       refine ⟨fun hs => (ih _ _ _ _ _ _ h).1 ?_,
         fun hb => (ih _ _ _ _ _ _ h).2 (hb.append (is_builder_index_convert _))⟩
       rw [← List.append_assoc]
@@ -238,14 +237,12 @@ theorem get_pending_partial_withdrawals_loop_safe (p : Preset) (state : BeaconSt
     split at h
     · cases h
       exact hs
-    · obtain ⟨_, -, h⟩ := specM_bind_ok h
-      obtain ⟨validator, hv, h⟩ := specM_bind_ok h
+    · obtain ⟨validator, hv, h⟩ := specM_bind_ok h
       obtain ⟨balance, hbal, h⟩ := specM_bind_ok h
       obtain ⟨bj, hbj, hle, hbeq⟩ := get_balance_after_withdrawals_ok hbal
       split at h
       · rename_i helig
         obtain ⟨d, hd, h⟩ := specM_bind_ok h
-        obtain ⟨_, -, h⟩ := specM_bind_ok h
         obtain ⟨_, -, h⟩ := specM_bind_ok h
         obtain ⟨_, -, h⟩ := specM_bind_ok h
         refine ih _ _ _ _ _ _ h ?_
@@ -257,7 +254,6 @@ theorem get_pending_partial_withdrawals_loop_safe (p : Preset) (state : BeaconSt
         obtain ⟨h1, h2⟩ := pending_amount_fits (a := w.amount) helig.2
         exact hs.append_validator hbj hle h1 ⟨validator, listGet_ok hv, Or.inl h2⟩
       · obtain ⟨_, -, h⟩ := specM_bind_ok h
-        obtain ⟨_, -, h⟩ := specM_bind_ok h
         exact ih _ _ _ _ _ _ h hs
 
 /-- The builders sweep loop keeps `WithdrawalsSafe` and adds only builder withdrawals. -/
@@ -281,7 +277,6 @@ theorem get_builders_sweep_withdrawals_loop_safe (p : Preset) (state : BeaconSta
     · cases h
       exact ⟨id, id⟩
     · obtain ⟨_, -, h⟩ := specM_bind_ok h
-      obtain ⟨_, -, h⟩ := specM_bind_ok h
       obtain ⟨_, -, h⟩ := specM_bind_ok h
       split at h
       · repeat (obtain ⟨_, -, h⟩ := specM_bind_ok h)
@@ -317,8 +312,7 @@ theorem get_validators_sweep_withdrawals_loop_safe (p : Preset) (state : BeaconS
     split at h
     · cases h
       exact hs
-    · obtain ⟨_, -, h⟩ := specM_bind_ok h
-      obtain ⟨validator, hv, h⟩ := specM_bind_ok h
+    · obtain ⟨validator, hv, h⟩ := specM_bind_ok h
       obtain ⟨balance, hbal, h⟩ := specM_bind_ok h
       obtain ⟨bj, hbj, hle, hbeq⟩ := get_balance_after_withdrawals_ok hbal
       subst hbeq
@@ -355,8 +349,7 @@ theorem get_builder_withdrawals_safe {p : Preset} {state : BeaconState} {wi : Na
   obtain ⟨limit, -, h⟩ := specM_bind_ok h
   split at h
   · cases h
-  · obtain ⟨_, -, h⟩ := specM_bind_ok h
-    exact (get_builder_withdrawals_loop_safe p state prior limit _ _ _ _ _ _ _ h).1
+  · exact (get_builder_withdrawals_loop_safe p state prior limit _ _ _ _ _ _ _ h).1
       (by rw [List.append_nil]; exact hs)
 
 /-- `get_pending_partial_withdrawals` keeps `WithdrawalsSafe`. -/
@@ -371,8 +364,7 @@ theorem get_pending_partial_withdrawals_safe {p : Preset} {state : BeaconState} 
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   split at h
   · cases h
-  · obtain ⟨_, -, h⟩ := specM_bind_ok h
-    exact get_pending_partial_withdrawals_loop_safe p state epoch prior _ _ _ _ _ _ _ _ h
+  · exact get_pending_partial_withdrawals_loop_safe p state epoch prior _ _ _ _ _ _ _ _ h
       (by rw [List.append_nil]; exact hs)
 
 /-- `get_builders_sweep_withdrawals` keeps `WithdrawalsSafe`. -/
@@ -386,8 +378,7 @@ theorem get_builders_sweep_withdrawals_safe {p : Preset} {state : BeaconState} {
   obtain ⟨limit, -, h⟩ := specM_bind_ok h
   split at h
   · cases h
-  · obtain ⟨_, -, h⟩ := specM_bind_ok h
-    exact (get_builders_sweep_withdrawals_loop_safe p state epoch prior limit _ _ _ _ _ _ _ _ h).1
+  · exact (get_builders_sweep_withdrawals_loop_safe p state epoch prior limit _ _ _ _ _ _ _ _ h).1
       (by rw [List.append_nil]; exact hs)
 
 /-- `get_validators_sweep_withdrawals` keeps `WithdrawalsSafe`. -/
@@ -400,8 +391,7 @@ theorem get_validators_sweep_withdrawals_safe {p : Preset} {state : BeaconState}
   obtain ⟨epoch, hepoch, h⟩ := specM_bind_ok h
   split at h
   · cases h
-  · obtain ⟨_, -, h⟩ := specM_bind_ok h
-    exact get_validators_sweep_withdrawals_loop_safe p state epoch
+  · exact get_validators_sweep_withdrawals_loop_safe p state epoch
       (get_current_epoch_ok hepoch) prior _ _ _ _ _ _ _ _ _ h
       (by rw [List.append_nil]; exact hs)
 
@@ -545,8 +535,7 @@ theorem process_withdrawals_core (p : Preset) (s s' : BeaconState)
     refine ⟨rfl, CheckpointsStable.refl _, rfl, [], WithdrawalsSafe.nil p _, fun i b hb => ?_⟩
     rw [withdrawnAmount_nil, Nat.sub_zero, ite_self]
     exact hb
-  · obtain ⟨_, -, h⟩ := specM_bind_ok h
-    obtain ⟨expected, he, h⟩ := specM_bind_ok h
+  · obtain ⟨expected, he, h⟩ := specM_bind_ok h
     obtain ⟨s1, h1, h⟩ := specM_bind_ok h
     obtain ⟨s2, h2, h⟩ := specM_bind_ok h
     obtain ⟨s3, h3, h⟩ := specM_bind_ok h
@@ -629,8 +618,7 @@ theorem get_builder_withdrawals_allBuilder {p : Preset} {state : BeaconState} {w
   obtain ⟨limit, -, h⟩ := specM_bind_ok h
   split at h
   · cases h
-  · obtain ⟨_, -, h⟩ := specM_bind_ok h
-    exact (get_builder_withdrawals_loop_safe p state prior limit _ _ _ _ _ _ _ h).2
+  · exact (get_builder_withdrawals_loop_safe p state prior limit _ _ _ _ _ _ _ h).2
       (fun _ hw => nomatch hw)
 
 /-- The builders sweep produces only withdrawals with the builder flag. -/
@@ -644,8 +632,7 @@ theorem get_builders_sweep_withdrawals_allBuilder {p : Preset} {state : BeaconSt
   obtain ⟨limit, -, h⟩ := specM_bind_ok h
   split at h
   · cases h
-  · obtain ⟨_, -, h⟩ := specM_bind_ok h
-    exact (get_builders_sweep_withdrawals_loop_safe p state epoch prior limit _ _ _ _ _ _ _ _ h).2
+  · exact (get_builders_sweep_withdrawals_loop_safe p state epoch prior limit _ _ _ _ _ _ _ _ h).2
       (fun _ hw => nomatch hw)
 
 end EpochProofs.Spec

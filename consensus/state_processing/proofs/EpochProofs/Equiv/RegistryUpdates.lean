@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.RewardsAndPenalties
 import EpochProofs.Sanity.RegistryUpdates
 
@@ -101,7 +102,7 @@ theorem compute_activation_exit_epoch_equiv (p : Spec.Preset) (epoch lookahead :
   | Err e =>
     obtain ⟨rfl, hov⟩ := h1.2 e rfl
     simp only [hone] at hov
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [Spec.compute_activation_exit_epoch, Spec.uint64Add, Spec.UINT64_SIZE, hov,
       absResult, absArithError, 
       
@@ -116,13 +117,13 @@ theorem compute_activation_exit_epoch_equiv (p : Spec.Preset) (epoch lookahead :
   | Err e =>
     obtain ⟨rfl, hov⟩ := h2.2 e rfl
     simp only [hv, hlookahead] at hov
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [Spec.compute_activation_exit_epoch, Spec.uint64Add, Spec.UINT64_SIZE, hfit, hov,
       absResult, absArithError, throw, throwThe, MonadExceptOf.throw]
   | Ok w =>
   obtain ⟨hw, hfit2⟩ := h2.1 w rfl
   simp only [hv, hlookahead] at hw hfit2
-  refine ⟨_, rfl, ?_⟩
+  refine ⟨_, by ok_rfl, ?_⟩
   simp [Spec.compute_activation_exit_epoch, Spec.uint64Add, Spec.UINT64_SIZE, hfit, hfit2, hw,
     absResult, except_ok_bind, Pure.pure, Except.pure]
 
@@ -138,7 +139,7 @@ theorem exit_churn_limit_equiv (p : Spec.Preset) (total_active_balance : U64)
   | Err e =>
     obtain ⟨rfl, hz⟩ := h1.2 e rfl
     rw [hc.churn_limit_quotient] at hz
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [Spec.get_exit_churn_limit, Spec.uint64Div, hz, absResult, absArithError,
       
       
@@ -156,7 +157,7 @@ theorem exit_churn_limit_equiv (p : Spec.Preset) (total_active_balance : U64)
   | Err e =>
     obtain ⟨rfl, hz⟩ := h2.2 e rfl
     rw [hc.effective_balance_increment] at hz
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [Spec.get_exit_churn_limit, Spec.uint64Div, Spec.uint64Mod, hnz, ← hq, hz,
       absResult, absArithError, except_ok_bind, except_error_bind, throw, throwThe,
       MonadExceptOf.throw, Pure.pure, Except.pure, 
@@ -178,7 +179,7 @@ theorem exit_churn_limit_equiv (p : Spec.Preset) (total_active_balance : U64)
   obtain ⟨hd, _⟩ := h3.1 d rfl
   simp only [bind_tc_ok, core.cmp.min,
     liftFun2]
-  refine ⟨_, rfl, ?_⟩
+  refine ⟨_, by ok_rfl, ?_⟩
   have hdb : d.val ≤ 18446744073709551615 := by have := d.hBounds; simp at this; omega
   have hmin := core.cmp.impls.OrdU64.min_val c.exit_churn_cap d
   rw [hc.exit_churn_cap, Nat.min_eq_right hdb] at hmin
@@ -229,7 +230,7 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
   cases r1 with
   | Err e =>
     simp only [absResult] at h1
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp only [Spec.exitChurnStep, ← h1]
     simp [absResult, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
       throw, throwThe, MonadExceptOf.throw, 
@@ -246,7 +247,7 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
   cases r2 with
   | Err e =>
     simp only [absResult] at h2
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp only [Spec.exitChurnStep, ← h1, ← h2]
     simp [absResult, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
       throw, throwThe, MonadExceptOf.throw, 
@@ -262,10 +263,12 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
   have hebtc : ebtc.val = (if earliest_exit_epoch.val < max earliest_exit_epoch.val act.val
       then churn.val else exit_balance_to_consume.val) := by
     rw [← hebtc_def]; split <;> rename_i h <;> simp [UScalar.lt_equiv, hmax] at h ⊢ <;> simp [h]
-  have hif : (if earliest_exit_epoch < core.cmp.impls.OrdU64.max earliest_exit_epoch act
-      then ok churn else ok exit_balance_to_consume) = (ok ebtc : Result U64) := by
-    rw [← hebtc_def]; split <;> rfl
-  rw [hif, bind_tc_ok]
+  apply exists_ite_tail (a := churn) (b := exit_balance_to_consume)
+  · rfl
+  intro e he
+  rw [hebtc_def] at he
+  rw [he]
+  clear he e
   by_cases hgt : ebtc.val < exit_balance.val
   · have hgt' : exit_balance > ebtc := by simp [UScalar.lt_equiv]; exact hgt
     rw [if_pos hgt']
@@ -299,7 +302,7 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
     | Err e =>
       obtain ⟨rfl, hbad5⟩ := h5.2 e rfl
       try simp only [hv3, hv4, hmax, hone] at hbad5
-      refine ⟨_, rfl, ?_⟩
+      refine ⟨_, by ok_rfl, ?_⟩
       simp only [Spec.exitChurnStep, ← h1, ← h2, except_ok_bind, ← hebtc]
       simp [absResult, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
         throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.uint64Div,
@@ -314,7 +317,7 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
     | Err e =>
       obtain ⟨rfl, hbad6⟩ := h6.2 e rfl
       try simp only [hv5, hone] at hbad6
-      refine ⟨_, rfl, ?_⟩
+      refine ⟨_, by ok_rfl, ?_⟩
       simp only [Spec.exitChurnStep, ← h1, ← h2, except_ok_bind, ← hebtc]
       simp [absResult, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
         throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.uint64Div,
@@ -329,7 +332,7 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
     | Err e =>
       obtain ⟨rfl, hbad7⟩ := h7.2 e rfl
       try simp only [hv6, hmax] at hbad7
-      refine ⟨_, rfl, ?_⟩
+      refine ⟨_, by ok_rfl, ?_⟩
       simp only [Spec.exitChurnStep, ← h1, ← h2, except_ok_bind, ← hebtc]
       simp [absResult, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
         throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.uint64Div,
@@ -344,7 +347,7 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
     | Err e =>
       obtain ⟨rfl, hbad8⟩ := h8.2 e rfl
       try simp only [hv6] at hbad8
-      refine ⟨_, rfl, ?_⟩
+      refine ⟨_, by ok_rfl, ?_⟩
       simp only [Spec.exitChurnStep, ← h1, ← h2, except_ok_bind, ← hebtc]
       simp [absResult, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
         throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.uint64Div,
@@ -359,7 +362,7 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
     | Err e =>
       obtain ⟨rfl, hbad9⟩ := h9.2 e rfl
       try simp only [hv8] at hbad9
-      refine ⟨_, rfl, ?_⟩
+      refine ⟨_, by ok_rfl, ?_⟩
       simp only [Spec.exitChurnStep, ← h1, ← h2, except_ok_bind, ← hebtc]
       simp [absResult, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
         throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.uint64Div,
@@ -382,7 +385,7 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
     obtain ⟨hv10, hle10⟩ := h10.1 fin rfl
     try simp only [hv9] at hv10 hle10
     simp only [bind_tc_ok]
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp only [Spec.exitChurnStep, ← h1, ← h2, except_ok_bind, ← hebtc]
     simp [absResult, except_ok_bind, Pure.pure, Except.pure,
           throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.uint64Div,
@@ -399,7 +402,7 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
     | Ok fin =>
     obtain ⟨hv3, hle3⟩ := h3.1 fin rfl
     simp only [bind_tc_ok]
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp only [Spec.exitChurnStep, ← h1, ← h2, except_ok_bind, ← hebtc]
     simp [absResult, except_ok_bind, Pure.pure, Except.pure,
           Spec.uint64Sub, 
@@ -436,7 +439,7 @@ theorem eligibility_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
   | Err e =>
     obtain ⟨rfl, hov⟩ := h1.2 e rfl
     simp only [hone] at hov
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [Spec.eligibilityStep, hfar, hmin, hov, absResult, absArithError, absRegistry, except_error_bind, Pure.pure,
       Except.pure, throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.UINT64_SIZE,
       
@@ -445,7 +448,7 @@ theorem eligibility_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
   | Ok v =>
     obtain ⟨hv, hfit⟩ := h1.1 v rfl
     simp only [hone] at hv hfit
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [Spec.eligibilityStep, hfar, hmin, hfit, hv, absResult, absRegistry, except_ok_bind, Pure.pure,
       Except.pure, Spec.uint64Add, Spec.UINT64_SIZE,
       
@@ -482,7 +485,7 @@ theorem activation_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
   simp only [absResult] at h1
   cases r1 with
   | Err e =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp only [Spec.activationStep, absRegistry, hfin, hfar, ← h1]
     simp [absResult, absArithError, except_error_bind, Pure.pure,
       Except.pure, 
@@ -490,7 +493,7 @@ theorem activation_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
       
       core.convert.FromSame.from]
   | Ok v =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp only [Spec.activationStep, absRegistry, hfin, hfar, ← h1]
     simp [absResult, absRegistry, except_ok_bind, Pure.pure,
       Except.pure, 
@@ -541,7 +544,7 @@ theorem ejection_step_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields)
         simp only [Spec.ejectionStep, absRegistry]
         simp [absResult, absRegistry, Pure.pure, Except.pure]
         intro h1 h2 h3
-        exact absurd ⟨⟨h1, h2⟩, h3⟩ hcond
+        exact absurd ⟨⟨of_decide_eq_true h1, of_decide_eq_true h2⟩, h3⟩ hcond
   obtain ⟨h1, h2, h3, h4⟩ := hact
   have h4' : fields.exit_epoch = c.far_future_epoch := by
     rw [UScalar.eq_equiv, h4, hc.far_future_epoch]
@@ -549,7 +552,7 @@ theorem ejection_step_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields)
   have hB : current_epoch < fields.exit_epoch := by rw [UScalar.lt_equiv]; exact h2
   have hC : effective_balance <= c.ejection_balance := by
     rw [UScalar.le_equiv, hc.ejection_balance]; exact h3
-  simp only [hA, hB, hC, decide_true, if_true, bind_tc_ok]
+  simp only [hA, hB, hC, decide_true, if_true, bind_tc_ok, Aeneas.Std.bind_ok]
   rw [if_pos h4']
   have hcond : (decide (fields.activation_epoch.val ≤ current_epoch.val)
       && decide (current_epoch.val < fields.exit_epoch.val)
@@ -563,7 +566,7 @@ theorem ejection_step_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields)
   simp only [absResult] at hx
   cases r1 with
   | Err e =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp only [Spec.ejectionStep, Spec.exitStep, absRegistry, h4, ← hx]
     simp [absResult, absArithError, except_ok_bind, except_error_bind, Pure.pure,
       Except.pure, throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.UINT64_SIZE,
@@ -573,7 +576,8 @@ theorem ejection_step_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields)
     exact ⟨h1, hcur, h3⟩
   | Ok x =>
   obtain ⟨exit_epoch, earliest, ebtc⟩ := x
-  simp only [core.result.Result.Insts.CoreOpsTry.branch, bind_tc_ok, uncurry_apply_pair]
+  simp only [core.result.Result.Insts.CoreOpsTry.branch, bind_tc_ok, Aeneas.Std.bind_ok,
+    uncurry_apply_pair]
   obtain ⟨r2, hr2, h2'⟩ := spec_imp_exists (safe_add_spec exit_epoch
     c.min_validator_withdrawability_delay)
   rw [hr2]
@@ -581,7 +585,7 @@ theorem ejection_step_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields)
   cases r2 with
   | Err e =>
     obtain ⟨rfl, hov⟩ := h2'.2 e rfl
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp only [Spec.ejectionStep, Spec.exitStep, absRegistry, h4, ← hx]
     simp [absResult, absArithError, except_ok_bind, except_error_bind, Pure.pure,
       Except.pure, throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.UINT64_SIZE,
@@ -590,7 +594,7 @@ theorem ejection_step_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields)
       core.convert.FromSame.from, hov, h1, h3, hcur]
   | Ok w =>
     obtain ⟨hw, hfit⟩ := h2'.1 w rfl
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp only [Spec.ejectionStep, Spec.exitStep, absRegistry, h4, ← hx]
     simp [absResult, absRegistry, except_ok_bind, Pure.pure,
       Except.pure, throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.UINT64_SIZE,
@@ -614,7 +618,7 @@ theorem registry_update_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields
   simp only [absResult] at h1
   cases r1 with
   | Err e =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp only [Spec.registryStepIndependent, ← h1]
     simp [absResult, absArithError, except_error_bind,
       
@@ -628,7 +632,7 @@ theorem registry_update_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields
   simp only [absResult] at h2
   cases r2 with
   | Err e =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp only [Spec.registryStepIndependent, ← h1, except_ok_bind, ← h2]
     simp [absResult, absArithError, except_error_bind,
       

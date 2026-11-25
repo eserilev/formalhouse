@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.PendingConsolidations
 import EpochProofs.Sanity.LighthouseRow
 
@@ -182,11 +183,11 @@ theorem inactivity_step_equiv (p : Spec.Preset) (lr : ValidatorRow) (r : Spec.Ro
   rw [hc.previous_epoch, hc.in_leak, hm.inactivity_score] at h
   cases res with
   | Err e =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp only [rowHitsTarget_eq, Spec.TIMELY_TARGET_FLAG_INDEX, Pure.pure, Except.pure, ← h]
     simp [core.convert.FromSame.from, absResult]
   | Ok v =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp only [rowHitsTarget_eq, Spec.TIMELY_TARGET_FLAG_INDEX, Pure.pure, Except.pure, ← h]
     simp [absResult]
 
@@ -230,10 +231,10 @@ theorem rewards_step_equiv (p : Spec.Preset) (lr : ValidatorRow) (r : Spec.Row)
     Spec.TIMELY_HEAD_FLAG_INDEX, Pure.pure, Except.pure, ← h]
   cases res with
   | Err e =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [core.convert.FromSame.from, absResult]
   | Ok v =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [absResult]
 
 /-- The registry fields that `registry_step` builds from a row and the churn. -/
@@ -284,10 +285,10 @@ theorem registry_step_equiv_churn (p : Spec.Preset) (lr : ValidatorRow) (r : Spe
   rw [← h]
   cases res with
   | Err e =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [core.convert.FromSame.from, absResult]
   | Ok v =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [absResult, absRegistry, lhRegistryFieldsOf]
 
 theorem registry_step_equiv (p : Spec.Preset) (lr : ValidatorRow) (r : Spec.Row)
@@ -331,10 +332,10 @@ theorem slashings_step_equiv (p : Spec.Preset) (lr : ValidatorRow) (r : Spec.Row
   rw [← h]
   cases res with
   | Err e =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [core.convert.FromSame.from, absResult]
   | Ok v =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [absResult]
 
 /-- `lhRowStep` as a plain chain of binds, once the eligibility is known. -/
@@ -384,13 +385,13 @@ theorem deposit_step_equiv (p : Spec.Preset) (lr : ValidatorRow) (deposit : U64)
   | Err e =>
     obtain ⟨he, hov⟩ := hA.2 e rfl
     subst he
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [hov, Spec.uint64Add, Spec.UINT64_SIZE, core.convert.FromSame.from, absResult,
       absArithError]
     rfl
   | Ok v =>
     obtain ⟨hv, hfit⟩ := hA.1 v rfl
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [hv, hfit, Spec.uint64Add, Spec.UINT64_SIZE, absResult]
     rfl
 
@@ -427,10 +428,10 @@ theorem effective_balance_step_equiv (p : Spec.Preset) (lr : ValidatorRow) (r : 
   rw [← h]
   cases res with
   | Err e =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [core.convert.FromSame.from, absResult]
   | Ok v =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [absResult]
 
 /-- `lhRowStepFull` as a plain chain of binds, once the eligibility is known. -/
@@ -529,7 +530,7 @@ theorem single_pass_step_equiv_churn (p : Spec.Preset) (lr : ValidatorRow) (r : 
   rw [hc.previous_epoch] at h0
   cases e0 with
   | Err e =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp only [Spec.lhRowStepFull, Spec.lhRowStep, ← h0]
     simp [core.convert.FromSame.from, absResult, absStep, except_error_bind]
   | Ok b =>
@@ -541,7 +542,7 @@ theorem single_pass_step_equiv_churn (p : Spec.Preset) (lr : ValidatorRow) (r : 
   simp only [absResult] at h1
   cases e1 with
   | Err e =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     rw [← h1]
     simp [core.convert.FromSame.from, absStep, except_error_bind]
   | Ok lr1 =>
@@ -556,7 +557,7 @@ theorem single_pass_step_equiv_churn (p : Spec.Preset) (lr : ValidatorRow) (r : 
   simp only [absResult, hi.base_reward] at h2
   cases e2 with
   | Err e =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     rw [← h2]
     simp [core.convert.FromSame.from, absStep, except_error_bind]
   | Ok lr2 =>
@@ -573,7 +574,7 @@ theorem single_pass_step_equiv_churn (p : Spec.Preset) (lr : ValidatorRow) (r : 
   simp only [absResult] at h3
   cases e3 with
   | Err e =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     rw [← h3]
     simp [core.convert.FromSame.from, absStep, except_error_bind]
   | Ok x3 =>
@@ -595,12 +596,11 @@ theorem single_pass_step_equiv_churn (p : Spec.Preset) (lr : ValidatorRow) (r : 
     subst hf
     exact ⟨rfl, rfl, hm.3, hm.4, rfl, rfl, rfl, rfl, hm.9⟩
   obtain ⟨e4, he4, h4, hf4⟩ := spec_imp_exists (slashings_step_equiv p _ _ hm3 c ctx hc)
-  simp only [uncurry_apply_pair]
   rw [he4]
   simp only [absResult] at h4
   cases e4 with
   | Err e =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     rw [← h4]
     simp [core.convert.FromSame.from, absStep, except_error_bind]
   | Ok lr4 =>
@@ -615,7 +615,7 @@ theorem single_pass_step_equiv_churn (p : Spec.Preset) (lr : ValidatorRow) (r : 
   simp only [absResult, hi.deposit] at h5
   cases e5 with
   | Err e =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     rw [← h5]
     simp [core.convert.FromSame.from, absStep, except_error_bind]
   | Ok lr5 =>
@@ -644,7 +644,7 @@ theorem single_pass_step_equiv_churn (p : Spec.Preset) (lr : ValidatorRow) (r : 
   simp only [absResult] at h6
   cases e6 with
   | Err e =>
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     rw [← h6]
     simp [core.convert.FromSame.from, absStep]
   | Ok lr6 =>

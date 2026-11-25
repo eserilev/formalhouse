@@ -227,7 +227,6 @@ theorem compute_balance_weighted_selection_length (p : Preset) (o : Oracle) (sta
   · obtain ⟨_, h0, -⟩ := specM_bind_ok h
     cases h0
   obtain ⟨_, -, h⟩ := specM_bind_ok h
-  obtain ⟨_, -, h⟩ := specM_bind_ok h
   exact compute_balance_weighted_selection_loop_length p o _ _ _ _ _ _ _ [] _ _ r
     (Nat.zero_le _) h
 

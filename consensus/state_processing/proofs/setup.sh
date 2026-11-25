@@ -3,5 +3,4 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
-./etheorem/setup.sh
 ./aeneas/setup.sh

@@ -3579,6 +3579,7 @@ structure per_epoch_processing.pending_deposits.DepositsOutcome where
   deposit_balance_to_consume : Std.U64
   postponed : alloc.vec.Vec Bool
 
+set_option Aeneas.customDoElab true in
 /-- [state_processing::per_epoch_processing::pending_deposits::deposit_status]:
     Source: 'consensus/state_processing/src/per_epoch_processing/pending_deposits.rs', lines 41:0-59:1
     Visibility: public -/
@@ -4149,6 +4150,7 @@ def per_epoch_processing.registry_update.eligibility_step
     else ok (core.result.Result.Ok fields)
   else ok (core.result.Result.Ok fields)
 
+set_option Aeneas.customDoElab true in
 /-- [state_processing::per_epoch_processing::registry_update::ejection_step]:
     Source: 'consensus/state_processing/src/per_epoch_processing/registry_update.rs', lines 108:0-137:1
     Visibility: public -/

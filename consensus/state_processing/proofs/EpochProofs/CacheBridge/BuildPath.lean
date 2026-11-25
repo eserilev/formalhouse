@@ -92,7 +92,7 @@ theorem process_pending_deposits_pkPrefix (p : Preset) (o : Oracle)
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨_, _, _, _, st⟩, hr, h⟩ := specM_bind_ok h
   have hP := SlashingsSanity.forIn_invariant
-    (fun r : MProd (List PendingDeposit) (MProd Bool (MProd Uint64 (MProd Uint64 BeaconState))) =>
+    (fun r : Prod Uint64 (Prod Uint64 (Prod (List PendingDeposit) (Prod Bool BeaconState))) =>
       PkPrefix s r.2.2.2.2) _ ?_ _ _ _ (PkPrefix.refl s) hr
   · simp only [bind, Except.bind, pure, Except.pure] at h
     repeat' split at h

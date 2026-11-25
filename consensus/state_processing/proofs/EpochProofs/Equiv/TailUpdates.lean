@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.RegistryUpdates
 
 /-!
@@ -99,6 +100,7 @@ theorem safe_div_abs (a b : U64) :
 `SpecM` value that the spec side binds first. -/
 macro "abs_err" h:ident : tactic =>
   `(tactic| (rw [← $h:ident]; simp only [WP.spec_ok, bind_tc_ok,
+      core.result.Result.Insts.CoreOpsTry.branch,
       core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       core.convert.FromSame.from]; rfl))
 

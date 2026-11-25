@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.Slashings
 import EpochProofs.Equiv.RegistryUpdates
 import EpochProofs.Sanity.LighthouseNewValidator

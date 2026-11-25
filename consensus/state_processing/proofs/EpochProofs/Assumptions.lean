@@ -1,4 +1,3 @@
-import EpochProofs.Assumptions.Etheorem
 import EpochProofs.Sanity.PtcIndices
 import EpochProofs.Sanity.Invariants.BalanceFloor
 import EpochProofs.Sanity.Invariants.LighthouseEpoch

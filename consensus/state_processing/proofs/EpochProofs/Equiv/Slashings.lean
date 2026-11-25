@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.InactivityUpdates
 import EpochProofs.Sanity.Slashings
 

@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.BalanceWeightedSelection
 import EpochProofs.Spec.EpochCommittees
 import EpochProofs.Equiv.RewardsAndPenalties
@@ -221,42 +222,51 @@ theorem compute_proposer_indices_spec {H B : Type} (inst : ShuffleHashInst H) (e
   have hsv : start = start_slot.val := (Except.ok.inj hstart').symm
   subst hsv
   unfold types.state.balance_weighted_selection.compute_proposer_indices
-  unfold types.state.balance_weighted_selection.compute_proposer_indices_loop
-  apply loop.spec_decr_nat
-    (measure := fun (x : alloc.vec.Vec Usize × U64) => spe.val - x.2.val)
-    (inv := fun (x : alloc.vec.Vec Usize × U64) => x.2.val ≤ spe.val ∧
-      x.1.val.map (·.val) = res.take x.2.val)
-  · rintro ⟨props, j⟩ ⟨hj, hprops⟩
-    dsimp only at hj hprops ⊢
-    unfold types.state.balance_weighted_selection.compute_proposer_indices_loop.body
-    split
-    · rename_i hlt
-      have hjs : j.val < p.SLOTS_PER_EPOCH := by rw [← hspe]; scalar_tac
-      obtain ⟨hfit, l, hl, hk', hl0⟩ := hk j.val hjs
-      apply spec_bind (proposer_at_spec inst ebi balances p o hH state hEB indices seed seedSpec
-        hseed start_slot j R hR maxeb hmaxeb hn24 hus hfit l hl _ hl0)
-      intro r hr
-      obtain ⟨x, hrx, hx⟩ := hr
-      simp only [hrx]
-      have hpl : props.val.length < Usize.max := by
-        have : props.val.length = j.val := by
-          have := congrArg List.length hprops
-          simp only [List.length_map, List.length_take] at this
-          omega
-        rw [this, hus, U64.max_eq]; scalar_tac
-      step*
-      have hjv := u64_saturating_add_one' j (by scalar_tac)
-      simp only [lift, bind_tc_ok, spec_ok]
-      rw [hjv]
-      refine ⟨by omega, ?_, by omega⟩
-      rw [proposers1_post, List.map_append, hprops, List.take_succ_eq_append_getElem hk']
-      simp only [List.map_cons, List.map_nil, hx]
-    · rename_i hge
-      have : j.val = spe.val := by scalar_tac
-      simp only [spec_ok]
-      refine ⟨props, rfl, ?_⟩
-      rw [hprops, this, hspe, ← hlen, List.take_length]
-  · exact ⟨by simp, by simp⟩
+  have hloop : types.state.balance_weighted_selection.compute_proposer_indices_loop inst ebi
+      balances indices seed start_slot spe R maxeb (alloc.vec.Vec.new Usize) 0#u64 ⦃ r =>
+        r.2 = none ∧ r.1.val.map (·.val) = res ⦄ := by
+    unfold types.state.balance_weighted_selection.compute_proposer_indices_loop
+    apply loop.spec_decr_nat
+      (measure := fun (x : alloc.vec.Vec Usize × U64) => spe.val - x.2.val)
+      (inv := fun (x : alloc.vec.Vec Usize × U64) => x.2.val ≤ spe.val ∧
+        x.1.val.map (·.val) = res.take x.2.val)
+    · rintro ⟨props, j⟩ ⟨hj, hprops⟩
+      dsimp only at hj hprops ⊢
+      unfold types.state.balance_weighted_selection.compute_proposer_indices_loop.body
+      split
+      · rename_i hlt
+        have hjs : j.val < p.SLOTS_PER_EPOCH := by rw [← hspe]; scalar_tac
+        obtain ⟨hfit, l, hl, hk', hl0⟩ := hk j.val hjs
+        apply spec_bind (proposer_at_spec inst ebi balances p o hH state hEB indices seed seedSpec
+          hseed start_slot j R hR maxeb hmaxeb hn24 hus hfit l hl _ hl0)
+        intro r hr
+        obtain ⟨x, hrx, hx⟩ := hr
+        simp only [hrx]
+        have hpl : props.val.length < Usize.max := by
+          have : props.val.length = j.val := by
+            have := congrArg List.length hprops
+            simp only [List.length_map, List.length_take] at this
+            omega
+          rw [this, hus, U64.max_eq]; scalar_tac
+        step*
+        have hjv := u64_saturating_add_one' j (by scalar_tac)
+        simp only [lift, bind_tc_ok, spec_ok]
+        rw [hjv]
+        refine ⟨by omega, ?_, by omega⟩
+        rw [proposers1_post, List.map_append, hprops, List.take_succ_eq_append_getElem hk']
+        simp only [List.map_cons, List.map_nil, hx]
+      · rename_i hge
+        have : j.val = spe.val := by scalar_tac
+        simp only [spec_ok]
+        refine ⟨trivial, ?_⟩
+        rw [hprops, this, hspe, ← hlen, List.take_length]
+    · exact ⟨by simp, by simp⟩
+  apply spec_bind hloop
+  rintro ⟨v, err⟩ ⟨herr, hv⟩
+  dsimp only at herr hv ⊢
+  subst herr
+  simp only [uncurry_apply_pair, bind_tc_ok, Bool.false_eq_true, if_false, spec_ok]
+  exact ⟨v, rfl, hv⟩
 
 theorem shift_loop0_spec (look : Slice U64) (shifted : alloc.vec.Vec U64) (spe k : Usize)
     (hk : spe.val ≤ k.val) (hkl : k.val ≤ look.val.length)
@@ -326,7 +336,7 @@ theorem shift_loop1_spec (props : Slice Usize) (shifted : alloc.vec.Vec U64) (ba
       simp only [lift, bind_tc_ok, spec_ok]
       rw [hj1']
       refine ⟨by omega, ?_, by omega⟩
-      rw [shifted1_post, List.map_append, hsh, List.take_succ_eq_append_getElem hjl, x_post]
+      rw [shifted1_post, List.map_append, hsh, List.take_succ_eq_append_getElem hjl, i1_post]
       simp only [List.map_append, List.map_cons, List.map_nil, List.append_assoc,
         cast_u64_of_usize]
     · rename_i hge
@@ -434,7 +444,7 @@ theorem next_proposer_lookahead_spec {H B : Type} (inst : ShuffleHashInst H) (eb
       state.proposer_lookahead.drop p.SLOTS_PER_EPOCH := by
     rw [List.map_drop, hlook]
   rw [hwv, ← hfin, hspev, hd, hlesv.1]
-  simp only [alloc.vec.Vec.deref]
+  simp only [alloc.vec.Vec.deref, Slice.from_val]
   rw [hv, List.take_append_of_le_length (by simp)]
   rw [List.take_of_length_le (by simp)]
 
@@ -643,7 +653,8 @@ theorem ptc_for_epoch_spec_gen {H B : Type} (inst : ShuffleHashInst H) (ebi : EB
           cst.shuffle_round_count hc'.shuffle_round_count cst.max_effective_balance
           hc'.max_effective_balance (by simpa [alloc.vec.Vec.deref] using hn24i) hus _
           (by simpa [alloc.vec.Vec.deref] using hsel))
-        rw [hr, hrv, bind_tc_ok, bind_tc_ok]
+        rw [hr, hrv, bind_tc_ok]
+        dsimp only
         have hpsl : ps.val.length < Usize.max := by
           have := congrArg List.length hps
           simp only [ptcsOf, List.length_map, List.length_take] at this
@@ -655,7 +666,7 @@ theorem ptc_for_epoch_spec_gen {H B : Type} (inst : ShuffleHashInst H) (ebi : EB
         refine ⟨hcst, by omega, ?_, by omega⟩
         simp only [ptcsOf] at hps ⊢
         rw [ptcs1_post, List.map_append, hps, List.take_succ_eq_append_getElem hki]
-        simp only [List.map_cons, List.map_nil, natsOf, alloc.vec.Vec.deref, hv]
+        simp only [List.map_cons, List.map_nil, natsOf, hv]
       · rename_i hge
         have : i.val = L := by
           have : ¬ i.val < committees.val.length := by simpa [Slice.len_val] using hge

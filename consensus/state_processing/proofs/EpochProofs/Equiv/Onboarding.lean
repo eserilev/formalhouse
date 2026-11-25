@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Trusted.Onboarding
 import EpochProofs.Sanity.Onboarding
 import EpochProofs.Equiv.ConsolidationTable
@@ -412,7 +413,7 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
             · simp only [hsig, if_true]
               obtain ⟨s3, hap, ht3, hp3⟩ := hc.add_pending_validator s2 d
               rw [hap, bind_tc_ok]
-              apply hrest s3 (ht3.trans ht2)
+              refine spec_mono (hrest s3 (ht3.trans ht2) ?_) (fun r h => by cases r <;> exact h)
               intro pk hpk'
               rw [hp3, hpend2, List.map_append, List.map_singleton, hd',
                 is_pending_validator_append, List.mem_cons, hp2, hpen pk hpk']
@@ -423,7 +424,7 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
                   (absDep d).withdrawal_credentials (absDep d).amount (absDep d).signature =
                   false := by simpa using hsig
               simp only [hsig', Bool.false_eq_true, if_false, bind_tc_ok]
-              apply hrest s2 ht2
+              refine spec_mono (hrest s2 ht2 ?_) (fun r h => by cases r <;> exact h)
               intro pk hpk'
               rw [hp2, hpend2, List.map_append, List.map_singleton, hd',
                 is_pending_validator_append, hpen pk hpk']
@@ -445,7 +446,9 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
             core.slice.index.Usize.get_mut, bind_tc_ok, uncurry_apply_pair,
             Slice.getElem?_Usize_eq]
           have hcidx : (UScalar.cast UScalarTy.Usize idx).val = idx.val := cast_usize_u64 hus idx
-          have hget : bs1.val[(UScalar.cast UScalarTy.Usize idx).val]? = some bs1.val[idx.val] := by
+          have hget : bs1.slice.val[(UScalar.cast UScalarTy.Usize idx).val]? =
+              some bs1.val[idx.val] := by
+            show bs1.val[(UScalar.cast UScalarTy.Usize idx).val]? = _
             rw [hcidx, List.getElem?_eq_getElem hidxlt]
           rw [hget]
           dsimp only
@@ -476,8 +479,10 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
             obtain ⟨b', htu, hb'⟩ := htu_ok v hadd
             rw [htu, bind_tc_ok]
             simp only [uncurry_apply_pair, lift, bind_tc_ok, spec_ok]
-            have hset : (Slice.set_opt ⟨bs1.val, bs1.property⟩ (UScalar.cast UScalarTy.Usize idx)
-                (some b')).val = bs1.val.set idx.val b' := by
+            have hset : (alloc.vec.Vec.mk (Slice.set_opt bs1.slice (UScalar.cast UScalarTy.Usize idx)
+                (some b'))).val = bs1.val.set idx.val b' := by
+              show (Slice.set_opt bs1.slice (UScalar.cast UScalarTy.Usize idx) (some b')).val =
+                bs1.slice.val.set idx.val b'
               simp [Slice.set_opt, list_set_opt_some, hcidx]
             refine ⟨⟨by (try dsimp only); (try rw [hsat]); omega, ?_, ?_, ?_, ?_,
               by (try dsimp only); (try rw [hsat]); rw [hset]; simp; omega,

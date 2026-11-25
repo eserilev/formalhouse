@@ -1,4 +1,4 @@
-import EpochProofs.CacheBridge.Capstone
+import EpochProofs.CacheBridge.CapstoneEtheorem
 import EpochProofs.Spec.PresetCfg
 import EpochProofs.CacheBridge.Committees
 

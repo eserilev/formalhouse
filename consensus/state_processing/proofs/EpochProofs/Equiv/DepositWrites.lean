@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Trusted.EpochTail
 import EpochProofs.Spec.PresetCfg
 import EpochProofs.Equiv.SinglePassLoop
@@ -445,7 +446,7 @@ theorem apply_deposit_writes_spec [EpochProofs.Spec.PresetCfg] {S D E : Type} (i
   cases r1 with
   | Ok added =>
     obtain ⟨hf, hL, ha⟩ := hpost
-    simp only [core.result.Result.Insts.CoreOpsTry.branch]
+    simp only [core.result.Result.Insts.CoreOpsTry.branch, bind_tc_ok]
     have hspec : Spec.depositWritesSpec o (view s) next.val dbtc.val (postOf s)
         (deps.val.map absDep) eb = (if eb then
           (List.range' (view s1).validators.length
@@ -458,6 +459,7 @@ theorem apply_deposit_writes_spec [EpochProofs.Spec.PresetCfg] {S D E : Type} (i
     cases eb with
     | false =>
       simp only [Bool.false_eq_true, if_false]
+      apply (spec_ok _).mpr
       show _ = _
       rw [hspec]
       rfl
@@ -488,6 +490,7 @@ theorem apply_deposit_writes_spec [EpochProofs.Spec.PresetCfg] {S D E : Type} (i
     simp only [core.result.Result.Insts.CoreOpsTry.branch, bind_tc_ok,
       core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       core.convert.FromSame.from]
+    apply (spec_ok _).mpr
     refine ⟨e', ?_⟩
     unfold Spec.depositWritesSpec
     rw [← hv1]

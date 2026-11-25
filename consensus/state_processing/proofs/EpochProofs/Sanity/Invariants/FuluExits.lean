@@ -167,8 +167,8 @@ theorem process_attester_slashing_fulu_keeps (p : Preset) (o : Oracle) (f : Fulu
   repeat' split at h
   all_goals first | (cases h; done) | skip
   cases h
-  refine SlashingsSanity.forIn_invariant (fun r : MProd Bool BeaconState => P r.snd) _ ?_ _
-    (⟨false, s⟩ : MProd Bool BeaconState) _ hs ‹forIn _ _ _ = _›
+  refine SlashingsSanity.forIn_invariant (fun r : Prod Bool BeaconState => P r.snd) _ ?_ _
+    (⟨false, s⟩ : Prod Bool BeaconState) _ hs ‹forIn _ _ _ = _›
   intro index r step hr hstep
   obtain ⟨_, -, hstep⟩ := specM_bind_ok hstep
   obtain ⟨_, -, hstep⟩ := specM_bind_ok hstep

@@ -517,7 +517,7 @@ theorem process_attester_slashing_ok (p : Preset) (o : Oracle) (s s' : BeaconSta
   all_goals first | (cases h; done) | skip
   cases h
   refine SlashingsSanity.forIn_invariant
-    (fun r : MProd Bool BeaconState => SlashEffect p s r.snd ∧ SlashFields p s r.snd) _ ?_ _ _ _
+    (fun r : Prod Bool BeaconState => SlashEffect p s r.snd ∧ SlashFields p s r.snd) _ ?_ _ _ _
     ⟨SlashEffect.refl p s, SlashFields.refl p s⟩ ‹forIn _ _ _ = _›
   intro index r step ⟨hr, hrf⟩ hstep
   obtain ⟨v, hv, hstep⟩ := specM_bind_ok hstep

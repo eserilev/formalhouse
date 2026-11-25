@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Generated
 import EpochProofs.Sanity.BuilderPendingPayments
 
@@ -34,12 +35,14 @@ theorem slice_get (s : Slice LhPayment) (i : Usize) :
 theorem withdrawal_clone (w : LhWithdrawal) :
     types.builder.builder_pending_withdrawal.BuilderPendingWithdrawal.Insts.CoreCloneClone.clone w
       = ok w := by
-  rfl
+  simp [types.builder.builder_pending_withdrawal.BuilderPendingWithdrawal.Insts.CoreCloneClone.clone,
+    alloy_primitives.bits.address.Address.Insts.CoreCloneClone.clone, lift]
 
 theorem payment_clone (p : LhPayment) :
     types.builder.builder_pending_payment.BuilderPendingPayment.Insts.CoreCloneClone.clone p
       = ok p := by
-  rfl
+  simp [types.builder.builder_pending_payment.BuilderPendingPayment.Insts.CoreCloneClone.clone,
+    withdrawal_clone, lift]
 
 /-- `BuilderPendingPayment::default()`. -/
 def lhDefaultPayment : LhPayment :=
@@ -53,6 +56,10 @@ def lhDefaultPayment : LhPayment :=
 theorem payment_default :
     types.builder.builder_pending_payment.BuilderPendingPayment.Insts.CoreDefaultDefault.default
       = ok lhDefaultPayment := by
+  simp [types.builder.builder_pending_payment.BuilderPendingPayment.Insts.CoreDefaultDefault.default,
+    types.builder.builder_pending_withdrawal.BuilderPendingWithdrawal.Insts.CoreDefaultDefault.default,
+    alloy_primitives.bits.address.Address.Insts.CoreDefaultDefault.default,
+    alloy_primitives.bits.fixed.FixedBytes.Insts.CoreDefaultDefault.default, lhDefaultPayment]
   rfl
 
 /-- The withdrawals that loop 0 collects from the first `n` payments. -/

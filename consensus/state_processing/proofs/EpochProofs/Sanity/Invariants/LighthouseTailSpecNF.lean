@@ -490,7 +490,7 @@ theorem process_pending_deposits_valAct [PresetCfg] (o : Oracle) (tab : Gwei) (S
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨_, _, _, _, st⟩, hr, h⟩ := specM_bind_ok h
   have hP := forIn_ok_inv
-    (fun r : MProd (List PendingDeposit) (MProd Bool (MProd Uint64 (MProd Uint64 BeaconState))) =>
+    (fun r : Prod Uint64 (Prod Uint64 (Prod (List PendingDeposit) (Prod Bool BeaconState))) =>
       ValAct S r.2.2.2.2) _ _ ?_ _ _ (ValAct.refl S) hr
   · simp only [bind, Except.bind, pure, Except.pure] at h
     repeat' split at h

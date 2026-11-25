@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.PendingDeposits
 import EpochProofs.Sanity.PendingConsolidations
 
@@ -61,12 +62,13 @@ theorem set_balance_eq (balances : alloc.vec.Vec U64) (i : Usize) (value : U64) 
   simp only [lift, alloc.vec.Vec.deref_mut, core.slice.Slice.get_mut,
     core.slice.index.Usize.get_mut, bind_tc_ok,
     uncurry_apply_pair, Slice.getElem?_Usize_eq]
-  by_cases h : i.val < balances.val.length
+  unfold alloc.vec.Vec.val
+  by_cases h : i.val < balances.slice.val.length
   · rw [List.getElem?_eq_getElem h]
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [Slice.set_opt, list_set_opt_some]
   · rw [List.getElem?_eq_none (Nat.le_of_not_lt h)]
-    refine ⟨_, rfl, ?_⟩
+    refine ⟨_, by ok_rfl, ?_⟩
     simp [Slice.set_opt, list_set_opt_none, List.set_eq_of_length_le (Nat.le_of_not_lt h)]
 
 def absConsolidationError :
@@ -158,7 +160,7 @@ theorem consolidations_loop_spec (consolidations : Slice LhConsolidationView)
       have hwe' : ¬ next_epoch.val < v.withdrawable_epoch.val := by scalar_tac
       simp only [hwe, if_false]
       have hsrcb : consolidations.val[j.val].source.val < bal.val.length := by omega
-      simp only [get_balance_eq, alloc.vec.Vec.deref, bind_tc_ok, List.getElem?_eq_getElem hsrcb,
+      simp only [get_balance_eq, alloc.vec.Vec.deref, Slice.from_val, bind_tc_ok, List.getElem?_eq_getElem hsrcb,
         core.cmp.min, liftFun2]
       have hmin := core.cmp.impls.OrdU64.min_val bal.val[consolidations.val[j.val].source.val]
         v.effective_balance

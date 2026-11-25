@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.TailUpdates
 import EpochProofs.Equiv.EpochCommittees
 import EpochProofs.Sanity.Invariants.LighthouseOrder

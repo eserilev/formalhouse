@@ -309,8 +309,8 @@ theorem get_block_root_total [PresetCfg] [PresetCfg.Ok] (s : BeaconState) (e : E
   dsimp only [Except.bind]
   rw [hc1]
   rw [if_neg Bool.false_ne_true, tot_add ha]
-  rw [pure_bind, show (Except.ok (e * S + R) : SpecM Nat) = pure (e * S + R) from rfl,
-    pure_bind, hc2, if_neg Bool.false_ne_true, pure_bind]
+  rw [show (Except.ok (e * S + R) : SpecM Nat) = pure (e * S + R) from rfl,
+    pure_bind, hc2, if_neg Bool.false_ne_true]
   exact tot_get hidx
 
 
@@ -470,8 +470,7 @@ theorem process_justification_and_finalization_total [PresetCfg] [PresetCfg.Ok] 
   · rename_i hE
     have h64 : 2 * P.SLOTS_PER_EPOCH ≤ s.slot := tot_ge64 (by simpa [GENESIS_EPOCH] using hE)
     have hsup64 : totalEffectiveBalance s < 2 ^ 64 := Nat.lt_trans hsup (by decide)
-    dsimp only
-    rw [pure_bind, tot_previous_epoch, tot_bind_ok,
+    rw [tot_previous_epoch, tot_bind_ok,
       participating_total s hrows TIMELY_TARGET_FLAG_INDEX (by decide) _ (Or.inl rfl), tot_bind_ok,
       tot_bind_ok,
       participating_total s hrows TIMELY_TARGET_FLAG_INDEX (by decide) _ (Or.inr rfl), tot_bind_ok]
@@ -627,7 +626,7 @@ theorem cons_step (B : List Nat) (i j x : Nat) (hi : i < B.length)
 
 /-- The loop state of `process_pending_consolidations` is `s` with other balances: the same
 number of balances, and a sum that is not larger. -/
-def ConsInv (s : BeaconState) (r : MProd Nat BeaconState) : Prop :=
+def ConsInv (s : BeaconState) (r : Prod Nat BeaconState) : Prop :=
   ∃ B : List Gwei, r.snd = { s with balances := B } ∧ B.length = s.validators.length ∧
     B.sum ≤ s.balances.sum
 
@@ -652,7 +651,7 @@ theorem process_pending_consolidations_total [PresetCfg] [PresetCfg.Ok] (s : Bea
     · exact ⟨_, rfl, ⟨B, rfl, hl, hs⟩⟩
     · split
       · exact ⟨_, rfl, ⟨B, rfl, hl, hs⟩⟩
-      · rw [pure_bind]
+      · dsimp only
         have hsb : c.source_index < B.length := by rw [hl]; exact hsrc
         rw [tot_get hsb, tot_bind_ok]
         unfold decrease_balance

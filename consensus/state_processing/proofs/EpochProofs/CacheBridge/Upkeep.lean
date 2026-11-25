@@ -20,14 +20,14 @@ theorem PBStep.coherent {incr : Nat} {x y : CacheProofs.Spec.BeaconState × LhCa
       heb hfit hlh =>
     obtain ⟨c'', h1, h2⟩ := attestation_coherent incr s s' c e j f is_slashed eb v p hc hspec he
       hepoch hv hp hnew hactive hf hslashed heb hfit
-    rw [hlh] at h1
-    cases h1
+    rw [hlh, ok.injEq, core.result.Result.Ok.injEq] at h1
+    subst h1
     exact h2
   | slash s s' c c' j pflags cflags eb v hspec hv hs hpp hcp hpact hcact heb hlh =>
     obtain ⟨c'', h1, h2⟩ := slashing_coherent incr s s' c j pflags cflags eb v hc hspec hv hs
       hpp hcp hpact hcact heb
-    rw [hlh] at h1
-    cases h1
+    rw [hlh, ok.injEq, core.result.Result.Ok.injEq] at h1
+    subst h1
     exact h2
   | view s c vs' hprev hcur => exact registry_change_coherent incr s c vs' hc hprev hcur
   | addValidator s c v hplen hclen => exact add_validator_coherent incr s c v hc hplen hclen

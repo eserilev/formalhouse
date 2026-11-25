@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Trusted.Consolidations
 import EpochProofs.Equiv.ListWrites
 
@@ -337,7 +338,7 @@ theorem build_views_spec (hus : Usize.max = U64.max) (pairs : Slice LhPendingPai
   obtain ⟨vw, o⟩ := r
   dsimp only at hnone hviews
   subst hnone
-  exact ⟨_, rfl, vw, rfl, hviews⟩
+  exact ⟨.Ok vw, by ok_rfl, vw, rfl, hviews⟩
 
 /-! ## The write-back -/
 
@@ -468,7 +469,7 @@ theorem process_on_table_spec {S E : Type} (inst : LhConsolidationState S E) (p 
         q.target.val ∈ idx.val.map (·.val) := by
       intro q hq
       have hqm : (q.source.val, q.target.val) ∈ pendingPairs (view s) := by
-        rw [← hpv]; exact List.mem_map_of_mem hq
+        rw [← hpv]; rw [vec_deref_val] at hq; exact List.mem_map_of_mem hq
       exact hin _ hqm
     obtain ⟨rv, hrv, views, rfl, hviews⟩ := spec_imp_exists
       (build_views_spec hus (alloc.vec.Vec.deref pv) idx hidx.1 hin')
@@ -480,18 +481,19 @@ theorem process_on_table_spec {S E : Type} (inst : LhConsolidationState S E) (p 
       simp [Spec.tableRows, Spec.tableBalances] at h1 h2
       omega
     obtain ⟨r3, hr3, habs⟩ := spec_imp_exists (process_pending_consolidations_equiv
-      (alloc.vec.Vec.deref views) (alloc.vec.Vec.deref vals) bals v hlenvb)
+      (alloc.vec.Vec.deref views) (alloc.vec.Vec.deref vals) bals v
+      (by rw [vec_deref_val]; exact hlenvb))
     rw [hr3, bind_tc_ok]
     have hviews' : (alloc.vec.Vec.deref views).val.map absView =
         (pendingPairs (view s)).map fun q =>
           ((idx.val.map (·.val)).idxOf q.1, (idx.val.map (·.val)).idxOf q.2) := by
-      show views.val.map absView = _
-      rw [hviews, ← hpv]
+      rw [vec_deref_val, hviews, ← hpv]
       simp [tablePairs, alloc.vec.Vec.deref]
     have hloop := Spec.stepLoop_table (vs := (view s).validators) hnd ne (pendingPairs (view s))
       hin (view s).balances hlen 0
     have htv' : (alloc.vec.Vec.deref vals).val.map absLocal =
-        Spec.tableRows (view s).validators (idx.val.map (·.val)) := htv
+        Spec.tableRows (view s).validators (idx.val.map (·.val)) := by
+      rw [vec_deref_val]; exact htv
     rw [htv', htb, hviews', hvv] at habs
     rw [show (Spec.tableBalances (view s).balances (idx.val.map (·.val)), 0) =
       Spec.toTable (idx.val.map (·.val)) ((view s).balances, 0) from rfl, hloop] at habs
@@ -545,7 +547,7 @@ theorem process_on_table_spec {S E : Type} (inst : LhConsolidationState S E) (p 
         simp only [bind_tc_ok, spec_ok]
         refine ⟨fun t ht => ?_, fun e he => by cases he⟩
         simp only [Bind.bind, Except.bind, Pure.pure, Except.pure, Except.ok.injEq] at ht
-        refine ⟨rfl, ?_⟩
+        refine ⟨trivial, ?_⟩
         rw [hv3, hv2, ← ht, hnxt]
 
 end EpochProofs

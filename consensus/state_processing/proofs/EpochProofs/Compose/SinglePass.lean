@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.StepContext
 import EpochProofs.Equiv.DepositWrites
 import EpochProofs.Equiv.ListWrites
@@ -169,7 +170,7 @@ theorem consolidations_keepB (p : Preset) (t t' : BeaconState)
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨_, st⟩, hr, h⟩ := specM_bind_ok h
-  have hP := forIn_keep (fun r : MProd Nat BeaconState => KeepB t r.snd) _ ?_ _ _ _
+  have hP := forIn_keep (fun r : Prod Nat BeaconState => KeepB t r.snd) _ ?_ _ _ _
     ⟨rfl, rfl, rfl⟩ hr
   · cases h
     exact hP
@@ -545,7 +546,8 @@ theorem payments_spec (P : PaymentsGlue σ E) (view : σ → Spec.BeaconState) (
   obtain ⟨hnum, hden⟩ := hL.threshold
   have hpay := apply_builder_pending_payments_equiv Spec.P P.payments P.wview P.pview
     hL.paymentContract (P.paymentsBorrow st4) (P.totalActiveBalance st) P.slotsPerEpoch
-    P.slotsPerEpochUsize hL.slotsPerEpoch hL.slotsPerEpochUsize hplen ⟨v.val, v.property⟩ hvv
+    P.slotsPerEpochUsize hL.slotsPerEpoch hL.slotsPerEpochUsize hplen
+    (Slice.from v.val v.property) (by rw [Slice.from_val]; exact hvv)
   rw [← hnum, ← hden] at hpay
   obtain ⟨⟨rp, sp⟩, hrp, hppost⟩ := spec_imp_exists hpay
   unfold payments

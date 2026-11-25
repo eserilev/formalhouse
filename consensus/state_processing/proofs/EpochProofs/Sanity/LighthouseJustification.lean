@@ -76,7 +76,6 @@ theorem lhJustificationAndFinalization_sameResultOrBothFail (p : Preset) (s : Be
   refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
   refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
   refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
-  refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
   exact lhWeigh_sameResultOrBothFail p s _ _ _ hlen
 
 end EpochProofs.Spec

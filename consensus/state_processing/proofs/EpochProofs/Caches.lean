@@ -1,5 +1,4 @@
 import CacheProofs
-import EpochProofs.Etheorem.Final
 
 /-!
 # The cache proofs in the epoch proofs

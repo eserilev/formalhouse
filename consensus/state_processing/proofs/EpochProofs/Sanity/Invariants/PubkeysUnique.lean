@@ -227,7 +227,6 @@ private theorem request_loop_pkSame {α : Type} {l : List α}
 local macro "loop_body" e:term : tactic => `(tactic| (
   intro _ _ _ hbody
   obtain ⟨_, h1, hbody⟩ := specM_bind_ok hbody
-  obtain ⟨_, -, hbody⟩ := specM_bind_ok hbody
   cases hbody
   exact $e h1))
 
@@ -434,7 +433,7 @@ theorem process_pending_deposits_pubkeysUnique (p : Preset) (o : Oracle)
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨_, _, _, _, st⟩, hr, h⟩ := specM_bind_ok h
   have hP := SlashingsSanity.forIn_invariant
-    (fun r : MProd (List PendingDeposit) (MProd Bool (MProd Uint64 (MProd Uint64 BeaconState))) =>
+    (fun r : Prod Uint64 (Prod Uint64 (Prod (List PendingDeposit) (Prod Bool BeaconState))) =>
       PubkeysUnique r.2.2.2.2) _ ?_ _ _ _ hs hr
   · simp only [bind, Except.bind, pure, Except.pure] at h
     repeat' split at h

@@ -120,14 +120,12 @@ theorem get_pending_partial_withdrawals_loop_safeAll (p : Preset) (state : Beaco
     split at h
     · cases h
       exact hs
-    · obtain ⟨_, -, h⟩ := specM_bind_ok h
-      obtain ⟨validator, hv, h⟩ := specM_bind_ok h
+    · obtain ⟨validator, hv, h⟩ := specM_bind_ok h
       obtain ⟨balance, hbal, h⟩ := specM_bind_ok h
       obtain ⟨bj, hbj, hle, hbeq⟩ := get_balance_after_withdrawals_ok hbal
       split at h
       · rename_i helig
         obtain ⟨d, hd, h⟩ := specM_bind_ok h
-        obtain ⟨_, -, h⟩ := specM_bind_ok h
         obtain ⟨_, -, h⟩ := specM_bind_ok h
         obtain ⟨_, -, h⟩ := specM_bind_ok h
         refine ih _ _ _ _ _ _ h ?_
@@ -139,7 +137,6 @@ theorem get_pending_partial_withdrawals_loop_safeAll (p : Preset) (state : Beaco
         obtain ⟨h1, h2⟩ := pending_amount_fits (a := w.amount) helig.2
         exact hs.append_validator hbj hle h1 ⟨validator, (listGet_ok hv).2, Or.inl h2⟩
       · obtain ⟨_, -, h⟩ := specM_bind_ok h
-        obtain ⟨_, -, h⟩ := specM_bind_ok h
         exact ih _ _ _ _ _ _ h hs
 
 /-- The validators sweep loop keeps `WithdrawalsSafeAll`. -/
@@ -162,8 +159,7 @@ theorem get_validators_sweep_withdrawals_loop_safeAll (p : Preset) (state : Beac
     split at h
     · cases h
       exact hs
-    · obtain ⟨_, -, h⟩ := specM_bind_ok h
-      obtain ⟨validator, hv, h⟩ := specM_bind_ok h
+    · obtain ⟨validator, hv, h⟩ := specM_bind_ok h
       obtain ⟨balance, hbal, h⟩ := specM_bind_ok h
       obtain ⟨bj, hbj, hle, hbeq⟩ := get_balance_after_withdrawals_ok hbal
       subst hbeq
@@ -206,16 +202,14 @@ theorem get_expected_withdrawals_fulu_safeAll {p : Preset} {state : BeaconState}
     obtain ⟨_, -, h1⟩ := specM_bind_ok h1
     split at h1
     · cases h1
-    · obtain ⟨_, -, h1⟩ := specM_bind_ok h1
-      exact get_pending_partial_withdrawals_loop_safeAll p state epoch [] _ _ _ _ _ _ _ _ h1
+    · exact get_pending_partial_withdrawals_loop_safeAll p state epoch [] _ _ _ _ _ _ _ _ h1
         (WithdrawalsSafeAll.nil p state)
   unfold get_validators_sweep_withdrawals at h2
   simp only [throw, throwThe, MonadExceptOf.throw] at h2
   obtain ⟨epoch, hepoch, h2⟩ := specM_bind_ok h2
   split at h2
   · cases h2
-  · obtain ⟨_, -, h2⟩ := specM_bind_ok h2
-    exact get_validators_sweep_withdrawals_loop_safeAll p state epoch
+  · exact get_validators_sweep_withdrawals_loop_safeAll p state epoch
       (get_current_epoch_ok_eq hepoch) _ _ _ _ _ _ _ _ _ _ h2
       (by simpa using s1)
 
@@ -391,10 +385,10 @@ theorem process_attester_slashing_fulu_slashable (p : Preset) (o : Oracle) (f : 
   all_goals first | (cases h; done) | skip
   cases h
   refine (SlashingsSanity.forIn_invariant
-    (fun r : MProd Bool BeaconState => r.snd.slot = s.slot ∧
+    (fun r : Prod Bool BeaconState => r.snd.slot = s.slot ∧
       ∀ (j : Nat) (v v' : Validator), s.validators[j]? = some v → r.snd.validators[j]? = some v' →
         v' = v ∨ s.slot / p.SLOTS_PER_EPOCH < v.withdrawable_epoch) _ ?_ _
-    (⟨false, s⟩ : MProd Bool BeaconState) _
+    (⟨false, s⟩ : Prod Bool BeaconState) _
     ⟨rfl, fun j v v' hv hv' => by rw [hv] at hv'; cases hv'; exact .inl rfl⟩
     ‹forIn _ _ _ = _›).2
   intro index r step ⟨hslot, hr⟩ hstep

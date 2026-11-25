@@ -164,7 +164,7 @@ theorem process_pending_deposits_checkpointsStable (p : Preset) (o : Oracle)
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨_, _, _, _, st⟩, hr, h⟩ := specM_bind_ok h
   have hP := forIn_ok_invariant
-    (fun r : MProd (List PendingDeposit) (MProd Bool (MProd Uint64 (MProd Uint64 BeaconState))) =>
+    (fun r : Prod Uint64 (Prod Uint64 (Prod (List PendingDeposit) (Prod Bool BeaconState))) =>
       CheckpointsStable s r.2.2.2.2) _ ?_ _ _ _ (CheckpointsStable.refl s) hr
   · simp only [bind, Except.bind, pure, Except.pure] at h
     repeat' split at h
@@ -188,7 +188,7 @@ theorem process_pending_consolidations_checkpointsStable (p : Preset) (s s' : Be
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨_, st⟩, hr, h⟩ := specM_bind_ok h
-  have hP := forIn_ok_invariant (fun r : MProd Nat BeaconState => CheckpointsStable s r.snd) _ ?_
+  have hP := forIn_ok_invariant (fun r : Prod Nat BeaconState => CheckpointsStable s r.snd) _ ?_
     _ _ _ (CheckpointsStable.refl s) hr
   · cases h
     exact hP

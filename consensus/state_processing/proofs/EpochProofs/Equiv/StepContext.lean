@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Equiv.SinglePassLoopModel
 import EpochProofs.Equiv.EpochContexts
 import EpochProofs.Equiv.Slashings
@@ -170,6 +171,7 @@ theorem step_context_spec [Spec.PresetCfg] (s : Spec.BeaconState) (cur : Nat)
   obtain ⟨y1, y2⟩ := y
   unfold per_epoch_processing.single_pass_step.step_context
   simp only [lift, bind_tc_ok, h0, h1, h2, h3, core.result.Result.Insts.CoreOpsTry.branch]
+  apply (spec_ok _).mpr
   refine ⟨_, rfl, ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
     ?_, ?_, ?_⟩, hq3.1, hq3.2⟩
   all_goals try simp only [Spec.lhContextOf]
@@ -226,6 +228,7 @@ theorem single_pass_rows_model_inputs [Spec.PresetCfg] {R E : Type} (inst : LhRe
   obtain ⟨r, hres, c, rfl, hcm, hd, hu⟩ := spec_imp_exists
     (step_context_spec s cur hcur tab rctx hr adjusted per hpre downward upward hh htarget i hi)
   rw [hres]
+  apply (spec_ok _).mpr
   exact ⟨c, rfl, single_pass_rows_model inst s tab topups named view rows hview hc c _ hcm
     downward upward hd hu k hk ch hch⟩
 

@@ -189,7 +189,7 @@ theorem consolidations_votesBlind [PresetCfg] :
       have hp : (clearVotes t).pending_consolidations = t.pending_consolidations := rfl
       rw [hp]
       rw [forIn_sim_eq t.pending_consolidations _
-        (fun b : MProd Nat BeaconState => ⟨b.fst, clearVotes b.snd⟩)
+        (fun b : Prod Nat BeaconState => ⟨b.fst, clearVotes b.snd⟩)
         (fun _ => True) ?_ ?_ ⟨0, t⟩ _ rfl trivial]
       · refine map_bind_eq _ (fun r => ?_)
         rfl
@@ -210,7 +210,7 @@ theorem consolidations_slotKeep [PresetCfg] : SlotKeep (process_pending_consolid
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨n, st⟩, hr, h⟩ := specM_bind_ok h
-  have hP := forIn_ok_inv (fun b : MProd Nat BeaconState => b.snd.slot = t.slot ∧
+  have hP := forIn_ok_inv (fun b : Prod Nat BeaconState => b.snd.slot = t.slot ∧
     b.snd.historical_summaries = t.historical_summaries) _ _ ?_ ⟨0, t⟩ _ ⟨rfl, rfl⟩ hr
   · cases h
     exact hP

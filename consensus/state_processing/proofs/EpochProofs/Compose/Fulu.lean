@@ -1,3 +1,4 @@
+import EpochProofs.AeneasCompat
 import EpochProofs.Compose.Epoch
 import EpochProofs.Equiv.FuluRegistry
 import EpochProofs.Sanity.Invariants.LighthouseFuluOrder

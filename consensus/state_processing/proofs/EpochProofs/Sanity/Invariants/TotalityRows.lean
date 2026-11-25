@@ -1092,9 +1092,9 @@ theorem act_churn_total [PresetCfg] [PresetCfg.Bounds] (tab : Gwei) :
 
 /-- The loop state of `process_pending_deposits` while `rest` is still to come. -/
 def DepInv (s : BeaconState) (avail : Nat) (rest : List PendingDeposit)
-    (r : MProd (List PendingDeposit) (MProd Bool (MProd Uint64 (MProd Uint64 BeaconState)))) :
+    (r : Prod Uint64 (Prod Uint64 (Prod (List PendingDeposit) (Prod Bool BeaconState)))) :
     Prop :=
-  @LE.le Nat _ r.2.2.2.1 avail ∧
+  @LE.le Nat _ r.1 avail ∧
   @LE.le Nat _ (r.2.2.2.2.balances.sum + (rest.map (·.amount)).sum)
     (s.balances.sum + (s.pending_deposits.map (·.amount)).sum) ∧
   @LE.le Nat _ (totalEffectiveBalance r.2.2.2.2 + (rest.map (·.amount)).sum)
@@ -1107,8 +1107,7 @@ def DepInv (s : BeaconState) (avail : Nat) (rest : List PendingDeposit)
   s.validators.length ≤ r.2.2.2.2.validators.length
 
 theorem DepInv.weaken {s : BeaconState} {avail : Nat} {a : PendingDeposit}
-    {rest : List PendingDeposit} {r : MProd (List PendingDeposit)
-      (MProd Bool (MProd Uint64 (MProd Uint64 BeaconState)))}
+    {rest : List PendingDeposit} {r : Prod Uint64 (Prod Uint64 (Prod (List PendingDeposit) (Prod Bool BeaconState)))}
     (h : DepInv s avail (a :: rest) r) : DepInv s avail [] r := by
   unfold DepInv at h ⊢
   obtain ⟨h1, h2, h3, h4⟩ := h
@@ -1120,8 +1119,8 @@ theorem DepInv.apply {s : BeaconState} {avail : Nat} {a : PendingDeposit}
     {rest : List PendingDeposit} {pp : List PendingDeposit} {b : Bool} {n p p' : Uint64}
     {st st' : BeaconState} (hP : @LT.lt Nat _ (s.balances.sum +
       (s.pending_deposits.map (·.amount)).sum) (2 ^ 62))
-    (h : DepInv s avail (a :: rest) ⟨pp, b, n, p, st⟩) (hp : @LE.le Nat _ p' avail)
-    (hstep : DepStep st st' a.amount) : DepInv s avail rest ⟨pp, b, n + 1, p', st'⟩ := by
+    (h : DepInv s avail (a :: rest) ⟨p, n, pp, b, st⟩) (hp : @LE.le Nat _ p' avail)
+    (hstep : DepStep st st' a.amount) : DepInv s avail rest ⟨p', n + 1, pp, b, st'⟩ := by
   unfold DepInv at h ⊢
   obtain ⟨-, h2, h3, -, h5, h6, h7, h8, h9, h10⟩ := h
   simp only [List.map_cons, List.sum_cons] at h2 h3
@@ -1145,8 +1144,8 @@ theorem DepInv.apply {s : BeaconState} {avail : Nat} {a : PendingDeposit}
 /-- A step that keeps the state keeps `DepInv` without the deposit. -/
 theorem DepInv.skip {s : BeaconState} {avail : Nat} {a : PendingDeposit}
     {rest : List PendingDeposit} {pp pp' : List PendingDeposit} {b : Bool} {n p : Uint64}
-    {st : BeaconState} (h : DepInv s avail (a :: rest) ⟨pp, b, n, p, st⟩) :
-    DepInv s avail rest ⟨pp', b, n + 1, p, st⟩ := by
+    {st : BeaconState} (h : DepInv s avail (a :: rest) ⟨p, n, pp, b, st⟩) :
+    DepInv s avail rest ⟨p, n + 1, pp', b, st⟩ := by
   unfold DepInv at h ⊢
   obtain ⟨h1, h2, h3, h4⟩ := h
   simp only [List.map_cons, List.sum_cons] at h2 h3
@@ -1200,9 +1199,9 @@ theorem depCore_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] 
     rw [hPt]; omega
   refine OkWith.bind (forIn_total_rest (DepInv s (s.deposit_balance_to_consume + c))
     (DepInv s (s.deposit_balance_to_consume + c) []) _ ?_ (fun _ h => h) s.pending_deposits
-    ⟨[], false, 0, 0, s⟩ ?_) (fun r hr => ?_)
+    ⟨0, 0, [], false, s⟩ ?_) (fun r hr => ?_)
   · intro a rest r hI
-    obtain ⟨pp, b, n, p, st⟩ := r
+    obtain ⟨p, n, pp, b, st⟩ := r
     dsimp only
     have hI' := hI
     unfold DepInv at hI'
@@ -1261,7 +1260,7 @@ theorem depCore_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] 
   · unfold DepInv
     exact ⟨Nat.zero_le _, Nat.le_refl _, Nat.le_refl _, hf.rows, fun v hv => hf.ebs v hv, rfl, rfl,
       rfl, rfl, Nat.le_refl _⟩
-  · obtain ⟨pp, b, n, p, st⟩ := r
+  · obtain ⟨p, n, pp, b, st⟩ := r
     unfold DepInv at hr
     obtain ⟨hp, hb, htb, hrows', hebs', hsl', hra', hss', hpc', hvl'⟩ := hr
     dsimp only at hp hb htb hrows' hebs' hsl' hra' hss' hpc' hvl'
