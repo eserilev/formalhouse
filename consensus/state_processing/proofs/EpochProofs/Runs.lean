@@ -1,5 +1,5 @@
-import EpochProofs.Sanity.Invariants.ForkUpgrade
-import EpochProofs.Sanity.Invariants.LighthouseEpoch
+import EpochProofs.Invariants.ForkUpgrade
+import EpochProofs.LighthouseModel.Epoch
 
 /-!
 # The runs that reach an input of `process_epoch`

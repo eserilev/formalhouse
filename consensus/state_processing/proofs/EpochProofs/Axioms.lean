@@ -1,99 +1,99 @@
-import EpochProofs.Equiv.BuilderPendingPayments
-import EpochProofs.Equiv.EffectiveBalanceUpdates
-import EpochProofs.Equiv.InactivityUpdates
-import EpochProofs.Equiv.Slashings
-import EpochProofs.Equiv.RewardsAndPenalties
-import EpochProofs.Equiv.RegistryUpdates
-import EpochProofs.Equiv.PendingDeposits
-import EpochProofs.Equiv.PendingConsolidations
-import EpochProofs.Sanity.RowsSinglePass
-import EpochProofs.Sanity.LighthouseRowOrder
-import EpochProofs.Equiv.SinglePassStep
-import EpochProofs.Sanity.LighthouseSinglePass
-import EpochProofs.Sanity.RowsEffectiveBalance
-import EpochProofs.Sanity.Frame
-import EpochProofs.Sanity.Effects
-import EpochProofs.Sanity.Block.Withdrawals
-import EpochProofs.Sanity.Block.ExecutionRequests
-import EpochProofs.Sanity.Block.ParentPayload
-import EpochProofs.Sanity.Block.Exits
-import EpochProofs.Sanity.Block.Slashings
-import EpochProofs.Sanity.Block.Attestations
-import EpochProofs.Sanity.Block.SyncAggregate
-import EpochProofs.Sanity.JustificationFinalization
-import EpochProofs.Sanity.EpochCommittees
-import EpochProofs.Sanity.Driver
-import EpochProofs.Sanity.Invariants.ExitDelay
-import EpochProofs.Sanity.Invariants.BalanceFloor
-import EpochProofs.Sanity.Invariants.EpochEnd
-import EpochProofs.Sanity.Invariants.Lengths
-import EpochProofs.Sanity.Invariants.ExitEpochs
-import EpochProofs.Sanity.Invariants.Reachable
-import EpochProofs.Sanity.Invariants.LighthouseEpoch
-import EpochProofs.Sanity.Invariants.Capstone
-import EpochProofs.Sanity.Invariants.ConsolidationIndices
-import EpochProofs.Sanity.Invariants.LighthouseTailDeposits
-import EpochProofs.Sanity.Invariants.LighthouseTailEB
-import EpochProofs.Sanity.Invariants.LighthouseTail
-import EpochProofs.Sanity.Invariants.LighthouseTailLhNF
-import EpochProofs.Sanity.Invariants.LighthouseTailModel
-import EpochProofs.Sanity.Invariants.LighthouseTailNF
-import EpochProofs.Sanity.Invariants.LighthouseTailRows
-import EpochProofs.Sanity.Invariants.LighthouseTailSpecNF
-import EpochProofs.Sanity.Invariants.LighthouseTailTopups
-import EpochProofs.Sanity.Invariants.LighthouseTailViews
-import EpochProofs.Sanity.Invariants.PubkeysUnique
-import EpochProofs.Sanity.Invariants.WithdrawableEpochs
-import EpochProofs.Sanity.EpochStepFrames
-import EpochProofs.Equiv.Justification
-import EpochProofs.Sanity.LighthouseJustification
-import EpochProofs.Equiv.EpochCommittees
-import EpochProofs.Equiv.TailUpdates
-import EpochProofs.Sanity.Invariants.LighthouseResets
-import EpochProofs.Sanity.Invariants.LighthouseOrder
-import EpochProofs.Sanity.Invariants.Totality
-import EpochProofs.Sanity.Invariants.TotalityCommittees
-import EpochProofs.Sanity.Invariants.TotalityRows
-import EpochProofs.Sanity.Invariants.TotalityFulu
-import EpochProofs.Equiv.DepositBalance
-import EpochProofs.Equiv.SelectionEmpty
-import EpochProofs.CacheBridge.Capstone
-import EpochProofs.CachePubkey
-import EpochProofs.Equiv.Fulu
-import EpochProofs.Equiv.FuluRegistry
-import EpochProofs.Sanity.FuluSinglePass
-import EpochProofs.Sanity.FuluEpoch
-import EpochProofs.Sanity.Invariants.FuluOrder
-import EpochProofs.Sanity.Block.FuluBlock
-import EpochProofs.Sanity.FuluTransition
-import EpochProofs.Sanity.Block.FuluEffects
-import EpochProofs.Sanity.Invariants.FuluSteps
-import EpochProofs.Sanity.Invariants.FuluLengths
-import EpochProofs.Sanity.Invariants.FuluPubkeys
-import EpochProofs.Sanity.Invariants.FuluConsolidations
-import EpochProofs.Sanity.Invariants.FuluExits
-import EpochProofs.Sanity.Invariants.FuluBalance
-import EpochProofs.Sanity.Invariants.FuluReachable
-import EpochProofs.Sanity.Invariants.ForkUpgrade
-import EpochProofs.Equiv.Upgrade
-import EpochProofs.Equiv.SinglePassLoopModel
-import EpochProofs.Equiv.DepositWrites
-import EpochProofs.Equiv.ListWrites
-import EpochProofs.Trusted.CacheUpkeep
-import EpochProofs.CacheBridge.Upkeep
-import EpochProofs.Equiv.EpochContexts
-import EpochProofs.Equiv.StepContext
-import EpochProofs.Equiv.PendingDepositsLen
-import EpochProofs.CacheBridge.EpochCacheBuild
-import EpochProofs.CacheBridge.BuildPath
-import EpochProofs.Equiv.ConsolidationTable
-import EpochProofs.Equiv.Onboarding
-import EpochProofs.Sanity.GlueBounds
+import EpochProofs.TranslatedSteps.BuilderPendingPayments
+import EpochProofs.TranslatedSteps.EffectiveBalanceUpdates
+import EpochProofs.TranslatedSteps.InactivityUpdates
+import EpochProofs.TranslatedSteps.Slashings
+import EpochProofs.TranslatedSteps.RewardsAndPenalties
+import EpochProofs.TranslatedSteps.RegistryUpdates
+import EpochProofs.TranslatedSteps.PendingDeposits
+import EpochProofs.TranslatedSteps.PendingConsolidations
+import EpochProofs.SpecFacts.RowsSinglePass
+import EpochProofs.LighthouseModel.RowOrder
+import EpochProofs.TranslatedSteps.SinglePassStep
+import EpochProofs.LighthouseModel.SinglePass
+import EpochProofs.SpecFacts.RowsEffectiveBalance
+import EpochProofs.SpecFacts.RegistryFieldsKept
+import EpochProofs.SpecFacts.Effects
+import EpochProofs.SpecFacts.Block.Withdrawals
+import EpochProofs.SpecFacts.Block.ExecutionRequests
+import EpochProofs.SpecFacts.Block.ParentPayload
+import EpochProofs.SpecFacts.Block.Exits
+import EpochProofs.SpecFacts.Block.Slashings
+import EpochProofs.SpecFacts.Block.Attestations
+import EpochProofs.SpecFacts.Block.SyncAggregate
+import EpochProofs.SpecFacts.JustificationFinalization
+import EpochProofs.SpecFacts.EpochCommittees
+import EpochProofs.SpecFacts.Driver
+import EpochProofs.Invariants.ExitDelay
+import EpochProofs.Invariants.BalanceFloor
+import EpochProofs.Invariants.EpochEnd
+import EpochProofs.Invariants.Lengths
+import EpochProofs.Invariants.ExitEpochs
+import EpochProofs.Invariants.Reachable
+import EpochProofs.LighthouseModel.Epoch
+import EpochProofs.LighthouseModel.StateTransition
+import EpochProofs.Invariants.ConsolidationIndices
+import EpochProofs.LighthouseModel.Deposits
+import EpochProofs.LighthouseModel.EffectiveBalances
+import EpochProofs.LighthouseModel.StepsAfterSinglePass
+import EpochProofs.LighthouseModel.LighthouseToCommonStepOrder
+import EpochProofs.LighthouseModel.DepositPlan
+import EpochProofs.LighthouseModel.CommonStepOrder
+import EpochProofs.LighthouseModel.ValidatorRows
+import EpochProofs.LighthouseModel.SpecToCommonStepOrder
+import EpochProofs.LighthouseModel.DepositTopUps
+import EpochProofs.LighthouseModel.DepositReads
+import EpochProofs.Invariants.PubkeysUnique
+import EpochProofs.Invariants.WithdrawableEpochs
+import EpochProofs.SpecFacts.FieldsStepsKeep
+import EpochProofs.TranslatedSteps.Justification
+import EpochProofs.LighthouseModel.Justification
+import EpochProofs.TranslatedSteps.EpochCommittees
+import EpochProofs.TranslatedSteps.EndOfEpochUpdates
+import EpochProofs.LighthouseModel.Resets
+import EpochProofs.LighthouseModel.Order
+import EpochProofs.Invariants.Totality
+import EpochProofs.Invariants.TotalityCommittees
+import EpochProofs.Invariants.TotalityRows
+import EpochProofs.Invariants.TotalityFulu
+import EpochProofs.TranslatedSteps.DepositBalance
+import EpochProofs.TranslatedSteps.SelectionEmpty
+import EpochProofs.CacheReads.EpochReads
+import EpochProofs.CacheReads.PubkeyCache
+import EpochProofs.TranslatedSteps.Fulu
+import EpochProofs.TranslatedSteps.FuluRegistry
+import EpochProofs.SpecFacts.FuluSinglePass
+import EpochProofs.SpecFacts.FuluEpoch
+import EpochProofs.Invariants.FuluOrder
+import EpochProofs.SpecFacts.Block.FuluBlock
+import EpochProofs.SpecFacts.FuluTransition
+import EpochProofs.SpecFacts.Block.FuluEffects
+import EpochProofs.Invariants.FuluSteps
+import EpochProofs.Invariants.FuluLengths
+import EpochProofs.Invariants.FuluPubkeys
+import EpochProofs.Invariants.FuluConsolidations
+import EpochProofs.Invariants.FuluExits
+import EpochProofs.Invariants.FuluBalance
+import EpochProofs.Invariants.FuluReachable
+import EpochProofs.Invariants.ForkUpgrade
+import EpochProofs.TranslatedSteps.Upgrade
+import EpochProofs.TranslatedSteps.SinglePassLoopModel
+import EpochProofs.TranslatedSteps.DepositWrites
+import EpochProofs.TranslatedSteps.ListWrites
+import EpochProofs.Trusted.ProgressiveBalancesUpdates
+import EpochProofs.CacheReads.ProgressiveBalancesUpdates
+import EpochProofs.TranslatedSteps.EpochContexts
+import EpochProofs.TranslatedSteps.StepContext
+import EpochProofs.TranslatedSteps.PendingDepositsLen
+import EpochProofs.CacheReads.EpochCacheBuild
+import EpochProofs.CacheReads.EarlierState
+import EpochProofs.TranslatedSteps.ConsolidationTable
+import EpochProofs.TranslatedSteps.Onboarding
+import EpochProofs.SpecFacts.ArithmeticBounds
 import EpochProofs.AssumptionsHoldForExample
 import EpochProofs.Assumptions
 import EpochProofs.ResultsOnPresets
 import EpochProofs.EthLib.StateInjective
-import EpochProofs.Sanity.Invariants.CommitteeStepsSucceed
+import EpochProofs.Invariants.CommitteeStepsSucceed
 open EpochProofs.Spec
 #print axioms EpochProofs.Spec.withdrawals_loop
 #print axioms EpochProofs.Spec.process_builder_pending_payments_eq
@@ -281,29 +281,29 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.lighthouseApplyPendingDeposit_mainnet
 #print axioms EpochProofs.compute_balance_weighted_selection_empty
 #print axioms EpochProofs.spec_compute_balance_weighted_selection_empty
-#print axioms EpochProofs.CacheBridge.has_flag_bridge
-#print axioms EpochProofs.CacheBridge.get_active_validator_indices_bridge
-#print axioms EpochProofs.CacheBridge.participating_total_bridge
-#print axioms EpochProofs.CacheBridge.previous_epoch_bridge
-#print axioms EpochProofs.CacheBridge.lighthouse_previous_flag_balance_eq
-#print axioms EpochProofs.CacheBridge.lighthouse_current_flag_balance_eq
-#print axioms EpochProofs.CacheBridge.integer_squareroot_eq_sqrt
-#print axioms EpochProofs.CacheBridge.activeSum_eq
-#print axioms EpochProofs.CacheBridge.get_total_active_balance_closed
-#print axioms EpochProofs.CacheBridge.lighthouse_total_active_balance_eq
-#print axioms EpochProofs.CacheBridge.rewardsBaseReward_of_altair
-#print axioms EpochProofs.CacheBridge.lighthouse_base_reward_eq
-#print axioms EpochProofs.CacheBridge.lighthouse_cache_reads_correct
-#print axioms EpochProofs.CacheBridge.shuffledIndexAfterRounds_eq
-#print axioms EpochProofs.CacheBridge.epoch_shuffled_at
-#print axioms EpochProofs.CacheBridge.epoch_compute_committee_slice
-#print axioms EpochProofs.CacheBridge.epoch_cps_eq
-#print axioms EpochProofs.CacheBridge.epoch_get_beacon_committee_slice
-#print axioms EpochProofs.CacheBridge.lighthouse_committee_eq
-#print axioms EpochProofs.CacheBridge.ptcIndices_of_cache
-#print axioms EpochProofs.CacheBridge.committeeCacheBuilt_of_rust
-#print axioms EpochProofs.CacheBridge.ptc_committees_match_spec
-#print axioms EpochProofs.CacheBridge.lighthouse_ptc_window_from_cache
+#print axioms EpochProofs.CacheReads.has_flag_bridge
+#print axioms EpochProofs.CacheReads.get_active_validator_indices_bridge
+#print axioms EpochProofs.CacheReads.participating_total_bridge
+#print axioms EpochProofs.CacheReads.previous_epoch_bridge
+#print axioms EpochProofs.CacheReads.lighthouse_previous_flag_balance_eq
+#print axioms EpochProofs.CacheReads.lighthouse_current_flag_balance_eq
+#print axioms EpochProofs.CacheReads.integer_squareroot_eq_sqrt
+#print axioms EpochProofs.CacheReads.activeSum_eq
+#print axioms EpochProofs.CacheReads.get_total_active_balance_closed
+#print axioms EpochProofs.CacheReads.lighthouse_total_active_balance_eq
+#print axioms EpochProofs.CacheReads.rewardsBaseReward_of_altair
+#print axioms EpochProofs.CacheReads.lighthouse_base_reward_eq
+#print axioms EpochProofs.CacheReads.lighthouse_cache_reads_correct
+#print axioms EpochProofs.CacheReads.shuffledIndexAfterRounds_eq
+#print axioms EpochProofs.CacheReads.epoch_shuffled_at
+#print axioms EpochProofs.CacheReads.epoch_compute_committee_slice
+#print axioms EpochProofs.CacheReads.epoch_cps_eq
+#print axioms EpochProofs.CacheReads.epoch_get_beacon_committee_slice
+#print axioms EpochProofs.CacheReads.lighthouse_committee_eq
+#print axioms EpochProofs.CacheReads.ptcIndices_of_cache
+#print axioms EpochProofs.CacheReads.committeeCacheBuilt_of_rust
+#print axioms EpochProofs.CacheReads.ptc_committees_match_spec
+#print axioms EpochProofs.CacheReads.lighthouse_ptc_window_from_cache
 #print axioms EpochProofs.Spec.idxOf_pubkey_eq
 #print axioms EpochProofs.Spec.pubkey_cache_lookup_correct
 #print axioms EpochProofs.Spec.process_rewards_and_penalties_genesis
@@ -438,9 +438,9 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.process_slots_loop_fulu_inv
 #print axioms EpochProofs.Spec.process_slots_fulu_inv
 #print axioms EpochProofs.Spec.state_transition_fulu_inv
-#print axioms EpochProofs.Spec.FuluLengthsSanity.ite_ok
-#print axioms EpochProofs.Spec.FuluLengthsSanity.forIn_ok_invariant
-#print axioms EpochProofs.Spec.FuluLengthsSanity.listSet_ok_length
+#print axioms EpochProofs.Spec.FuluLengthsFacts.ite_ok
+#print axioms EpochProofs.Spec.FuluLengthsFacts.forIn_ok_invariant
+#print axioms EpochProofs.Spec.FuluLengthsFacts.listSet_ok_length
 #print axioms EpochProofs.Spec.compute_exit_epoch_and_update_churn_fulu_len
 #print axioms EpochProofs.Spec.initiate_validator_exit_fulu_len
 #print axioms EpochProofs.Spec.slash_validator_fulu_len
@@ -497,8 +497,8 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.process_epoch_fulu_inRange
 #print axioms EpochProofs.Spec.process_slots_fulu_inRange
 #print axioms EpochProofs.Spec.state_transition_fulu_inRange
-#print axioms EpochProofs.Spec.FuluExitsSanity.exit_le_far
-#print axioms EpochProofs.Spec.FuluExitsSanity.wd_le_far
+#print axioms EpochProofs.Spec.FuluExitsFacts.exit_le_far
+#print axioms EpochProofs.Spec.FuluExitsFacts.wd_le_far
 #print axioms EpochProofs.Spec.consolidation_exit_fulu_exitEpochsU64
 #print axioms EpochProofs.Spec.consolidation_exit_fulu_withdrawableU64
 #print axioms EpochProofs.Spec.consolidation_exit_fulu_exitShape
@@ -536,11 +536,11 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.process_proposer_lookahead_fulu_total
 #print axioms EpochProofs.Spec.committeesOkFulu_of
 #print axioms EpochProofs.Spec.process_epoch_fulu_total
-#print axioms EpochProofs.Spec.FuluBalanceSanity.saturating_sub_eq
-#print axioms EpochProofs.Spec.FuluBalanceSanity.withdraw_fits
-#print axioms EpochProofs.Spec.FuluBalanceSanity.uint64Sub_ok'
-#print axioms EpochProofs.Spec.FuluBalanceSanity.pending_amount_fits
-#print axioms EpochProofs.Spec.FuluBalanceSanity.sweep_amount_fits
+#print axioms EpochProofs.Spec.FuluBalanceFacts.saturating_sub_eq
+#print axioms EpochProofs.Spec.FuluBalanceFacts.withdraw_fits
+#print axioms EpochProofs.Spec.FuluBalanceFacts.uint64Sub_ok'
+#print axioms EpochProofs.Spec.FuluBalanceFacts.pending_amount_fits
+#print axioms EpochProofs.Spec.FuluBalanceFacts.sweep_amount_fits
 #print axioms EpochProofs.Spec.WithdrawalsSafeAll.nil
 #print axioms EpochProofs.Spec.WithdrawalsSafeAll.append_validator
 #print axioms EpochProofs.Spec.get_pending_partial_withdrawals_loop_safeAll
@@ -634,7 +634,7 @@ open EpochProofs.Spec
 #print axioms EpochProofs.hysteresis_thresholds_ok_mainnet
 #print axioms EpochProofs.Spec.depositDecisions_postponed_len
 #print axioms EpochProofs.process_pending_deposits_postponed_len
-#print axioms EpochProofs.CacheBridge.base_rewards_ok_mainnet
+#print axioms EpochProofs.CacheReads.base_rewards_ok_mainnet
 #print axioms EpochProofs.Spec.SameActiveBalances.symm
 #print axioms EpochProofs.Spec.apply_pending_deposit_pkPrefix
 #print axioms EpochProofs.Spec.process_pending_deposits_pkPrefix
@@ -643,10 +643,10 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.state_transition_pkPrefix
 #print axioms EpochProofs.Spec.ReachableByBlocks.pubkeysArePrefix
 #print axioms EpochProofs.Spec.ReachableBySlotsBefore.pubkeysArePrefix
-#print axioms EpochProofs.CacheBridge.activeSum_congr
-#print axioms EpochProofs.CacheBridge.epoch_cache_total_stays_correct
-#print axioms EpochProofs.CacheBridge.activeAgree_of_epochInv
-#print axioms EpochProofs.CacheBridge.pubkey_cache_stays_correct
+#print axioms EpochProofs.CacheReads.activeSum_congr
+#print axioms EpochProofs.CacheReads.epoch_cache_total_stays_correct
+#print axioms EpochProofs.CacheReads.activeAgree_of_epochInv
+#print axioms EpochProofs.CacheReads.pubkey_cache_stays_correct
 #print axioms EpochProofs.Spec.consolidationStep_table
 #print axioms EpochProofs.Spec.consolidationStep_full_ok
 #print axioms EpochProofs.Spec.consolidationStep_count
@@ -677,22 +677,22 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.P_ep_bound
 #print axioms EpochProofs.Spec.P_ep_start_bound
 #print axioms EpochProofs.Spec.mapM_range'_head_error
-#print axioms EpochProofs.CacheBridge.committeeCachePresetOf_mainnet
-#print axioms EpochProofs.CacheBridge.committeeCachePresetOf_minimal
-#print axioms EpochProofs.CacheBridge.committeePresetsMatch_P
-#print axioms EpochProofs.Spec.glue_epoch_add_fits
-#print axioms EpochProofs.Spec.glue_lookahead_slot_fits
-#print axioms EpochProofs.Spec.glue_seed_mix_index
+#print axioms EpochProofs.CacheReads.committeeCachePresetOf_mainnet
+#print axioms EpochProofs.CacheReads.committeeCachePresetOf_minimal
+#print axioms EpochProofs.CacheReads.committeePresetsMatch_P
+#print axioms EpochProofs.Spec.arithmetic_epoch_add_fits
+#print axioms EpochProofs.Spec.arithmetic_lookahead_slot_fits
+#print axioms EpochProofs.Spec.arithmetic_seed_mix_index
 #print axioms EpochProofs.Spec.mapM_length_ok
 #print axioms EpochProofs.Spec.compute_proposer_indices_length
 #print axioms EpochProofs.Spec.get_beacon_proposer_indices_length
 #print axioms EpochProofs.Spec.process_proposer_lookahead_length
 #print axioms EpochProofs.Spec.filter_sum_le
-#print axioms EpochProofs.Spec.glue_validator_deposit_sum
-#print axioms EpochProofs.Spec.glue_exit_count
-#print axioms EpochProofs.CacheBridge.ProgressiveBalancesUpdate.correct
-#print axioms EpochProofs.CacheBridge.ProgressiveBalancesUpdates.correct
-#print axioms EpochProofs.CacheBridge.progressive_balances_correct_after_updates
+#print axioms EpochProofs.Spec.arithmetic_validator_deposit_sum
+#print axioms EpochProofs.Spec.arithmetic_exit_count
+#print axioms EpochProofs.CacheReads.ProgressiveBalancesUpdate.correct
+#print axioms EpochProofs.CacheReads.ProgressiveBalancesUpdates.correct
+#print axioms EpochProofs.CacheReads.progressive_balances_correct_after_updates
 #print axioms EpochProofs.Spec.lighthouseSinglePassThen_order_eq
 #print axioms EpochProofs.Spec.forIn_keep
 #print axioms EpochProofs.Spec.foldlM_keep
@@ -723,22 +723,22 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Spec.lighthouseStepsAfterPaymentsFulu_eq
 #print axioms EpochProofs.Spec.process_proposer_lookahead_fulu_len
 #print axioms EpochProofs.Spec.process_proposer_lookahead_fulu_start
-#print axioms EpochProofs.Compose.translatedJustification_matches_model
-#print axioms EpochProofs.Compose.translatedStepsAfterLoop_spec
-#print axioms EpochProofs.Compose.translatedBuilderPayments_matches_model
-#print axioms EpochProofs.Compose.translatedSinglePass_matches_model
-#print axioms EpochProofs.Compose.slots_lt_2_32
-#print axioms EpochProofs.Compose.translatedLookahead_matches_model
-#print axioms EpochProofs.Compose.translatedPtcWindow_matches_model
-#print axioms EpochProofs.Compose.resultToSpec_ok
-#print axioms EpochProofs.Compose.translatedResets_matches_model
-#print axioms EpochProofs.Compose.translatedSyncCommitteeUpdate_matches_model
-#print axioms EpochProofs.Compose.translatedEndOfEpoch_matches_model
-#print axioms EpochProofs.Compose.translatedEpoch_matches_model
-#print axioms EpochProofs.Compose.rowsContract_stepSpec_fulu
-#print axioms EpochProofs.Compose.translatedLookaheadFulu_matches_model
-#print axioms EpochProofs.Compose.translatedSinglePassFulu_matches_model
-#print axioms EpochProofs.Compose.translatedEpochFulu_matches_model
+#print axioms EpochProofs.TranslatedEpoch.translatedJustification_matches_model
+#print axioms EpochProofs.TranslatedEpoch.translatedStepsAfterLoop_spec
+#print axioms EpochProofs.TranslatedEpoch.translatedBuilderPayments_matches_model
+#print axioms EpochProofs.TranslatedEpoch.translatedSinglePass_matches_model
+#print axioms EpochProofs.TranslatedEpoch.slots_lt_2_32
+#print axioms EpochProofs.TranslatedEpoch.translatedLookahead_matches_model
+#print axioms EpochProofs.TranslatedEpoch.translatedPtcWindow_matches_model
+#print axioms EpochProofs.TranslatedEpoch.resultToSpec_ok
+#print axioms EpochProofs.TranslatedEpoch.translatedResets_matches_model
+#print axioms EpochProofs.TranslatedEpoch.translatedSyncCommitteeUpdate_matches_model
+#print axioms EpochProofs.TranslatedEpoch.translatedEndOfEpoch_matches_model
+#print axioms EpochProofs.TranslatedEpoch.translatedEpoch_matches_model
+#print axioms EpochProofs.TranslatedEpoch.rowsContract_stepSpec_fulu
+#print axioms EpochProofs.TranslatedEpoch.translatedLookaheadFulu_matches_model
+#print axioms EpochProofs.TranslatedEpoch.translatedSinglePassFulu_matches_model
+#print axioms EpochProofs.TranslatedEpoch.translatedEpochFulu_matches_model
 #print axioms EpochProofs.Spec.process_epoch_committees
 #print axioms EpochProofs.Spec.epochBeforeCommitteeSteps_parts
 #print axioms EpochProofs.Spec.epochBeforeCommitteeSteps_total

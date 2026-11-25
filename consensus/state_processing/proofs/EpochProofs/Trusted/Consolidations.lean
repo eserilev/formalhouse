@@ -1,5 +1,5 @@
-import EpochProofs.Equiv.PendingConsolidations
-import EpochProofs.Sanity.ConsolidationTable
+import EpochProofs.TranslatedSteps.PendingConsolidations
+import EpochProofs.SpecFacts.ConsolidationTable
 
 /-!
 # The contracts of the pending consolidations code

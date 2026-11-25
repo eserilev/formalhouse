@@ -1,8 +1,8 @@
 import EthLib.Consensus.Transition.EpochRewards
 import EpochProofs.EthLib.Consolidations
 import EpochProofs.EthLib.Inactivity
-import EpochProofs.Sanity.Invariants.BalanceFloor
-import EpochProofs.Sanity.RewardsBound
+import EpochProofs.Invariants.BalanceFloor
+import EpochProofs.SpecFacts.RewardsBound
 import Mathlib.Data.Nat.Sqrt
 
 /-!

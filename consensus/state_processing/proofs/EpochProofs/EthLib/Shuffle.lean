@@ -1,6 +1,6 @@
 import EthLib.Consensus.Proofs.Shuffle
 import EpochProofs.EthLib.Oracle
-import EpochProofs.Sanity.ShuffleClosedForm
+import EpochProofs.SpecFacts.ShuffleClosedForm
 
 /-!
 # The shuffle and the seeds: the reference and EthLib agree

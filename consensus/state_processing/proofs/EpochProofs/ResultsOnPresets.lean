@@ -53,11 +53,13 @@ theorem lighthouse_rust_gloas_epoch_eq_ethlib_mainnet {PubkeyMap : Type}
     (oracleMatches : OracleMatches Preset.mainnet checks oracle)
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state))
-    {RustState RustError : Type} {rustCode : Compose.UntranslatedEpochCode RustState RustError}
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCode RustState RustError}
     {rustStateToSpec : RustState → Spec.BeaconState} {rustState : RustState}
     (rust : GloasUntranslatedRustFacts rustCode oracle rustStateToSpec rustState
     (toSpecState state)) :
-    (∃ rustResult result, (Compose.translatedEpoch rustCode rustState).run = ok (some rustResult) ∧
+    (∃ rustResult result, (TranslatedEpoch.translatedEpoch rustCode rustState).run =
+      ok (some rustResult) ∧
       processEpoch Config.mainnet checks state = .ok result ∧
       rustStateToSpec rustResult = toSpecState result) ∧
     GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
@@ -86,13 +88,14 @@ theorem lighthouse_rust_gloas_epoch_of_ethlib_ok_mainnet
     (slotFarFromOverflow : (toSpecState state).slot + 8192 < 2 ^ 64)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle)
-    {RustState RustError : Type} {rustCode : Compose.UntranslatedEpochCode RustState RustError}
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCode RustState RustError}
     {rustStateToSpec : RustState → Spec.BeaconState} {rustState : RustState}
     (rust : GloasUntranslatedRustFacts rustCode oracle rustStateToSpec rustState
     (toSpecState state))
     {result : BeaconState Preset.mainnet .glamsterdam}
     (ethLibSucceeds : processEpoch Config.mainnet checks state = .ok result) :
-    ∃ rustResult, (Compose.translatedEpoch rustCode rustState).run = ok (some rustResult) ∧
+    ∃ rustResult, (TranslatedEpoch.translatedEpoch rustCode rustState).run = ok (some rustResult) ∧
       rustStateToSpec rustResult = toSpecState result :=
   lighthouse_rust_gloas_epoch_of_ethlib_ok presetMatchesEthLib_mainnet invariants atLastSlotOfEpoch
     slotFarFromOverflow roomForDeposits oracleMatches rust ethLibSucceeds
@@ -118,12 +121,14 @@ theorem lighthouse_rust_fulu_epoch_eq_ethlib_mainnet
     (chain : FuluChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle)
-    {RustState RustError : Type} {rustCode : Compose.UntranslatedEpochCodeFulu RustState RustError}
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCodeFulu RustState RustError}
     {rustStateToSpec : RustState → Spec.BeaconState}
     {rustState : RustState}
     (rust : FuluUntranslatedRustFacts rustCode oracle rustStateToSpec rustState
     (toSpecState state)) :
-    ∃ rustResult result, (Compose.translatedEpochFulu rustCode rustState).run = ok (some rustResult)
+    ∃ rustResult result, (TranslatedEpoch.translatedEpochFulu rustCode rustState).run =
+      ok (some rustResult)
       ∧
       processEpoch Config.mainnet checks state = .ok result ∧
       rustStateToSpec rustResult = toSpecState result ∧
@@ -153,13 +158,15 @@ theorem lighthouse_rust_fulu_epoch_of_ethlib_ok_mainnet
     (atLastSlotOfEpoch : Spec.AtLastSlotOfEpoch (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle)
-    {RustState RustError : Type} {rustCode : Compose.UntranslatedEpochCodeFulu RustState RustError}
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCodeFulu RustState RustError}
     {rustStateToSpec : RustState → Spec.BeaconState}
     {rustState : RustState}
     (rust : FuluUntranslatedRustFacts rustCode oracle rustStateToSpec rustState (toSpecState state))
     {result : BeaconState Preset.mainnet .fusaka}
     (ethLibSucceeds : processEpoch Config.mainnet checks state = .ok result) :
-    (∃ rustResult, (Compose.translatedEpochFulu rustCode rustState).run = ok (some rustResult) ∧
+    (∃ rustResult, (TranslatedEpoch.translatedEpochFulu rustCode rustState).run =
+      ok (some rustResult) ∧
       rustStateToSpec rustResult = toSpecState result) ∧
     result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader :=
   lighthouse_rust_fulu_epoch_of_ethlib_ok presetMatchesEthLib_mainnet toSpecFuluConfig_mainnet
@@ -221,11 +228,13 @@ theorem lighthouse_rust_gloas_epoch_eq_ethlib_minimal {PubkeyMap : Type}
     (oracleMatches : OracleMatches Preset.minimal checks oracle)
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state))
-    {RustState RustError : Type} {rustCode : Compose.UntranslatedEpochCode RustState RustError}
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCode RustState RustError}
     {rustStateToSpec : RustState → Spec.BeaconState} {rustState : RustState}
     (rust : GloasUntranslatedRustFacts rustCode oracle rustStateToSpec rustState
     (toSpecState state)) :
-    (∃ rustResult result, (Compose.translatedEpoch rustCode rustState).run = ok (some rustResult) ∧
+    (∃ rustResult result, (TranslatedEpoch.translatedEpoch rustCode rustState).run =
+      ok (some rustResult) ∧
       processEpoch Config.minimal checks state = .ok result ∧
       rustStateToSpec rustResult = toSpecState result) ∧
     GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
@@ -254,13 +263,14 @@ theorem lighthouse_rust_gloas_epoch_of_ethlib_ok_minimal
     (slotFarFromOverflow : (toSpecState state).slot + 8192 < 2 ^ 64)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle)
-    {RustState RustError : Type} {rustCode : Compose.UntranslatedEpochCode RustState RustError}
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCode RustState RustError}
     {rustStateToSpec : RustState → Spec.BeaconState} {rustState : RustState}
     (rust : GloasUntranslatedRustFacts rustCode oracle rustStateToSpec rustState
     (toSpecState state))
     {result : BeaconState Preset.minimal .glamsterdam}
     (ethLibSucceeds : processEpoch Config.minimal checks state = .ok result) :
-    ∃ rustResult, (Compose.translatedEpoch rustCode rustState).run = ok (some rustResult) ∧
+    ∃ rustResult, (TranslatedEpoch.translatedEpoch rustCode rustState).run = ok (some rustResult) ∧
       rustStateToSpec rustResult = toSpecState result :=
   lighthouse_rust_gloas_epoch_of_ethlib_ok presetMatchesEthLib_minimal invariants atLastSlotOfEpoch
     slotFarFromOverflow roomForDeposits oracleMatches rust ethLibSucceeds
@@ -286,12 +296,14 @@ theorem lighthouse_rust_fulu_epoch_eq_ethlib_minimal
     (chain : FuluChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle)
-    {RustState RustError : Type} {rustCode : Compose.UntranslatedEpochCodeFulu RustState RustError}
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCodeFulu RustState RustError}
     {rustStateToSpec : RustState → Spec.BeaconState}
     {rustState : RustState}
     (rust : FuluUntranslatedRustFacts rustCode oracle rustStateToSpec rustState
     (toSpecState state)) :
-    ∃ rustResult result, (Compose.translatedEpochFulu rustCode rustState).run = ok (some rustResult)
+    ∃ rustResult result, (TranslatedEpoch.translatedEpochFulu rustCode rustState).run =
+      ok (some rustResult)
       ∧
       processEpoch Config.minimal checks state = .ok result ∧
       rustStateToSpec rustResult = toSpecState result ∧
@@ -321,13 +333,15 @@ theorem lighthouse_rust_fulu_epoch_of_ethlib_ok_minimal
     (atLastSlotOfEpoch : Spec.AtLastSlotOfEpoch (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle)
-    {RustState RustError : Type} {rustCode : Compose.UntranslatedEpochCodeFulu RustState RustError}
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCodeFulu RustState RustError}
     {rustStateToSpec : RustState → Spec.BeaconState}
     {rustState : RustState}
     (rust : FuluUntranslatedRustFacts rustCode oracle rustStateToSpec rustState (toSpecState state))
     {result : BeaconState Preset.minimal .fusaka}
     (ethLibSucceeds : processEpoch Config.minimal checks state = .ok result) :
-    (∃ rustResult, (Compose.translatedEpochFulu rustCode rustState).run = ok (some rustResult) ∧
+    (∃ rustResult, (TranslatedEpoch.translatedEpochFulu rustCode rustState).run =
+      ok (some rustResult) ∧
       rustStateToSpec rustResult = toSpecState result) ∧
     result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader :=
   lighthouse_rust_fulu_epoch_of_ethlib_ok presetMatchesEthLib_minimal toSpecFuluConfig_minimal

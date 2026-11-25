@@ -1,4 +1,4 @@
-import EpochProofs.Sanity.Invariants.ForkUpgrade
+import EpochProofs.Invariants.ForkUpgrade
 import EpochProofs.Generated
 
 /-!

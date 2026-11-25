@@ -1,4 +1,4 @@
-import EpochProofs.Spec.PresetCfg
+import EpochProofs.Spec.CurrentPreset
 
 /-!
 # More facts about the preset values

@@ -1,5 +1,5 @@
 import EthLib.Consensus.Transition.Basic
-import EpochProofs.Sanity.SinglePass
+import EpochProofs.SpecFacts.SinglePass
 
 /-!
 # Comparison of an EthLib result and a reference result

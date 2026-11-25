@@ -1,15 +1,15 @@
-import EpochProofs.Sanity.PtcIndices
-import EpochProofs.Sanity.Invariants.BalanceFloor
-import EpochProofs.Sanity.Invariants.LighthouseEpoch
+import EpochProofs.SpecFacts.PtcIndices
+import EpochProofs.Invariants.BalanceFloor
+import EpochProofs.LighthouseModel.Epoch
 import EpochProofs.Runs
-import EpochProofs.Sanity.Invariants.TotalityCommittees
-import EpochProofs.Sanity.Invariants.TotalityRows
-import EpochProofs.Sanity.Invariants.TotalityFulu
-import EpochProofs.CacheBridge.ProgressiveBalances
-import EpochProofs.CacheBridge.EpochCache
-import EpochProofs.Trusted.CacheUpkeep
-import EpochProofs.Compose.Epoch
-import EpochProofs.Compose.Fulu
+import EpochProofs.Invariants.TotalityCommittees
+import EpochProofs.Invariants.TotalityRows
+import EpochProofs.Invariants.TotalityFulu
+import EpochProofs.CacheReads.ProgressiveBalances
+import EpochProofs.CacheReads.EpochCache
+import EpochProofs.Trusted.ProgressiveBalancesUpdates
+import EpochProofs.TranslatedEpoch.Epoch
+import EpochProofs.TranslatedEpoch.Fulu
 import EpochProofs.EthLib.Shuffle
 
 /-!
@@ -118,7 +118,7 @@ reads the spec values directly, so the Fulu theorems take no cache facts. -/
 
 section Caches
 
-open EpochProofs.CacheBridge
+open EpochProofs.CacheReads
 
 variable [Spec.CurrentPreset]
 
@@ -164,31 +164,34 @@ section Glue
 variable [Spec.CurrentPreset]
 
 /-- The Rust state `rustState` holds the epoch input `s`, and the untranslated Rust does what the
-proofs assume (`Compose.UntranslatedEpochFacts`). One field is a fact about the state:
+proofs assume (`TranslatedEpoch.UntranslatedEpochFacts`). One field is a fact about the state:
 `UntranslatedSinglePassFacts.depositRoom`, the new validators of the epoch fit under the `2^40`
 limit of Lighthouse's validator list. -/
 structure GloasUntranslatedRustFacts {RustState RustError : Type}
-    (rustCode : Compose.UntranslatedEpochCode RustState RustError) (oracle : Spec.Oracle)
+    (rustCode : TranslatedEpoch.UntranslatedEpochCode RustState RustError) (oracle : Spec.Oracle)
     (rustStateToSpec : RustState → Spec.BeaconState) (rustState : RustState)
     (s : Spec.BeaconState) : Prop where
   /-- The Rust state holds the epoch input. -/
   holdsInput : rustStateToSpec rustState = s
   /-- What the proofs assume about the untranslated Rust. -/
-  untranslatedCode : Compose.UntranslatedEpochFacts rustCode oracle rustStateToSpec rustState
+  untranslatedCode : TranslatedEpoch.UntranslatedEpochFacts rustCode oracle rustStateToSpec
+    rustState
 
 variable [Spec.CurrentFuluConfig]
 
 /-- The Rust state `rustState` holds the epoch input `s`, and the untranslated Rust of the Fulu
-epoch does what the proofs assume (`Compose.UntranslatedEpochFactsFulu`). As for Gloas,
+epoch does what the proofs assume (`TranslatedEpoch.UntranslatedEpochFactsFulu`). As for Gloas,
 `UntranslatedSinglePassFacts.depositRoom` is a fact about the state. -/
 structure FuluUntranslatedRustFacts {RustState RustError : Type}
-    (rustCode : Compose.UntranslatedEpochCodeFulu RustState RustError) (oracle : Spec.Oracle)
+    (rustCode : TranslatedEpoch.UntranslatedEpochCodeFulu RustState RustError)
+    (oracle : Spec.Oracle)
     (rustStateToSpec : RustState → Spec.BeaconState) (rustState : RustState)
     (s : Spec.BeaconState) : Prop where
   /-- The Rust state holds the epoch input. -/
   holdsInput : rustStateToSpec rustState = s
   /-- What the proofs assume about the untranslated Rust. -/
-  untranslatedCode : Compose.UntranslatedEpochFactsFulu rustCode oracle rustStateToSpec rustState
+  untranslatedCode : TranslatedEpoch.UntranslatedEpochFactsFulu rustCode oracle rustStateToSpec
+    rustState
 
 end Glue
 

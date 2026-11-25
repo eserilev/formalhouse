@@ -1,6 +1,6 @@
 import EpochProofs.EthLib.Preset
 import EpochProofs.EthLib.State
-import EpochProofs.Sanity.Invariants.TotalityFulu
+import EpochProofs.Invariants.TotalityFulu
 
 /-!
 # The vector fields of an EthLib state have their SSZ lengths
