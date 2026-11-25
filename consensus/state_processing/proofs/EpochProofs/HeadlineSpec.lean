@@ -130,29 +130,55 @@ theorem gloas_cache_reads_correct {PubkeyMap : Type} {progressiveCache : LhCache
   rw [Spec.idxOf_pubkey_eq] at hresult
   exact ⟨result, hget, by convert hresult⟩
 
+/-- The committee cache that `process_ptc_window` builds at `state` for `epoch`, and the committees
+that it reads from that cache. Review checks that Lighthouse reads them in this way. -/
+structure PtcCommitteeCache (oracle : Spec.Oracle) (state : Spec.BeaconState) (epoch : Nat) where
+  /-- The seed of the shuffling. -/
+  seed : Spec.Bytes32
+  /-- The shuffled validator indices. -/
+  shuffling : Slice Usize
+  /-- The number of committees in each slot. -/
+  committeesPerSlot : Usize
+  /-- The slots of an epoch. -/
+  slotsPerEpoch : Usize
+  /-- The first slot of `epoch`. -/
+  startSlot : Nat
+  /-- Entry `k` holds the members of all committees of slot `startSlot + k`. -/
+  committees : Slice (alloc.vec.Vec Usize)
+  /-- The seed is the spec seed. -/
+  seedCorrect : Spec.get_seed Spec.P oracle state epoch Spec.DOMAIN_BEACON_ATTESTER = .ok seed
+  /-- The slots of an epoch are the spec value. -/
+  slotsPerEpochCorrect : slotsPerEpoch.val = Spec.P.SLOTS_PER_EPOCH
+  /-- The first slot is the spec value. -/
+  startSlotCorrect : Spec.compute_start_slot_at_epoch Spec.P epoch = .ok startSlot
+  /-- A validator is active. -/
+  someValidatorActive : 0 < (Spec.get_active_validator_indices state epoch).length
+  /-- `shuffle_list` accepts at most `2^24` indices. -/
+  shuffleAcceptsActive : (Spec.get_active_validator_indices state epoch).length ≤ 2 ^ 24
+  /-- The products of the committee ranges do not overflow. -/
+  committeeProductFits : (Spec.get_active_validator_indices state epoch).length *
+    (committeesPerSlot.val * slotsPerEpoch.val) ≤ Usize.max
+  /-- The cache holds the spec shuffling and the spec committee count. -/
+  built : CommitteeCacheBuilt cachePresetOf oracle state epoch seed shuffling committeesPerSlot
+  /-- One entry for each slot of the epoch. -/
+  oneEntryPerSlot : committees.val.length = Spec.P.SLOTS_PER_EPOCH
+  /-- Each entry joins the committees that `get_beacon_committee` returns for its slot. -/
+  readFromCache :
+    CommitteesFromCache shuffling committeesPerSlot slotsPerEpoch epoch startSlot committees
+
 omit [Spec.FuluCfg] [Spec.FuluCfg.Ok] in
-/-- The committee cache read of the PTC window step: for any state `st` at which Lighthouse
-builds the committee cache of `epoch`, a cache with its build facts (`CommitteeCacheBuilt`) and
-the way Lighthouse joins its committees (`CommitteesFromCache`) give the spec's `ptcIndices`. -/
-theorem ptc_committees_from_cache (o : Spec.Oracle) (st : Spec.BeaconState) (epoch : Nat)
-    (seed : Spec.Bytes32)
-    (hseed : Spec.get_seed Spec.P o st epoch Spec.DOMAIN_BEACON_ATTESTER = .ok seed)
-    (shuffling : Slice Usize) (cps spe : Usize)
-    (hbuilt : CommitteeCacheBuilt cachePresetOf o st epoch seed shuffling cps)
-    (hspe : spe.val = Spec.P.SLOTS_PER_EPOCH)
-    (hn : 0 < (Spec.get_active_validator_indices st epoch).length)
-    (hn24 : (Spec.get_active_validator_indices st epoch).length ≤ 2 ^ 24)
-    (hfit : (Spec.get_active_validator_indices st epoch).length * (cps.val * spe.val) ≤
-      Usize.max)
-    (start : Nat) (hstart : Spec.compute_start_slot_at_epoch Spec.P epoch = .ok start)
-    (committees : Slice (alloc.vec.Vec Usize))
-    (hclen : committees.val.length = Spec.P.SLOTS_PER_EPOCH)
-    (hglue : CommitteesFromCache shuffling cps spe epoch start committees) :
-    ∀ k (hk : k < committees.val.length) l,
-      Spec.ptcIndices Spec.P o st epoch (start + k) = .ok l →
-        (committees.val[k]).val.map (·.val) = l :=
-  hcomm_of_cache Spec.P _ committeePresetLink_P o st epoch seed hseed shuffling cps spe hbuilt
-    hspe hn hn24 hfit start hstart committees hclen hglue
+/-- The committees that the PTC window step reads from its committee cache are the spec
+committees. -/
+theorem ptc_committees_from_cache {oracle : Spec.Oracle} {state : Spec.BeaconState} {epoch : Nat}
+    (cache : PtcCommitteeCache oracle state epoch) (k : Nat)
+    (inEpoch : k < cache.committees.val.length) (expected : List Spec.ValidatorIndex)
+    (specCommittees :
+      Spec.ptcIndices Spec.P oracle state epoch (cache.startSlot + k) = .ok expected) :
+    (cache.committees.val[k]).val.map (·.val) = expected :=
+  hcomm_of_cache Spec.P _ committeePresetLink_P oracle state epoch cache.seed cache.seedCorrect
+    cache.shuffling _ _ cache.built cache.slotsPerEpochCorrect cache.someValidatorActive
+    cache.shuffleAcceptsActive cache.committeeProductFits _ cache.startSlotCorrect _
+    cache.oneEntryPerSlot cache.readFromCache k inEpoch expected specCommittees
 
 end Caches
 
