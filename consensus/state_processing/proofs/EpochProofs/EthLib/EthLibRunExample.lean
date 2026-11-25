@@ -21,10 +21,10 @@ open _root_.EthLib.Base (Fork)
 open _root_.EthLib.Consensus (Config Preset SignatureChecks processEpoch processSlot Run Step
   ForkedBeaconState Validator advanceSlotAcross)
 
-attribute [local instance] minimalCfg fuluMinimalCfg
-local instance : @PresetCfg.Ok minimalCfg := minimalCfg_ok
-local instance : @PresetCfg.Bounds minimalCfg := minimalCfg_bounds
-local instance : FuluCfg.Ok := ⟨fuluCompat_minimal⟩
+attribute [local instance] currentPresetMinimal currentFuluConfigMinimal
+local instance : @CurrentPreset.Valid currentPresetMinimal := currentPresetMinimal_ok
+local instance : @CurrentPreset.Bounds currentPresetMinimal := currentPresetMinimal_bounds
+local instance : CurrentFuluConfig.Valid := ⟨fuluCompat_minimal⟩
 
 /-- The start of the run: the example state, one slot earlier. -/
 def exampleStart (fork : Fork) : _root_.EthLib.Consensus.BeaconState Preset.minimal fork :=
@@ -155,7 +155,7 @@ theorem LikeExample.supply {fork : Fork}
     {input : _root_.EthLib.Consensus.BeaconState Preset.minimal fork} (like : LikeExample input) :
     SupplyAtInput (toSpecState input) := by
   obtain ⟨_, _, _, _, rfl⟩ := like
-  refine ⟨exampleGloasState_reachableInvariants.1.1.2.2.2.2, fun total totalOk => ?_⟩
+  refine ⟨exampleGloasState_epochInputInvariants.1.1.2.2.2.2, fun total totalOk => ?_⟩
   have value : get_total_active_balance P exampleGloasState = .ok 16384000000000 := rfl
   change get_total_active_balance P exampleGloasState = .ok total at totalOk
   rw [value] at totalOk
@@ -200,18 +200,18 @@ theorem toSpecState_gloasInput : toSpecState (exampleInput .glamsterdam) = gloas
 
 /-- The steps before the committee steps return the state itself, as for `exampleGloasState`. -/
 theorem gloasInput_epochToCommittees (oracle : Oracle) :
-    epochToCommittees P oracle gloasInput = .ok gloasInput := by rfl
+    epochBeforeCommitteeSteps P oracle gloasInput = .ok gloasInput := by rfl
 
 theorem gloasChain {checks : SignatureChecks} {oracle : Oracle}
     (oracleMatches : OracleMatches Preset.minimal checks oracle) :
-    GloasChainAssumptions oracle (toSpecState (exampleInput .glamsterdam)) := by
+    GloasChainConditions oracle (toSpecState (exampleInput .glamsterdam)) := by
   rw [toSpecState_gloasInput]
   have keys := exampleGloasState_keys oracleMatches
-  have preconditions := exampleGloasState_committeeStepPreconds oracle
-  have limits := exampleGloasState_physicalLimits
+  have preconditions := exampleGloasState_committeeStepPreconditions oracle
+  have limits := exampleGloasState_supplyAndTimeLimits
   refine ⟨fun committeeInput steps => ?_,
     ⟨limits.1, limits.2, limits.3, limits.4, limits.5, limits.6, limits.7⟩, ?_,
-    exampleGloasState_atEpochBoundary.2.2⟩
+    exampleGloasState_atLastSlotOfEpoch.2.2⟩
   · rw [gloasInput_epochToCommittees] at steps
     cases steps
     exact ⟨⟨preconditions.1, preconditions.2, preconditions.3, preconditions.4, preconditions.5,
@@ -226,7 +226,7 @@ theorem gloas_run_assumptions_hold_for_example (checks : SignatureChecks)
     ∃ (oracle : Oracle) (input : _root_.EthLib.Consensus.BeaconState Preset.minimal .glamsterdam),
       Nonempty (RunToEpochInput (withForkEpochs Config.minimal forkEpochs) checks
         ⟨.glamsterdam, exampleStart .glamsterdam⟩ input) ∧
-      SupplyAtInput (toSpecState input) ∧ GloasChainAssumptions oracle (toSpecState input) ∧
+      SupplyAtInput (toSpecState input) ∧ GloasChainConditions oracle (toSpecState input) ∧
       RoomForDeposits (by decide) input ∧ OracleMatches Preset.minimal checks oracle ∧
       ∃ result, process_epoch_lighthouse oracle (toSpecState input) = .ok (toSpecState result) ∧
         processEpoch (withForkEpochs Config.minimal forkEpochs) checks input = .ok result := by
@@ -245,7 +245,7 @@ theorem gloas_run_assumptions_hold_for_example (checks : SignatureChecks)
   exact Formalhouse.lighthouse_model_gloas_epoch_eq_ethlib_of_invariants presetMatches_minimal
     (run.invariants presetMatches_minimal maxEffectiveBalance_minimal (by decide)
       (registryWithinLimit room) supply)
-    (run.atEpochBoundary presetMatches_minimal chain.historicalSummariesBelowLimit) chain room
+    (run.atLastSlotOfEpoch presetMatches_minimal chain.historicalSummariesBelowLimit) chain room
     oracleMatches
 
 /-! ## Fulu -/
@@ -278,19 +278,19 @@ theorem toSpecState_fuluInput : toSpecState (exampleInput .fusaka) = fuluInput :
 
 /-- The steps before the committee steps return the state itself, as for `exampleFuluState`. -/
 theorem fuluInput_epochToCommittees (oracle : Oracle) :
-    epochToCommitteesFulu P FC oracle fuluInput = .ok fuluInput := by rfl
+    epochBeforeCommitteeStepsFulu P FC oracle fuluInput = .ok fuluInput := by rfl
 
 theorem fuluChain {checks : SignatureChecks} {oracle : Oracle}
     (oracleMatches : OracleMatches Preset.minimal checks oracle) :
-    FuluChainAssumptions oracle (toSpecState (exampleInput .fusaka)) := by
+    FuluChainConditions oracle (toSpecState (exampleInput .fusaka)) := by
   rw [toSpecState_fuluInput]
   have keys := exampleGloasState_keys oracleMatches
   have preconditions := (exampleFuluState_atCommitteeStepState oracle keys _
-    (exampleFuluState_epochToCommitteesFulu oracle)).2
-  have limits := exampleFuluState_physicalLimits
+    (exampleFuluState_epochBeforeCommitteeStepsFulu oracle)).2
+  have limits := exampleFuluState_supplyAndTimeLimits
   refine ⟨fun committeeInput steps => ?_,
     ⟨limits.1, limits.2, limits.3, limits.4, limits.5, limits.6, limits.7⟩, ?_,
-    exampleGloasState_atEpochBoundary.2.2⟩
+    exampleGloasState_atLastSlotOfEpoch.2.2⟩
   · rw [fuluInput_epochToCommittees] at steps
     cases steps
     exact ⟨⟨preconditions.1, preconditions.2, preconditions.3, preconditions.4⟩,
@@ -306,7 +306,7 @@ theorem fulu_run_assumptions_hold_for_example (checks : SignatureChecks) (forkEp
     ∃ (oracle : Oracle) (input : _root_.EthLib.Consensus.BeaconState Preset.minimal .fusaka),
       Nonempty (RunToEpochInput (withForkEpochs Config.minimal forkEpochs) checks
         ⟨.fusaka, exampleStart .fusaka⟩ input) ∧
-      SupplyAtInput (toSpecState input) ∧ FuluChainAssumptions oracle (toSpecState input) ∧
+      SupplyAtInput (toSpecState input) ∧ FuluChainConditions oracle (toSpecState input) ∧
       RoomForDeposits (by decide) input ∧ OracleMatches Preset.minimal checks oracle ∧
       ∃ result,
         process_epoch_lighthouse_fulu oracle (toSpecState input) = .ok (toSpecState result) ∧

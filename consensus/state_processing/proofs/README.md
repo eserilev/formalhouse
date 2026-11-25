@@ -6,10 +6,15 @@ cover Fulu and Gloas, on the mainnet and minimal presets. Charon and Aeneas tran
 
 ## What is proved
 
-Take a chain that starts in Fulu and crosses the Gloas fork, with the [assumptions](#the-chain) below.
-At each input of `process_epoch` on that chain, Lighthouse's epoch and EthLib's `processEpoch` both
-succeed, with the same state. All theorems are in `EpochProofs/Results.lean`. Each name has a Fulu form
-(`fulu` in place of `gloas`). The versions for the two presets are in `ResultsOnPresets.lean`.
+Take a chain of EthLib slots and blocks from genesis, with the [assumptions](#the-chain) below. At each
+Fulu and Gloas input of `process_epoch` on that chain, Lighthouse's epoch and EthLib's `processEpoch`
+both succeed, with the same state. The theorems are in `EpochProofs/EthLib/ResultsFromEthLibRun.lean`,
+with their versions for the two presets. Each name has a Fulu form (`fulu` in place of `gloas`).
+
+The chain can also start at a later state, if that state has the facts of `ChainStart`. `Results.lean` and
+`ResultsOnPresets.lean` have the same theorems for a chain that our transcription defines
+(`FuluThenGloasRun`, `FuluOnlyRun`). That chain starts in Fulu. Those theorems are not necessary for the
+ones above, but the proofs share their last steps.
 
 | Theorem | Statement |
 |---|---|
@@ -27,15 +32,15 @@ builds at the start of the epoch are in neither. They write no field of the stat
 Lighthouse return an error.
 
 **The transcription** (`Spec/`) is a hand-written Lean copy of pyspec v1.7.0-beta.4. The proofs go
-through it: Lighthouse equals the transcription, and the transcription equals EthLib (`EthLib/`). It also
-defines the chain (`FuluThenGloasRun`, `FuluOnlyRun`) with its block processing and fork upgrades. So the
-transcription is trusted for which states count, but not for the epoch.
+through it: Lighthouse equals the transcription, and the transcription equals EthLib (`EthLib/`). The
+main theorems do not trust it: EthLib defines the epoch and the chain (`RunToEpochInput`). Only
+`Results.lean` uses the block processing of the transcription to define a chain.
 
 **Same state** means equal under `toSpecState`, which reads an EthLib state as a state of the
 transcription. No two EthLib states give the same one (`toSpecState_injective`; for Fulu,
 `toSpecFuluState_injective`, which includes the payload header).
 
-**Axioms.** `lake build` prints the axioms of 843 theorems here (`Axioms.lean`), and the cache proofs check
+**Axioms.** `lake build` prints the axioms of 884 theorems here (`Axioms.lean`), and the cache proofs check
 1100. CI fails if one uses an axiom other than `propext`, `Classical.choice` and `Quot.sound`.
 
 ## What is assumed, and why it is true
@@ -44,7 +49,11 @@ transcription. No two EthLib states give the same one (`toSpecState_injective`; 
 
 ### The chain
 
-The `_agrees_pyspec` theorems need only the run and fewer than 2^24 historical summaries.
+For an EthLib chain, the start is a genesis state or a state with `ChainStart`, so no fact about a genesis
+state is assumed. The supply bounds below then apply only at the epoch input (`SupplyAtInput`). The preset
+must have equal `MAX_EFFECTIVE_BALANCE` and `MIN_ACTIVATION_BALANCE`, which both presets have. The fork
+epochs are a parameter, because the EthLib configs do not schedule Gloas. The next two items are about the
+chain of `Results.lean`.
 
 - The start state has the facts of a genesis state (`GenesisInvariants`). The step from genesis to the
   Fulu fork is not proved, because no Electra spec is transcribed.
@@ -129,7 +138,8 @@ The Lean kernel, Charon, Aeneas and its Lean library. Aeneas has no end-to-end s
 - EthLib outside `processEpoch`.
 
 `AssumptionsHoldForExample.lean` gives an example state where the state, preset and oracle assumptions hold
-together and the epoch succeeds. The runs, the caches and the untranslated code have no example.
+together and the epoch succeeds. `EthLib/EthLibRunExample.lean` adds a run of one slot. A run with a block, a
+run from genesis, the caches and the untranslated code have no example.
 
 ## Build
 

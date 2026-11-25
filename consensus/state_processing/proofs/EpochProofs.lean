@@ -207,3 +207,5 @@ import EpochProofs.EthLib.State
 import EpochProofs.EthLib.StateInjective
 import EpochProofs.EthLib.SyncCommittee
 import EpochProofs.EthLib.VectorLengths
+import EpochProofs.EthLib.ResultsFromEthLibRun
+import EpochProofs.EthLib.EthLibRunExample

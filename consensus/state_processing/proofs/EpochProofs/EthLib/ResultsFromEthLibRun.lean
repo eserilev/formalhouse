@@ -14,20 +14,20 @@ schedule Gloas, so a genesis run with those configs does not reach a Gloas epoch
 
 namespace EpochProofs.Formalhouse.FromEthLibRun
 
-open EpochProofs.EthLib EpochProofs.CacheBridge
+open EpochProofs.EthLib EpochProofs.CacheReads
 open _root_.EthLib.Consensus
   (BeaconState Config ForkedBeaconState Preset SignatureChecks processEpoch)
 open Aeneas.Std (U64)
 open Aeneas.Std.Result (ok)
-open CacheProofs.PB (LhCache)
+open CacheProofs.ProgressiveBalances (LighthouseProgressiveBalancesCache)
 
 section AnyPreset
 
-variable [Spec.PresetCfg] [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds]
+variable [Spec.CurrentPreset] [Spec.CurrentPreset.Valid] [Spec.CurrentPreset.Bounds]
 variable {preset : Preset} {config : Config} {checks : SignatureChecks} {oracle : Spec.Oracle}
   {start : ForkedBeaconState preset}
 
-omit [Spec.PresetCfg.Bounds] [Spec.PresetCfg] [Spec.PresetCfg.Ok] in
+omit [Spec.CurrentPreset.Bounds] [Spec.CurrentPreset] [Spec.CurrentPreset.Valid] in
 /-- The room for deposits gives the registry limit. -/
 theorem registryWithinLimit {fork : _root_.EthLib.Base.Fork} {electra : .pectra ≤ fork}
     {state : BeaconState preset fork} (roomForDeposits : RoomForDeposits electra state) :
@@ -40,7 +40,7 @@ section Gloas
 
 variable {state : BeaconState preset .glamsterdam}
 
-omit [Spec.PresetCfg.Bounds] in
+omit [Spec.CurrentPreset.Bounds] in
 /-- At every Gloas epoch input of a run, the cache reads give the spec values, when the cache
 assumptions hold. -/
 theorem gloas_cache_reads_correct
@@ -49,12 +49,12 @@ theorem gloas_cache_reads_correct
     (registryWithinLimit : state.RegistryWithinLimit)
     (run : RunToEpochInput config checks start state)
     (supply : SupplyAtInput (toSpecState state))
-    {PubkeyMap : Type} {progressiveCache : LhCache} {cachedTotal : U64}
+    {PubkeyMap : Type} {progressiveCache : LighthouseProgressiveBalancesCache} {cachedTotal : U64}
     {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state)) :
-    GloasCacheReadsCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
+    GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state) := by
   have invariants := run.invariants presetMatches maxEffectiveBalance (by decide)
     registryWithinLimit supply
@@ -63,16 +63,16 @@ theorem gloas_cache_reads_correct
   obtain ⟨lookup, laws, earlier, builtMap, builtLength, length, hprefix, hbuilt, hinsert⟩ :=
     caches.pubkeyCache
   rw [← activeSum_eq_active_balances] at htotal
-  obtain ⟨h1, h2, h3⟩ := lh_cache_reads_mainnet _ invariants.1.1.1.2.1
-    invariants.1.1.2.2.2.2 progressiveCache (coherent_of_upkeep hstart hupdates) cachedTotal
-    (epoch_cache_total_carry cachedTotal.val htotal hagree)
+  obtain ⟨h1, h2, h3⟩ := lighthouse_cache_reads_correct _ invariants.1.1.1.2.1
+    invariants.1.1.2.2.2.2 progressiveCache (progressive_balances_correct_after_updates hstart hupdates) cachedTotal
+    (epoch_cache_total_stays_correct cachedTotal.val htotal hagree)
   refine ⟨h1, h2, h3, fun pubkey => ?_⟩
-  obtain ⟨result, hget, hresult⟩ := CacheProofs.get_coherent_of_nodup laws
-    (pubkey_cache_carry laws hprefix hbuilt hinsert) invariants.1.2.1 pubkey
+  obtain ⟨result, hget, hresult⟩ := CacheProofs.get_correct_of_nodup laws
+    (pubkey_cache_stays_correct laws hprefix hbuilt hinsert) invariants.1.2.1 pubkey
   rw [Spec.idxOf_pubkey_eq] at hresult
   exact ⟨result, hget, by convert hresult⟩
 
-omit [Spec.PresetCfg.Bounds] in
+omit [Spec.CurrentPreset.Bounds] in
 /-- Gloas, against the hand-written pyspec transcription: at every epoch input of a run, the Lean
 model of Lighthouse's epoch and the transcription's give the same state, or both fail. -/
 theorem lighthouse_model_gloas_epoch_agrees_pyspec
@@ -81,13 +81,14 @@ theorem lighthouse_model_gloas_epoch_agrees_pyspec
     (registryWithinLimit : state.RegistryWithinLimit)
     (run : RunToEpochInput config checks start state)
     (supply : SupplyAtInput (toSpecState state))
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state))
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT)
     (oracle : Spec.Oracle) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse oracle (toSpecState state))
       (Spec.process_epoch Spec.P oracle (toSpecState state)) :=
   Formalhouse.lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants oracle
     (run.invariants presetMatches maxEffectiveBalance (by decide) registryWithinLimit supply)
-    (run.atEpochBoundary presetMatches historicalSummariesBelowLimit)
+    (run.atLastSlotOfEpoch presetMatches historicalSummariesBelowLimit)
 
 /-- Gloas: at every epoch input of a run, the Lean model of Lighthouse's epoch and EthLib's
 `processEpoch` give the same state, or both fail. -/
@@ -96,7 +97,8 @@ theorem lighthouse_model_gloas_epoch_agrees_ethlib
     (maxEffectiveBalance : MaxEffectiveBalanceIsActivationBalance preset)
     (run : RunToEpochInput config checks start state)
     (supply : SupplyAtInput (toSpecState state))
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state))
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT)
     (slotFarFromOverflow : (toSpecState state).slot + 8192 < 2 ^ 64)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle) :
@@ -105,7 +107,7 @@ theorem lighthouse_model_gloas_epoch_agrees_ethlib
   Formalhouse.lighthouse_model_gloas_epoch_agrees_ethlib presetMatches
     (run.invariants presetMatches maxEffectiveBalance (by decide)
       (registryWithinLimit roomForDeposits) supply)
-    (run.atEpochBoundary presetMatches historicalSummariesBelowLimit) slotFarFromOverflow
+    (run.atLastSlotOfEpoch presetMatches historicalSummariesBelowLimit) slotFarFromOverflow
     roomForDeposits oracleMatches
 
 /-- Gloas: at every epoch input of a run, the Lean model of Lighthouse's epoch succeeds. EthLib's
@@ -115,22 +117,22 @@ theorem lighthouse_model_gloas_epoch_eq_ethlib
     (maxEffectiveBalance : MaxEffectiveBalanceIsActivationBalance preset)
     (run : RunToEpochInput config checks start state)
     (supply : SupplyAtInput (toSpecState state))
-    (chain : GloasChainAssumptions oracle (toSpecState state))
+    (chain : GloasChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle)
-    {PubkeyMap : Type} {progressiveCache : LhCache} {cachedTotal : U64}
+    {PubkeyMap : Type} {progressiveCache : LighthouseProgressiveBalancesCache} {cachedTotal : U64}
     {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state)) :
     (∃ result, Spec.process_epoch_lighthouse oracle (toSpecState state) = .ok (toSpecState result) ∧
       processEpoch config checks state = .ok result) ∧
-    GloasCacheReadsCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
+    GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state) :=
   ⟨Formalhouse.lighthouse_model_gloas_epoch_eq_ethlib_of_invariants presetMatches
     (run.invariants presetMatches maxEffectiveBalance (by decide)
       (registryWithinLimit roomForDeposits) supply)
-    (run.atEpochBoundary presetMatches chain.historicalSummariesBelowLimit) chain roomForDeposits
+    (run.atLastSlotOfEpoch presetMatches chain.historicalSummariesBelowLimit) chain roomForDeposits
     oracleMatches,
   gloas_cache_reads_correct presetMatches maxEffectiveBalance
     (FromEthLibRun.registryWithinLimit roomForDeposits) run supply caches⟩
@@ -142,20 +144,23 @@ theorem lighthouse_rust_gloas_epoch_of_ethlib_ok
     (maxEffectiveBalance : MaxEffectiveBalanceIsActivationBalance preset)
     (run : RunToEpochInput config checks start state)
     (supply : SupplyAtInput (toSpecState state))
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state))
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT)
     (slotFarFromOverflow : (toSpecState state).slot + 8192 < 2 ^ 64)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle)
-    {σ E : Type} {rustGlue : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
-    (rust : GloasRustGlueFacts rustGlue oracle view rustState (toSpecState state))
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCode RustState RustError}
+    {rustStateToSpec : RustState → Spec.BeaconState} {rustState : RustState}
+    (rust : GloasUntranslatedRustFacts rustCode oracle rustStateToSpec rustState (toSpecState state))
     {result : BeaconState preset .glamsterdam}
     (ethLibSucceeds : processEpoch config checks state = .ok result) :
-    ∃ rustResult, (Compose.epoch rustGlue rustState).run = ok (some rustResult) ∧
-      view rustResult = toSpecState result :=
+    ∃ rustResult, (TranslatedEpoch.translatedEpoch rustCode rustState).run = ok (some rustResult) ∧
+      rustStateToSpec rustResult = toSpecState result :=
   Formalhouse.lighthouse_rust_gloas_epoch_of_ethlib_ok presetMatches
     (run.invariants presetMatches maxEffectiveBalance (by decide)
       (registryWithinLimit roomForDeposits) supply)
-    (run.atEpochBoundary presetMatches historicalSummariesBelowLimit) slotFarFromOverflow
+    (run.atLastSlotOfEpoch presetMatches historicalSummariesBelowLimit) slotFarFromOverflow
     roomForDeposits oracleMatches rust ethLibSucceeds
 
 /-- Gloas, for the composed Rust: at every epoch input of a run, the Rust returns `Ok`, and EthLib's
@@ -165,19 +170,21 @@ theorem lighthouse_rust_gloas_epoch_eq_ethlib
     (maxEffectiveBalance : MaxEffectiveBalanceIsActivationBalance preset)
     (run : RunToEpochInput config checks start state)
     (supply : SupplyAtInput (toSpecState state))
-    (chain : GloasChainAssumptions oracle (toSpecState state))
+    (chain : GloasChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle)
-    {PubkeyMap : Type} {progressiveCache : LhCache} {cachedTotal : U64}
+    {PubkeyMap : Type} {progressiveCache : LighthouseProgressiveBalancesCache} {cachedTotal : U64}
     {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state))
-    {σ E : Type} {rustGlue : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
-    (rust : GloasRustGlueFacts rustGlue oracle view rustState (toSpecState state)) :
-    (∃ rustResult result, (Compose.epoch rustGlue rustState).run = ok (some rustResult) ∧
-      processEpoch config checks state = .ok result ∧ view rustResult = toSpecState result) ∧
-    GloasCacheReadsCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCode RustState RustError}
+    {rustStateToSpec : RustState → Spec.BeaconState} {rustState : RustState}
+    (rust : GloasUntranslatedRustFacts rustCode oracle rustStateToSpec rustState (toSpecState state)) :
+    (∃ rustResult result, (TranslatedEpoch.translatedEpoch rustCode rustState).run = ok (some rustResult) ∧
+      processEpoch config checks state = .ok result ∧ rustStateToSpec rustResult = toSpecState result) ∧
+    GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state) := by
   obtain ⟨⟨result, -, ethLibSucceeds⟩, reads⟩ := lighthouse_model_gloas_epoch_eq_ethlib
     presetMatches maxEffectiveBalance run supply chain roomForDeposits oracleMatches caches
@@ -192,9 +199,9 @@ end Gloas
 
 section Fulu
 
-variable [Spec.FuluCfg] [Spec.FuluCfg.Ok] {state : BeaconState preset .fusaka}
+variable [Spec.CurrentFuluConfig] [Spec.CurrentFuluConfig.Valid] {state : BeaconState preset .fusaka}
 
-omit [Spec.PresetCfg.Bounds] in
+omit [Spec.CurrentPreset.Bounds] in
 /-- Fulu, against the hand-written pyspec transcription. -/
 theorem lighthouse_model_fulu_epoch_agrees_pyspec
     (presetMatches : PresetMatchesEthLib preset config)
@@ -202,15 +209,16 @@ theorem lighthouse_model_fulu_epoch_agrees_pyspec
     (registryWithinLimit : state.RegistryWithinLimit)
     (run : RunToEpochInput config checks start state)
     (supply : SupplyAtInput (toSpecState state))
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state))
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT)
     (oracle : Spec.Oracle) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse_fulu oracle (toSpecState state))
       (Spec.process_epoch_fulu Spec.P Spec.FC oracle (toSpecState state)) :=
   Spec.lighthouse_fulu_epoch_sameResultOrBothFail oracle _
     (run.invariants presetMatches maxEffectiveBalance (by decide) registryWithinLimit supply)
-    (run.atEpochBoundary presetMatches historicalSummariesBelowLimit)
+    (run.atLastSlotOfEpoch presetMatches historicalSummariesBelowLimit)
 
-omit [Spec.PresetCfg.Bounds] in
+omit [Spec.CurrentPreset.Bounds] in
 /-- Fulu: at every epoch input of a run, the Lean model of Lighthouse's epoch and EthLib's
 `processEpoch` give the same state, or both fail. The state includes the payload header, which the
 epoch keeps. -/
@@ -220,7 +228,8 @@ theorem lighthouse_model_fulu_epoch_agrees_ethlib
     (fuluConfigMatches : toSpecFuluConfig config = Spec.FC)
     (run : RunToEpochInput config checks start state)
     (supply : SupplyAtInput (toSpecState state))
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state))
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle) :
     Spec.SameResultOrBothFail
@@ -231,7 +240,7 @@ theorem lighthouse_model_fulu_epoch_agrees_ethlib
   Formalhouse.lighthouse_model_fulu_epoch_agrees_ethlib presetMatches fuluConfigMatches
     (run.invariants presetMatches maxEffectiveBalance (by decide)
       (registryWithinLimit roomForDeposits) supply)
-    (run.atEpochBoundary presetMatches historicalSummariesBelowLimit) roomForDeposits oracleMatches
+    (run.atLastSlotOfEpoch presetMatches historicalSummariesBelowLimit) roomForDeposits oracleMatches
 
 /-- Fulu: at every epoch input of a run, the Lean model of Lighthouse's epoch succeeds. EthLib's
 `processEpoch` succeeds with the same state, and keeps the payload header. -/
@@ -241,7 +250,7 @@ theorem lighthouse_model_fulu_epoch_eq_ethlib
     (fuluConfigMatches : toSpecFuluConfig config = Spec.FC)
     (run : RunToEpochInput config checks start state)
     (supply : SupplyAtInput (toSpecState state))
-    (chain : FuluChainAssumptions oracle (toSpecState state))
+    (chain : FuluChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle) :
     ∃ result,
@@ -251,7 +260,7 @@ theorem lighthouse_model_fulu_epoch_eq_ethlib
   Formalhouse.lighthouse_model_fulu_epoch_eq_ethlib_of_invariants presetMatches fuluConfigMatches
     (run.invariants presetMatches maxEffectiveBalance (by decide)
       (registryWithinLimit roomForDeposits) supply)
-    (run.atEpochBoundary presetMatches chain.historicalSummariesBelowLimit) chain roomForDeposits
+    (run.atLastSlotOfEpoch presetMatches chain.historicalSummariesBelowLimit) chain roomForDeposits
     oracleMatches
 
 /-- Fulu, for the composed Rust: at an epoch input of a run, if EthLib's `processEpoch` succeeds,
@@ -262,21 +271,23 @@ theorem lighthouse_rust_fulu_epoch_of_ethlib_ok
     (fuluConfigMatches : toSpecFuluConfig config = Spec.FC)
     (run : RunToEpochInput config checks start state)
     (supply : SupplyAtInput (toSpecState state))
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state))
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle)
-    {σ E : Type} {rustGlue : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
-    {rustState : σ}
-    (rust : FuluRustGlueFacts rustGlue oracle view rustState (toSpecState state))
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCodeFulu RustState RustError}
+    {rustStateToSpec : RustState → Spec.BeaconState} {rustState : RustState}
+    (rust : FuluUntranslatedRustFacts rustCode oracle rustStateToSpec rustState (toSpecState state))
     {result : BeaconState preset .fusaka}
     (ethLibSucceeds : processEpoch config checks state = .ok result) :
-    (∃ rustResult, (Compose.epochFulu rustGlue rustState).run = ok (some rustResult) ∧
-      view rustResult = toSpecState result) ∧
+    (∃ rustResult, (TranslatedEpoch.translatedEpochFulu rustCode rustState).run = ok (some rustResult) ∧
+      rustStateToSpec rustResult = toSpecState result) ∧
     result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader :=
   Formalhouse.lighthouse_rust_fulu_epoch_of_ethlib_ok presetMatches fuluConfigMatches
     (run.invariants presetMatches maxEffectiveBalance (by decide)
       (registryWithinLimit roomForDeposits) supply)
-    (run.atEpochBoundary presetMatches historicalSummariesBelowLimit) roomForDeposits oracleMatches
+    (run.atLastSlotOfEpoch presetMatches historicalSummariesBelowLimit) roomForDeposits oracleMatches
     rust ethLibSucceeds
 
 /-- Fulu, for the composed Rust: at every epoch input of a run, the Rust returns `Ok`, and EthLib's
@@ -287,14 +298,15 @@ theorem lighthouse_rust_fulu_epoch_eq_ethlib
     (fuluConfigMatches : toSpecFuluConfig config = Spec.FC)
     (run : RunToEpochInput config checks start state)
     (supply : SupplyAtInput (toSpecState state))
-    (chain : FuluChainAssumptions oracle (toSpecState state))
+    (chain : FuluChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle)
-    {σ E : Type} {rustGlue : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
-    {rustState : σ}
-    (rust : FuluRustGlueFacts rustGlue oracle view rustState (toSpecState state)) :
-    ∃ rustResult result, (Compose.epochFulu rustGlue rustState).run = ok (some rustResult) ∧
-      processEpoch config checks state = .ok result ∧ view rustResult = toSpecState result ∧
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCodeFulu RustState RustError}
+    {rustStateToSpec : RustState → Spec.BeaconState} {rustState : RustState}
+    (rust : FuluUntranslatedRustFacts rustCode oracle rustStateToSpec rustState (toSpecState state)) :
+    ∃ rustResult result, (TranslatedEpoch.translatedEpochFulu rustCode rustState).run = ok (some rustResult) ∧
+      processEpoch config checks state = .ok result ∧ rustStateToSpec rustResult = toSpecState result ∧
       result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader := by
   obtain ⟨result, -, ethLibSucceeds, -⟩ := lighthouse_model_fulu_epoch_eq_ethlib presetMatches
     maxEffectiveBalance fuluConfigMatches run supply chain roomForDeposits oracleMatches
@@ -331,7 +343,7 @@ def withForkEpochs (config : Config) (forkEpochs : ForkEpochs) : Config :=
     GLOAS_FORK_EPOCH := forkEpochs.gloas }
 
 /-- The preset match does not read the fork epochs. -/
-theorem presetMatches_withForkEpochs [Spec.PresetCfg] {preset : Preset} {config : Config}
+theorem presetMatches_withForkEpochs [Spec.CurrentPreset] {preset : Preset} {config : Config}
     (presetMatches : PresetMatchesEthLib preset config) (forkEpochs : ForkEpochs) :
     PresetMatchesEthLib preset (withForkEpochs config forkEpochs) :=
   ⟨presetMatches.values, ⟨presetMatches.divisorsNonzero.1, presetMatches.divisorsNonzero.2,
@@ -344,10 +356,10 @@ variable {forkEpochs : ForkEpochs} {checks : SignatureChecks} {oracle : Spec.Ora
 
 section Mainnet
 
-attribute [local instance] Spec.mainnetCfg Spec.fuluMainnetCfg
-local instance : @Spec.PresetCfg.Ok Spec.mainnetCfg := Spec.mainnetCfg_ok
-local instance : @Spec.PresetCfg.Bounds Spec.mainnetCfg := Spec.mainnetCfg_bounds
-local instance : Spec.FuluCfg.Ok := ⟨Spec.fuluCompat_mainnet⟩
+attribute [local instance] Spec.currentPresetMainnet Spec.currentFuluConfigMainnet
+local instance : @Spec.CurrentPreset.Valid Spec.currentPresetMainnet := Spec.currentPresetMainnet_ok
+local instance : @Spec.CurrentPreset.Bounds Spec.currentPresetMainnet := Spec.currentPresetMainnet_bounds
+local instance : Spec.CurrentFuluConfig.Valid := ⟨Spec.fuluCompat_mainnet⟩
 
 theorem presetMatches_mainnet :
     PresetMatchesEthLib Preset.mainnet (withForkEpochs Config.mainnet forkEpochs) :=
@@ -361,12 +373,12 @@ theorem gloas_cache_reads_correct_mainnet
     (run : RunToEpochInput (withForkEpochs Config.mainnet forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    {PubkeyMap : Type} {progressiveCache : LhCache} {cachedTotal : U64}
+    {PubkeyMap : Type} {progressiveCache : LighthouseProgressiveBalancesCache} {cachedTotal : U64}
     {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state)) :
-    GloasCacheReadsCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
+    GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state) :=
   gloas_cache_reads_correct presetMatches_mainnet
     maxEffectiveBalance_mainnet registryWithinLimit run supply caches
@@ -379,7 +391,8 @@ theorem lighthouse_model_gloas_epoch_agrees_pyspec_mainnet
     (run : RunToEpochInput (withForkEpochs Config.mainnet forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state))
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT)
     (oracle : Spec.Oracle) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse oracle (toSpecState state))
       (Spec.process_epoch Spec.P oracle (toSpecState state)) :=
@@ -394,7 +407,8 @@ theorem lighthouse_model_gloas_epoch_agrees_ethlib_mainnet
     (run : RunToEpochInput (withForkEpochs Config.mainnet forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state))
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT)
     (slotFarFromOverflow : (toSpecState state).slot + 8192 < 2 ^ 64)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle) :
@@ -412,17 +426,17 @@ theorem lighthouse_model_gloas_epoch_eq_ethlib_mainnet
     (run : RunToEpochInput (withForkEpochs Config.mainnet forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (chain : GloasChainAssumptions oracle (toSpecState state))
+    (chain : GloasChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle)
-    {PubkeyMap : Type} {progressiveCache : LhCache} {cachedTotal : U64}
+    {PubkeyMap : Type} {progressiveCache : LighthouseProgressiveBalancesCache} {cachedTotal : U64}
     {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state)) :
     (∃ result, Spec.process_epoch_lighthouse oracle (toSpecState state) = .ok (toSpecState result) ∧
       processEpoch (withForkEpochs Config.mainnet forkEpochs) checks state = .ok result) ∧
-    GloasCacheReadsCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
+    GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state) :=
   lighthouse_model_gloas_epoch_eq_ethlib presetMatches_mainnet
     maxEffectiveBalance_mainnet run supply chain roomForDeposits oracleMatches caches
@@ -434,17 +448,20 @@ theorem lighthouse_rust_gloas_epoch_of_ethlib_ok_mainnet
     (run : RunToEpochInput (withForkEpochs Config.mainnet forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state))
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT)
     (slotFarFromOverflow : (toSpecState state).slot + 8192 < 2 ^ 64)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle)
-    {σ E : Type} {rustGlue : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
-    (rust : GloasRustGlueFacts rustGlue oracle view rustState (toSpecState state))
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCode RustState RustError}
+    {rustStateToSpec : RustState → Spec.BeaconState} {rustState : RustState}
+    (rust : GloasUntranslatedRustFacts rustCode oracle rustStateToSpec rustState (toSpecState state))
     {result : BeaconState Preset.mainnet .glamsterdam}
     (ethLibSucceeds :
       processEpoch (withForkEpochs Config.mainnet forkEpochs) checks state = .ok result) :
-    ∃ rustResult, (Compose.epoch rustGlue rustState).run = ok (some rustResult) ∧
-      view rustResult = toSpecState result :=
+    ∃ rustResult, (TranslatedEpoch.translatedEpoch rustCode rustState).run = ok (some rustResult) ∧
+      rustStateToSpec rustResult = toSpecState result :=
   lighthouse_rust_gloas_epoch_of_ethlib_ok presetMatches_mainnet
     maxEffectiveBalance_mainnet run supply historicalSummariesBelowLimit slotFarFromOverflow
     roomForDeposits oracleMatches rust ethLibSucceeds
@@ -456,20 +473,22 @@ theorem lighthouse_rust_gloas_epoch_eq_ethlib_mainnet
     (run : RunToEpochInput (withForkEpochs Config.mainnet forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (chain : GloasChainAssumptions oracle (toSpecState state))
+    (chain : GloasChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle)
-    {PubkeyMap : Type} {progressiveCache : LhCache} {cachedTotal : U64}
+    {PubkeyMap : Type} {progressiveCache : LighthouseProgressiveBalancesCache} {cachedTotal : U64}
     {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state))
-    {σ E : Type} {rustGlue : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
-    (rust : GloasRustGlueFacts rustGlue oracle view rustState (toSpecState state)) :
-    (∃ rustResult result, (Compose.epoch rustGlue rustState).run = ok (some rustResult) ∧
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCode RustState RustError}
+    {rustStateToSpec : RustState → Spec.BeaconState} {rustState : RustState}
+    (rust : GloasUntranslatedRustFacts rustCode oracle rustStateToSpec rustState (toSpecState state)) :
+    (∃ rustResult result, (TranslatedEpoch.translatedEpoch rustCode rustState).run = ok (some rustResult) ∧
       processEpoch (withForkEpochs Config.mainnet forkEpochs) checks state = .ok result ∧
-      view rustResult = toSpecState result) ∧
-    GloasCacheReadsCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
+      rustStateToSpec rustResult = toSpecState result) ∧
+    GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state) :=
   lighthouse_rust_gloas_epoch_eq_ethlib presetMatches_mainnet
     maxEffectiveBalance_mainnet run supply chain roomForDeposits oracleMatches caches rust
@@ -482,7 +501,8 @@ theorem lighthouse_model_fulu_epoch_agrees_pyspec_mainnet
     (run : RunToEpochInput (withForkEpochs Config.mainnet forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state))
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT)
     (oracle : Spec.Oracle) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse_fulu oracle (toSpecState state))
       (Spec.process_epoch_fulu Spec.P Spec.FC oracle (toSpecState state)) :=
@@ -497,7 +517,8 @@ theorem lighthouse_model_fulu_epoch_agrees_ethlib_mainnet
     (run : RunToEpochInput (withForkEpochs Config.mainnet forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state))
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle) :
     Spec.SameResultOrBothFail
@@ -518,7 +539,7 @@ theorem lighthouse_model_fulu_epoch_eq_ethlib_mainnet
     (run : RunToEpochInput (withForkEpochs Config.mainnet forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (chain : FuluChainAssumptions oracle (toSpecState state))
+    (chain : FuluChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle) :
     ∃ result,
@@ -536,17 +557,19 @@ theorem lighthouse_rust_fulu_epoch_of_ethlib_ok_mainnet
     (run : RunToEpochInput (withForkEpochs Config.mainnet forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state))
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle)
-    {σ E : Type} {rustGlue : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
-    {rustState : σ}
-    (rust : FuluRustGlueFacts rustGlue oracle view rustState (toSpecState state))
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCodeFulu RustState RustError}
+    {rustStateToSpec : RustState → Spec.BeaconState} {rustState : RustState}
+    (rust : FuluUntranslatedRustFacts rustCode oracle rustStateToSpec rustState (toSpecState state))
     {result : BeaconState Preset.mainnet .fusaka}
     (ethLibSucceeds :
       processEpoch (withForkEpochs Config.mainnet forkEpochs) checks state = .ok result) :
-    (∃ rustResult, (Compose.epochFulu rustGlue rustState).run = ok (some rustResult) ∧
-      view rustResult = toSpecState result) ∧
+    (∃ rustResult, (TranslatedEpoch.translatedEpochFulu rustCode rustState).run = ok (some rustResult) ∧
+      rustStateToSpec rustResult = toSpecState result) ∧
     result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader :=
   lighthouse_rust_fulu_epoch_of_ethlib_ok presetMatches_mainnet
     maxEffectiveBalance_mainnet toSpecFuluConfig_mainnet run supply historicalSummariesBelowLimit
@@ -559,15 +582,16 @@ theorem lighthouse_rust_fulu_epoch_eq_ethlib_mainnet
     (run : RunToEpochInput (withForkEpochs Config.mainnet forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (chain : FuluChainAssumptions oracle (toSpecState state))
+    (chain : FuluChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle)
-    {σ E : Type} {rustGlue : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
-    {rustState : σ}
-    (rust : FuluRustGlueFacts rustGlue oracle view rustState (toSpecState state)) :
-    ∃ rustResult result, (Compose.epochFulu rustGlue rustState).run = ok (some rustResult) ∧
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCodeFulu RustState RustError}
+    {rustStateToSpec : RustState → Spec.BeaconState} {rustState : RustState}
+    (rust : FuluUntranslatedRustFacts rustCode oracle rustStateToSpec rustState (toSpecState state)) :
+    ∃ rustResult result, (TranslatedEpoch.translatedEpochFulu rustCode rustState).run = ok (some rustResult) ∧
       processEpoch (withForkEpochs Config.mainnet forkEpochs) checks state = .ok result ∧
-      view rustResult = toSpecState result ∧
+      rustStateToSpec rustResult = toSpecState result ∧
       result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader :=
   lighthouse_rust_fulu_epoch_eq_ethlib presetMatches_mainnet
     maxEffectiveBalance_mainnet toSpecFuluConfig_mainnet run supply chain roomForDeposits
@@ -577,10 +601,10 @@ end Mainnet
 
 section Minimal
 
-attribute [local instance] Spec.minimalCfg Spec.fuluMinimalCfg
-local instance : @Spec.PresetCfg.Ok Spec.minimalCfg := Spec.minimalCfg_ok
-local instance : @Spec.PresetCfg.Bounds Spec.minimalCfg := Spec.minimalCfg_bounds
-local instance : Spec.FuluCfg.Ok := ⟨Spec.fuluCompat_minimal⟩
+attribute [local instance] Spec.currentPresetMinimal Spec.currentFuluConfigMinimal
+local instance : @Spec.CurrentPreset.Valid Spec.currentPresetMinimal := Spec.currentPresetMinimal_ok
+local instance : @Spec.CurrentPreset.Bounds Spec.currentPresetMinimal := Spec.currentPresetMinimal_bounds
+local instance : Spec.CurrentFuluConfig.Valid := ⟨Spec.fuluCompat_minimal⟩
 
 theorem presetMatches_minimal :
     PresetMatchesEthLib Preset.minimal (withForkEpochs Config.minimal forkEpochs) :=
@@ -594,12 +618,12 @@ theorem gloas_cache_reads_correct_minimal
     (run : RunToEpochInput (withForkEpochs Config.minimal forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    {PubkeyMap : Type} {progressiveCache : LhCache} {cachedTotal : U64}
+    {PubkeyMap : Type} {progressiveCache : LighthouseProgressiveBalancesCache} {cachedTotal : U64}
     {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state)) :
-    GloasCacheReadsCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
+    GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state) :=
   gloas_cache_reads_correct presetMatches_minimal
     maxEffectiveBalance_minimal registryWithinLimit run supply caches
@@ -612,7 +636,8 @@ theorem lighthouse_model_gloas_epoch_agrees_pyspec_minimal
     (run : RunToEpochInput (withForkEpochs Config.minimal forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state))
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT)
     (oracle : Spec.Oracle) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse oracle (toSpecState state))
       (Spec.process_epoch Spec.P oracle (toSpecState state)) :=
@@ -627,7 +652,8 @@ theorem lighthouse_model_gloas_epoch_agrees_ethlib_minimal
     (run : RunToEpochInput (withForkEpochs Config.minimal forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state))
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT)
     (slotFarFromOverflow : (toSpecState state).slot + 8192 < 2 ^ 64)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle) :
@@ -645,17 +671,17 @@ theorem lighthouse_model_gloas_epoch_eq_ethlib_minimal
     (run : RunToEpochInput (withForkEpochs Config.minimal forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (chain : GloasChainAssumptions oracle (toSpecState state))
+    (chain : GloasChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle)
-    {PubkeyMap : Type} {progressiveCache : LhCache} {cachedTotal : U64}
+    {PubkeyMap : Type} {progressiveCache : LighthouseProgressiveBalancesCache} {cachedTotal : U64}
     {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state)) :
     (∃ result, Spec.process_epoch_lighthouse oracle (toSpecState state) = .ok (toSpecState result) ∧
       processEpoch (withForkEpochs Config.minimal forkEpochs) checks state = .ok result) ∧
-    GloasCacheReadsCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
+    GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state) :=
   lighthouse_model_gloas_epoch_eq_ethlib presetMatches_minimal
     maxEffectiveBalance_minimal run supply chain roomForDeposits oracleMatches caches
@@ -667,17 +693,20 @@ theorem lighthouse_rust_gloas_epoch_of_ethlib_ok_minimal
     (run : RunToEpochInput (withForkEpochs Config.minimal forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state))
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT)
     (slotFarFromOverflow : (toSpecState state).slot + 8192 < 2 ^ 64)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle)
-    {σ E : Type} {rustGlue : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
-    (rust : GloasRustGlueFacts rustGlue oracle view rustState (toSpecState state))
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCode RustState RustError}
+    {rustStateToSpec : RustState → Spec.BeaconState} {rustState : RustState}
+    (rust : GloasUntranslatedRustFacts rustCode oracle rustStateToSpec rustState (toSpecState state))
     {result : BeaconState Preset.minimal .glamsterdam}
     (ethLibSucceeds :
       processEpoch (withForkEpochs Config.minimal forkEpochs) checks state = .ok result) :
-    ∃ rustResult, (Compose.epoch rustGlue rustState).run = ok (some rustResult) ∧
-      view rustResult = toSpecState result :=
+    ∃ rustResult, (TranslatedEpoch.translatedEpoch rustCode rustState).run = ok (some rustResult) ∧
+      rustStateToSpec rustResult = toSpecState result :=
   lighthouse_rust_gloas_epoch_of_ethlib_ok presetMatches_minimal
     maxEffectiveBalance_minimal run supply historicalSummariesBelowLimit slotFarFromOverflow
     roomForDeposits oracleMatches rust ethLibSucceeds
@@ -689,20 +718,22 @@ theorem lighthouse_rust_gloas_epoch_eq_ethlib_minimal
     (run : RunToEpochInput (withForkEpochs Config.minimal forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (chain : GloasChainAssumptions oracle (toSpecState state))
+    (chain : GloasChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle)
-    {PubkeyMap : Type} {progressiveCache : LhCache} {cachedTotal : U64}
+    {PubkeyMap : Type} {progressiveCache : LighthouseProgressiveBalancesCache} {cachedTotal : U64}
     {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state))
-    {σ E : Type} {rustGlue : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
-    (rust : GloasRustGlueFacts rustGlue oracle view rustState (toSpecState state)) :
-    (∃ rustResult result, (Compose.epoch rustGlue rustState).run = ok (some rustResult) ∧
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCode RustState RustError}
+    {rustStateToSpec : RustState → Spec.BeaconState} {rustState : RustState}
+    (rust : GloasUntranslatedRustFacts rustCode oracle rustStateToSpec rustState (toSpecState state)) :
+    (∃ rustResult result, (TranslatedEpoch.translatedEpoch rustCode rustState).run = ok (some rustResult) ∧
       processEpoch (withForkEpochs Config.minimal forkEpochs) checks state = .ok result ∧
-      view rustResult = toSpecState result) ∧
-    GloasCacheReadsCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
+      rustStateToSpec rustResult = toSpecState result) ∧
+    GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state) :=
   lighthouse_rust_gloas_epoch_eq_ethlib presetMatches_minimal
     maxEffectiveBalance_minimal run supply chain roomForDeposits oracleMatches caches rust
@@ -715,7 +746,8 @@ theorem lighthouse_model_fulu_epoch_agrees_pyspec_minimal
     (run : RunToEpochInput (withForkEpochs Config.minimal forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state))
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT)
     (oracle : Spec.Oracle) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse_fulu oracle (toSpecState state))
       (Spec.process_epoch_fulu Spec.P Spec.FC oracle (toSpecState state)) :=
@@ -730,7 +762,8 @@ theorem lighthouse_model_fulu_epoch_agrees_ethlib_minimal
     (run : RunToEpochInput (withForkEpochs Config.minimal forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state))
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle) :
     Spec.SameResultOrBothFail
@@ -751,7 +784,7 @@ theorem lighthouse_model_fulu_epoch_eq_ethlib_minimal
     (run : RunToEpochInput (withForkEpochs Config.minimal forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (chain : FuluChainAssumptions oracle (toSpecState state))
+    (chain : FuluChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle) :
     ∃ result,
@@ -769,17 +802,19 @@ theorem lighthouse_rust_fulu_epoch_of_ethlib_ok_minimal
     (run : RunToEpochInput (withForkEpochs Config.minimal forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state))
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle)
-    {σ E : Type} {rustGlue : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
-    {rustState : σ}
-    (rust : FuluRustGlueFacts rustGlue oracle view rustState (toSpecState state))
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCodeFulu RustState RustError}
+    {rustStateToSpec : RustState → Spec.BeaconState} {rustState : RustState}
+    (rust : FuluUntranslatedRustFacts rustCode oracle rustStateToSpec rustState (toSpecState state))
     {result : BeaconState Preset.minimal .fusaka}
     (ethLibSucceeds :
       processEpoch (withForkEpochs Config.minimal forkEpochs) checks state = .ok result) :
-    (∃ rustResult, (Compose.epochFulu rustGlue rustState).run = ok (some rustResult) ∧
-      view rustResult = toSpecState result) ∧
+    (∃ rustResult, (TranslatedEpoch.translatedEpochFulu rustCode rustState).run = ok (some rustResult) ∧
+      rustStateToSpec rustResult = toSpecState result) ∧
     result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader :=
   lighthouse_rust_fulu_epoch_of_ethlib_ok presetMatches_minimal
     maxEffectiveBalance_minimal toSpecFuluConfig_minimal run supply historicalSummariesBelowLimit
@@ -792,15 +827,16 @@ theorem lighthouse_rust_fulu_epoch_eq_ethlib_minimal
     (run : RunToEpochInput (withForkEpochs Config.minimal forkEpochs) checks start
       state)
     (supply : SupplyAtInput (toSpecState state))
-    (chain : FuluChainAssumptions oracle (toSpecState state))
+    (chain : FuluChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle)
-    {σ E : Type} {rustGlue : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
-    {rustState : σ}
-    (rust : FuluRustGlueFacts rustGlue oracle view rustState (toSpecState state)) :
-    ∃ rustResult result, (Compose.epochFulu rustGlue rustState).run = ok (some rustResult) ∧
+    {RustState RustError : Type}
+    {rustCode : TranslatedEpoch.UntranslatedEpochCodeFulu RustState RustError}
+    {rustStateToSpec : RustState → Spec.BeaconState} {rustState : RustState}
+    (rust : FuluUntranslatedRustFacts rustCode oracle rustStateToSpec rustState (toSpecState state)) :
+    ∃ rustResult result, (TranslatedEpoch.translatedEpochFulu rustCode rustState).run = ok (some rustResult) ∧
       processEpoch (withForkEpochs Config.minimal forkEpochs) checks state = .ok result ∧
-      view rustResult = toSpecState result ∧
+      rustStateToSpec rustResult = toSpecState result ∧
       result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader :=
   lighthouse_rust_fulu_epoch_eq_ethlib presetMatches_minimal
     maxEffectiveBalance_minimal toSpecFuluConfig_minimal run supply chain roomForDeposits

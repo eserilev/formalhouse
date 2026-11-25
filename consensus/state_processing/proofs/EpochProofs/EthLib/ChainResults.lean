@@ -7,7 +7,7 @@ import EpochProofs.EthLib.Epoch
 
 `RunToEpochInput` describes a run of EthLib slots and blocks that ends where `process_epoch` starts.
 The run starts at a genesis state, or at a state with the facts of `ChainStart`. The run can cross
-any fork. `RunToEpochInput.invariants` proves `ReachableInvariants` at the end of the run.
+any fork. `RunToEpochInput.invariants` proves `EpochInputInvariants` at the end of the run.
 -/
 
 namespace EpochProofs.EthLib
@@ -54,10 +54,10 @@ structure RunToEpochInput (config : Config) (checks : SignatureChecks)
   atEpochEnd : (input.slot.toNat + 1) % preset.SLOTS_PER_EPOCH.toNat = 0
 
 /-- The bounds on the amounts at the epoch input. -/
-structure SupplyAtInput [Spec.PresetCfg] (input : Spec.BeaconState) : Prop where
+structure SupplyAtInput [Spec.CurrentPreset] (input : Spec.BeaconState) : Prop where
   /-- Each balance is below `2^62`, all effective balances are below `2^60`, and the recent slashed
   balances are below `2^64 / 3`. -/
-  balances : Spec.EpochBalanceBounds input
+  balances : Spec.BalancesFarFromOverflow input
   /-- At most 139 million ETH is active. -/
   active : ∀ total, Spec.get_total_active_balance Spec.P input = .ok total →
     total ≤ 139000000000000000
@@ -79,7 +79,7 @@ theorem maxEffectiveBalance_minimal : MaxEffectiveBalanceIsActivationBalance Pre
 
 section Values
 
-variable [Spec.PresetCfg] (presetMatches : PresetMatchesEthLib preset config)
+variable [Spec.CurrentPreset] (presetMatches : PresetMatchesEthLib preset config)
 include presetMatches
 
 theorem slotsPerEpoch_eq : preset.SLOTS_PER_EPOCH.toNat = Spec.P.SLOTS_PER_EPOCH := by
@@ -140,7 +140,7 @@ end Values
 
 /-- If at most 139 million ETH is active, the sync committee penalties of one block are at most
 `syncLoss` for each validator. -/
-theorem syncReward_bound [Spec.PresetCfg] [Spec.PresetCfg.Ok]
+theorem syncReward_bound [Spec.CurrentPreset] [Spec.CurrentPreset.Valid]
     (presetMatches : PresetMatchesEthLib preset config) {fork : Fork}
     {state : BeaconState preset fork} (total : activeBalanceTotal state ≤ 139000000000000000) :
     preset.SYNC_COMMITTEE_SIZE.toNat * syncRewardAt state ≤ Spec.syncLoss := by
@@ -188,10 +188,10 @@ theorem syncReward_bound [Spec.PresetCfg] [Spec.PresetCfg.Ok]
 
 section Run
 
-variable [Spec.PresetCfg] [Spec.PresetCfg.Ok] {start : ForkedBeaconState preset} {fork : Fork}
+variable [Spec.CurrentPreset] [Spec.CurrentPreset.Valid] {start : ForkedBeaconState preset} {fork : Fork}
   {input : BeaconState preset fork}
 
-omit [Spec.PresetCfg.Ok] in
+omit [Spec.CurrentPreset.Valid] in
 /-- The slot step that enters an epoch leaves each effective balance at most `4/3` of the
 balance. -/
 theorem balanceFloor_of_slot (presetMatches : PresetMatchesEthLib preset config)
@@ -361,23 +361,23 @@ theorem RunToEpochInput.effectiveBalance_le (presetMatches : PresetMatchesEthLib
 
 /-! ## The invariants at the epoch input -/
 
-omit [Spec.PresetCfg] [Spec.PresetCfg.Ok] in
+omit [Spec.CurrentPreset] [Spec.CurrentPreset.Valid] in
 /-- The epoch input of a run has the facts of a chain state. -/
 theorem RunToEpochInput.facts (caps : CapOrder preset)
     (run : RunToEpochInput config checks start input) : ChainFacts config input :=
   ((run.startsAt.elim ChainStart.genesis id).facts.run caps run.run).processSlot run.lastSlot
 
-omit [Spec.PresetCfg.Ok] in
-/-- The facts of a chain state give the reachable-state invariants, except `EntryEB` and the balance
+omit [Spec.CurrentPreset.Valid] in
+/-- The facts of a chain state give the reachable-state invariants, except `EligibleBalancesAboveFloor` and the balance
 bounds. -/
 theorem ChainFacts.toSpecState (presetMatches : PresetMatchesEthLib preset config)
     (maxEffectiveBalance : MaxEffectiveBalanceIsActivationBalance preset) (fulu : .fusaka ≤ fork)
     (facts : ChainFacts config input) :
-    Spec.FfgInvariant Spec.P (toSpecState input) ∧ Spec.RowsOk (toSpecState input) ∧
-    (toSpecState input).slot < 2 ^ 64 ∧ Spec.EBOk Spec.P (toSpecState input) ∧
-    Spec.ExitEpochsU64 (toSpecState input) ∧ Spec.PubkeysUnique (toSpecState input) ∧
-    Spec.ConsolidationsInRange (toSpecState input) ∧ Spec.WithdrawableU64 (toSpecState input) ∧
-    Spec.WithdrawableValid (toSpecState input) := by
+    Spec.CheckpointsInOrder Spec.P (toSpecState input) ∧ Spec.ListLengthsMatch (toSpecState input) ∧
+    (toSpecState input).slot < 2 ^ 64 ∧ Spec.EffectiveBalancesValid Spec.P (toSpecState input) ∧
+    Spec.ExitEpochsAreUint64 (toSpecState input) ∧ Spec.PubkeysUnique (toSpecState input) ∧
+    Spec.ConsolidationsInRange (toSpecState input) ∧ Spec.WithdrawableEpochsFitUint64 (toSpecState input) ∧
+    Spec.NoWithdrawableEpochWithoutExit (toSpecState input) := by
   have caps := capOrder presetMatches maxEffectiveBalance
   have alignedMax := maxEffectiveBalancesAligned presetMatches maxEffectiveBalance
   have altair : Fork.altair ≤ fork := Nat.le_trans (by decide) fulu
@@ -409,7 +409,7 @@ theorem ChainFacts.toSpecState (presetMatches : PresetMatchesEthLib preset confi
     have inactivity := facts.shaped.inactivityScoresMatch altair
     unfold BalancesMatch at balances
     unfold ParticipationMatches at *
-    simp [Spec.RowsOk, EthLib.toSpecState, fieldOr, altair, readList]
+    simp [Spec.ListLengthsMatch, EthLib.toSpecState, fieldOr, altair, readList]
     exact ⟨balances, inactivity, participation.1, participation.2⟩
   · intro v member
     obtain ⟨w, inside, rfl⟩ := ofMember v member
@@ -463,7 +463,7 @@ theorem notWithdrawable_of_rewardsEligible (presetMatches : PresetMatchesEthLib 
   have below : (getCurrentEpoch input).toNat < Spec.FAR_FUTURE_EPOCH := by
     rw [epoch]
     exact Spec.slot_div_lt_far Spec.P_slots_gt_one input.slot.toNat_lt
-  have waits : Spec.ExitDelayV Spec.P (toSpecValidator validator) := by
+  have waits : Spec.ValidatorExitToWithdrawableDelay Spec.P (toSpecValidator validator) := by
     by_cases none : validator.exitEpoch = FAR_FUTURE_EPOCH
     · left
       simp only [toSpecValidator, withdrawableEpoch_of_no_exit facts.invariant _ member none]
@@ -480,7 +480,7 @@ theorem RunToEpochInput.invariants (presetMatches : PresetMatchesEthLib preset c
     (maxEffectiveBalance : MaxEffectiveBalanceIsActivationBalance preset) (fulu : .fusaka ≤ fork)
     (run : RunToEpochInput config checks start input) (registry : input.RegistryWithinLimit)
     (supply : SupplyAtInput (toSpecState input)) :
-    Spec.ReachableInvariants (toSpecState input) := by
+    Spec.EpochInputInvariants (toSpecState input) := by
   have facts := run.facts (capOrder presetMatches maxEffectiveBalance)
   obtain ⟨ffg, rows, slot, effective, exits, keys, consolidations, withdrawable, valid⟩ :=
     facts.toSpecState presetMatches maxEffectiveBalance fulu
@@ -522,13 +522,14 @@ theorem RunToEpochInput.invariants (presetMatches : PresetMatchesEthLib preset c
     (Array.getElem?_eq_getElem inside') (Array.getElem?_eq_getElem balanceInside)
     (notWithdrawable_of_rewardsEligible presetMatches facts (Array.getElem_mem inside') eligible)
 
-omit [Spec.PresetCfg.Ok] in
+omit [Spec.CurrentPreset.Valid] in
 /-- The epoch input of a run is at an epoch boundary, when Lighthouse's list of historical summaries
 has room. -/
-theorem RunToEpochInput.atEpochBoundary (presetMatches : PresetMatchesEthLib preset config)
+theorem RunToEpochInput.atLastSlotOfEpoch (presetMatches : PresetMatchesEthLib preset config)
     (run : RunToEpochInput config checks start input)
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState input)) :
-    Spec.AtEpochBoundary (toSpecState input) :=
+    (historicalSummariesBelowLimit : (toSpecState input).historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT) :
+    Spec.AtLastSlotOfEpoch (toSpecState input) :=
   ⟨by rw [← slotsPerEpoch_eq presetMatches]; exact run.atEpochEnd, run.nextSlotFits,
     historicalSummariesBelowLimit⟩
 
