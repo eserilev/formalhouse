@@ -29,7 +29,7 @@ def allowedAxioms : List Name := [``propext, ``Classical.choice, ``Quot.sound]
 
 run_cmd do
   let env ← getEnv
-  let mut theorems := 0
+  let mut theorems : Nat := 0
   let mut violations : Array MessageData := #[]
   for (declName, info) in env.constants.toList do
     let some idx := env.getModuleIdxFor? declName | continue

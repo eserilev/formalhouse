@@ -79,6 +79,7 @@ theorem safe_div_eq (x y : Usize) :
        | .Ok z => z.val = x.val / y.val ∧ y.val ≠ 0
        | .Err e => e = .DivisionByZero ∧ y.val = 0) := by
   unfold Usize.Insts.Safe_arithSafeArithUsize.safe_div
+  simp only [lift, bind_tc_ok, core.option.Option.ok_or]
   have hs := Usize.checked_div_bv_spec x y
   cases hc : Usize.checked_div x y with
   | none => simp only [hc] at hs; exact ⟨_, rfl, rfl, hs⟩
@@ -90,6 +91,7 @@ theorem safe_rem_eq (x y : Usize) :
        | .Ok z => z.val = x.val % y.val ∧ y.val ≠ 0
        | .Err e => e = .DivisionByZero ∧ y.val = 0) := by
   unfold Usize.Insts.Safe_arithSafeArithUsize.safe_rem
+  simp only [lift, bind_tc_ok, core.option.Option.ok_or]
   have hs := Usize.checked_rem_bv_spec x y
   cases hc : Usize.checked_rem x y with
   | none => simp only [hc] at hs; exact ⟨_, rfl, rfl, hs⟩
@@ -225,7 +227,7 @@ theorem committee_range_in_epoch_ok (c k n : Usize) (hk : k.val < c.val)
           cases r5 with
           | Err e => exact absurd hr5.2 (by scalar_tac)
           | Ok e =>
-            refine ⟨s, e, rfl, ?_, ?_⟩
+            refine ⟨s, e, by simp only [bind_tc_ok, branch_ok], ?_, ?_⟩
             · rw [hr2.1, hr1.1]
             · rw [hr5.1, hr4.1, hk1]
 
@@ -498,16 +500,18 @@ theorem shuffling_positions_loop_spec (shuffling : Slice Usize) (vc : Nat)
       have hgetu : (alloc.vec.Vec.deref_mut u).1[shuffling.val[j.val]]? =
           some u.val[shuffling.val[j.val].val] := by
         simp only [alloc.vec.Vec.deref_mut, Slice.getElem?_Usize_eq]
-        rw [List.getElem?_eq_getElem (by omega)]
+        rw [List.getElem?_eq_getElem (show _ < u.slice.val.length by change _ < u.val.length; omega)]
+        rfl
       simp only [hlt', if_true, core.slice.Slice.get,
         core.slice.index.Usize.get, Slice.getElem?_Usize_eq, List.getElem?_eq_getElem hjl,
         bind_tc_ok, lift, alloc.vec.Vec.deref_mut, core.slice.Slice.get_mut,
         core.slice.index.Usize.get_mut]
-      simp only [Std.uncurry_apply_pair]
-      rw [List.getElem?_eq_getElem (by omega)]
+      rw [List.getElem?_eq_getElem (show _ < u.slice.val.length by change _ < u.val.length; omega)]
       apply (spec_ok _).mpr
       refine ⟨⟨by simp [hsat]; omega, ?_⟩, by simp [hsat]; omega⟩
-      simp only [Slice.set_opt_val_eq, set_opt_some, List.map_set, hsat, hu]
+      have hus : u.slice.val = u.val := rfl
+      change List.map _ (Slice.set_opt u.slice _ _).val = _
+      simp only [hus, Slice.set_opt_val_eq, set_opt_some, List.map_set, hsat, hu]
       have hjl' : j.val < (shuffling.val.map (·.val)).length := by simpa using hjl
       have hnm := not_mem_take_of_nodup _ hnodup j.val hjl'
       rw [← List.map_take] at hnm
@@ -563,12 +567,12 @@ theorem shuffling_positions_spec (shuffling : Slice Usize) (validator_count : Us
   unfold shuffling_positions
   step with alloc.vec.from_elem_spec as ⟨pos0, hpos0, hlen0⟩
   step with shuffling_positions_loop_spec shuffling validator_count.val hnodup hrange
-    as ⟨pos1, oor, hoor, hpos1⟩
+    as ⟨pr, hoor, hpos1⟩
   · simp only [hpos0, List.map_replicate]
     apply List.ext_getElem <;> simp [posOf]
-  rcases oor with _ | v
-  swap
-  · simp at hoor
+  obtain ⟨pos1, oor⟩ := pr
+  dsimp only at hoor hpos1
+  subst hoor
   have hmap : ∀ x ∈ shuffling.val.map (·.val), x < validator_count.val := by
     intro x hx
     simp only [List.mem_map] at hx
@@ -623,7 +627,7 @@ theorem attestation_duty_loop_spec (pos c n nth : Usize) (k0 : Nat) (hk0 : k0 < 
     have hjmax : j.val < Usize.max := by scalar_tac
     have hsat := usize_saturating_add_one j hjmax
     obtain ⟨s, e, hr, hs, he⟩ := committee_range_in_epoch_ok c j n hjc hfit
-    simp only [hjc, if_true, hr, bind_tc_ok, Std.uncurry_apply_pair]
+    simp only [hjc, if_true, hr, bind_tc_ok]
     by_cases hin' : InCommittee n.val c.val j.val pos.val
     · have hjk := inCommittee_unique _ _ _ _ _ hin' hin
       have h1 : s ≤ pos := by unfold InCommittee at hin'; scalar_tac
@@ -632,31 +636,23 @@ theorem attestation_duty_loop_spec (pos c n nth : Usize) (k0 : Nat) (hk0 : k0 < 
       apply (spec_ok _).mpr
       exact ⟨j, s, e, rfl, hjk, by rw [hs, hjk], by rw [he, hjk]⟩
     · have hjk : j.val ≠ k0 := fun h => hin' (h ▸ hin)
-      have hnext : (ok (ControlFlow.cont (core.num.Usize.saturating_add j 1#usize)) :
-          Result (ControlFlow Usize (RResult (Option (Usize × Usize × Usize)) ArithError))) ⦃ r =>
-          match r with
-          | ControlFlow.done y => ∃ k s e : Usize, y = .Ok (some (k, s, e)) ∧ k.val = k0 ∧
-              s.val = n.val * k0 / c.val ∧ e.val = n.val * (k0 + 1) / c.val
-          | ControlFlow.cont x' => x'.val ≤ k0 ∧ c.val - x'.val < c.val - j.val ⦄ := by
-        apply (spec_ok _).mpr
+      have hnext : (core.num.Usize.saturating_add j 1#usize).val ≤ k0 ∧
+          c.val - (core.num.Usize.saturating_add j 1#usize).val < c.val - j.val := by
         simp only [hsat]
         omega
       by_cases h1 : s ≤ pos
       · have h2 : ¬ e > pos := by
           intro h2; apply hin'; unfold InCommittee; rw [← hs, ← he]; scalar_tac
         simp only [h1, h2, if_true, if_false, lift, bind_tc_ok]
-        exact hnext
+        exact (spec_ok _).mpr hnext
       · simp only [h1, if_false, lift, bind_tc_ok]
-        exact hnext
+        exact (spec_ok _).mpr hnext
   · exact hnth
 
 
 theorem spec_exists {α : Type} {x : Result α} {p : α → Prop} (h : x ⦃ v => p v ⦄) :
-    ∃ v, x = ok v ∧ p v := by
-  cases x with
-  | ok v => exact ⟨v, rfl, (spec_ok v).mp h⟩
-  | fail e => exact ((spec_fail e).mp h).elim
-  | div => exact (spec_div.mp h).elim
+    ∃ v, x = ok v ∧ p v :=
+  spec_imp_exists h
 
 theorem attestation_duty_spec (pos c n : Usize) (hc : 0 < c.val) (hpos : pos.val < n.val)
     (hfit : n.val * c.val ≤ Usize.max) :
@@ -668,7 +664,7 @@ theorem attestation_duty_spec (pos c n : Usize) (hc : 0 < c.val) (hpos : pos.val
     (attestation_duty_loop_spec pos c n 0#usize k0 hk0 hin (by simp) hfit)
   subst hr
   unfold attestation_duty
-  simp only [hloop, bind_tc_ok, branch_ok, Std.uncurry_apply_pair]
+  simp only [hloop, bind_tc_ok, branch_ok]
   obtain ⟨r1, h1, hr1⟩ := safe_sub_eq pos s
   rw [h1]
   have hsle : s.val ≤ pos.val := by rw [hs]; exact hin.1
@@ -682,19 +678,19 @@ theorem attestation_duty_spec (pos c n : Usize) (hc : 0 < c.val) (hpos : pos.val
     cases r2 with
     | Err _ => omega
     | Ok cl =>
-      refine ⟨k, cp, cl, rfl, by omega, hk ▸ hin, ?_, ?_⟩
+      refine ⟨k, cp, cl, by simp only [bind_tc_ok, branch_ok], by omega, hk ▸ hin, ?_, ?_⟩
       · rw [hr1.1, hs, hk]
       · rw [hr2.1, he, hs, hk]
 
 
 /-- A `for` loop that returns the first match, in the `Except` monad. -/
 theorem forIn_search {ε α β : Type} (l : List α)
-    (f : α → MProd (Option β) PUnit → Except ε (ForInStep (MProd (Option β) PUnit)))
+    (f : α → Option β × PUnit → Except ε (ForInStep (Option β × PUnit)))
     (P : α → Option β)
     (hf : ∀ x ∈ l, ∀ r, f x r = .ok (match P x with
-      | some b => .done ⟨some b, PUnit.unit⟩
-      | none => .yield ⟨none, PUnit.unit⟩)) :
-    forIn l ⟨none, PUnit.unit⟩ f = .ok ⟨l.findSome? P, PUnit.unit⟩ := by
+      | some b => .done (some b, PUnit.unit)
+      | none => .yield (none, PUnit.unit))) :
+    forIn l (none, PUnit.unit) f = .ok (l.findSome? P, PUnit.unit) := by
   induction l with
   | nil => rfl
   | cons a l ih =>
@@ -929,7 +925,7 @@ theorem get_committee_count_per_slot_pos (p : Preset) (n x : Nat)
   by_cases h1 : p.SLOTS_PER_EPOCH = 0
   · simp [h1] at h; cases h
   · by_cases h2 : p.TARGET_COMMITTEE_SIZE = 0
-    · simp [h1, h2] at h; cases h
+    · simp [h1, h2] at h
     · simp [h1, h2] at h
       cases h
       exact Nat.le_max_left _ _

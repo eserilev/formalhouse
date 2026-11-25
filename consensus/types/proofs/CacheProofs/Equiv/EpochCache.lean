@@ -375,9 +375,9 @@ theorem update_effective_balance_spec (ebs : alloc.vec.Vec U64) (total : U64) (i
     rw [if_neg hne]
     generalize hd : alloc.vec.Vec.deref_mut ebs = p
     obtain ⟨sl, back⟩ := p
-    have hs : sl.val = ebs.val := by simp [alloc.vec.Vec.deref_mut] at hd; rw [← hd.1]
+    have hs : sl.val = ebs.val := by simp [alloc.vec.Vec.deref_mut] at hd; rw [← hd.1]; rfl
     have hback : ∀ t : Slice U64, (back t).val = t.val := by
-      simp [alloc.vec.Vec.deref_mut] at hd; intro t; rw [← hd.2]
+      simp [alloc.vec.Vec.deref_mut] at hd; intro t; rw [← hd.2]; rfl
     have hget2 : sl.val[i.val]? = some ebs.val[i.val] := by
       rw [hs]; exact List.getElem?_eq_getElem hlt
     have hnew : ((back (sl.set_opt i (some eb))).val).map (·.val) =
@@ -421,9 +421,9 @@ theorem update_effective_balance_out_of_bounds (ebs : alloc.vec.Vec U64) (total 
   rw [if_neg hne]
   generalize hd : alloc.vec.Vec.deref_mut ebs = p
   obtain ⟨sl, back⟩ := p
-  have hs : sl.val = ebs.val := by simp [alloc.vec.Vec.deref_mut] at hd; rw [← hd.1]
+  have hs : sl.val = ebs.val := by simp [alloc.vec.Vec.deref_mut] at hd; rw [← hd.1]; rfl
   have hback : ∀ t : Slice U64, (back t).val = t.val := by
-    simp [alloc.vec.Vec.deref_mut] at hd; intro t; rw [← hd.2]
+    simp [alloc.vec.Vec.deref_mut] at hd; intro t; rw [← hd.2]; rfl
   have hget2 : sl.val[i.val]? = none := by rw [hs]; exact List.getElem?_eq_none (by omega)
   simp [lift, core.slice.Slice.get_mut, core.slice.index.Usize.get_mut, hget2]
   rw [hback, Slice.set_opt_val_eq]
@@ -772,6 +772,7 @@ theorem base_rewards_loop_spec (inc factor bpe : U64) (phase0 : Bool) (sq brpi m
         saturating_add_val k 1#u64 (by simp [u64_max_val]; omega)
       simp only [hle, if_true, core.option.Option.is_none, Option.isNone_none, hc, bind_tc_ok,
         hw1, lift]
+      apply (spec_ok _).mpr
       refine ⟨⟨rfl, by rw [hsat]; omega, ?_⟩, by rw [hsat]; omega⟩
       rw [hw1v, hsat, List.map_append, hw, List.range_succ, List.map_append]
       simp [hcv]
@@ -955,9 +956,9 @@ theorem get_base_reward_equiv (cfg : Config) (vs : List Validator) (epoch : Nat)
     rw [hr]; exact Option.some.inj this
   refine ⟨r, ?_, ?_⟩
   · rw [get_base_reward_spec ebs (alloc.vec.Vec.deref tbl) inc index hindex (by omega)
-      (by simp only [alloc.vec.Vec.deref, hebv, ← heth_def]; omega)
+      (by simp only [alloc.vec.Vec.deref, Slice.from_val, hebv, ← heth_def]; omega)
       (by rw [hebv, ← heth_def]; omega)]
-    simp only [alloc.vec.Vec.deref, hebv, ← heth_def, hr]
+    simp only [alloc.vec.Vec.deref, Slice.from_val, hebv, ← heth_def, hr]
   · have hT : 1 ≤ max inc.val total.val := by omega
     have hT64 : max inc.val total.val < 2 ^ 64 := by
       have := inc.hBounds; have := total.hBounds; simp at *; omega

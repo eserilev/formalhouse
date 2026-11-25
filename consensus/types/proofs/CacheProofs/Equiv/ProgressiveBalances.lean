@@ -343,7 +343,7 @@ theorem on_new_attestation_ok (t : Array Bal 3#usize) (is_slashed : Bool) (f : U
   unfold on_new_attestation
   cases is_slashed
   · have h0 : (ab (Array.to_slice t).val)[f.val]? = some (R f.val, m) := by
-      simp only [Array.to_slice, ht, tri]
+      simp only [Array.to_slice, Slice.from_val, ht, tri]
       have : f.val = 0 ∨ f.val = 1 ∨ f.val = 2 := by omega
       rcases this with h | h | h <;> simp [h]
     obtain ⟨b, hb, hr, hm⟩ := ab_getElem? _ _ _ _ h0
@@ -363,7 +363,7 @@ theorem total_flag_balance_ok (t : Array Bal 3#usize) (f : Usize) (R : Nat → N
     (ht : ab t.val = tri R m) (hf : f.val < 3) :
     ∃ v : U64, total_flag_balance (Array.to_slice t) f = ok (.Ok v) ∧ v.val = max (R f.val) m := by
   have h0 : (ab (Array.to_slice t).val)[f.val]? = some (R f.val, m) := by
-    simp only [Array.to_slice, ht, tri]
+    simp only [Array.to_slice, Slice.from_val, ht, tri]
     have : f.val = 0 ∨ f.val = 1 ∨ f.val = 2 := by omega
     rcases this with h | h | h <;> simp [h]
   obtain ⟨b, hb, hr, hm⟩ := ab_getElem? _ _ _ _ h0
@@ -891,9 +891,9 @@ theorem slashing_coherent (incr : Nat) (s s' : Spec.BeaconState) (c : LhCache) (
     apply tri_congr; intro g hg
     rw [(hC g hg).1, heb]; by_cases hf : Spec.has_flag cflags.val g <;> simp [hf]
   · simp only [PreviousCoherent, hat]
-    simp only [Spec.get_previous_epoch, Spec.get_current_epoch] at hP ⊢
     apply tri_congr; intro g hg
-    rw [(hP g hg).1, heb]
+    refine Eq.trans ?_ (hP g hg).1.symm
+    rw [heb]
     by_cases hf : Spec.has_flag pflags.val g <;> simp [hf]
 
 /-! ## Effective balance change -/
@@ -987,7 +987,7 @@ theorem effective_balance_change_coherent (incr : Nat) (s s' : Spec.BeaconState)
 /-- `EpochTotalBalances::new`: three `Balance::zero(effective_balance_increment)`. -/
 def lhNewTotals (incr : U64) : Result (Array Bal 3#usize) := do
   let z ← Balance.zero incr
-  ok ⟨[z, z, z], by simp⟩
+  ok (Array.make 3#usize [z, z, z])
 
 /-- `ProgressiveBalancesCache::on_epoch_transition`. -/
 def lhOnEpochTransition (c : LhCache) (incr : U64) :
@@ -1080,9 +1080,8 @@ theorem add_validator_coherent (incr : Nat) (s : Spec.BeaconState) (c : LhCache)
     rw [hc1]; apply tri_congr; intro g _
     rw [flagSum_append _ _ _ _ _ _ hclen, hw, Nat.add_zero]
   · simp only [PreviousCoherent] at hc2 ⊢
-    simp only [Spec.get_previous_epoch, Spec.get_current_epoch] at hc2 ⊢
     rw [hc2]; apply tri_congr; intro g _
-    rw [flagSum_append _ _ _ _ _ _ hplen, hw, Nat.add_zero]
+    exact ((flagSum_append _ _ _ _ _ _ hplen).trans (by rw [hw, Nat.add_zero]; rfl)).symm
 
 /-! ## Reads -/
 
@@ -1263,13 +1262,20 @@ theorem lhInitLoop_ok (pe ce m : Nat) (vs : List LhValidator) (cs ps : List U8)
         (fun g hg => by have := hfc g hg; omega)
       refine ⟨pt', ct', ?_, ?_, ?_⟩
       · simp only [lhInitLoop, hs', Bool.false_eq_true, if_false]
-        rw [e1]; simp only [bind_tc_ok]; rw [e2]; simp only [bind_tc_ok]; exact e3
+        by_cases h1 : lhIsActiveAt v ce = true <;> by_cases h2 : lhIsActiveAt v pe = true <;>
+          (simp only [h1, h2, Bool.false_eq_true, if_true, if_false] at e1 e2
+           simp only [h1, h2, Bool.false_eq_true, if_true, if_false, e1, e2, bind_tc_ok]
+           first
+             | exact e3
+             | (simp only [Result.ok.injEq, Prod.mk.injEq, true_and] at e1 e2; subst_vars; exact e3)
+             | (simp only [Result.ok.injEq, Prod.mk.injEq, true_and] at e1; subst_vars; exact e3)
+             | (simp only [Result.ok.injEq, Prod.mk.injEq, true_and] at e2; subst_vars; exact e3))
       · rw [a3]; apply tri_congr; intro g _; omega
       · rw [a4]; apply tri_congr; intro g _; omega
 
 theorem lhNewTotals_ok (incr : U64) :
     ∃ t, lhNewTotals incr = ok t ∧ ab t.val = tri (fun _ => 0) incr.val :=
-  ⟨_, rfl, by simp [ab, tri]⟩
+  ⟨_, by simp [lhNewTotals, Balance.zero]; rfl, by simp [ab, tri]⟩
 
 /-- The build gives a coherent cache, and it does not fail when each total fits in a `u64`. -/
 theorem build_coherent (incr : U64) (s : LhState)
@@ -1285,6 +1291,7 @@ theorem build_coherent (incr : U64) (s : LhState)
   have hpe : lhPreviousEpoch s.current_epoch = Spec.get_previous_epoch s.toSpec := by
     simp [lhPreviousEpoch, Spec.get_previous_epoch, Spec.get_current_epoch, LhState.toSpec,
       Spec.GENESIS_EPOCH]
+    rfl
   obtain ⟨pt, ct, e, a1, a2⟩ := lhInitLoop_ok (lhPreviousEpoch s.current_epoch) s.current_epoch
     incr.val s.validators s.current_epoch_participation s.previous_epoch_participation hcl hpl
     z z _ _ az az
