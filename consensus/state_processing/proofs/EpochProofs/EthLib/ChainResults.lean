@@ -92,7 +92,8 @@ theorem increment_eq : preset.EFFECTIVE_BALANCE_INCREMENT.toNat = 1000000000 :=
 theorem minActivationBalance_eq : preset.MIN_ACTIVATION_BALANCE.toNat = 32000000000 :=
   congrArg Spec.Preset.MIN_ACTIVATION_BALANCE presetMatches.values
 
-theorem maxEffectiveBalanceElectra_eq : preset.MAX_EFFECTIVE_BALANCE_ELECTRA.toNat = 2048000000000 :=
+theorem maxEffectiveBalanceElectra_eq :
+    preset.MAX_EFFECTIVE_BALANCE_ELECTRA.toNat = 2048000000000 :=
   congrArg Spec.Preset.MAX_EFFECTIVE_BALANCE_ELECTRA presetMatches.values
 
 /-- The bands of the effective balance update. -/
@@ -220,8 +221,8 @@ theorem balanceFloor_of_slot (presetMatches : PresetMatchesEthLib preset config)
   rw [bands.1] at down
   omega
 
-/-- At the epoch input, each validator that is not withdrawable has at least `1/256` of its effective
-balance. -/
+/-- At the epoch input, the balance of each validator that is not withdrawable is at least `1/256` of
+its effective balance. -/
 theorem RunToEpochInput.effectiveBalance_le (presetMatches : PresetMatchesEthLib preset config)
     (maxEffectiveBalance : MaxEffectiveBalanceIsActivationBalance preset) (fulu : .fusaka ≤ fork)
     (run : RunToEpochInput config checks start input) (registry : input.RegistryWithinLimit)
@@ -367,8 +368,8 @@ theorem RunToEpochInput.facts (caps : CapOrder preset)
   ((run.startsAt.elim ChainStart.genesis id).facts.run caps run.run).processSlot run.lastSlot
 
 omit [Spec.PresetCfg.Ok] in
-/-- The reachable-state invariants except `EntryEB` and the balance bounds, from the facts of a chain
-state. -/
+/-- The facts of a chain state give the reachable-state invariants, except `EntryEB` and the balance
+bounds. -/
 theorem ChainFacts.toSpecState (presetMatches : PresetMatchesEthLib preset config)
     (maxEffectiveBalance : MaxEffectiveBalanceIsActivationBalance preset) (fulu : .fusaka ≤ fork)
     (facts : ChainFacts config input) :

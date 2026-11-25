@@ -154,11 +154,13 @@ theorem execution_balance_floor {f : Fork} {s t : BeaconState preset f}
   · simp only [bind_ok_iff] at computed
     obtain ⟨middle, withdrawnOk, bidOk⟩ := computed
     obtain ⟨_, rfl⟩ := processExecutionPayloadBid_eq bidOk
-    simpa [actualBalanceAt] using withdrawals_balance_floor compounding electra within withdrawnOk found later
+    simpa [actualBalanceAt] using
+      withdrawals_balance_floor compounding electra within withdrawnOk found later
   · simp only [bind_ok_iff] at computed
     obtain ⟨middle, withdrawnOk, paidOk⟩ := computed
     obtain ⟨-, header, -, rfl⟩ := processExecutionPayload_ok paidOk
-    simpa [actualBalanceAt] using withdrawals_balance_floor compounding electra within withdrawnOk found later
+    simpa [actualBalanceAt] using
+      withdrawals_balance_floor compounding electra within withdrawnOk found later
 
 /-! ## One block -/
 
@@ -169,14 +171,17 @@ def KeepsNotWithdrawable {fork : Fork} (before after : BeaconState preset fork) 
     getCurrentEpoch before < old.withdrawableEpoch → getCurrentEpoch before < new.withdrawableEpoch
 
 theorem KeepsNotWithdrawable.of_validators {fork : Fork} {before after : BeaconState preset fork}
-    (slot : after.slot = before.slot) (validators : after.validators.data = before.validators.data) :
+    (slot : after.slot = before.slot)
+    (validators : after.validators.data = before.validators.data) :
     KeepsNotWithdrawable before after :=
   ⟨slot, fun i old new found read early => by
     rw [validators, found] at read
     exact Option.some.inj read ▸ early⟩
 
-theorem KeepsNotWithdrawable.of_setValidator {fork : Fork} {before middle after : BeaconState preset fork}
-    (slot : middle.slot = before.slot) (validators : middle.validators.data = before.validators.data)
+theorem KeepsNotWithdrawable.of_setValidator {fork : Fork}
+    {before middle after : BeaconState preset fork}
+    (slot : middle.slot = before.slot)
+    (validators : middle.validators.data = before.validators.data)
     {index : ValidatorIndex} {old new : Validator}
     (found : before.validators.data[index.toNat]? = some old)
     (set : middle.setValidator index new = .ok after)
@@ -213,7 +218,8 @@ theorem KeepsNotWithdrawable.exit {fork : Fork} {before after : BeaconState pres
     dsimp only
     omega
 
-theorem KeepsNotWithdrawable.withdrawalRequest {fork : Fork} {before after : BeaconState preset fork}
+theorem KeepsNotWithdrawable.withdrawalRequest {fork : Fork}
+    {before after : BeaconState preset fork}
     {electra : .pectra ≤ fork} {request : WithdrawalRequest}
     (ok : processWithdrawalRequest config before electra request = .ok after) :
     KeepsNotWithdrawable before after := by
@@ -248,7 +254,8 @@ theorem KeepsNotWithdrawable.consolidationRequest {fork : Fork}
       queueConsolidation_steps queued
     refine KeepsNotWithdrawable.of_setValidator (before := before) (middle := { before with
         consolidationBalanceToConsume := fun _ => rest
-        earliestConsolidationEpoch := fun _ => exitEpoch }) (after := written) rfl rfl accepted.sourceAt set
+        earliestConsolidationEpoch := fun _ => exitEpoch }) (after := written) rfl rfl
+      accepted.sourceAt set
       fun _ => UInt64.lt_iff_toNat_lt.mpr ?_
     cases first : computeActivationExitEpoch preset (getCurrentEpoch before) with
     | error =>
@@ -342,7 +349,8 @@ theorem block_balance_floor {fork : Fork} {before after : BeaconState preset for
   have middleEarly := parentEarly.2 _ _ _ found middleFound early
   -- The header, the withdrawals, the RANDAO reveal and the deposit contract vote.
   have headedLedger := ledger_processBlockHeader headedOk
-  have headedValidators : headed.validators = parented.validators ∧ headed.slot = parented.slot := by
+  have headedValidators : headed.validators = parented.validators ∧
+      headed.slot = parented.slot := by
     obtain ⟨_, _, rfl⟩ := processBlockHeader_eq headedOk
     exact ⟨rfl, rfl⟩
   have afterSize : before.validators.data.size ≤ after.validators.data.size :=
@@ -502,7 +510,8 @@ theorem block {engine : ExecutionEngine preset fork} {block : BeaconBlock preset
   obtain ⟨input, last, started, operated, -, synced⟩ := processBlock_operationsInput ok
   have head : AddsNoEffectiveBalance before input :=
     started.step_of AddsNoEffectiveBalance refl trans
-      (fun _ paid => of_size (effectiveKept_parentPayload paid).1 (effectiveKept_parentPayload paid).2)
+      (fun _ paid => of_size (effectiveKept_parentPayload paid).1
+        (effectiveKept_parentPayload paid).2)
       (fun headed => by
         obtain ⟨_, _, rfl⟩ := processBlockHeader_eq headed
         exact of_validators rfl)
@@ -585,7 +594,8 @@ structure BalanceInEpoch (first current : ForkedBeaconState preset) (syncPenalty
         slashingPenaltyBound preset first.fork atStart.effectiveBalance.toNat atStart.slashed
           now.slashed
 
-private theorem effectiveAt_found {state : ForkedBeaconState preset} {i : Nat} {validator : Validator}
+private theorem effectiveAt_found {state : ForkedBeaconState preset} {i : Nat}
+    {validator : Validator}
     (found : state.state.validators.data[i]? = some validator) :
     effectiveAt state i = validator.effectiveBalance.toNat := by
   simp [effectiveAt, found]
@@ -606,7 +616,8 @@ theorem Run.fork_same_epoch {first last : ForkedBeaconState preset}
     (run : Run config checks first last)
     (same : getCurrentEpoch last.state = getCurrentEpoch first.state) : last.fork = first.fork :=
   Run.induction_of_same_epoch (fun current _ => current.fork = first.fork) rfl
-    (fun _ _ _ _ _ prior => prior) (fun _ _ lastEq _ _ prior => by rw [lastEq]; exact prior) run same
+    (fun _ _ _ _ _ prior => prior) (fun _ _ lastEq _ _ prior => by rw [lastEq]; exact prior)
+    run same
 
 /-- The seats of a validator are at most the size of the sync committee. -/
 theorem syncSeats_le {fork : Fork} (state : BeaconState preset fork) (altair : .altair ≤ fork)
@@ -635,7 +646,8 @@ theorem Run.balanceInEpoch {first last : ForkedBeaconState preset} (caps : CapOr
         first.validators.data[index.toNat]? = some atStart →
         ∃ now, BalanceInEpoch ⟨fork, first⟩ current syncPenalty pre.blockCount index atStart now))
     ?_ ?_ ?_ run same
-  · refine ⟨rfl, rfl, fun i outside => ?_, fun _ index atStart found => ⟨atStart, found, id, .inr ?_⟩⟩
+  · refine ⟨rfl, rfl, fun i outside => ?_, fun _ index atStart found =>
+      ⟨atStart, found, id, .inr ?_⟩⟩
     · simp [effectiveAt, Array.getElem?_eq_none outside]
     · exact Nat.le_trans (Nat.min_le_left _ _) (by omega)
   · intro f before after engine signed due ok pre prior
