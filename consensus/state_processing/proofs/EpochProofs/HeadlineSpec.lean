@@ -34,13 +34,9 @@ variable {oracle : Spec.Oracle} {fuluOracle : Spec.FuluOracle}
 /-- The reachable-state invariants at a Gloas epoch input
 (`fulu_then_gloas_reachable_invariants`). -/
 theorem GloasEpochRun.invariants (h : GloasEpochRun oracle fuluOracle blockConfig upgradeConfig
-    fuluStart s) : Spec.ReachableInvariants s := by
-  exact Spec.fulu_then_gloas_reachable_invariants oracle fuluOracle blockConfig upgradeConfig
-    fuluStart h.startInvariants h.fuluActiveBalance _ _ _ _ _ _ h.fulu.blocks
-    h.fulu.targetSlotFits h.fulu.slots h.fulu.beforeTarget h.fulu.lastSlot h.fulu.atEpochEnd
-    h.fulu.lastEpoch h.fulu.upgrade _ _ h.gloasActiveBalance _ h.gloasBalanceBounds _ _ _ _
-    h.gloas.blocks h.gloas.targetSlotFits h.gloas.slots h.gloas.beforeTarget h.gloas.lastSlot
-    h.gloas.atEpochEnd
+    fuluStart s) : Spec.ReachableInvariants s :=
+  Spec.fulu_then_gloas_reachable_invariants h.startInvariants h.fuluActiveBalance h.fulu
+    h.gloasActiveBalance _ h.gloasBalanceBounds h.gloas
 
 omit [Spec.PresetCfg.Ok] [Spec.FuluCfg.Ok] in
 /-- A Gloas epoch input is the last slot of an epoch, and the next slot fits in `u64`. With

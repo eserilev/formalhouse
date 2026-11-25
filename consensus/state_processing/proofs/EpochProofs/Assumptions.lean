@@ -1,8 +1,7 @@
 import EpochProofs.Sanity.PtcIndices
 import EpochProofs.Sanity.Invariants.BalanceFloor
 import EpochProofs.Sanity.Invariants.LighthouseEpoch
-import EpochProofs.Sanity.Invariants.ForkUpgrade
-import EpochProofs.Sanity.Invariants.FuluReachable
+import EpochProofs.Runs
 import EpochProofs.Sanity.Invariants.TotalityCommittees
 import EpochProofs.Sanity.Invariants.TotalityRows
 import EpochProofs.Sanity.Invariants.TotalityFulu
@@ -15,8 +14,9 @@ import EpochProofs.Compose.Fulu
 /-!
 # The assumptions of the main theorems
 
-- The run, `GloasEpochRun` and `FuluEpochRun`: the state is an input of `process_epoch` on a chain
-  from a start state with the facts of a genesis state. The total stake stays below its bounds.
+- The run, `GloasEpochRun` and `FuluEpochRun` (`Runs.lean`): the state is an input of
+  `process_epoch` on a chain from a start state with the facts of a genesis state. The total stake
+  stays below its bounds.
 - The chain, `GloasChainAssumptions` and `FuluChainAssumptions`: what the epoch needs to succeed.
 - The caches, `GloasCacheAssumptions`: where each cache that the Gloas epoch reads came from. The
   Fulu model reads the spec values, so the Fulu theorems take no cache facts.
@@ -27,112 +27,6 @@ import EpochProofs.Compose.Fulu
 namespace EpochProofs.Formalhouse
 
 open Aeneas Aeneas.Std Result
-
-/-! ## The runs -/
-
-section Runs
-
-variable [Spec.PresetCfg] [Spec.FuluCfg]
-
-/-- A run of Fulu blocks from `start` to an input of the Fulu `process_epoch`. -/
-structure FuluRunToEpoch (oracle : Spec.Oracle) (fuluOracle : Spec.FuluOracle)
-    (config : Spec.FuluBlockConfig) (start : Spec.FuluState) where
-  /-- The state after the last block. -/
-  afterBlocks : Spec.FuluState
-  /-- The state after the slots that follow the last block. -/
-  beforeLastSlot : Spec.FuluState
-  /-- The state that `process_epoch` gets. -/
-  epochInput : Spec.FuluState
-  /-- The slot that `process_slots` runs to. -/
-  targetSlot : Spec.Slot
-  /-- Blocks reach `afterBlocks`. -/
-  blocks : Spec.ReachableFulu oracle fuluOracle config start afterBlocks
-  /-- The target slot is a `u64`. -/
-  targetSlotFits : targetSlot < 2 ^ 64
-  /-- The slots from there reach `beforeLastSlot`. -/
-  slots : Spec.SlotReachFulu oracle fuluOracle afterBlocks targetSlot beforeLastSlot
-  /-- That state is before the target slot. -/
-  beforeTarget : beforeLastSlot.state.slot < targetSlot
-  /-- `process_slot` on the last slot of the epoch gives the epoch input. -/
-  lastSlot : Spec.process_slot_fulu Spec.P oracle fuluOracle beforeLastSlot = .ok epochInput
-  /-- The epoch input is at the last slot of an epoch. -/
-  atEpochEnd : (epochInput.state.slot + 1) % Spec.P.SLOTS_PER_EPOCH = 0
-
-/-- A Fulu run whose last epoch ends with the Gloas fork. -/
-structure FuluRunToGloasFork (oracle : Spec.Oracle) (fuluOracle : Spec.FuluOracle)
-    (config : Spec.FuluBlockConfig) (upgradeConfig : Spec.UpgradeConfig) (start : Spec.FuluState)
-    extends FuluRunToEpoch oracle fuluOracle config start where
-  /-- The state after the last Fulu `process_epoch`. -/
-  afterEpoch : Spec.BeaconState
-  /-- The first Gloas state. -/
-  gloasStart : Spec.BeaconState
-  /-- The last Fulu epoch. -/
-  lastEpoch : Spec.process_epoch_fulu Spec.P Spec.FC oracle epochInput.state = .ok afterEpoch
-  /-- `upgrade_to_gloas` at the next slot. -/
-  upgrade : Spec.upgrade_to_gloas Spec.P oracle upgradeConfig
-    { epochInput with state := { afterEpoch with slot := afterEpoch.slot + 1 } } = .ok gloasStart
-
-/-- A run of Gloas blocks from `start` to the input `epochInput` of the Gloas `process_epoch`. -/
-structure GloasRunToEpoch (oracle : Spec.Oracle) (maxBlobsPerBlock : Spec.Epoch → Spec.Uint64)
-    (gloasForkEpoch : Spec.Epoch) (start epochInput : Spec.BeaconState) where
-  /-- The state after the last block. -/
-  afterBlocks : Spec.BeaconState
-  /-- The state after the slots that follow the last block. -/
-  beforeLastSlot : Spec.BeaconState
-  /-- The slot that `process_slots` runs to. -/
-  targetSlot : Spec.Slot
-  /-- Blocks reach `afterBlocks`. -/
-  blocks : Spec.Reachable oracle maxBlobsPerBlock gloasForkEpoch start afterBlocks
-  /-- The target slot is a `u64`. -/
-  targetSlotFits : targetSlot < 2 ^ 64
-  /-- The slots from there reach `beforeLastSlot`. -/
-  slots : Spec.SlotReachG oracle afterBlocks targetSlot beforeLastSlot
-  /-- That state is before the target slot. -/
-  beforeTarget : beforeLastSlot.slot < targetSlot
-  /-- `process_slot` on the last slot of the epoch gives the epoch input. -/
-  lastSlot : Spec.process_slot Spec.P oracle beforeLastSlot = .ok epochInput
-  /-- The epoch input is at the last slot of an epoch. -/
-  atEpochEnd : (epochInput.slot + 1) % Spec.P.SLOTS_PER_EPOCH = 0
-
-/-- A chain that starts in Fulu, crosses the Gloas fork, and reaches the input `epochInput` of a
-Gloas `process_epoch`. The total stake stays below its bounds. -/
-structure GloasEpochRun (oracle : Spec.Oracle) (fuluOracle : Spec.FuluOracle)
-    (config : Spec.FuluBlockConfig) (upgradeConfig : Spec.UpgradeConfig) (start : Spec.FuluState)
-    (epochInput : Spec.BeaconState) where
-  /-- The start state has the invariants of a genesis state. -/
-  startInvariants : Spec.FuluStartOk start.state
-  /-- At most 139 million ETH is active before each Fulu block. -/
-  fuluActiveBalance : Spec.SupplyBoundFulu oracle fuluOracle config start
-  /-- The Fulu part, up to the first Gloas state. -/
-  fulu : FuluRunToGloasFork oracle fuluOracle config upgradeConfig start
-  /-- The blob limit of each epoch. -/
-  maxBlobsPerBlock : Spec.Epoch → Spec.Uint64
-  /-- The epoch of the Gloas fork that block processing reads. -/
-  gloasForkEpoch : Spec.Epoch
-  /-- At most 139 million ETH is active before each Gloas block. -/
-  gloasActiveBalance : Spec.SupplyBound oracle maxBlobsPerBlock gloasForkEpoch fulu.gloasStart
-  /-- The balance bounds hold at each Gloas epoch input. -/
-  gloasBalanceBounds : Spec.EpochEcon oracle maxBlobsPerBlock gloasForkEpoch fulu.gloasStart
-    Spec.EpochBalanceBounds
-  /-- The Gloas part. -/
-  gloas : GloasRunToEpoch oracle maxBlobsPerBlock gloasForkEpoch fulu.gloasStart epochInput
-
-/-- A Fulu chain that reaches the input `epochInput` of a Fulu `process_epoch`. The total stake
-stays below its bounds. -/
-structure FuluEpochRun (oracle : Spec.Oracle) (fuluOracle : Spec.FuluOracle)
-    (config : Spec.FuluBlockConfig) (start : Spec.FuluState) (epochInput : Spec.BeaconState) where
-  /-- The start state has the invariants of a genesis state. -/
-  startInvariants : Spec.FuluStartOk start.state
-  /-- At most 139 million ETH is active before each block. -/
-  activeBalance : Spec.SupplyBoundFulu oracle fuluOracle config start
-  /-- The balance bounds hold at each epoch input. -/
-  balanceBounds : Spec.EpochEconFulu oracle fuluOracle config start Spec.EpochBalanceBounds
-  /-- The blocks and slots up to the epoch input. -/
-  path : FuluRunToEpoch oracle fuluOracle config start
-  /-- The path ends at the epoch input. -/
-  reachesInput : path.epochInput.state = epochInput
-
-end Runs
 
 /-! ## The chain -/
 

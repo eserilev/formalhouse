@@ -481,31 +481,4 @@ theorem gloas_reachable_invariants [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_
   exact ⟨⟨⟨hok, Nat.lt_trans hlt1 hslot64, hb.ebOk hA, hx,
     hecon s t t1 hr hreach.slotReach ht hz⟩, hp1, hc1⟩, hw1, withdrawableValid_of hd1 hw1⟩
 
-/-- A Fulu run that crosses the Gloas fork: every input of the Gloas `process_epoch` after the
-fork has the facts of `EpochInputOk''`. -/
-theorem fulu_then_gloas_reachable_invariants [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok]
-    (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
-    (uc : UpgradeConfig) (init : FuluState) (hi : FuluStartOk init.state)
-    (hsupply : SupplyBoundFulu o fo c init)
-    (fs t t1 : FuluState) (s2 g : BeaconState) (slot : Slot) (hr : ReachableFulu o fo c init fs)
-    (hslot64 : slot < 2 ^ 64) (hreach : SlotReachFulu o fo fs slot t) (hlt : t.state.slot < slot)
-    (ht : process_slot_fulu P o fo t = .ok t1)
-    (hz : (t1.state.slot + 1) % P.SLOTS_PER_EPOCH = 0)
-    (he : process_epoch_fulu_m o t1.state = .ok s2)
-    (hup : upgrade_to_gloas P o uc
-      { t1 with state := { s2 with slot := s2.slot + 1 } } = .ok g)
-    (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch)
-    (hsupplyG : SupplyBound o max_blobs_per_block GLOAS_FORK_EPOCH g)
-    (Econ : BeaconState → Prop) (hecon : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH g Econ)
-    (s u u1 : BeaconState) (slotG : Slot)
-    (hrg : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH g s)
-    (hslotG : slotG < 2 ^ 64) (hreachG : SlotReachG o s slotG u) (hltG : u.slot < slotG)
-    (hu : process_slot P o u = .ok u1)
-    (hzG : (u1.slot + 1) % P.SLOTS_PER_EPOCH = 0) :
-    EpochInputOk'' Econ u1 :=
-  gloas_reachable_invariants o _ _ g
-    (fulu_gloas_fork_startOk o fo c uc init hi hsupply fs t t1 s2 g slot hr hslot64 hreach hlt ht
-      hz he hup)
-    hsupplyG Econ hecon s u u1 slotG hrg hslotG hreachG hltG hu hzG
-
 end EpochProofs.Spec
