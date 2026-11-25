@@ -1,0 +1,15 @@
+diff --git a/charon/src/bin/charon-driver/translate/translate_crate.rs b/charon/src/bin/charon-driver/translate/translate_crate.rs
+index c0187a683..c09c55235 100644
+--- a/charon/src/bin/charon-driver/translate/translate_crate.rs
++++ b/charon/src/bin/charon-driver/translate/translate_crate.rs
+@@ -327,8 +327,9 @@ impl<'tcx> TranslateCtx<'tcx> {
+                 (tcx.lang_items().index_trait().unwrap(), sym::index),
+                 (tcx.lang_items().index_mut_trait().unwrap(), sym::index_mut),
+             ] {
++                // Only the std impls. A dependency can implement `Index` for its own array type.
+                 let impls = tcx.all_impls(trait_id).filter(|&impl_id| {
+-                    matches!(
++                    impl_id.krate == trait_id.krate && matches!(
+                         tcx.impl_trait_ref(impl_id).skip_binder().self_ty().kind(),
+                         ty::Array(..) | ty::Slice(..)
+                     )

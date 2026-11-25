@@ -61,13 +61,13 @@ beneath these theorems surfaces as `sorryAx` however deep it hides.
 ```sh
 # Charon, pinned to the commit Aeneas expects
 git clone https://github.com/AeneasVerif/charon && cd charon
-git checkout fea3fc68d445181cf4ce094855a43a17192a2b12
+git checkout 695be3d6292e988eedd8afcb7a709146a0ff4f01
 cd charon && cargo build --release
 
 # Aeneas (OCaml 5.2; needs domainslib, so 4.x will not work).
 # Use the `rev` pinned in lakefile.toml -- that file is the source of truth, and CI reads it.
 git clone https://github.com/AeneasVerif/aeneas && cd aeneas
-git checkout 453b09f98f2b593c0544a8ad654b77e2a3bc621a
+git checkout fb44cb400eb6bfe7dce97422ebe8fa748b7e4f9b
 ln -s ../charon charon && cd src && dune build
 
 # Translate. `--lib` matters: without it Charon picks up src/bin/test_generator.rs

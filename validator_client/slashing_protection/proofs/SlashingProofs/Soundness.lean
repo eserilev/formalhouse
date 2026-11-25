@@ -236,12 +236,14 @@ theorem check_attestation_pure_sound
             · simp
             · split
               · simp
-              · intro _ b hb
+              · rw [WP.spec_ok]
+                intro _ b hb
                 rintro (⟨ht, hr⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩)
                 · exact absurd (hfound.mpr ⟨b, hb, ht.symm⟩) (by simp_all)
                 · exact absurd (hnew.mpr ⟨b, hb, h1, h2⟩) (by simp_all)
                 · exact absurd (hprev.mpr ⟨b, hb, h1, h2⟩) (by simp_all)
-          · intro _ b hb
+          · rw [WP.spec_ok]
+            intro _ b hb
             have hlen : history.length = 0 := by scalar_tac
             have hnil : history.v = [] := by
               simpa [Slice.length, List.length_eq_zero_iff] using hlen
