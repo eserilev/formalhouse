@@ -276,7 +276,9 @@ before the update function runs.
 Four more glue facts have no proof (N1 to N4 in `Trusted/EpochGlue.lean`): the superstruct
 accessors return `Ok` on a state of the right fork, `update_tree_hash_cache` succeeds, the
 `slashings` sum computes what the spec computes, and the active set fits the committee shuffle.
-If one of these is false, Lighthouse returns an error rather than a wrong state.
+If one of these is false, Lighthouse can return an error. Two of them can also give a wrong state
+with no error. A wrong `slashings` sum changes the slashing penalties. If an exit churn accessor
+returns `Err`, the code skips the write of that field.
 
 <details>
 <summary>The full list</summary>
