@@ -593,7 +593,7 @@ open EpochProofs.Spec
 #print axioms EpochProofs.initialize_proposer_lookahead_get
 #print axioms EpochProofs.initialize_ptc_window_get
 #print axioms EpochProofs.initialize_ptc_window_lh
-#print axioms EpochProofs.passM_append
+#print axioms EpochProofs.passOverRows_append
 #print axioms EpochProofs.single_pass_rows_loop_spec
 #print axioms EpochProofs.single_pass_rows_spec
 #print axioms EpochProofs.lighthouseValidatorStep_base_reward

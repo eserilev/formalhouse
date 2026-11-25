@@ -63,16 +63,17 @@ theorem bitOf_eq (o : Spec.Oracle) (seed : List UInt8) (r position : Nat) :
   congr 2
   rw [show (0 : Nat) = UInt8.toNat 0 from rfl, List.getD_map]
 
-theorem sigma_eq (o : Spec.Oracle) (seed : List UInt8) (n r x : Nat) :
-    CacheProofs.Shuffle.sigma (hashOfByteNumbers o) (byteNumbers seed) n r x =
-      Spec.sigma o seed n r x := by
-  simp only [CacheProofs.Shuffle.sigma, Spec.sigma, pivotOf_eq, bitOf_eq]
+theorem swapOrNotRound_eq (o : Spec.Oracle) (seed : List UInt8) (n r x : Nat) :
+    CacheProofs.Shuffle.swapOrNotRound (hashOfByteNumbers o) (byteNumbers seed) n r x =
+      Spec.swapOrNotRound o seed n r x := by
+  simp only [CacheProofs.Shuffle.swapOrNotRound, Spec.swapOrNotRound, pivotOf_eq, bitOf_eq]
 
 /-- The closed form of the shuffle is the same in both references. -/
 theorem shuffledIndexAfterRounds_eq (o : Spec.Oracle) (seed : List UInt8) (n R x : Nat) :
     CacheProofs.Shuffle.shuffledIndexAfterRounds (hashOfByteNumbers o) (byteNumbers seed) n R x =
       Spec.shuffledIndexAfterRounds o seed n R x := by
-  simp only [CacheProofs.Shuffle.shuffledIndexAfterRounds, Spec.shuffledIndexAfterRounds, sigma_eq]
+  simp only [CacheProofs.Shuffle.shuffledIndexAfterRounds, Spec.shuffledIndexAfterRounds,
+    swapOrNotRound_eq]
 
 /-! ## The committees of the epoch reference, from a shuffling -/
 
@@ -476,7 +477,7 @@ committee cache returns the PTCs that the spec `process_ptc_window` appends. Thi
 `ptc_for_epoch_spec` with its committee hypothesis replaced by the committee cache build facts
 (`CommitteeCacheMatchesSpec`) and the way Lighthouse joins the cache committees
 (`CommitteesReadFromCache`). -/
-theorem lighthouse_ptc_window_from_cache {H B : Type} (inst : ShuffleHashInst H)
+theorem lighthouse_ptc_window_from_cache {H B : Type} (inst : ShuffleHash H)
     (ebi : EffectiveBalanceSource B)
     (balances : B) (p : Spec.Preset) (cp : CacheProofs.Spec.CommitteeCache.Preset)
     (hp : CommitteePresetsMatch p cp) (o : Spec.Oracle) (hH : HashMatches inst o)

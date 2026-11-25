@@ -23,7 +23,7 @@ def LoopAgree : SpecM DepositLoopResult → SpecM DepositLoopResult → Prop
 /-- From index `k ≤ MAX`, the loop over all views agrees with the loop over the first `MAX - k`
 views: at index `MAX` the loop stops with the state unchanged and no churn flag. -/
 theorem depositLoop_take_agree [CurrentPreset] (fs avail : Nat) :
-    ∀ (vs : List DepositSpecView) (ls : DepositLoopState),
+    ∀ (vs : List DepositInfo) (ls : DepositLoopState),
       ls.next_deposit_index ≤ P.MAX_PENDING_DEPOSITS_PER_EPOCH →
       LoopAgree (depositLoop P fs avail ls vs)
         (depositLoop P fs avail ls
@@ -60,7 +60,7 @@ theorem depositLoop_take_agree [CurrentPreset] (fs avail : Nat) :
           exact depositLoop_take_agree fs avail vs r.state hk'
 
 /-- The decisions read only the first `MAX_PENDING_DEPOSITS_PER_EPOCH` views. -/
-theorem depositDecisions_take_max [CurrentPreset] (fs dbtc churn : Nat) (views : List DepositSpecView) :
+theorem depositDecisions_take_max [CurrentPreset] (fs dbtc churn : Nat) (views : List DepositInfo) :
     depositDecisions P fs dbtc churn views =
       depositDecisions P fs dbtc churn
         (views.take P.MAX_PENDING_DEPOSITS_PER_EPOCH) := by
@@ -121,24 +121,24 @@ theorem lighthouseRowStep_registry_exclusive [CurrentPreset] (ctx : LighthouseSt
 
 /-! ## Rows of a pass -/
 
-/-- Each output row of a successful `passM` comes from the input row at the same position, by
+/-- Each output row of a successful `passOverRows` comes from the input row at the same position, by
 one step from some accumulator. -/
-theorem passM_rows {A R : Type} (f : A → R → SpecM (A × R)) :
-    ∀ (rows : List R) (a : A) (y : A × List R), passM f a rows = .ok y →
+theorem passOverRows_rows {A R : Type} (f : A → R → SpecM (A × R)) :
+    ∀ (rows : List R) (a : A) (y : A × List R), passOverRows f a rows = .ok y →
       y.2.length = rows.length ∧
         ∀ i (h1 : i < rows.length) (h2 : i < y.2.length), ∃ a' x, f a' rows[i] = .ok x ∧
           x.2 = y.2[i]
   | [], a, y, h => by
-    simp only [passM, pure, Except.pure, Except.ok.injEq] at h
+    simp only [passOverRows, pure, Except.pure, Except.ok.injEq] at h
     subst h
     exact ⟨rfl, fun i h1 => absurd h1 (Nat.not_lt_zero _)⟩
   | r :: rs, a, y, h => by
-    rw [passM_cons] at h
+    rw [passOverRows_cons] at h
     obtain ⟨x, hx, h⟩ := specM_bind_ok h
     obtain ⟨z, hz, h⟩ := specM_bind_ok h
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
-    obtain ⟨hlen, hget⟩ := passM_rows f rs x.1 z hz
+    obtain ⟨hlen, hget⟩ := passOverRows_rows f rs x.1 z hz
     refine ⟨by simp [hlen], fun i h1 h2 => ?_⟩
     cases i with
     | zero => exact ⟨a, x, hx, rfl⟩
@@ -147,7 +147,7 @@ theorem passM_rows {A R : Type} (f : A → R → SpecM (A × R)) :
 
 /-- After a successful Lighthouse pass over the rows of `s`, each validator is the validator of
 `s` with the registry fields of a successful `registryStepExclusive`. -/
-theorem passM_rows_registry [CurrentPreset] (ctx : LighthouseStepContext) (bf : Row → Gwei)
+theorem passOverRows_rows_registry [CurrentPreset] (ctx : LighthouseStepContext) (bf : Row → Gwei)
     (s : BeaconState)
     (churn0 churn : Epoch × Gwei) (rows : List Row) (activation_epoch : Epoch)
     (hfinalized : ctx.finalized_epoch ≤ ctx.current_epoch)
@@ -155,7 +155,7 @@ theorem passM_rows_registry [CurrentPreset] (ctx : LighthouseStepContext) (bf : 
     (hcurrent : ctx.current_epoch + 1 < UINT64_SIZE)
     (hactivation : compute_activation_exit_epoch P ctx.current_epoch =
       .ok activation_epoch)
-    (h : passM (fun c r => lighthouseRowStep P ctx (bf r) c r) churn0 (rowsOf s) =
+    (h : passOverRows (fun c r => lighthouseRowStep P ctx (bf r) c r) churn0 (rowsOf s) =
       .ok (churn, rows)) :
     rows.length = s.validators.length ∧
       ∀ i (h1 : i < s.validators.length) (h2 : i < rows.length), ∃ c g,
@@ -163,7 +163,7 @@ theorem passM_rows_registry [CurrentPreset] (ctx : LighthouseStepContext) (bf : 
           ctx.finalized_epoch activation_epoch s.validators[i].effective_balance
             (registryFieldsOf s.validators[i] c) = .ok g ∧
         rows[i].validator = s.validators[i].withRegistryFields g := by
-  obtain ⟨hlen, hget⟩ := passM_rows _ (rowsOf s) churn0 (churn, rows) h
+  obtain ⟨hlen, hget⟩ := passOverRows_rows _ (rowsOf s) churn0 (churn, rows) h
   rw [rowsOf_length] at hlen
   refine ⟨hlen, fun i h1 h2 => ?_⟩
   have h1' : i < (rowsOf s).length := by rw [rowsOf_length]; exact h1
@@ -244,16 +244,16 @@ theorem views_eq [CurrentPreset] (ctx : LighthouseStepContext) (bf : Row → Gwe
     (hnext : ctx.current_epoch + 1 < FAR_FUTURE_EPOCH)
     (hactivation : compute_activation_exit_epoch P ctx.current_epoch =
       .ok activation_epoch)
-    (h : passM (fun c r => lighthouseRowStep P ctx (bf r) c r) churn0 (rowsOf s) =
+    (h : passOverRows (fun c r => lighthouseRowStep P ctx (bf r) c r) churn0 (rowsOf s) =
       .ok (churn, rows))
     (T : BeaconState) (hT : T.validators = rows.map (·.validator)) (l : List PendingDeposit) :
     l.map (specDepositView T (ctx.current_epoch + 1)) =
-      l.map (lighthouseDepositView s ctx.current_epoch) := by
+      l.map (lighthouseDepositInfo s ctx.current_epoch) := by
   have hcurrent : ctx.current_epoch + 1 < UINT64_SIZE := by
     have h' : @LT.lt Nat _ (ctx.current_epoch + 1) (2 ^ 64 - 1) := hnext
     show @LT.lt Nat _ (ctx.current_epoch + 1) (2 ^ 64)
     omega
-  obtain ⟨hlen, hget⟩ := passM_rows_registry ctx bf s churn0 churn rows activation_epoch
+  obtain ⟨hlen, hget⟩ := passOverRows_rows_registry ctx bf s churn0 churn rows activation_epoch
     hfinalized hexit hcurrent hactivation h
   have hTlen : T.validators.length = s.validators.length := by rw [hT, List.length_map, hlen]
   have hTget : ∀ (i : Nat) (v : Validator), s.validators[i]? = some v → ∃ c g,
@@ -278,7 +278,7 @@ theorem views_eq [CurrentPreset] (ctx : LighthouseStepContext) (bf : Row → Gwe
       rfl
   apply List.map_congr_left
   intro d _
-  unfold specDepositView lighthouseDepositView
+  unfold specDepositView lighthouseDepositInfo
   rw [hpk]
   cases hs : s.validators[(s.validators.map (·.pubkey)).idxOf d.pubkey]? with
   | none =>

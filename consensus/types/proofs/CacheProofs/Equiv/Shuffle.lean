@@ -17,7 +17,7 @@ Proof outline:
 - `bit_at_spec`: the cached hash and byte always belong to the current position `j`.
 - `loop1_spec`, `loop2_spec`: the two inner loops swap each pair `(i, j)` with
   `i + j ≡ pivot (mod n)` when the bit of `max(i, j)` is set. So after one round, entry `x`
-  holds the old entry `sigma r x`.
+  holds the old entry `swapOrNotRound r x`.
 - `round_spec`, `rounds_loop_spec`: rounds `R - 1, ..., 0` compose to `shuffledIndexAfterRounds`.
 - `compute_shuffled_permutation_eq` (in `ShuffleSpec.lean`): the spec gives the same `shuffledIndexAfterRounds`.
 -/
@@ -229,15 +229,15 @@ section Sigma
 
 variable (sha256 : List Nat → List Nat) (seed : List Nat) (n r : Nat)
 
-theorem sigma_low (i : Nat) (hp : pivotOf sha256 seed n r < n)
+theorem swapOrNotRound_low (i : Nat) (hp : pivotOf sha256 seed n r < n)
     (hi : i ≤ pivotOf sha256 seed n r - i) :
-    sigma sha256 seed n r i =
+    swapOrNotRound sha256 seed n r i =
         (if bitOf sha256 seed r (pivotOf sha256 seed n r - i) ≠ 0
           then pivotOf sha256 seed n r - i else i) ∧
-      sigma sha256 seed n r (pivotOf sha256 seed n r - i) =
+      swapOrNotRound sha256 seed n r (pivotOf sha256 seed n r - i) =
         (if bitOf sha256 seed r (pivotOf sha256 seed n r - i) ≠ 0
           then i else pivotOf sha256 seed n r - i) := by
-  unfold sigma
+  unfold swapOrNotRound
   dsimp only
   generalize pivotOf sha256 seed n r = p at *
   have hn : 0 < n := by omega
@@ -251,15 +251,15 @@ theorem sigma_low (i : Nat) (hp : pivotOf sha256 seed n r < n)
     show max (p - i) i = p - i from max_eq_left hi]
   exact ⟨trivial, trivial⟩
 
-theorem sigma_high (i : Nat) (hp : pivotOf sha256 seed n r < i) (hin : i < n)
+theorem swapOrNotRound_high (i : Nat) (hp : pivotOf sha256 seed n r < i) (hin : i < n)
     (hi : i ≤ n + pivotOf sha256 seed n r - i) :
-    sigma sha256 seed n r i =
+    swapOrNotRound sha256 seed n r i =
         (if bitOf sha256 seed r (n + pivotOf sha256 seed n r - i) ≠ 0
           then n + pivotOf sha256 seed n r - i else i) ∧
-      sigma sha256 seed n r (n + pivotOf sha256 seed n r - i) =
+      swapOrNotRound sha256 seed n r (n + pivotOf sha256 seed n r - i) =
         (if bitOf sha256 seed r (n + pivotOf sha256 seed n r - i) ≠ 0
           then i else n + pivotOf sha256 seed n r - i) := by
-  unfold sigma
+  unfold swapOrNotRound
   dsimp only
   generalize pivotOf sha256 seed n r = p at *
   have f1 : (p + n - i) % n = n + p - i := by
@@ -270,10 +270,10 @@ theorem sigma_high (i : Nat) (hp : pivotOf sha256 seed n r < i) (hin : i < n)
     show max (n + p - i) i = n + p - i from max_eq_left hi]
   exact ⟨trivial, trivial⟩
 
-theorem sigma_fixed (x : Nat) (hx : x < n)
+theorem swapOrNotRound_fixed (x : Nat) (hx : x < n)
     (h : 2 * x = pivotOf sha256 seed n r ∨ 2 * x = n + pivotOf sha256 seed n r) :
-    sigma sha256 seed n r x = x := by
-  unfold sigma
+    swapOrNotRound sha256 seed n r x = x := by
+  unfold swapOrNotRound
   have : (pivotOf sha256 seed n r + n - x) % n = x := by
     rcases h with h | h
     · rw [show pivotOf sha256 seed n r + n - x = x + n * 1 by omega, Nat.add_mul_mod_self_left,
@@ -282,9 +282,9 @@ theorem sigma_fixed (x : Nat) (hx : x < n)
   simp only [this]
   split <;> rfl
 
-theorem sigma_le_iff (x : Nat) (hp : pivotOf sha256 seed n r < n) (hx : x < n) :
-    sigma sha256 seed n r x ≤ pivotOf sha256 seed n r ↔ x ≤ pivotOf sha256 seed n r := by
-  unfold sigma
+theorem swapOrNotRound_le_iff (x : Nat) (hp : pivotOf sha256 seed n r < n) (hx : x < n) :
+    swapOrNotRound sha256 seed n r x ≤ pivotOf sha256 seed n r ↔ x ≤ pivotOf sha256 seed n r := by
+  unfold swapOrNotRound
   dsimp only
   generalize pivotOf sha256 seed n r = p at *
   have hn : 0 < n := by omega
@@ -463,13 +463,14 @@ theorem loop1_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Na
     (input : alloc.vec.Vec Usize) (buf : Buf) (source : Array U8 32#usize) (byte_v : U8)
     (i : Usize) (hi : i.val ≤ mirror.val) (hlen : input.val.length = n)
     (hA : ∀ x < n, nats input x = A0.getD (if x ≤ pivot.val ∧ (x < i.val ∨ pivot.val - i.val < x)
-      then sigma sha256 seed n r x else x) 0)
+      then swapOrNotRound sha256 seed n r x else x) 0)
     (hc : ∃ c, (c = pivot.val - i.val ∨ c = pivot.val - i.val + 1) ∧
       CacheOK sha256 (seed ++ [r]) buf source byte_v c) :
     swap_or_not_shuffle.shuffle_list.shuffle_list_with_loop0_loop0 inst input buf pivot mirror
       source byte_v i ⦃ input' buf' =>
         input'.val.length = n ∧
-        (∀ x < n, nats input' x = A0.getD (if x ≤ pivot.val then sigma sha256 seed n r x else x) 0) ∧
+        (∀ x < n, nats input' x =
+          A0.getD (if x ≤ pivot.val then swapOrNotRound sha256 seed n r x else x) 0) ∧
         (bytes buf').take 33 = seed ++ [r] ∧ (bytes buf').length = 37 ⦄ := by
   unfold swap_or_not_shuffle.shuffle_list.shuffle_list_with_loop0_loop0
   apply loop.spec_decr_nat
@@ -478,7 +479,7 @@ theorem loop1_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Na
     (inv := fun (x : alloc.vec.Vec Usize × Buf × Array U8 32#usize × U8 × Usize) =>
       x.2.2.2.2.val ≤ mirror.val ∧ x.1.val.length = n ∧
       (∀ y < n, nats x.1 y = A0.getD (if y ≤ pivot.val ∧ (y < x.2.2.2.2.val ∨
-        pivot.val - x.2.2.2.2.val < y) then sigma sha256 seed n r y else y) 0) ∧
+        pivot.val - x.2.2.2.2.val < y) then swapOrNotRound sha256 seed n r y else y) 0) ∧
       ∃ c, (c = pivot.val - x.2.2.2.2.val ∨ c = pivot.val - x.2.2.2.2.val + 1) ∧
         CacheOK sha256 (seed ++ [r]) x.2.1 x.2.2.1 x.2.2.2.1 c)
   · rintro ⟨u, b, src, byv, k⟩ ⟨hk, hu, hAu, c, hck, hcache⟩
@@ -502,13 +503,13 @@ theorem loop1_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Na
         u.val[k.val] else u.val := hsw
       have hsv : (alloc.vec.Vec.mk sw).val = sw.val := rfl
       step as ⟨k1, hk1⟩
-      have hσ := sigma_low sha256 seed n r k.val (hp ▸ hpn) (by rw [← hp]; omega)
+      have hσ := swapOrNotRound_low sha256 seed n r k.val (hp ▸ hpn) (by rw [← hp]; omega)
       rw [← hp, ← hj1] at hσ
       have hbiteq : bitOf sha256 seed r j.val = bit.val := by rw [hbit]; rfl
       rw [hbiteq] at hσ
       refine ⟨by omega, by simp [hsv, hsw]; split <;> simp [hu], ?_, ⟨j.val, Or.inr (by omega), hcache1⟩,
         by omega⟩
-      apply inv_step (sigma sha256 seed n r) A0 _ _ k.val j.val n (nats u) _ (bit.val = 1)
+      apply inv_step (swapOrNotRound sha256 seed n r) A0 _ _ k.val j.val n (nats u) _ (bit.val = 1)
         (by omega) (by omega) (by intro y; omega) (by omega) hAu (by omega) (by omega)
       · intro y
         simp only [nats, hsv, hsw]
@@ -540,7 +541,7 @@ theorem loop1_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Na
       · by_cases hproc : x < mirror.val ∨ pivot.val - mirror.val < x
         · simp [hxp, hproc]
         · have h2 : 2 * x = pivotOf sha256 seed n r := by omega
-          simp [hxp, hproc, sigma_fixed sha256 seed n r x hx (Or.inl h2)]
+          simp [hxp, hproc, swapOrNotRound_fixed sha256 seed n r x hx (Or.inl h2)]
       · simp [hxp]
   · exact ⟨hi, hlen, hA, hc⟩
 
@@ -554,13 +555,13 @@ theorem loop2_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Na
     (i : Usize) (hi : i.val ≤ mirror.val) (hi' : pivot.val + 1 ≤ i.val)
     (hlen : input.val.length = n)
     (hA : ∀ x < n, nats input x = A0.getD (if x ≤ pivot.val ∨ (pivot.val < x ∧
-      (x < i.val ∨ n + pivot.val - i.val < x)) then sigma sha256 seed n r x else x) 0)
+      (x < i.val ∨ n + pivot.val - i.val < x)) then swapOrNotRound sha256 seed n r x else x) 0)
     (hc : ∃ c, (c = n + pivot.val - i.val ∨ c = n + pivot.val - i.val + 1) ∧
       CacheOK sha256 (seed ++ [r]) buf source byte_v c) :
     swap_or_not_shuffle.shuffle_list.shuffle_list_with_loop0_loop1 inst input buf pivot mirror
       «end» source byte_v i ⦃ input' buf' =>
         input'.val.length = n ∧
-        (∀ x < n, nats input' x = A0.getD (sigma sha256 seed n r x) 0) ∧
+        (∀ x < n, nats input' x = A0.getD (swapOrNotRound sha256 seed n r x) 0) ∧
         (bytes buf').take 33 = seed ++ [r] ∧ (bytes buf').length = 37 ⦄ := by
   unfold swap_or_not_shuffle.shuffle_list.shuffle_list_with_loop0_loop1
   apply loop.spec_decr_nat
@@ -569,7 +570,7 @@ theorem loop2_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Na
     (inv := fun (x : alloc.vec.Vec Usize × Buf × Array U8 32#usize × U8 × Usize) =>
       x.2.2.2.2.val ≤ mirror.val ∧ pivot.val + 1 ≤ x.2.2.2.2.val ∧ x.1.val.length = n ∧
       (∀ y < n, nats x.1 y = A0.getD (if y ≤ pivot.val ∨ (pivot.val < y ∧ (y < x.2.2.2.2.val ∨
-        n + pivot.val - x.2.2.2.2.val < y)) then sigma sha256 seed n r y else y) 0) ∧
+        n + pivot.val - x.2.2.2.2.val < y)) then swapOrNotRound sha256 seed n r y else y) 0) ∧
       ∃ c, (c = n + pivot.val - x.2.2.2.2.val ∨ c = n + pivot.val - x.2.2.2.2.val + 1) ∧
         CacheOK sha256 (seed ++ [r]) x.2.1 x.2.2.1 x.2.2.2.1 c)
   · rintro ⟨u, b, src, byv, k⟩ ⟨hk, hk', hu, hAu, c, hck, hcache⟩
@@ -598,13 +599,14 @@ theorem loop2_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Na
         u.val[k.val] else u.val := hsw
       have hsv : (alloc.vec.Vec.mk sw).val = sw.val := rfl
       step as ⟨k1, hk1⟩
-      have hσ := sigma_high sha256 seed n r k.val (by omega) (by omega) (by rw [← hp]; omega)
+      have hσ := swapOrNotRound_high sha256 seed n r k.val (by omega) (by omega)
+        (by rw [← hp]; omega)
       rw [← hp, show n + pivot.val - k.val = j.val by omega] at hσ
       have hbiteq : bitOf sha256 seed r j.val = bit.val := by rw [hbit]; rfl
       rw [hbiteq] at hσ
       refine ⟨by omega, by omega, by simp [hsv, hsw]; split <;> simp [hu], ?_,
         ⟨j.val, Or.inr (by omega), hcache1⟩, by omega⟩
-      apply inv_step (sigma sha256 seed n r) A0 _ _ k.val j.val n (nats u) _ (bit.val = 1)
+      apply inv_step (swapOrNotRound sha256 seed n r) A0 _ _ k.val j.val n (nats u) _ (bit.val = 1)
         (by omega) (by omega) (by intro y; omega) (by omega) hAu (by omega) (by omega)
       · intro y
         simp only [nats, hsv, hsw]
@@ -637,7 +639,7 @@ theorem loop2_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Na
           n + pivot.val - mirror.val < x))
       · simp [hproc]
       · have h2 : 2 * x = n + pivotOf sha256 seed n r := by omega
-        simp [hproc, sigma_fixed sha256 seed n r x hx (Or.inr h2)]
+        simp [hproc, swapOrNotRound_fixed sha256 seed n r x hx (Or.inr h2)]
   · exact ⟨hi, hi', hlen, hA, hc⟩
 
 theorem buf_split (pre : List Nat) (b : Buf) (h1 : (bytes b).take 33 = pre)
@@ -653,10 +655,10 @@ theorem round_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Na
       input buf r ⦃ res =>
         match res with
         | .done out => r.val = 0 ∧ out.val.length = n ∧
-            ∀ x < n, nats out x = nats input (sigma sha256 seed n r.val x)
+            ∀ x < n, nats out x = nats input (swapOrNotRound sha256 seed n r.val x)
         | .cont (out, buf', r') => r.val ≠ 0 ∧ r'.val = r.val - 1 ∧
             out.val.length = n ∧ (bytes buf').take 32 = seed ∧ (bytes buf').length = 37 ∧
-            ∀ x < n, nats out x = nats input (sigma sha256 seed n r.val x) ⦄ := by
+            ∀ x < n, nats out x = nats input (swapOrNotRound sha256 seed n r.val x) ⦄ := by
   unfold swap_or_not_shuffle.shuffle_list.shuffle_list_with_loop0.body
   step with set_round_spec' as ⟨buf1, hbuf1⟩
   have hpre1 : (bytes buf1).take 33 = seed ++ [r.val] := by
@@ -755,7 +757,7 @@ theorem round_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Na
     as ⟨pr2, hl2, hA2, hb51, hb52⟩
   obtain ⟨input2, buf5⟩ := pr2
   dsimp only at hl2 hA2 hb51 hb52 ⊢
-  have hA2' : ∀ x < n, nats input2 x = nats input (sigma sha256 seed n r.val x) := hA2
+  have hA2' : ∀ x < n, nats input2 x = nats input (swapOrNotRound sha256 seed n r.val x) := hA2
   simp only [Bool.false_eq_true, if_false]
   by_cases hr0 : r = 0#u8
   · simp only [hr0, if_true]
@@ -772,10 +774,11 @@ theorem round_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Na
 
 /-- Rounds `s, ..., R - 1` on index `x`. -/
 def gFrom (sha256 : List Nat → List Nat) (seed : List Nat) (n s R x : Nat) : Nat :=
-  (List.range' s (R - s)).foldl (fun y k => sigma sha256 seed n k y) x
+  (List.range' s (R - s)).foldl (fun y k => swapOrNotRound sha256 seed n k y) x
 
 theorem gFrom_step (sha256 : List Nat → List Nat) (seed : List Nat) (n s R x : Nat) (h : s < R) :
-    gFrom sha256 seed n s R x = gFrom sha256 seed n (s + 1) R (sigma sha256 seed n s x) := by
+    gFrom sha256 seed n s R x =
+      gFrom sha256 seed n (s + 1) R (swapOrNotRound sha256 seed n s x) := by
   unfold gFrom
   rw [show R - s = (R - (s + 1)) + 1 by omega, List.range'_succ]
   rfl
@@ -813,16 +816,17 @@ theorem rounds_loop_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → L
     rw [hres]
     apply (spec_ok _).mpr
     have hstep : ∀ x < n, nats input0 (gFrom sha256 seed n (k.val + 1) rounds.val
-        (sigma sha256 seed n k.val x)) = nats input0 (gFrom sha256 seed n k.val rounds.val x) := by
+        (swapOrNotRound sha256 seed n k.val x)) =
+          nats input0 (gFrom sha256 seed n k.val rounds.val x) := by
       intro x hx; rw [gFrom_step _ _ _ _ _ _ hk]
     match res, hpost with
     | .done out, ⟨hk0, hout, hAout⟩ =>
       refine ⟨hout, fun x hx => ?_⟩
-      rw [hAout x hx, hAu _ (sigma_lt _ _ _ _ _ hn hx), hstep x hx, hk0, gFrom_zero]
+      rw [hAout x hx, hAu _ (swapOrNotRound_lt _ _ _ _ _ hn hx), hstep x hx, hk0, gFrom_zero]
     | .cont (out, b', k'), ⟨hk0, hk', hout, hb1'', hb2'', hAout⟩ =>
       dsimp only
       refine ⟨⟨by omega, hout, hb1'', hb2'', fun x hx => ?_⟩, by omega⟩
-      rw [hAout x hx, hAu _ (sigma_lt _ _ _ _ _ hn hx), hstep x hx, hk', Nat.sub_add_cancel
+      rw [hAout x hx, hAu _ (swapOrNotRound_lt _ _ _ _ _ hn hx), hstep x hx, hk', Nat.sub_add_cancel
         (by omega)]
   · exact ⟨hr, hlen, hb1, hb2, hA⟩
 

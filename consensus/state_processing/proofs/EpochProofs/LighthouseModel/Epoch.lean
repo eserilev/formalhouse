@@ -60,21 +60,21 @@ theorem get_total_active_balance_congr_key (p : Preset) (s s' : BeaconState) (ep
   rw [active_indices_map, active_indices_map, hkey, hf]
 
 /-- If every step keeps a key of the row, a pass keeps the list of keys. -/
-private theorem passM_keys {A R K : Type} (f : A → R → SpecM (A × R)) (key : R → K)
+private theorem passOverRows_keys {A R K : Type} (f : A → R → SpecM (A × R)) (key : R → K)
     (hf : ∀ a r x, f a r = .ok x → key x.2 = key r) :
-    ∀ (rows : List R) (a : A) (y : A × List R), passM f a rows = .ok y →
+    ∀ (rows : List R) (a : A) (y : A × List R), passOverRows f a rows = .ok y →
       y.2.map key = rows.map key
   | [], a, y, h => by
-    simp only [passM, pure, Except.pure, Except.ok.injEq] at h
+    simp only [passOverRows, pure, Except.pure, Except.ok.injEq] at h
     subst h
     rfl
   | r :: rs, a, y, h => by
-    rw [passM_cons] at h
+    rw [passOverRows_cons] at h
     obtain ⟨x, hx, h⟩ := specM_bind_ok h
     obtain ⟨z, hz, h⟩ := specM_bind_ok h
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
-    simp only [List.map_cons, hf a r x hx, passM_keys f key hf rs x.1 z hz]
+    simp only [List.map_cons, hf a r x hx, passOverRows_keys f key hf rs x.1 z hz]
 
 /-- One registry row step keeps the `activeKey` of the validator. The activation epoch is after
 the current epoch, and an exit is after the current epoch. -/
@@ -128,7 +128,7 @@ theorem process_registry_updates_activeKey (p : Preset) (total_active_balance : 
     exact Nat.lt_of_lt_of_le (Nat.lt_succ_self _) (Nat.le_add_right _ _)
   have hs := (process_registry_updates_rows p total_active_balance s current_epoch
     activation_epoch hrows hcurrent hactivation s').mp h
-  cases hp : passM (registryRowStep p total_active_balance current_epoch
+  cases hp : passOverRows (registryRowStep p total_active_balance current_epoch
       s.finalized_checkpoint.epoch activation_epoch)
       (s.earliest_exit_epoch, s.exit_balance_to_consume) (rowsOf s) with
   | error e => rw [hp] at hs; cases hs
@@ -136,7 +136,7 @@ theorem process_registry_updates_activeKey (p : Preset) (total_active_balance : 
     rw [hp] at hs
     simp only [Functor.map, Except.map, Except.ok.injEq] at hs
     subst hs
-    have hk := passM_keys _ (fun r => activeKey current_epoch r.validator)
+    have hk := passOverRows_keys _ (fun r => activeKey current_epoch r.validator)
       (fun a r x hx => registryRowStep_activeKey p total_active_balance current_epoch _
         activation_epoch hact hcur a r x hx) (rowsOf s) _ y hp
     simp only [BeaconState.withRows]
@@ -598,7 +598,7 @@ theorem lighthouse_single_pass_eq_spec_supply [CurrentPreset] (total_active_bala
       let s3 ← process_registry_updates P total_active_balance s2
       process_slashings P total_active_balance s3)
     ((fun y => state.withRowsChurn y.1 y.2) <$>
-      passM (fun churn r => lighthouseRowStep P
+      passOverRows (fun churn r => lighthouseRowStep P
           (lighthouseContextOf state total_active_balance current_epoch rctx per) (base_reward r)
             churn r)
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
@@ -627,12 +627,12 @@ theorem lighthouse_single_pass_eq_spec_supply [CurrentPreset] (total_active_bala
       (by rw [htab]; exact hbase _ hr) (by rw [htab]; exact htotal) k hk hincrements
       (heffective i hiv) (hmax _ (List.getElem_mem hiv)) (hbalance i hiv) hfinalized hcurrent64
       hactivation (hexit i hiv)
-  rw [passM_congr _ _ (rowsOf state) (fun churn r hr => hstep churn r hr)]
-  rw [passM_proj (singlePassStep P total_active_balance rctx.previous_epoch
+  rw [passOverRows_congr _ _ (rowsOf state) (fun churn r hr => hstep churn r hr)]
+  rw [passOverRows_proj (singlePassStep P total_active_balance rctx.previous_epoch
     rctx.in_leak rctx current_epoch state.finalized_checkpoint.epoch activation_epoch
     (current_epoch + P.EPOCHS_PER_SLASHINGS_VECTOR / 2) per)
     (fun c => ((((), ()), c), ())) (fun b => b.1.2) (fun _ => rfl) (fun _ => rfl)]
-  cases passM _ _ (rowsOf state) <;> rfl
+  cases passOverRows _ _ (rowsOf state) <;> rfl
 
 /-! ## `processEpochWithSinglePass` -/
 
@@ -658,7 +658,7 @@ def lighthousePass [CurrentPreset] (s : BeaconState) : SpecM BeaconState := do
   let rctx ← rewardsContextOf P total_active_balance s
   let (_, per) ← slashingsPreamble P total_active_balance s.slashings
   (fun y => s.withRowsChurn y.1 y.2) <$>
-    passM (fun churn r => lighthouseRowStep P
+    passOverRows (fun churn r => lighthouseRowStep P
         (lighthouseContextOf s total_active_balance current_epoch rctx per)
         (lighthouseBaseReward total_active_balance r) churn r)
       (s.earliest_exit_epoch, s.exit_balance_to_consume) (rowsOf s)

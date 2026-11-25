@@ -45,7 +45,8 @@ theorem process_proposer_lookahead_fulu_shape (p : Preset) (o : Oracle) (s s' : 
     | (cases h; exact ⟨_, rfl⟩)
 
 /-- The Fulu `process_epoch` keeps every property that each of its steps keeps. -/
-theorem process_epoch_fulu_inv (p : Preset) (f : FuluConfig) (hc : FuluCompat p f) (o : Oracle)
+theorem process_epoch_fulu_inv (p : Preset) (f : FuluConfig) (hc : FuluConfigMatchesPreset p f)
+    (o : Oracle)
     (P : BeaconState → Prop)
     (hJ : ∀ a b, process_justification_and_finalization p a = .ok b → P a → P b)
     (hI : ∀ a b, process_inactivity_updates p a = .ok b → P a → P b)

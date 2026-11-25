@@ -72,33 +72,33 @@ theorem lighthouseValidatorStep_eq [CurrentPreset] (ctx : LighthouseStepContext)
 theorem lighthouseValidatorStep_split [CurrentPreset] (ctx : LighthouseStepContext)
     (downward upward : Uint64)
     (bf : Row → Gwei) (td : Nat → Gwei) (nm : Nat → Bool) (c0 : Epoch × Gwei) (rows : List Row) :
-    SameResultOrBothFail (passM (fun c r => lighthouseValidatorStep P ctx downward upward
+    SameResultOrBothFail (passOverRows (fun c r => lighthouseValidatorStep P ctx downward upward
         ⟨bf r, td r.index, nm r.index⟩ c r) c0 rows)
       (do
-        let x ← passM (fun c r => lighthouseRowStep P ctx (bf r) c r) c0 rows
-        let y ← passM (fun _ r => (fun r' => ((), r')) <$>
+        let x ← passOverRows (fun c r => lighthouseRowStep P ctx (bf r) c r) c0 rows
+        let y ← passOverRows (fun _ r => (fun r' => ((), r')) <$>
           lighthouseRowStep2 downward upward (td r.index) (nm r.index) r) () x.2
         pure (x.1, y.2)) := by
   let f := fun c r => lighthouseRowStep P ctx (bf r) c r
   let g := fun (_ : Unit) r => (fun r' => ((), r')) <$>
     lighthouseRowStep2 downward upward (td r.index) (nm r.index) r
-  have h1 : passM (fun c r => lighthouseValidatorStep P ctx downward upward
+  have h1 : passOverRows (fun c r => lighthouseValidatorStep P ctx downward upward
       ⟨bf r, td r.index, nm r.index⟩ c r) c0 rows =
-      (fun y => (y.1.1, y.2)) <$> passM (bothSteps f g) (c0, ()) rows := by
-    rw [← passM_proj (bothSteps f g) (fun c => (c, ())) (fun b => b.1) (fun _ => rfl)
+      (fun y => (y.1.1, y.2)) <$> passOverRows (bothSteps f g) (c0, ()) rows := by
+    rw [← passOverRows_proj (bothSteps f g) (fun c => (c, ())) (fun b => b.1) (fun _ => rfl)
       (fun _ => rfl)]
-    exact passM_congr _ _ rows (fun c r _ =>
+    exact passOverRows_congr _ _ rows (fun c r _ =>
       lighthouseValidatorStep_eq ctx downward upward bf td nm c r) c0
   rw [h1]
   refine SameResultOrBothFail.trans (SameResultOrBothFail.map (two_passes_eq_one_pass f g c0 () rows).flip _) ?_
   apply SameResultOrBothFail.of_eq
   unfold twoPasses
-  cases passM f c0 rows with
+  cases passOverRows f c0 rows with
   | error e => rfl
   | ok x =>
-    show (fun y => (y.1.1, y.2)) <$> (passM g () x.2 >>= fun y => pure ((x.1, y.1), y.2)) =
-      (passM g () x.2 >>= fun y => pure (x.1, y.2))
-    cases passM g () x.2 <;> rfl
+    show (fun y => (y.1.1, y.2)) <$> (passOverRows g () x.2 >>= fun y => pure ((x.1, y.1), y.2)) =
+      (passOverRows g () x.2 >>= fun y => pure (x.1, y.2))
+    cases passOverRows g () x.2 <;> rfl
 
 /-! ## The second pass as a fold over indices -/
 
@@ -199,10 +199,10 @@ theorem rowsStep_fold [CurrentPreset] (S : BeaconState) (downward upward : Uint6
     (td : Nat → Gwei) (nm : Nat → Bool) :
     ∀ (rs pre : List Row), (∀ j (h : j < rs.length), rs[j].index = pre.length + j) →
       (List.range' pre.length rs.length).foldlM (rowsStep td nm) (S.withRows (pre ++ rs)) =
-        (fun y => S.withRows (pre ++ y.2)) <$> passM (fun _ r => (fun r' => ((), r')) <$>
+        (fun y => S.withRows (pre ++ y.2)) <$> passOverRows (fun _ r => (fun r' => ((), r')) <$>
           lighthouseRowStep2 downward upward (td r.index) (nm r.index) r) () rs
   | [], pre, _ => by
-    simp [passM, pure, Except.pure, Functor.map, Except.map]
+    simp [passOverRows, pure, Except.pure, Functor.map, Except.map]
   | r :: rs, pre, hidx => by
     have hr : r.index = pre.length := by
       have h0 := hidx 0 (by simp)
@@ -210,7 +210,7 @@ theorem rowsStep_fold [CurrentPreset] (S : BeaconState) (downward upward : Uint6
       simpa using h0
     rw [List.length_cons, List.range'_succ, List.foldlM_cons]
     have hk : (pre ++ r :: rs)[pre.length]? = some r := by simp
-    rw [rowsStep_withRows S downward upward hthr td nm _ _ r hk, passM_cons, hr]
+    rw [rowsStep_withRows S downward upward hthr td nm _ _ r hk, passOverRows_cons, hr]
     have hset : ∀ r', (pre ++ r :: rs).set pre.length r' = (pre ++ [r']) ++ rs := by
       intro r'
       simp [List.set_append_right]
@@ -232,7 +232,8 @@ theorem rowsStep_fold [CurrentPreset] (S : BeaconState) (downward upward : Uint6
 theorem rows_pass2_fold [CurrentPreset] (S : BeaconState) (hrows : ListLengthsMatch S) (downward upward : Uint64)
     (hthr : hysteresisThresholds P = .ok (downward, upward))
     (td : Nat → Gwei) (nm : Nat → Bool) :
-    SameResultOrBothFail ((fun y => S.withRows y.2) <$> passM (fun _ r => (fun r' => ((), r')) <$>
+    SameResultOrBothFail ((fun y => S.withRows y.2) <$> passOverRows (fun _ r =>
+      (fun r' => ((), r')) <$>
         lighthouseRowStep2 downward upward (td r.index) (nm r.index) r) () (rowsOf S))
       ((List.range S.validators.length).foldlM (fun t i => do
         let t ← increaseAt i (td i) t

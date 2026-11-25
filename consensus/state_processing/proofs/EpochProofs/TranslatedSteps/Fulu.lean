@@ -126,7 +126,7 @@ theorem activation_churn_limit_gloas (p : Spec.Preset) (total_active_balance : U
   exit_churn_limit_capped p total_active_balance c hmin hq hinc hcap
 
 /-- `next_sync_committee_indices` equals the Electra `get_next_sync_committee_indices`. -/
-theorem next_sync_committee_indices_spec_fulu {H B : Type} (inst : ShuffleHashInst H)
+theorem next_sync_committee_indices_spec_fulu {H B : Type} (inst : ShuffleHash H)
     (ebi : EffectiveBalanceSource B) (balances : B) (p : Spec.Preset) (o : Spec.Oracle)
     (hH : HashMatches inst o)
     (state : Spec.BeaconState)
@@ -154,7 +154,7 @@ theorem get_beacon_proposer_indices_fulu_frame (p : Spec.Preset) (o : Spec.Oracl
 
 /-- `next_proposer_lookahead` on all the active validators equals Fulu
 `process_proposer_lookahead`. -/
-theorem next_proposer_lookahead_spec_fulu {H B : Type} (inst : ShuffleHashInst H)
+theorem next_proposer_lookahead_spec_fulu {H B : Type} (inst : ShuffleHash H)
     (ebi : EffectiveBalanceSource B)
     (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
     (state : Spec.BeaconState)

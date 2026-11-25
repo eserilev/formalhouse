@@ -27,7 +27,7 @@ open state_processing.per_epoch_processing.single_pass_step (ValidatorRow ExitCh
 
 /-- The Fulu registry constants give the Gloas exit churn at `fuluTotalActiveBalance`. -/
 theorem fulu_churnSpec (p : Spec.Preset) (f : Spec.FuluConfig) (c : LighthouseRegistryConstants)
-    (hcompat : Spec.FuluCompat p f) (hc : ChurnConstantsMatchFulu p f c) :
+    (hcompat : Spec.FuluConfigMatchesPreset p f) (hc : ChurnConstantsMatchFulu p f c) :
     ChurnSpec p c (Spec.fuluTotalActiveBalance p f) := by
   intro total_active_balance
   have h := exit_churn_limit_fulu p f total_active_balance c hc
@@ -35,7 +35,7 @@ theorem fulu_churnSpec (p : Spec.Preset) (f : Spec.FuluConfig) (c : LighthouseRe
   exact h
 
 theorem registry_update_equiv_fulu (p : Spec.Preset) (f : Spec.FuluConfig)
-    (hcompat : Spec.FuluCompat p f) (fields : LighthouseRegistryFields)
+    (hcompat : Spec.FuluConfigMatchesPreset p f) (fields : LighthouseRegistryFields)
     (effective_balance current_epoch finalized_epoch total_active_balance : U64)
     (c : LighthouseRegistryConstants) (hc : RegistryConstantsMatch p c)
     (hfulu : ChurnConstantsMatchFulu p f c) :
@@ -50,7 +50,7 @@ theorem registry_update_equiv_fulu (p : Spec.Preset) (f : Spec.FuluConfig)
 /-- On valid states, Lighthouse's Fulu registry update equals the loop body of Fulu
 `process_registry_updates`, which is the Gloas loop body at `fuluTotalActiveBalance`. -/
 theorem registry_update_eq_spec_fulu (p : Spec.Preset) (f : Spec.FuluConfig)
-    (hcompat : Spec.FuluCompat p f) (fields : LighthouseRegistryFields)
+    (hcompat : Spec.FuluConfigMatchesPreset p f) (fields : LighthouseRegistryFields)
     (effective_balance current_epoch finalized_epoch total_active_balance : U64)
     (c : LighthouseRegistryConstants) (hc : RegistryConstantsMatch p c)
     (hfulu : ChurnConstantsMatchFulu p f c)
@@ -77,7 +77,7 @@ theorem registry_update_eq_spec_fulu (p : Spec.Preset) (f : Spec.FuluConfig)
 /-- Lighthouse's Fulu `single_pass_step` equals `lighthouseValidatorStep` with the registry total
 `fuluTotalActiveBalance`. The rewards, the slashings and the effective balance update read the real total. -/
 theorem single_pass_step_equiv_fulu (p : Spec.Preset) (f : Spec.FuluConfig)
-    (hcompat : Spec.FuluCompat p f) (lr : ValidatorRow) (r : Spec.Row)
+    (hcompat : Spec.FuluConfigMatchesPreset p f) (lr : ValidatorRow) (r : Spec.Row)
     (hm : RowMatches lr r) (i : RowInputs) (inputs : Spec.LighthouseRowInputs)
     (hi : InputsMatches p i inputs r) (churn : ExitChurn) (c : StepContext)
     (ctx : Spec.LighthouseStepContext) (hc : ContextMatches p c ctx) (downward upward : Spec.Uint64)

@@ -75,9 +75,9 @@ theorem pass_balances_lt [CurrentPreset] (ctx : LighthouseStepContext) (bf : Row
     (s : BeaconState)
     (churn0 : Epoch × Gwei) (y : (Epoch × Gwei) × List Row)
     (hb : ∀ i, i < s.validators.length → s.balances.getD i 0 < 2 ^ 64)
-    (h : passM (fun c r => lighthouseRowStep P ctx (bf r) c r) churn0 (rowsOf s) = .ok y) :
+    (h : passOverRows (fun c r => lighthouseRowStep P ctx (bf r) c r) churn0 (rowsOf s) = .ok y) :
     ∀ r ∈ y.2, r.balance < 2 ^ 64 := by
-  obtain ⟨hlen, hget⟩ := passM_rows _ _ _ _ h
+  obtain ⟨hlen, hget⟩ := passOverRows_rows _ _ _ _ h
   intro r hr
   obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hr
   have hi' : i < (rowsOf s).length := by rw [← hlen]; exact hi

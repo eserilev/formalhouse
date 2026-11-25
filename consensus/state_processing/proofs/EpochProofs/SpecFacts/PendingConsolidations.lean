@@ -153,15 +153,15 @@ theorem stepLoop_map {S X Y : Type} (step : S → X → SpecM (S × Bool)) (f : 
     simp only [List.map_cons, stepLoop, ih]
 
 /-- A validator of the full registry, as a row of the local table. -/
-def globalLocal (v : Validator) : LocalValidator :=
+def consolidationValidatorOf (v : Validator) : LocalValidator :=
   ⟨true, v.slashed, v.withdrawable_epoch, v.effective_balance⟩
 
 theorem localExists_global (validators : List Validator) (i : Nat) :
-    localExists (validators.map globalLocal) i = decide (i < validators.length) := by
+    localExists (validators.map consolidationValidatorOf) i = decide (i < validators.length) := by
   unfold localExists
   rw [List.getElem?_map]
   by_cases h : i < validators.length
-  · simp [h, globalLocal]
+  · simp [h, consolidationValidatorOf]
   · simp [h]
 
 /-- On the full registry, the reference equals `stepLoop consolidationStep`, then a drop of the
@@ -170,7 +170,8 @@ theorem process_pending_consolidations_eq (p : Preset) (state : BeaconState)
     (hlen : state.balances.length = state.validators.length) :
     process_pending_consolidations p state = (do
       let next_epoch ← uint64Add (← get_current_epoch p state) 1
-      let r ← stepLoop (consolidationStep (state.validators.map globalLocal) next_epoch)
+      let r ← stepLoop (consolidationStep (state.validators.map consolidationValidatorOf)
+        next_epoch)
         (state.balances, 0)
         (state.pending_consolidations.map fun c => (c.source_index, c.target_index))
       pure { state with
@@ -193,9 +194,10 @@ theorem process_pending_consolidations_eq (p : Preset) (state : BeaconState)
   rw [hinit, forIn_eq_stepLoop
     (fun s : List Gwei × Nat => (⟨s.2, { state with balances := s.1 }⟩ : Prod Nat BeaconState))
     (fun s => s.1.length = state.validators.length) _
-    (fun s c => consolidationStep (state.validators.map globalLocal) next_epoch s
+    (fun s c => consolidationStep (state.validators.map consolidationValidatorOf) next_epoch s
       (c.source_index, c.target_index)), stepLoop_map]
-  · cases stepLoop (fun s c => consolidationStep (state.validators.map globalLocal) next_epoch s
+  · cases stepLoop (fun s c => consolidationStep (state.validators.map consolidationValidatorOf)
+      next_epoch s
       (c.source_index, c.target_index)) (state.balances, 0) state.pending_consolidations <;> rfl
   · rintro ⟨src, tgt⟩ ⟨bal, n⟩ hbs
     dsimp only at hbs ⊢
@@ -207,22 +209,22 @@ theorem process_pending_consolidations_eq (p : Preset) (state : BeaconState)
     have hsrcb : src < bal.length := by rw [hbs]; exact hsrc
     by_cases hsl : state.validators[src].slashed = true
     · simp [consolidationStep, localExists_global, hsrc, listGet, 
-        hsl, globalLocal, Except.map, bind, Except.bind, pure, Except.pure]
+        hsl, consolidationValidatorOf, Except.map, bind, Except.bind, pure, Except.pure]
     by_cases hwe : state.validators[src].withdrawable_epoch > next_epoch
     · simp [consolidationStep, localExists_global, hsrc, listGet, 
-        hsl, hwe, globalLocal, Except.map, bind, Except.bind, pure, Except.pure]
+        hsl, hwe, consolidationValidatorOf, Except.map, bind, Except.bind, pure, Except.pure]
     by_cases htgt : tgt < state.validators.length
     case neg =>
       have htgtb : ¬ tgt < bal.length := by rw [hbs]; exact htgt
       simp [consolidationStep, localExists_global, hsrc, htgt, listGet, listSet,
         hsrcb, hsl, hwe,
-        globalLocal, decrease_balance, increase_balance,
+        consolidationValidatorOf, decrease_balance, increase_balance,
         htgtb,
         Except.map, bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]
     have htgtb : tgt < bal.length := by rw [hbs]; exact htgt
     simp [consolidationStep, localExists_global, hsrc, htgt, listGet, listSet,
       hsrcb, hsl, hwe,
-      globalLocal, decrease_balance, increase_balance, htgtb,
+      consolidationValidatorOf, decrease_balance, increase_balance, htgtb,
       
       Except.map, bind, Except.bind, pure, Except.pure]
     generalize uint64Add _ _ = x
@@ -237,20 +239,23 @@ theorem process_pending_consolidations_eq (p : Preset) (state : BeaconState)
       simp [consolidationStep, localExists_global, hsrc, bind, Except.bind, throw, throwThe,
         MonadExceptOf.throw] at hr
     by_cases hsl : state.validators[src].slashed = true
-    · simp [consolidationStep, localExists_global, hsrc, listGet, hsl, globalLocal, bind,
+    · simp [consolidationStep, localExists_global, hsrc, listGet, hsl, consolidationValidatorOf,
+        bind,
         Except.bind, pure, Except.pure] at hr
       subst hr; rfl
     by_cases hwe : state.validators[src].withdrawable_epoch > next_epoch
-    · simp [consolidationStep, localExists_global, hsrc, listGet, hsl, hwe, globalLocal, bind,
+    · simp [consolidationStep, localExists_global, hsrc, listGet, hsl, hwe,
+        consolidationValidatorOf, bind,
         Except.bind, pure, Except.pure] at hr
       subst hr; rfl
     by_cases htgt : tgt < state.validators.length
     case neg =>
       simp [consolidationStep, localExists_global, hsrc, htgt, listGet, listSet, hsrcb hsrc, hsl,
-        hwe, globalLocal, decrease_balance, bind, Except.bind, pure, Except.pure, throw, throwThe,
+        hwe, consolidationValidatorOf, decrease_balance, bind, Except.bind, pure, Except.pure,
+          throw, throwThe,
         MonadExceptOf.throw] at hr
     simp [consolidationStep, localExists_global, hsrc, htgt, listGet, listSet, hsrcb hsrc, hsl,
-      hwe, globalLocal, decrease_balance, increase_balance, htgtb htgt, 
+      hwe, consolidationValidatorOf, decrease_balance, increase_balance, htgtb htgt, 
       bind, Except.bind, pure, Except.pure] at hr
     revert hr
     generalize uint64Add _ _ = x

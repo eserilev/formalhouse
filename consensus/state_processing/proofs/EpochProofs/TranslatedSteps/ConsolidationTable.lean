@@ -504,7 +504,8 @@ theorem process_on_table_spec {S E : Type} (inst : LighthouseConsolidationState 
     rw [show (Spec.tableBalances (view s).balances (idx.val.map (·.val)), 0) =
       Spec.toTable (idx.val.map (·.val)) ((view s).balances, 0) from rfl, hloop] at habs
     simp only [pendingPairs] at habs
-    cases hfull : Spec.stepLoop (Spec.consolidationStep ((view s).validators.map Spec.globalLocal)
+    cases hfull : Spec.stepLoop
+      (Spec.consolidationStep ((view s).validators.map Spec.consolidationValidatorOf)
         ne) ((view s).balances, 0)
         ((view s).pending_consolidations.map fun c => (c.source_index, c.target_index)) with
     | error e =>

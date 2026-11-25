@@ -11,12 +11,13 @@ to the whole pass.
 
 namespace EpochProofs.Spec
 
-theorem passM_congr {A R : Type} (f g : A → R → SpecM (A × R)) (rows : List R)
-    (h : ∀ a r, r ∈ rows → f a r = g a r) (a : A) : passM f a rows = passM g a rows := by
+theorem passOverRows_congr {A R : Type} (f g : A → R → SpecM (A × R)) (rows : List R)
+    (h : ∀ a r, r ∈ rows → f a r = g a r) (a : A) : passOverRows f a rows =
+    passOverRows g a rows := by
   induction rows generalizing a with
   | nil => rfl
   | cons r rs ih =>
-    simp only [passM_cons]
+    simp only [passOverRows_cons]
     rw [h a r List.mem_cons_self]
     congr 1
     funext x

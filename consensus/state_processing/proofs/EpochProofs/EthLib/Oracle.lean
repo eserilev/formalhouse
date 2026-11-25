@@ -27,26 +27,35 @@ variable {preset : Preset} {config : Config} {fork : _root_.EthLib.Base.Fork}
 
 /-- Each oracle field that an epoch reads is the EthLib function. -/
 structure OracleMatches (preset : Preset) (checks : SignatureChecks) (o : Spec.Oracle) : Prop where
+  /-- SHA-256. -/
   hash : ∀ bytes : List UInt8,
     o.hash bytes = _root_.EthLib.Cryptography.Hash.Sha256.hash32 ⟨bytes.toArray⟩
+  /-- The root of a vector of block roots. -/
   blockRoots : ∀ roots : RootedVector Root preset.SLOTS_PER_HISTORICAL_ROOT.toNat,
     hashTreeRoot roots = .ok (o.hash_tree_root_BlockRoots roots.elements.toList)
+  /-- The root of a vector of state roots. -/
   stateRoots : ∀ roots : RootedVector Root preset.SLOTS_PER_HISTORICAL_ROOT.toNat,
     hashTreeRoot roots = .ok (o.hash_tree_root_StateRoots roots.elements.toList)
+  /-- The root of a `ForkData`. -/
   forkData : ∀ version root,
     hashTreeRoot (ForkData.mk version root) =
       .ok (o.hash_tree_root_ForkData
         { current_version := version, genesis_validators_root := root })
+  /-- The root of a `SigningData`. -/
   signingData : ∀ root domain,
     hashTreeRoot (SigningData.mk root domain) =
       .ok (o.hash_tree_root_SigningData { object_root := root, domain := domain })
+  /-- The root of a `DepositMessage`. -/
   depositMessage : ∀ pubkey credentials (amount : UInt64),
     hashTreeRoot (DepositMessage.mk pubkey credentials amount) =
       .ok (o.hash_tree_root_DepositMessage
         { pubkey := pubkey, withdrawal_credentials := credentials, amount := amount.toNat })
+  /-- The BLS check of one signature. -/
   verify : ∀ pubkey message signature,
     o.bls_Verify pubkey message signature = checks.verify pubkey (packBytes message) signature
+  /-- The BLS check of a public key. -/
   keyValidate : ∀ pubkey, o.bls_KeyValidate pubkey = true ↔ G1.keyValidate pubkey = .ok ()
+  /-- The aggregate of BLS public keys, when EthLib accepts the keys. -/
   aggregate : ∀ (pubkeys : List BLSPubkey) key,
     Signatures.ethAggregatePubkeys pubkeys.toArray = .ok key → o.bls_AggregatePKs pubkeys = key
 

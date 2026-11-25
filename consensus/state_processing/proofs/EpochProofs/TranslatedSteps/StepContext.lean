@@ -11,8 +11,7 @@ import EpochProofs.TranslatedSteps.Slashings
 them. `step_context_spec` shows that when the raw values are the spec's raw values
 (`ContextInputsMatch`), the result holds the spec context `lighthouseContextOf` and the spec
 hysteresis thresholds (`ContextMatches`). `single_pass_rows_model_inputs` puts this together with
-the loop: the context of `single_pass_rows_model` is no longer an assumption, only the raw reads
-are.
+the loop: only the raw reads are assumptions.
 -/
 
 namespace EpochProofs
@@ -205,7 +204,7 @@ theorem step_context_spec [Spec.CurrentPreset] (s : Spec.BeaconState) (cur : Nat
   · exact hi.effective_balance_updates
 
 /-- The loop of `single_pass_rows_model`, with the context computed by `step_context` from raw
-inputs. The context is no longer an assumption: only the raw reads (`ContextInputsMatch`) are. -/
+inputs. Only the raw reads (`ContextInputsMatch`) are assumptions. -/
 theorem single_pass_rows_model_inputs [Spec.CurrentPreset] {R E : Type}
     (inst : LighthouseRegistryRows R E)
     (s : Spec.BeaconState) (tab : Spec.Gwei) (topups : List Spec.Gwei)
@@ -223,7 +222,8 @@ theorem single_pass_rows_model_inputs [Spec.CurrentPreset] {R E : Type}
     (hch : exitChurnToSpec ch = (s.earliest_exit_epoch, s.exit_balance_to_consume)) :
     per_epoch_processing.single_pass_step.step_context i ⦃ r => ∃ c, r = .Ok c ∧
       per_epoch_processing.registry_rows.single_pass_rows inst rows ch c k ⦃ res =>
-        LoopResultMatchesModel view (Spec.passM (fun churn r => Spec.lighthouseValidatorStep Spec.P
+        LoopResultMatchesModel view
+          (Spec.passOverRows (fun churn r => Spec.lighthouseValidatorStep Spec.P
             (Spec.lighthouseContextOf s tab cur rctx per) downward upward
             ⟨Spec.lighthouseBaseReward tab r, topups.getD r.index 0, decide (r.index ∈ named)⟩ churn
               r)

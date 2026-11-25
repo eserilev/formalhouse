@@ -15,14 +15,15 @@ namespace EpochProofs.Spec
 open FuluLengthsFacts
 
 /-- The Fulu `initiate_validator_exit` keeps the pubkeys. -/
-theorem initiate_validator_exit_fulu_pkSame {p : Preset} {f : FuluConfig} (hc : FuluCompat p f)
+theorem initiate_validator_exit_fulu_pkSame {p : Preset} {f : FuluConfig}
+    (hc : FuluConfigMatchesPreset p f)
     {tab : Gwei} {s s' : BeaconState} {index : Nat}
     (h : initiate_validator_exit_fulu p f tab s index = .ok s') : SamePubkeys s s' := by
   rw [initiate_validator_exit_fulu_eq p f hc] at h
   exact initiate_validator_exit_pkSame h
 
 /-- The Fulu `slash_validator` keeps the pubkeys. -/
-theorem slash_validator_fulu_pkSame (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem slash_validator_fulu_pkSame (p : Preset) (f : FuluConfig) (hc : FuluConfigMatchesPreset p f)
     (s s' : BeaconState) (i : ValidatorIndex) (w : Option ValidatorIndex)
     (h : slash_validator_fulu p f s i w = .ok s') : SamePubkeys s s' := by
   obtain ⟨-, hlen, hother, ⟨v, v', hv, hv', hch⟩, -⟩ := slash_validator_fulu_ok p f hc s s' i w h
@@ -40,14 +41,14 @@ theorem slash_validator_fulu_pkSame (p : Preset) (f : FuluConfig) (hc : FuluComp
 
 /-- The Fulu `process_proposer_slashing` keeps the pubkeys. -/
 theorem process_proposer_slashing_fulu_pkSame (p : Preset) (o : Oracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (s s' : BeaconState) (ps : ProposerSlashing)
+    (hc : FuluConfigMatchesPreset p f) (s s' : BeaconState) (ps : ProposerSlashing)
     (h : process_proposer_slashing_fulu p o f s ps = .ok s') : SamePubkeys s s' := by
   obtain ⟨_, _, -, -, -, hsl⟩ := process_proposer_slashing_fulu_ok p o f s s' ps h
   exact slash_validator_fulu_pkSame p f hc s s' _ none hsl
 
 /-- The Fulu `process_attester_slashing` keeps the pubkeys. -/
 theorem process_attester_slashing_fulu_pkSame (p : Preset) (o : Oracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (s s' : BeaconState) (as : AttesterSlashing)
+    (hc : FuluConfigMatchesPreset p f) (s s' : BeaconState) (as : AttesterSlashing)
     (h : process_attester_slashing_fulu p o f s as = .ok s') : SamePubkeys s s' := by
   obtain ⟨heff, hf⟩ := process_attester_slashing_fulu_ok p o f hc s s' as h
   refine .of_pointwise heff.2.1 fun j v v' hv hv' => ?_
@@ -57,13 +58,14 @@ theorem process_attester_slashing_fulu_pkSame (p : Preset) (o : Oracle) (f : Ful
 
 /-- The Fulu `process_voluntary_exit` keeps the pubkeys. -/
 theorem process_voluntary_exit_fulu_pkSame (p : Preset) (o : Oracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (s s' : BeaconState) (e : SignedVoluntaryExit)
+    (hc : FuluConfigMatchesPreset p f) (s s' : BeaconState) (e : SignedVoluntaryExit)
     (h : process_voluntary_exit_fulu p o f s e = .ok s') : SamePubkeys s s' := by
   obtain ⟨tab, -, -, -, -, -, -, hi⟩ := process_voluntary_exit_fulu_initiate p o f hc s s' e h
   exact initiate_validator_exit_pkSame hi
 
 /-- The Fulu `process_withdrawal_request` keeps the pubkeys. -/
-theorem process_withdrawal_request_fulu_pkSame (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem process_withdrawal_request_fulu_pkSame (p : Preset) (f : FuluConfig)
+    (hc : FuluConfigMatchesPreset p f)
     (s s' : BeaconState) (withdrawal_request : WithdrawalRequest)
     (h : process_withdrawal_request_fulu p f s withdrawal_request = .ok s') : SamePubkeys s s' := by
   unfold process_withdrawal_request_fulu at h
@@ -121,7 +123,7 @@ theorem process_consolidation_request_fulu_pkSame (p : Preset) (f : FuluConfig)
 
 /-- The Fulu `process_operations` keeps `PubkeysUnique`. -/
 theorem process_operations_fulu_pubkeysUnique (p : Preset) (o : Oracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (s s' : BeaconState) (body : FuluBeaconBlockBody)
+    (hc : FuluConfigMatchesPreset p f) (s s' : BeaconState) (body : FuluBeaconBlockBody)
     (h : process_operations_fulu p o f s body = .ok s') (hs : PubkeysUnique s) :
     PubkeysUnique s' :=
   process_operations_fulu_inv p o f PubkeysUnique
@@ -139,7 +141,7 @@ theorem process_operations_fulu_pubkeysUnique (p : Preset) (o : Oracle) (f : Ful
 
 /-- The Fulu `process_block` keeps `PubkeysUnique`. -/
 theorem process_block_fulu_pubkeysUnique (p : Preset) (o : Oracle) (fo : FuluOracle)
-    (f : FuluConfig) (hc : FuluCompat p f) (c : FuluBlockConfig) (fs fs' : FuluState)
+    (f : FuluConfig) (hc : FuluConfigMatchesPreset p f) (c : FuluBlockConfig) (fs fs' : FuluState)
     (block : FuluBeaconBlock) (h : process_block_fulu p o fo f c fs block = .ok fs')
     (hs : PubkeysUnique fs.state) : PubkeysUnique fs'.state :=
   process_block_fulu_inv p o fo f c PubkeysUnique
@@ -158,7 +160,8 @@ theorem process_block_fulu_pubkeysUnique (p : Preset) (o : Oracle) (fo : FuluOra
     fs fs' block h hs
 
 /-- The Fulu `process_epoch` keeps `PubkeysUnique`. -/
-theorem process_epoch_fulu_pubkeysUnique [CurrentPreset] (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem process_epoch_fulu_pubkeysUnique [CurrentPreset] (p : Preset) (f : FuluConfig)
+    (hc : FuluConfigMatchesPreset p f)
     (o : Oracle) (s s' : BeaconState) (h : process_epoch_fulu p f o s = .ok s')
     (hs : PubkeysUnique s) : PubkeysUnique s' :=
   process_epoch_fulu_inv p f hc o PubkeysUnique
@@ -194,7 +197,8 @@ theorem process_epoch_fulu_pubkeysUnique [CurrentPreset] (p : Preset) (f : FuluC
     s s' h hs
 
 /-- `process_slots_fulu` with the Fulu `process_epoch` keeps `PubkeysUnique`. -/
-theorem process_slots_fulu_pubkeysUnique [CurrentPreset] (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem process_slots_fulu_pubkeysUnique [CurrentPreset] (p : Preset) (f : FuluConfig)
+    (hc : FuluConfigMatchesPreset p f)
     (o : Oracle) (fo : FuluOracle) (fs fs' : FuluState) (slot : Slot)
     (h : process_slots_fulu p o fo (process_epoch_fulu p f o) fs slot = .ok fs')
     (hs : PubkeysUnique fs.state) : PubkeysUnique fs'.state :=
@@ -206,7 +210,7 @@ theorem process_slots_fulu_pubkeysUnique [CurrentPreset] (p : Preset) (f : FuluC
 
 /-- `state_transition_fulu` keeps `PubkeysUnique`. -/
 theorem state_transition_fulu_pubkeysUnique [CurrentPreset] (p : Preset) (o : Oracle) (fo : FuluOracle)
-    (f : FuluConfig) (hc : FuluCompat p f) (c : FuluBlockConfig) (fs fs' : FuluState)
+    (f : FuluConfig) (hc : FuluConfigMatchesPreset p f) (c : FuluBlockConfig) (fs fs' : FuluState)
     (signed_block : FuluSignedBeaconBlock) (validate_result : Bool)
     (hs : PubkeysUnique fs.state)
     (h : state_transition_fulu p o fo f c fs signed_block validate_result = .ok fs') :

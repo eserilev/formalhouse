@@ -14,7 +14,8 @@ import EpochProofs.LighthouseModel.Deposits
 
 namespace EpochProofs.Spec
 
-theorem depositDecisions_postponed_len [CurrentPreset] (fs dbtc churn : Nat) (views : List DepositSpecView)
+theorem depositDecisions_postponed_len [CurrentPreset] (fs dbtc churn : Nat)
+    (views : List DepositInfo)
     (n : Nat) (b : Gwei) (pp : List Bool)
     (h : depositDecisions P fs dbtc churn views = .ok (n, b, pp)) :
     pp.length = n := by

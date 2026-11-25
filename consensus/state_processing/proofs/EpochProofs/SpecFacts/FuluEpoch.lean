@@ -36,7 +36,7 @@ theorem process_sync_committee_updates_fulu_sameResultOrBothFail (p : Preset) (o
 
 /-- Fulu `process_epoch` with the registry update and the pending deposits written as the Gloas
 functions at `fuluTotalActiveBalance`. -/
-theorem process_epoch_fulu_eq_tab (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem process_epoch_fulu_eq_tab (p : Preset) (f : FuluConfig) (hc : FuluConfigMatchesPreset p f)
     (o : Oracle) (state : BeaconState) :
     process_epoch_fulu p f o state = (do
       let state ← process_justification_and_finalization p state

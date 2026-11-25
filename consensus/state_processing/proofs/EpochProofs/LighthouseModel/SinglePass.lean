@@ -14,14 +14,14 @@ hypotheses are facts about the state at the start of epoch processing, not about
 namespace EpochProofs.Spec
 
 /-- A pass with a padded accumulator equals the pass with the plain accumulator. -/
-theorem passM_proj {A B R : Type} (f : B → R → SpecM (B × R)) (emb : A → B) (proj : B → A)
+theorem passOverRows_proj {A B R : Type} (f : B → R → SpecM (B × R)) (emb : A → B) (proj : B → A)
     (hep : ∀ b, emb (proj b) = b) (hpe : ∀ a, proj (emb a) = a) (a : A) (rows : List R) :
-    passM (fun a r => (fun x => (proj x.1, x.2)) <$> f (emb a) r) a rows =
-      (fun y => (proj y.1, y.2)) <$> passM f (emb a) rows := by
+    passOverRows (fun a r => (fun x => (proj x.1, x.2)) <$> f (emb a) r) a rows =
+      (fun y => (proj y.1, y.2)) <$> passOverRows f (emb a) rows := by
   induction rows generalizing a with
-  | nil => simp [passM, hpe, Functor.map, Except.map, pure, Except.pure]
+  | nil => simp [passOverRows, hpe, Functor.map, Except.map, pure, Except.pure]
   | cons r rs ih =>
-    simp only [passM_cons]
+    simp only [passOverRows_cons]
     cases hf : f (emb a) r with
     | error e => simp [Functor.map, Except.map, bind, Except.bind]
     | ok x =>
@@ -30,7 +30,7 @@ theorem passM_proj {A B R : Type} (f : B → R → SpecM (B × R)) (emb : A → 
       rw [hep] at h
       simp only [Functor.map, Except.map] at h
       rw [h]
-      cases passM f x.1 rs <;> rfl
+      cases passOverRows f x.1 rs <;> rfl
 
 /-- The per-validator facts that hold at the start of epoch processing. -/
 structure EpochEntry (state : BeaconState) (previous_epoch : Epoch) : Prop where
@@ -111,7 +111,7 @@ theorem lighthouse_single_pass_eq_spec [CurrentPreset] (total_active_balance : G
       let s3 ← process_registry_updates P total_active_balance s2
       process_slashings P total_active_balance s3)
     ((fun y => state.withRowsChurn y.1 y.2) <$>
-      passM (fun churn r => lighthouseRowStep P
+      passOverRows (fun churn r => lighthouseRowStep P
           (lighthouseContextOf state total_active_balance current_epoch rctx per) (base_reward r)
             churn r)
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
@@ -140,11 +140,11 @@ theorem lighthouse_single_pass_eq_spec [CurrentPreset] (total_active_balance : G
       (by rw [htab]; exact hbase _ hr) (by rw [htab]; exact htotal) hincrements
       (hentry.effective_balance i hiv) (hentry.supply i hiv) hfinalized hcurrent64 hactivation
       (hentry.exit_epoch i hiv)
-  rw [passM_congr _ _ (rowsOf state) (fun churn r hr => hstep churn r hr)]
-  rw [passM_proj (singlePassStep P total_active_balance rctx.previous_epoch
+  rw [passOverRows_congr _ _ (rowsOf state) (fun churn r hr => hstep churn r hr)]
+  rw [passOverRows_proj (singlePassStep P total_active_balance rctx.previous_epoch
     rctx.in_leak rctx current_epoch state.finalized_checkpoint.epoch activation_epoch
     (current_epoch + P.EPOCHS_PER_SLASHINGS_VECTOR / 2) per)
     (fun c => ((((), ()), c), ())) (fun b => b.1.2) (fun _ => rfl) (fun _ => rfl)]
-  cases passM _ _ (rowsOf state) <;> rfl
+  cases passOverRows _ _ (rowsOf state) <;> rfl
 
 end EpochProofs.Spec

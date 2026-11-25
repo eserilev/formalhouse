@@ -6,12 +6,13 @@ import EpochProofs.LighthouseModel.Order
 /-!
 # The proposer lookahead and the PTC window, composed from the translated functions
 
-`lookahead` is `process_proposer_lookahead` of `single_pass.rs`: the translated
-`next_proposer_lookahead` and the `Vector::new` write. `ptcWindow` is `process_ptc_window`: the
-translated `ptc_for_epoch` and `shift_window`. The reads, the hash, the effective balance source,
-the committees from the committee cache and the writes are untranslated code
-(`UntranslatedLookahead`, `UntranslatedPtcWindow`), each with the fact that links it to the spec
-(`UntranslatedLookaheadFacts`, `UntranslatedPtcWindowFacts`). `translatedLookahead_matches_model`
+`translatedLookahead` is `process_proposer_lookahead` of `single_pass.rs`: the translated
+`next_proposer_lookahead` and the `Vector::new` write. `translatedPtcWindow` is
+`process_ptc_window`: the translated `ptc_for_epoch` and `shift_window`. The reads, the hash, the
+effective balance source, the committees from the committee cache and the writes are untranslated
+code (`UntranslatedLookahead`, `UntranslatedPtcWindow`), each with the fact that links it to the
+spec (`UntranslatedLookaheadFacts`, `UntranslatedPtcWindowFacts`).
+`translatedLookahead_matches_model`
 and `translatedPtcWindow_matches_model` show that they return the states of the models. The Fulu
 lookahead (`translatedLookaheadFulu_matches_model`) differs only in the proposer candidates.
 -/
@@ -71,7 +72,7 @@ open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 structure UntranslatedLookahead (RustState : Type) where
   /-- `Sha256Hash`, and the `BeaconState` as the effective balance source. -/
   Hash : Type
-  hash : ShuffleHashInst Hash
+  hash : ShuffleHash Hash
   effectiveBalances : EffectiveBalanceSource RustState
   /-- The reads: the lookahead, the proposer candidates, the lookahead epoch
   (`current_epoch + min_seed_lookahead + 1`), its mix and start slot, `selection_constants`. -/

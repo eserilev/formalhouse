@@ -6,16 +6,17 @@ import EpochProofs.TranslatedEpoch.EndOfEpoch
 /-!
 # The Gloas epoch, composed from the translated functions
 
-`epoch` is Lighthouse's Gloas `process_epoch` (`altair.rs` with `process_epoch_single_pass`) as
-one Lean function: the calls of the translated functions of `Generated.lean`, in Lighthouse's
-order, joined by the untranslated code (`UntranslatedEpochCode`). `translatedEpoch_matches_model`
-shows that, under the trusted facts about the untranslated code (`UntranslatedEpochFacts`), `epoch`
+`translatedEpoch` is Lighthouse's Gloas `process_epoch` (`altair.rs` with
+`process_epoch_single_pass`) as one Lean function: the calls of the translated functions of
+`Generated.lean`, in Lighthouse's order, joined by the untranslated code (`UntranslatedEpochCode`).
+`translatedEpoch_matches_model`
+shows that, under the trusted facts about the untranslated code (`UntranslatedEpochFacts`), it
 returns `Ok` with the state of the model `process_epoch_lighthouse` whenever the model returns `ok`.
 
 The cache builds at the start of `process_epoch` and `process_epoch_single_pass`, and the cache
 writes that do not change the state's fields (`set_total_active_balance`, the epoch cache, the
 lookahead committee cache, `advance_caches`, the progressive balances update), are not in
-`epoch`. They can only make the Rust return an error.
+`translatedEpoch`. They can only make the Rust return an error.
 -/
 
 namespace EpochProofs.TranslatedEpoch

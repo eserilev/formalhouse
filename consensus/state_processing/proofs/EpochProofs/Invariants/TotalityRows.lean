@@ -14,24 +14,25 @@ Each row step returns `ok` when its row and the pass state have small values, an
 small for the next row.
 
 Error sources and why they do not fire:
-- Inactivity: `score + INACTIVITY_SCORE_BIAS`. `SupplyAndTimeLimits.scores` keeps scores below
-  `2^22`.
+- Inactivity: `score + INACTIVITY_SCORE_BIAS`. `SupplyAndTimeLimits.inactivityScoresBounded` keeps
+  scores below `2^22`.
 - Rewards: `base_reward * weight * participating_increments`. The base reward is at most
   `2048 * 2023907` Gwei because the total active balance is at least `10^9`, and the
-  participating increments are at most `2^57 / 10^9` (`SupplyAndTimeLimits.supply`). The inactivity
-  penalty `effective_balance * inactivity_score` stays below `2^64` for the same reason as
-  the scores.
+  participating increments are at most `2^57 / 10^9`
+  (`SupplyAndTimeLimits.effectiveBalancesBounded`). The inactivity penalty `effective_balance *
+  inactivity_score` stays below `2^64` for the same reason as the scores.
 - Registry: `compute_exit_epoch_and_update_churn`. An ejected validator has at most
   `EJECTION_BALANCE` and the exit churn is at least `MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA`, so
-  each exit adds one epoch at most. `SupplyAndTimeLimits.churn` and `SupplyAndTimeLimits.count`
-  keep the earliest exit epoch below `2^63`.
+  each exit adds one epoch at most. `SupplyAndTimeLimits.earliestExitEpochBounded` and
+  `SupplyAndTimeLimits.validatorCountBounded` keep the earliest exit epoch below `2^63`.
 - Slashings: `penalty_per_increment * increments`. The penalty per increment is at most
   `2 * 10^9`.
-- Pending deposits: the churn sums and `increase_balance`. `SupplyAndTimeLimits.funds` bounds the
+- Pending deposits: the churn sums and `increase_balance`.
+  `SupplyAndTimeLimits.balancesAndDepositsBounded` bounds the
   balances, the pending deposits and `deposit_balance_to_consume` together.
 
-`SupplyAndTimeLimits.participation` bounds the reward sum: each flag's participating increments are
-at most `1024` times the active increments.
+`SupplyAndTimeLimits.participationBounded` bounds the reward sum: each flag's participating
+increments are at most `1024` times the active increments.
 -/
 
 namespace EpochProofs.Spec
@@ -429,11 +430,12 @@ def RowRel (P : Row → Row → Prop) : List Row → List Row → Prop
 theorem RowRel.cons {P : Row → Row → Prop} {x y : Row} {xs ys : List Row}
     (h : RowRel P (x :: xs) (y :: ys)) : P x y ∧ RowRel P xs ys := h
 
-theorem passM_rel {A : Type} (f : A → Row → SpecM (A × Row)) (I : Nat → A → Prop)
+theorem passOverRows_rel {A : Type} (f : A → Row → SpecM (A × Row)) (I : Nat → A → Prop)
     (P : Row → Row → Prop) (Q : Row → Prop)
     (hf : ∀ r j a, Q r → I j a → ∃ a' r', f a r = .ok (a', r') ∧ I (j + 1) a' ∧ P r r') :
     ∀ (rows : List Row) (k : Nat) (a : A), I k a → (∀ r ∈ rows, Q r) →
-      ∃ a' ys, passM f a rows = .ok (a', ys) ∧ I (k + rows.length) a' ∧ RowRel P rows ys := by
+      ∃ a' ys, passOverRows f a rows = .ok (a', ys) ∧ I (k + rows.length) a' ∧
+        RowRel P rows ys := by
   intro rows
   induction rows with
   | nil => intro k a hI _; exact ⟨a, [], rfl, by simpa using hI, trivial⟩
@@ -442,7 +444,7 @@ theorem passM_rel {A : Type} (f : A → Row → SpecM (A × Row)) (I : Nat → A
     obtain ⟨a1, r1, h1, hI1, hP⟩ := hf r k a (hQ r (by simp)) hI
     obtain ⟨a2, ys, h2, hI2, hR⟩ := ih (k + 1) a1 hI1 (fun x hx => hQ x (by simp [hx]))
     refine ⟨a2, r1 :: ys, ?_, ?_, ⟨hP, hR⟩⟩
-    · rw [passM_cons, h1, tot_bind_ok, h2, tot_bind_ok]; rfl
+    · rw [passOverRows_cons, h1, tot_bind_ok, h2, tot_bind_ok]; rfl
     · simp only [List.length_cons]
       have : k + 1 + rs.length = k + (rs.length + 1) := by omega
       rw [← this]; exact hI2
@@ -493,12 +495,13 @@ theorem RowRel.forall {P : Row → Row → Prop} (Q Q' : Row → Prop)
   | [], _ :: _, hr, _ => hr.elim
   | _ :: _, [], hr, _ => hr.elim
 
-/-- `passM_rel` where the step may use a bound `K` on the number of rows done. -/
-theorem passM_rel_bounded {A : Type} (f : A → Row → SpecM (A × Row)) (I : Nat → A → Prop)
+/-- `passOverRows_rel` where the step uses a bound `K` on the number of rows done. -/
+theorem passOverRows_rel_bounded {A : Type} (f : A → Row → SpecM (A × Row)) (I : Nat → A → Prop)
     (P : Row → Row → Prop) (K : Nat)
     (hf : ∀ r j a, I j a → j < K → ∃ a' r', f a r = .ok (a', r') ∧ I (j + 1) a' ∧ P r r') :
     ∀ (rows : List Row) (k : Nat) (a : A), I k a → k + rows.length ≤ K →
-      ∃ a' ys, passM f a rows = .ok (a', ys) ∧ I (k + rows.length) a' ∧ RowRel P rows ys := by
+      ∃ a' ys, passOverRows f a rows = .ok (a', ys) ∧ I (k + rows.length) a' ∧
+        RowRel P rows ys := by
   intro rows
   induction rows with
   | nil => intro k a hI _; exact ⟨a, [], rfl, by simpa using hI, trivial⟩
@@ -508,7 +511,7 @@ theorem passM_rel_bounded {A : Type} (f : A → Row → SpecM (A × Row)) (I : N
     obtain ⟨a1, r1, h1, hI1, hP⟩ := hf r k a hI (by omega)
     obtain ⟨a2, ys, h2, hI2, hR⟩ := ih (k + 1) a1 hI1 (by omega)
     refine ⟨a2, r1 :: ys, ?_, ?_, ⟨hP, hR⟩⟩
-    · rw [passM_cons, h1, tot_bind_ok, h2, tot_bind_ok]; rfl
+    · rw [passOverRows_cons, h1, tot_bind_ok, h2, tot_bind_ok]; rfl
     · simp only [List.length_cons]
       have : k + 1 + rs.length = k + (rs.length + 1) := by omega
       rw [← this]; exact hI2
@@ -535,9 +538,9 @@ def PSlash (a b : Row) : Prop :=
 
 theorem inactivity_pass_total [CurrentPreset] (rows : List Row) (prev : Epoch) (in_leak : Bool)
     (hprev : prev + 1 < 2 ^ 64) (hs : ∀ r ∈ rows, @LT.lt Nat _ r.inactivity_score (2 ^ 22)) :
-    ∃ ys, passM (inactivityRowStep P prev in_leak) () rows = .ok ((), ys) ∧
+    ∃ ys, passOverRows (inactivityRowStep P prev in_leak) () rows = .ok ((), ys) ∧
       RowRel PInact rows ys := by
-  obtain ⟨u, ys, h, -, hr⟩ := passM_rel (inactivityRowStep P prev in_leak)
+  obtain ⟨u, ys, h, -, hr⟩ := passOverRows_rel (inactivityRowStep P prev in_leak)
     (fun _ _ => True) PInact (fun r => @LT.lt Nat _ r.inactivity_score (2 ^ 22))
     (fun r _ _ hq _ => by
       obtain ⟨x, hx, he, hle⟩ := inactivityRowStep_total prev in_leak r hprev
@@ -549,9 +552,9 @@ theorem rewards_pass_total [CurrentPreset] (rows : List Row) (ctx : RewardsConte
     (hs : ∀ r ∈ rows, r.validator.effective_balance ≤ 2048000000000 ∧
       @LT.lt Nat _ r.inactivity_score (2 ^ 23) ∧
       r.balance + 4 * r.validator.effective_balance < 2 ^ 64) :
-    ∃ ys, passM (rewardsRowStep P ctx) () rows = .ok ((), ys) ∧
+    ∃ ys, passOverRows (rewardsRowStep P ctx) () rows = .ok ((), ys) ∧
       RowRel PBal rows ys := by
-  obtain ⟨u, ys, h, -, hr⟩ := passM_rel (rewardsRowStep P ctx)
+  obtain ⟨u, ys, h, -, hr⟩ := passOverRows_rel (rewardsRowStep P ctx)
     (fun _ _ => True) PBal (fun r => r.validator.effective_balance ≤ 2048000000000 ∧
       @LT.lt Nat _ r.inactivity_score (2 ^ 23) ∧
       r.balance + 4 * r.validator.effective_balance < 2 ^ 64)
@@ -564,9 +567,9 @@ theorem registry_pass_total [CurrentPreset] (rows : List Row) (tab : Gwei) (cur 
     (hc : get_exit_churn_limit P tab = .ok c) (hc1 : 64000000000 ≤ c)
     (hc2 : c < 2 ^ 60) (hcur : cur + 5 < 2 ^ 62) (E B : Nat) (hE : E < 2 ^ 62)
     (hB : B < 2 ^ 61) (hn : rows.length < 2 ^ 40) :
-    ∃ E' B' ys, passM (registryRowStep P tab cur fin act) (E, B) rows =
+    ∃ E' B' ys, passOverRows (registryRowStep P tab cur fin act) (E, B) rows =
       .ok ((E', B'), ys) ∧ RowRel PReg rows ys := by
-  obtain ⟨⟨E', B'⟩, ys, h, -, hr⟩ := passM_rel_bounded
+  obtain ⟨⟨E', B'⟩, ys, h, -, hr⟩ := passOverRows_rel_bounded
     (registryRowStep P tab cur fin act)
     (fun j a => @LE.le Nat _ a.1 (max E (cur + 5) + j) ∧ @LE.le Nat _ a.2 (max B c)) PReg
     rows.length
@@ -598,9 +601,9 @@ theorem registry_pass_total [CurrentPreset] (rows : List Row) (tab : Gwei) (cur 
 
 theorem slashings_pass_total [CurrentPreset] (rows : List Row) (target per : Nat) (hper : per ≤ 2000000000)
     (hs : ∀ r ∈ rows, r.validator.effective_balance ≤ 2048000000000) :
-    ∃ ys, passM (slashingsRowStep P target per) () rows = .ok ((), ys) ∧
+    ∃ ys, passOverRows (slashingsRowStep P target per) () rows = .ok ((), ys) ∧
       RowRel PSlash rows ys := by
-  obtain ⟨u, ys, h, -, hr⟩ := passM_rel (slashingsRowStep P target per)
+  obtain ⟨u, ys, h, -, hr⟩ := passOverRows_rel (slashingsRowStep P target per)
     (fun _ _ => True) PSlash (fun r => r.validator.effective_balance ≤ 2048000000000)
     (fun r _ _ hq _ => by
       obtain ⟨x, hx, he, hle⟩ := slashingsRowStep_total target per hper r hq
@@ -706,14 +709,16 @@ theorem regSlash_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Boun
 /-- Bounds on a reachable state at the epoch input that the per-validator steps and the pending
 deposits need. Each one is a time or supply bound; the pyspec raises without them too.
 
-- `scores`: inactivity scores grow by 4 per epoch of leak, so `2^22` is about one million epochs
-  of leak. With a score near `2^23`, `effective_balance * inactivity_score` overflows.
-- `supply`: the effective balances sum to less than `2^57` Gwei (about 144M ETH).
-- `funds`: the balances, the pending deposits and `deposit_balance_to_consume` sum to less than
-  `2^61` Gwei. `deposit_balance_to_consume` is at most the amount of a pending deposit that did
-  not fit the churn, so this is a supply bound.
-- `earliest`, `exit_balance`, `count`: the exit queue and the registry are far from `2^64`.
-- `participation`: each flag's participating increments of the previous epoch are at most
+- `inactivityScoresBounded`: inactivity scores grow by 4 per epoch of leak, so `2^22` is about one
+  million epochs of leak. With a score near `2^23`, `effective_balance * inactivity_score`
+  overflows.
+- `effectiveBalancesBounded`: the effective balances sum to less than `2^57` Gwei (about 144M ETH).
+- `balancesAndDepositsBounded`: the balances, the pending deposits and `deposit_balance_to_consume`
+  sum to less than `2^61` Gwei. `deposit_balance_to_consume` is at most the amount of a pending
+  deposit that did not fit the churn, so this is a supply bound.
+- `earliestExitEpochBounded`, `exitBalanceBounded`, `validatorCountBounded`: the exit queue and the
+  registry are far from `2^64`.
+- `participationBounded`: each flag's participating increments of the previous epoch are at most
   `1024` times the active increments of the current epoch. Exits are churn limited, so the
   active balance cannot drop by that factor in one epoch unless almost nothing is staked. -/
 structure SupplyAndTimeLimits [CurrentPreset] (t : BeaconState) : Prop where

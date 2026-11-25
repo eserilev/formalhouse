@@ -337,7 +337,7 @@ theorem compute_ptc_total_of_sel (o : Oracle) (s : BeaconState) (slot : Nat)
   exact hr1
 
 /-- `process_ptc_window_total` with the PTC selections of the epoch that it fills as a
-hypothesis. Without F12 (at least `SLOTS_PER_EPOCH` active validators), the first of these
+hypothesis. With fewer than `SLOTS_PER_EPOCH` active validators, the first of these
 selections has no candidate, so the hypothesis fails there, as the pyspec does. -/
 theorem process_ptc_window_total_of_sel (o : Oracle) (s : BeaconState)
     (hslot : s.slot + 8192 < 2 ^ 64) (hr : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)

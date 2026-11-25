@@ -5,11 +5,12 @@ import EpochProofs.LighthouseModel.DepositPlan
 /-!
 # The single-pass loop is the loop of the Lighthouse model
 
-`processEpochWithSinglePassAndDeposits` (`LighthouseModel/DepositPlan.lean`) runs one `passM` of
-`lighthouseValidatorStep` over `rowsOf s`, from the exit churn of `s`. `single_pass_rows_model`
-shows that the Rust loop `single_pass_rows` computes exactly this `passM`, when the `RegistryRows`
-value holds `rowsOf s` and satisfies the trusted `ValidatorRowsMatchSpec`. So the loop in the model
-is no longer a hand-written assumption about `single_pass.rs`: only `ValidatorRowsMatchSpec` is.
+`processEpochWithSinglePassAndDeposits` (`LighthouseModel/DepositPlan.lean`) runs one
+`passOverRows` of `lighthouseValidatorStep` over `rowsOf s`, from the exit churn of `s`.
+`single_pass_rows_model`
+shows that the Rust loop `single_pass_rows` computes exactly this `passOverRows`, when the
+`RegistryRows` value holds `rowsOf s` and satisfies the trusted `ValidatorRowsMatchSpec`. The only
+assumption about the loop in `single_pass.rs` is `ValidatorRowsMatchSpec`.
 -/
 
 namespace EpochProofs
@@ -39,7 +40,7 @@ theorem single_pass_rows_model [EpochProofs.Spec.CurrentPreset] {R E : Type}
     (hch : exitChurnToSpec ch = (s.earliest_exit_epoch, s.exit_balance_to_consume)) :
     per_epoch_processing.registry_rows.single_pass_rows inst rows ch c k ⦃ res =>
       LoopResultMatchesModel view
-        (Spec.passM (fun churn r => Spec.lighthouseValidatorStep Spec.P ctx
+        (Spec.passOverRows (fun churn r => Spec.lighthouseValidatorStep Spec.P ctx
           downward upward
           ⟨Spec.lighthouseBaseReward total_active_balance r, topups.getD r.index 0,
             decide (r.index ∈ named)⟩ churn r)

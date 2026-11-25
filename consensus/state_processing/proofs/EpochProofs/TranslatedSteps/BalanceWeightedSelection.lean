@@ -66,7 +66,7 @@ def RandomBytesOk (o : Spec.Oracle) (seedSpec : Spec.Bytes32) (i : Nat) (rb : Sp
     Prop :=
   i % 16 ≠ 0 → rb = o.hash (seedSpec.toList ++ Spec.uint_to_bytes 8 (i / 16))
 
-theorem selection_pass_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EffectiveBalanceSource B)
+theorem selection_pass_spec {H B : Type} (inst : ShuffleHash H) (ebi : EffectiveBalanceSource B)
     (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
     (reg : List Nat) (hEB : EffectiveBalancesMatch ebi balances reg)
     (indices : Slice Usize) (seed : Array U8 32#usize) (seedSpec : Spec.Bytes32)
@@ -319,7 +319,7 @@ theorem selection_loop_zero (p : Spec.Preset) (o : Spec.Oracle) (indices : List 
       sel i rb ≠ .ok res := by
   simp [Spec.compute_balance_weighted_selection_loop, throw, throwThe, MonadExceptOf.throw]
 
-theorem selection_loop_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EffectiveBalanceSource B)
+theorem selection_loop_spec {H B : Type} (inst : ShuffleHash H) (ebi : EffectiveBalanceSource B)
     (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
     (reg : List Nat) (hEB : EffectiveBalancesMatch ebi balances reg)
     (indices : Slice Usize) (seed : Array U8 32#usize) (seedSpec : Spec.Bytes32)
@@ -470,7 +470,7 @@ theorem mapM_effective_balances (vals : List Spec.Validator) (indices : List Nat
       · exact ih2 k hk
 
 /-- Lighthouse `compute_balance_weighted_selection` equals the reference. -/
-theorem compute_balance_weighted_selection_spec {H B : Type} (inst : ShuffleHashInst H)
+theorem compute_balance_weighted_selection_spec {H B : Type} (inst : ShuffleHash H)
     (ebi : EffectiveBalanceSource B) (balances : B) (p : Spec.Preset) (o : Spec.Oracle)
     (hH : HashMatches inst o)
     (state : Spec.BeaconState)

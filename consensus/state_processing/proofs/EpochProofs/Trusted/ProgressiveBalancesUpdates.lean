@@ -1,7 +1,7 @@
 import EpochProofs.CacheReads.ProgressiveBalances
 
 /-!
-# The upkeep of the progressive balances cache inside one epoch
+# The updates of the progressive balances cache inside one epoch
 
 Lighthouse changes `ProgressiveBalancesCache` step by step, without a rebuild. This file names the
 updates as the steps of `ProgressiveBalancesUpdate`. A run of the steps is a
@@ -9,24 +9,24 @@ updates as the steps of `ProgressiveBalancesUpdate`. A run of the steps is a
 
 The trusted part is one fact: between two states of one epoch, Lighthouse runs exactly the updates
 of a `ProgressiveBalancesUpdates` that follows the spec changes. The audit of sigp unstable
-`ec2442d24b` (2026-10-22) found these call sites, and no other write to a field that the cache
+`ec2442d24b` found these call sites, and no other write to a field that the cache
 reads:
 
-- `attest`: `process_operations.rs` (Altair to Fulu `process_attestation`, and the Gloas
+- `attestation`: `process_operations.rs` (Altair to Fulu `process_attestation`, and the Gloas
   `process_attestation`) calls `update_progressive_balances_on_attestation` for each flag that the
   attestation newly sets. The effective balance comes from the epoch cache, which equals the
   validator's effective balance inside the epoch.
-- `slash`: `slash_validator.rs` calls `update_progressive_balances_on_slashing` with the flags
+- `slashing`: `slash_validator.rs` calls `update_progressive_balances_on_slashing` with the flags
   of both epochs, before any other change to the validator.
-- `toSpec`: every other block operation, and every slot inside an epoch, keeps each effective
+- `otherWrite`: every other block operation, and every slot inside an epoch, keeps each effective
   balance, each `slashed` flag, and the activity in the previous and current epochs. Exits and
   activations set epochs after the current epoch. Withdrawals, deposits, execution requests,
   the sync aggregate, payload attestations and builder operations do not write these fields.
-- `addValidator`: a new validator joins with empty participation. Since Electra this happens
+- `newValidator`: a new validator joins with empty participation. Since Electra this happens
   only in epoch processing, so a block run inside an epoch does not use this step.
 
-The effective balance update and the epoch transition update are outside the epoch. The proofs of
-#64 cover them (`effective_balance_change_correct`, `epoch_transition_correct`).
+The effective balance update and the epoch transition update are outside the epoch. The cache
+proofs cover them (`effective_balance_change_correct`, `epoch_transition_correct`).
 -/
 
 namespace EpochProofs.CacheReads

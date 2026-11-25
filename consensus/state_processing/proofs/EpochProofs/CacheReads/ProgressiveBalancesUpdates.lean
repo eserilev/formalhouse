@@ -3,10 +3,10 @@ import EpochProofs.Trusted.ProgressiveBalancesUpdates
 /-!
 # The progressive balances cache stays correct inside an epoch
 
-`ProgressiveBalancesUpdate.correct` proves each hook of `Trusted/ProgressiveBalancesUpdates.lean`
-correct from the Aeneas-checked update functions (#64). `ProgressiveBalancesUpdates.correct` chains
-them. A theorem that uses them asks for a correct cache at a state `start` of the epoch, not at the
-epoch input.
+`ProgressiveBalancesUpdate.correct` proves that each update of
+`Trusted/ProgressiveBalancesUpdates.lean` keeps the cache correct. It uses the proofs about the
+translated update functions. `ProgressiveBalancesUpdates.correct` chains the updates. A theorem
+that uses them asks for a correct cache at a state `start` of the epoch, not at the epoch input.
 -/
 
 namespace EpochProofs.CacheReads
@@ -45,7 +45,7 @@ theorem ProgressiveBalancesUpdates.correct {incr : Nat}
   | refl => exact hc
   | step hs _ ih => exact ih (hs.correct hc)
 
-/-- The upkeep fact moves a correct cache from `start` to `finish`. -/
+/-- A run of cache updates keeps the cache correct. -/
 theorem progressive_balances_correct_after_updates {incr : Nat}
     {start finish : CacheProofs.Spec.BeaconState}
     {c0 c : LighthouseProgressiveBalancesCache}

@@ -14,8 +14,9 @@ import EpochProofs.SpecFacts.RewardsAndPenalties
 # The main theorems
 
 - `lighthouse_model_*`: about the Lean model of Lighthouse's epoch (`process_epoch_lighthouse`).
-- `lighthouse_rust_*`: about the composed translation of the Rust (`TranslatedEpoch.epoch`). They
-  take facts about the Rust that Aeneas does not translate.
+- `lighthouse_rust_*`: about the composed translation of the Rust
+  (`TranslatedEpoch.translatedEpoch`). They take facts about the Rust that Aeneas does not
+  translate.
 - `*_eq_ethlib`: at every epoch input of a run, the epoch succeeds, and its result is the result of
   EthLib's `processEpoch`.
 - `*_agrees_ethlib`: at an epoch input, the epoch and EthLib give the same state, or both fail.
@@ -54,13 +55,13 @@ omit [Spec.CurrentPreset.Valid] [Spec.CurrentFuluConfig.Valid] in
 /-- A Gloas epoch input is the last slot of an epoch, and the next slot fits in `u64`. With
 room in the list of historical summaries, this is `AtLastSlotOfEpoch`. -/
 theorem FuluThenGloasRun.atLastSlotOfEpoch (h : FuluThenGloasRun oracle fuluOracle blockConfig
-    upgradeConfig fuluStart s) (hhist : s.historical_summaries.length <
+    upgradeConfig fuluStart s) (historicalSummariesBelowLimit : s.historical_summaries.length <
       Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT) :
     Spec.AtLastSlotOfEpoch s := by
   have hs : s.slot = h.gloas.beforeLastSlot.slot :=
     (Spec.process_slot_frame _ oracle _ _ h.gloas.lastSlot).2
   exact ⟨h.gloas.atEpochEnd,
-    by rw [hs]; exact Nat.lt_of_le_of_lt h.gloas.beforeTarget h.gloas.targetSlotFits, hhist⟩
+    by rw [hs]; exact Nat.lt_of_le_of_lt h.gloas.beforeTarget h.gloas.targetSlotFits, historicalSummariesBelowLimit⟩
 
 /-- The reachable-state invariants at a Fulu epoch input (`fulu_epoch_input_invariants`). -/
 theorem FuluOnlyRun.invariants (h : FuluOnlyRun oracle fuluOracle blockConfig fuluStart s) :
@@ -73,13 +74,13 @@ theorem FuluOnlyRun.invariants (h : FuluOnlyRun oracle fuluOracle blockConfig fu
 omit [Spec.CurrentPreset.Valid] [Spec.CurrentFuluConfig.Valid] in
 /-- A Fulu epoch input is the last slot of an epoch, and the next slot fits in `u64`. -/
 theorem FuluOnlyRun.atLastSlotOfEpoch (h : FuluOnlyRun oracle fuluOracle blockConfig fuluStart s)
-    (hhist : s.historical_summaries.length <
+    (historicalSummariesBelowLimit : s.historical_summaries.length <
     Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT) : Spec.AtLastSlotOfEpoch s := by
   obtain ⟨-, -, -, path, rfl⟩ := h
   have hs : path.epochInput.state.slot = path.beforeLastSlot.state.slot :=
     (Spec.process_slot_fulu_frame _ oracle fuluOracle _ _ path.lastSlot).2.1
   exact ⟨path.atEpochEnd,
-    by rw [hs]; exact Nat.lt_of_le_of_lt path.beforeTarget path.targetSlotFits, hhist⟩
+    by rw [hs]; exact Nat.lt_of_le_of_lt path.beforeTarget path.targetSlotFits, historicalSummariesBelowLimit⟩
 
 /-! ## The cache reads -/
 
@@ -226,35 +227,39 @@ omit [Spec.CurrentFuluConfig] [Spec.CurrentFuluConfig.Valid] in
 /-- The Lean model of Lighthouse's Gloas epoch agrees with the transcription's `process_epoch`,
 at a state with the reachable-state invariants at an epoch boundary. These hypotheses hold
 together (`AssumptionsHoldForExample.lean`). -/
-theorem lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants (o : Spec.Oracle)
-    {s : Spec.BeaconState} (hin : Spec.EpochInputInvariants s) (hpre : Spec.AtLastSlotOfEpoch s) :
-    Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse o s)
-      (Spec.process_epoch Spec.P o s) := by
-  obtain ⟨⟨⟨hb, hslot, heb, hexit, hsup⟩, -, hcons⟩, -, hvalid⟩ := hin
+theorem lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants (oracle : Spec.Oracle)
+    {s : Spec.BeaconState} (invariants : Spec.EpochInputInvariants s)
+    (atLastSlotOfEpoch : Spec.AtLastSlotOfEpoch s) :
+    Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse oracle s)
+      (Spec.process_epoch Spec.P oracle s) := by
+  obtain ⟨⟨⟨hb, hslot, heb, hexit, hsup⟩, -, hcons⟩, -, hvalid⟩ := invariants
   exact Spec.SameResultOrBothFail.trans
-    (Spec.process_epoch_lighthouse_sameResultOrBothFail o s hpre)
-    (Spec.processEpochWithSinglePassAndDeposits_sameResultOrBothFail' o s hb hslot heb hexit hsup
+    (Spec.process_epoch_lighthouse_sameResultOrBothFail oracle s atLastSlotOfEpoch)
+    (Spec.processEpochWithSinglePassAndDeposits_sameResultOrBothFail' oracle s hb hslot heb hexit
+      hsup
       hvalid hcons)
 
 /-- Gloas, against the hand-written pyspec transcription: at every epoch boundary of a run, the
 Lean model of Lighthouse's epoch and the transcription's give the same state, or both fail. No
 pyspec precondition. -/
 theorem lighthouse_model_gloas_epoch_agrees_pyspec
-    (hrun : FuluThenGloasRun oracle fuluOracle blockConfig upgradeConfig fuluStart s)
-    (hhistBelowLimit : s.historical_summaries.length < Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT) :
+    (run : FuluThenGloasRun oracle fuluOracle blockConfig upgradeConfig fuluStart s)
+    (historicalSummariesBelowLimit : s.historical_summaries.length <
+    Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse oracle s)
       (Spec.process_epoch Spec.P oracle s) :=
-  lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants oracle hrun.invariants
-    (hrun.atLastSlotOfEpoch hhistBelowLimit)
+  lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants oracle run.invariants
+    (run.atLastSlotOfEpoch historicalSummariesBelowLimit)
 
 /-- Fulu, against the hand-written pyspec transcription. -/
 theorem lighthouse_model_fulu_epoch_agrees_pyspec
-    (hrun : FuluOnlyRun oracle fuluOracle blockConfig fuluStart s)
-    (hhistBelowLimit : s.historical_summaries.length < Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT) :
+    (run : FuluOnlyRun oracle fuluOracle blockConfig fuluStart s)
+    (historicalSummariesBelowLimit : s.historical_summaries.length <
+    Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse_fulu oracle s)
       (Spec.process_epoch_fulu Spec.P Spec.FC oracle s) :=
-  Spec.lighthouse_fulu_epoch_sameResultOrBothFail oracle s hrun.invariants
-    (hrun.atLastSlotOfEpoch hhistBelowLimit)
+  Spec.lighthouse_fulu_epoch_sameResultOrBothFail oracle s run.invariants
+    (run.atLastSlotOfEpoch historicalSummariesBelowLimit)
 
 /-! ## Against EthLib -/
 

@@ -342,7 +342,8 @@ theorem lt_withdrawable_of_slashable' {v : Validator} {e : Epoch}
 
 /-- The Fulu `process_proposer_slashing` at epoch `E` is a slashing step. -/
 theorem process_proposer_slashing_fulu_slashStep (p : Preset) (o : Oracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (s s' : BeaconState) (E : Epoch) (hE : s.slot / p.SLOTS_PER_EPOCH = E)
+    (hc : FuluConfigMatchesPreset p f) (s s' : BeaconState) (E : Epoch)
+    (hE : s.slot / p.SLOTS_PER_EPOCH = E)
     (ps : ProposerSlashing) (h : process_proposer_slashing_fulu p o f s ps = .ok s') :
     SlashStep p E s s' := by
   obtain ⟨-, -, -, heff, hother, ⟨v, v', hv, hv', hns, hs', hch⟩, hbal⟩ :=
@@ -375,7 +376,7 @@ theorem process_proposer_slashing_fulu_slashStep (p : Preset) (o : Oracle) (f : 
 /-- In a Fulu attester slashing, each validator that changes was withdrawable only after the
 current epoch. -/
 theorem process_attester_slashing_fulu_slashable (p : Preset) (o : Oracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (s s' : BeaconState) (as : AttesterSlashing)
+    (hc : FuluConfigMatchesPreset p f) (s s' : BeaconState) (as : AttesterSlashing)
     (h : process_attester_slashing_fulu p o f s as = .ok s') :
     ∀ (j : Nat) (v v' : Validator), s.validators[j]? = some v → s'.validators[j]? = some v' →
       v' = v ∨ s.slot / p.SLOTS_PER_EPOCH < v.withdrawable_epoch := by
@@ -414,7 +415,8 @@ theorem process_attester_slashing_fulu_slashable (p : Preset) (o : Oracle) (f : 
 
 /-- The Fulu `process_attester_slashing` at epoch `E` is a slashing step. -/
 theorem process_attester_slashing_fulu_slashStep (p : Preset) (o : Oracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (s s' : BeaconState) (E : Epoch) (hE : s.slot / p.SLOTS_PER_EPOCH = E)
+    (hc : FuluConfigMatchesPreset p f) (s s' : BeaconState) (E : Epoch)
+    (hE : s.slot / p.SLOTS_PER_EPOCH = E)
     (as : AttesterSlashing) (h : process_attester_slashing_fulu p o f s as = .ok s') :
     SlashStep p E s s' := by
   obtain ⟨heff, hf⟩ := process_attester_slashing_fulu_ok p o f hc s s' as h
@@ -440,7 +442,7 @@ theorem process_block_header_fulu_opStep (p : Preset) (o : Oracle) (fo : FuluOra
 
 /-- The Fulu `process_operations` at epoch `E` keeps everything. -/
 theorem process_operations_fulu_keeps (p : Preset) (o : Oracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (s0 : BeaconState) (E : Epoch) (L : Nat → Gwei) (n : Nat)
+    (hc : FuluConfigMatchesPreset p f) (s0 : BeaconState) (E : Epoch) (L : Nat → Gwei) (n : Nat)
     (s t : BeaconState) (body : FuluBeaconBlockBody) (hE : s.slot / p.SLOTS_PER_EPOCH = E)
     (hfar : E < FAR_FUTURE_EPOCH) (h : process_operations_fulu p o f s body = .ok t) :
     Keeps p s0 E L n s t := by

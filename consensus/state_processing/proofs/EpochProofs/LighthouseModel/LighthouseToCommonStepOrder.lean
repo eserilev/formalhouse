@@ -45,7 +45,7 @@ theorem lighthouseFullTailG_eq [CurrentPreset] (o : Oracle) (rt : Gwei → Gwei)
     (hthr : hysteresisThresholds P = .ok (downward, upward)) :
     lighthouseFullTailG o rt fin s1 =
       (lighthouseDepositPlan s1 (rt total_active_balance) current_epoch >>=
-      fun plan => passM (fun churn r => lighthouseValidatorStep P
+      fun plan => passOverRows (fun churn r => lighthouseValidatorStep P
           (lighthouseContextOf s1 (rt total_active_balance) current_epoch rctx per) downward upward
           ⟨lighthouseBaseReward total_active_balance r, plan.topups.getD r.index 0,
             decide (r.index ∈ validatorsInConsolidations s1)⟩ churn r)
@@ -64,7 +64,7 @@ def planDec [CurrentPreset] (s : BeaconState) (total_active_balance : Gwei) (cur
   depositDecisions P finalized_slot s.deposit_balance_to_consume
     (← get_activation_churn_limit P total_active_balance)
     ((s.pending_deposits.take P.MAX_PENDING_DEPOSITS_PER_EPOCH).map
-      (lighthouseDepositView s current_epoch))
+      (lighthouseDepositInfo s current_epoch))
 
 /-- The handled deposits for a decision. -/
 def handledOfDec (s : BeaconState) (dec : Nat × Gwei × List Bool) :
@@ -99,7 +99,7 @@ theorem lighthouseDepositPlan_eq [CurrentPreset] (s : BeaconState) (total_active
       simp only [ok_bind']
       cases depositDecisions P fs s.deposit_balance_to_consume cl
           ((s.pending_deposits.take P.MAX_PENDING_DEPOSITS_PER_EPOCH).map
-            (lighthouseDepositView s current_epoch)) with
+            (lighthouseDepositInfo s current_epoch)) with
       | error e => rfl
       | ok dec =>
         obtain ⟨next, dbtc, pp⟩ := dec
@@ -147,7 +147,7 @@ theorem tailNFG_eq [CurrentPreset] (o : Oracle) (K : BeaconState → SpecM Beaco
       simp only [ok_bind']
       cases depositDecisions P fs s1.deposit_balance_to_consume cl
           ((s1.pending_deposits.take P.MAX_PENDING_DEPOSITS_PER_EPOCH).map
-            (lighthouseDepositView s1 current_epoch)) with
+            (lighthouseDepositInfo s1 current_epoch)) with
       | error e => rfl
       | ok dec => rfl
 
@@ -252,7 +252,7 @@ theorem lighthouseAfter_pass2_nf [CurrentPreset] (o : Oracle) (K : BeaconState �
     (hthr : hysteresisThresholds P = .ok (downward, upward)) (hrows : ListLengthsMatch s1)
     (dec : Nat × Gwei × List Bool) (sums : List Gwei) (x : (Epoch × Gwei) × List Row)
     (hkey : x.2.map rowKey = (rowsOf s1).map rowKey) :
-    SameResultOrBothFail (passM (fun _ r =>
+    SameResultOrBothFail (passOverRows (fun _ r =>
       (fun r' => ((), r')) <$> lighthouseRowStep2 downward upward
         (sums.getD r.index 0) (decide (r.index ∈ validatorsInConsolidations s1)) r) () x.2 >>=
         fun y => lighthouseAfterPassG o K s1 (planOf s1 dec sums) (x.1, y.2))
@@ -267,10 +267,10 @@ theorem lighthouseAfter_pass2_nf [CurrentPreset] (o : Oracle) (K : BeaconState �
   have hlen : S4.validators.length = s1.validators.length := by
     show (x.2.map (·.validator)).length = _
     rw [List.length_map, hlen2]
-  have hL : (passM (fun _ r => (fun r' => ((), r')) <$> lighthouseRowStep2 downward upward
+  have hL : (passOverRows (fun _ r => (fun r' => ((), r')) <$> lighthouseRowStep2 downward upward
         (td r.index) (nm r.index) r) () x.2 >>=
         fun y => lighthouseAfterPassG o K s1 (planOf s1 dec sums) (x.1, y.2)) =
-      ((fun y => S4.withRows y.2) <$> passM (fun _ r => (fun r' => ((), r')) <$>
+      ((fun y => S4.withRows y.2) <$> passOverRows (fun _ r => (fun r' => ((), r')) <$>
         lighthouseRowStep2 downward upward (td r.index) (nm r.index) r) () (rowsOf S4)) >>=
         lighthouseRest o K s1 (planOf s1 dec sums) := by
     rw [bind_map_left, hrowsS4]
@@ -282,7 +282,7 @@ theorem lighthouseAfter_pass2_nf [CurrentPreset] (o : Oracle) (K : BeaconState �
     simp only [nfAfterG, addSums]
     rw [hlen, bind_assoc]
     rfl
-  show SameResultOrBothFail (passM (fun _ r =>
+  show SameResultOrBothFail (passOverRows (fun _ r =>
     (fun r' => ((), r')) <$> lighthouseRowStep2 downward upward
       (td r.index) (nm r.index) r) () x.2 >>=
       fun y => lighthouseAfterPassG o K s1 (planOf s1 dec sums) (x.1, y.2))
@@ -292,7 +292,7 @@ theorem lighthouseAfter_pass2_nf [CurrentPreset] (o : Oracle) (K : BeaconState �
     (fold_interleave td nm _ S4)) (fun T2 hT2 => SameResultOrBothFail.of_eq ?_)
   apply lighthouseRest_eq_nfRest
   obtain ⟨y, hy, rfl⟩ := (map_ok_iff' _ _ _).mp hT2
-  have hyl := (passM_rows _ _ _ _ hy).1
+  have hyl := (passOverRows_rows _ _ _ _ hy).1
   show (y.2.map (·.validator)).length = _
   rw [List.length_map, hyl, rowsOf_length, hlen]
 
@@ -310,7 +310,7 @@ theorem lighthouseFullTailG_nf [CurrentPreset] (o : Oracle) (rt : Gwei → Gwei)
     (hrows : ListLengthsMatch s1) :
     SameResultOrBothFail (lighthouseFullTailG o rt fin s1)
       (do
-        let x ← passM (fun c r => lighthouseRowStep P
+        let x ← passOverRows (fun c r => lighthouseRowStep P
             (lighthouseContextOf s1 (rt total_active_balance) current_epoch rctx per)
             (lighthouseBaseReward total_active_balance r) c r)
           (s1.earliest_exit_epoch, s1.exit_balance_to_consume) (rowsOf s1)
@@ -318,7 +318,7 @@ theorem lighthouseFullTailG_nf [CurrentPreset] (o : Oracle) (rt : Gwei → Gwei)
           (rt total_active_balance) current_epoch) := by
   let ctx := lighthouseContextOf s1 (rt total_active_balance) current_epoch rctx per
   let c0 := (s1.earliest_exit_epoch, s1.exit_balance_to_consume)
-  let pass1 := passM (fun c r => lighthouseRowStep P ctx
+  let pass1 := passOverRows (fun c r => lighthouseRowStep P ctx
     (lighthouseBaseReward total_active_balance r) c r) c0 (rowsOf s1)
   let K := fin total_active_balance
   rw [lighthouseFullTailG_eq o rt fin s1 current_epoch total_active_balance rctx adjusted per
@@ -340,7 +340,8 @@ theorem lighthouseFullTailG_nf [CurrentPreset] (o : Oracle) (rt : Gwei → Gwei)
   simp only [bind_assoc, pure_bind]
   refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun x hx => ?_)
   exact lighthouseAfter_pass2_nf o K s1 downward upward hthr hrows dec sums x
-    (passM_rowKey _ (fun c r y h => lighthouseRowStep_rowKey ctx _ c r y h) c0 (rowsOf s1) x hx)
+    (passOverRows_rowKey _ (fun c r y h => lighthouseRowStep_rowKey ctx _ c r y h) c0 (rowsOf s1) x
+      hx)
 
 /-- `lighthouseFullTail` gives the same `ok` results as the first pass followed by
 `stepsAfterSinglePassCommonOrder`. -/
@@ -357,7 +358,7 @@ theorem lighthouseFullTail_nf [CurrentPreset] (o : Oracle) (s1 : BeaconState)
     (hrows : ListLengthsMatch s1) :
     SameResultOrBothFail (lighthouseFullTail o s1)
       (do
-        let x ← passM (fun c r => lighthouseRowStep P
+        let x ← passOverRows (fun c r => lighthouseRowStep P
             (lighthouseContextOf s1 total_active_balance current_epoch rctx per)
             (lighthouseBaseReward total_active_balance r) c r)
           (s1.earliest_exit_epoch, s1.exit_balance_to_consume) (rowsOf s1)

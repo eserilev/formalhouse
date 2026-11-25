@@ -30,7 +30,7 @@ open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 /-- `proposer_indices_for_epoch` on all the active validators returns Fulu
 `get_beacon_proposer_indices`. -/
-theorem proposer_indices_for_epoch_spec_fulu {H B : Type} (inst : ShuffleHashInst H)
+theorem proposer_indices_for_epoch_spec_fulu {H B : Type} (inst : ShuffleHash H)
     (ebi : EffectiveBalanceSource B) (balances : B) (p : Spec.Preset) (o : Spec.Oracle)
     (hH : HashMatches inst o)
     (state : Spec.BeaconState)
@@ -118,7 +118,7 @@ theorem initialize_ptc_window_get (p : Spec.Preset) (o : Spec.Oracle) (state : S
 /-- Lighthouse `initialize_ptc_window`: for each epoch `current_epoch + e` of the window,
 `ptc_for_epoch` returns the PTCs that the reference puts after the empty epoch. The loop in
 `upgrade/gloas.rs` concatenates them in epoch order. -/
-theorem initialize_ptc_window_lh {H B : Type} (inst : ShuffleHashInst H)
+theorem initialize_ptc_window_lh {H B : Type} (inst : ShuffleHash H)
     (ebi : EffectiveBalanceSource B)
     (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
     (state : Spec.BeaconState)

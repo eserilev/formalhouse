@@ -7,8 +7,8 @@ import EpochProofs.SpecFacts.RowsSlashings
 
 `registryRowStep` runs `registryStepExclusive` on one row. The accumulator is the exit churn:
 `(earliest_exit_epoch, exit_balance_to_consume)`. `process_registry_updates_rows` shows that the
-spec loop is a `passM` of this step. Each spec iteration changes only the validator at its index
-and the two churn fields.
+spec loop is a `passOverRows` of this step. Each spec iteration changes only the validator at its
+index and the two churn fields.
 -/
 
 namespace EpochProofs.Spec
@@ -205,7 +205,7 @@ theorem registrySpecBody_step (p : Preset) (total_active_balance : Gwei) (state 
     erw [if_neg h2', if_neg h3]
     rfl
 
-/-- The spec loop over the indices from `pre.length` is a `passM` over the rows. -/
+/-- The spec loop over the indices from `pre.length` is a `passOverRows` over the rows. -/
 theorem registrySpecBody_forIn (p : Preset) (total_active_balance : Gwei) (state : BeaconState)
     (current_epoch activation_epoch : Epoch)
     (hcurrent : get_current_epoch p state = .ok current_epoch) :
@@ -214,19 +214,19 @@ theorem registrySpecBody_forIn (p : Preset) (total_active_balance : Gwei) (state
           (registryLoopState state (pre ++ rows.map (·.validator)) churn)
           (registrySpecBody p total_active_balance current_epoch activation_epoch) =
         (fun x => registryLoopState state (pre ++ x.2.map (·.validator)) x.1) <$>
-          passM (registryRowStep p total_active_balance current_epoch
+          passOverRows (registryRowStep p total_active_balance current_epoch
             state.finalized_checkpoint.epoch activation_epoch) churn rows := by
   intro rows
   induction rows with
   | nil =>
     intro pre churn
-    simp [passM, forIn, ForIn.forIn, pure, Except.pure, Functor.map, Except.map]
+    simp [passOverRows, forIn, ForIn.forIn, pure, Except.pure, Functor.map, Except.map]
   | cons row rows ih =>
     intro pre churn
     show forIn (pre.length :: List.range' (pre.length + 1) rows.length)
         (registryLoopState state (pre ++ row.validator :: rows.map (·.validator)) churn) _ = _
     rw [List.forIn_cons, registrySpecBody_step p total_active_balance state current_epoch
-      activation_epoch hcurrent, passM_cons]
+      activation_epoch hcurrent, passOverRows_cons]
     cases registryRowStep p total_active_balance current_epoch state.finalized_checkpoint.epoch
         activation_epoch churn row with
     | error e => rfl
@@ -235,7 +235,7 @@ theorem registrySpecBody_forIn (p : Preset) (total_active_balance : Gwei) (state
     simp only [List.length_append, List.length_singleton, List.append_assoc,
       List.singleton_append] at h
     simp only [bind, Except.bind, h]
-    cases passM (registryRowStep p total_active_balance current_epoch
+    cases passOverRows (registryRowStep p total_active_balance current_epoch
         state.finalized_checkpoint.epoch activation_epoch) x.1 rows with
     | error e => rfl
     | ok y => simp [Functor.map, Except.map, pure, Except.pure]
@@ -253,10 +253,10 @@ theorem registryRowStep_preserves (p : Preset) (total_active_balance current_epo
   · cases h; rfl
 
 /-- The pass keeps the balances and the inactivity scores of the rows. -/
-private theorem passM_registry_preserves (p : Preset) (total_active_balance current_epoch
+private theorem passOverRows_registry_preserves (p : Preset) (total_active_balance current_epoch
     finalized_epoch activation_epoch : Nat) :
     ∀ (rows : List Row) (churn : Epoch × Gwei) (y : (Epoch × Gwei) × List Row),
-      passM (registryRowStep p total_active_balance current_epoch finalized_epoch
+      passOverRows (registryRowStep p total_active_balance current_epoch finalized_epoch
         activation_epoch) churn rows = .ok y →
       y.2.map (·.balance) = rows.map (·.balance)
         ∧ y.2.map (·.inactivity_score) = rows.map (·.inactivity_score) := by
@@ -268,7 +268,7 @@ private theorem passM_registry_preserves (p : Preset) (total_active_balance curr
     exact ⟨rfl, rfl⟩
   | cons row rows ih =>
     intro churn y h
-    rw [passM_cons] at h
+    rw [passOverRows_cons] at h
     simp only [bind, Except.bind, pure, Except.pure] at h
     split at h
     · cases h
@@ -283,7 +283,7 @@ private theorem passM_registry_preserves (p : Preset) (total_active_balance curr
         rw [hrow]
         simp only [List.map_cons, hb, hi, and_self]
 
-/-- `process_registry_updates` is a `passM` of `registryRowStep` over the rows.
+/-- `process_registry_updates` is a `passOverRows` of `registryRowStep` over the rows.
 
 `hrows` makes `withRows` write back the same balances and inactivity scores.
 `hcurrent` and `hactivation` give the two epochs that the step takes as parameters.
@@ -296,7 +296,7 @@ theorem process_registry_updates_rows (p : Preset) (total_active_balance : Gwei)
       ((fun x => { state.withRows x.2 with
           earliest_exit_epoch := x.1.1
           exit_balance_to_consume := x.1.2 }) <$>
-        passM (registryRowStep p total_active_balance current_epoch
+        passOverRows (registryRowStep p total_active_balance current_epoch
           state.finalized_checkpoint.epoch activation_epoch)
           (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
   apply SameResultOrBothFail.of_eq
@@ -308,12 +308,12 @@ theorem process_registry_updates_rows (p : Preset) (total_active_balance : Gwei)
     ← List.range_eq_range'] at h
   rw [process_registry_updates_forIn p total_active_balance state current_epoch activation_epoch
     hcurrent hactivation, h]
-  cases hy : passM (registryRowStep p total_active_balance current_epoch
+  cases hy : passOverRows (registryRowStep p total_active_balance current_epoch
       state.finalized_checkpoint.epoch activation_epoch)
       (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state) with
   | error e => rfl
   | ok y =>
-    obtain ⟨hb, hi⟩ := passM_registry_preserves p total_active_balance current_epoch
+    obtain ⟨hb, hi⟩ := passOverRows_registry_preserves p total_active_balance current_epoch
       state.finalized_checkpoint.epoch activation_epoch (rowsOf state) _ y hy
     simp only [Functor.map, Except.map, registryLoopState, BeaconState.withRows, hb, hi,
       rowsOf_map_balance state hrows.1,

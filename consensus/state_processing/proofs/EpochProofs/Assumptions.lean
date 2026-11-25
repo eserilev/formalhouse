@@ -160,7 +160,7 @@ end Caches
 
 /-! ## The untranslated Rust -/
 
-section Glue
+section UntranslatedRust
 
 variable [Spec.CurrentPreset]
 
@@ -194,6 +194,6 @@ structure FuluUntranslatedRustFacts {RustState RustError : Type}
   untranslatedCode : TranslatedEpoch.UntranslatedEpochFactsFulu rustCode oracle rustStateToSpec
     rustState
 
-end Glue
+end UntranslatedRust
 
 end EpochProofs.Formalhouse

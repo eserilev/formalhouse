@@ -23,7 +23,7 @@ def tailNFG [CurrentPreset] (o : Oracle) (K : BeaconState → SpecM BeaconState)
     s1.deposit_balance_to_consume
     (← get_activation_churn_limit P total_active_balance)
     ((s1.pending_deposits.take P.MAX_PENDING_DEPOSITS_PER_EPOCH).map
-      (lighthouseDepositView s1 current_epoch))
+      (lighthouseDepositInfo s1 current_epoch))
   let handled := (s1.pending_deposits.take next).zip postponed
   let pubkeys := s1.validators.map (·.pubkey)
   let n := s1.validators.length

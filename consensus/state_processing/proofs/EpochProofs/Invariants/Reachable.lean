@@ -339,7 +339,7 @@ theorem state_transition_reach [CurrentPreset] [CurrentPreset.Valid] (o : Oracle
   obtain ⟨hinv1, hlt1⟩ := (process_slots_reach o s _ hslot64 hs).2 s1 h1
   have hs1 := process_slots_process_epoch_slot _ o s s1 _ h1
   obtain ⟨hffg1, hrows1, hd1, hx1, -, s0, n, h0, hb1, -, hstrict⟩ := hinv1
-  have hfitsShuffle := hstrict hlt1
+  have hn1 := hstrict hlt1
   have hblock : ∀ s2, process_block P o max_blobs_per_block GLOAS_FORK_EPOCH s1
       signed_block.message = .ok s2 → StateInvariants s2 := by
     intro s2 h2

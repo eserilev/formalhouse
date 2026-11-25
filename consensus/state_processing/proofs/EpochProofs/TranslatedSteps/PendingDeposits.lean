@@ -37,7 +37,7 @@ def viewFields (v : LighthouseDepositView) : Spec.RegistryFields :=
 
 /-- The spec view of a Lighthouse view. -/
 def specView (p : Spec.Preset) (c : LighthouseDepositConstants) (current_epoch next_epoch : Nat)
-    (v : LighthouseDepositView) : Spec.DepositSpecView :=
+    (v : LighthouseDepositView) : Spec.DepositInfo :=
   let status := Spec.predictedStatus p c.registry_updates v.is_known_validator (viewFields v)
     v.effective_balance.val current_epoch next_epoch
   ⟨v.slot.val, v.amount.val, v.eth1_bridge_blocked, status.1, status.2⟩
@@ -74,7 +74,7 @@ theorem u64_saturating_add_one (x : U64) (h : x.val < U64.max) :
 
 /-- The spec views of a slice of Lighthouse views. -/
 abbrev specViews (p : Spec.Preset) (c : LighthouseDepositConstants) (current_epoch next_epoch : U64)
-    (views : Slice LighthouseDepositView) : List Spec.DepositSpecView :=
+    (views : Slice LighthouseDepositView) : List Spec.DepositInfo :=
   views.val.map (specView p c current_epoch.val next_epoch.val)
 
 theorem deposits_loop_spec (p : Spec.Preset) (views : Slice LighthouseDepositView)

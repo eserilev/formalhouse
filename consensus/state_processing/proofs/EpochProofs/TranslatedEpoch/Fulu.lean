@@ -6,9 +6,9 @@ import EpochProofs.LighthouseModel.FuluOrder
 /-!
 # The Fulu epoch, composed from the translated functions
 
-`epochFulu` is Lighthouse's Fulu `process_epoch`: the Gloas composition without the builder
-payments and the PTC window, with the Fulu registry constants and the Fulu proposer candidates
-(every active validator). `translatedEpochFulu_matches_model` shows that, under
+`translatedEpochFulu` is Lighthouse's Fulu `process_epoch`: the Gloas composition without the
+builder payments and the PTC window, with the Fulu registry constants and the Fulu proposer
+candidates (every active validator). `translatedEpochFulu_matches_model` shows that, under
 `UntranslatedEpochFactsFulu`, it returns the state of the model `process_epoch_lighthouse_fulu`
 whenever the model returns `ok`.
 -/
@@ -106,7 +106,8 @@ open state_processing.per_epoch_processing.single_pass_step (ExitChurn StepConte
 call runs `lighthouseValidatorStep` with the registry total `fuluTotalActiveBalance`. -/
 theorem rowsContract_stepSpec_fulu {R RustError : Type} (inst : LighthouseRegistryRows R RustError)
     (p : Spec.Preset)
-    (f : Spec.FuluConfig) (hcompat : Spec.FuluCompat p f) (rustStateToSpec : R → List Spec.Row)
+    (f : Spec.FuluConfig) (hcompat : Spec.FuluConfigMatchesPreset p f)
+    (rustStateToSpec : R → List Spec.Row)
     (inputsOf : Spec.Row → Spec.LighthouseRowInputs)
     (hc : ValidatorRowsMatchSpec inst p rustStateToSpec inputsOf)
     (c : StepContext) (ctx : Spec.LighthouseStepContext) (hcm : ContextMatches p c ctx)
@@ -227,7 +228,7 @@ theorem translatedSinglePassFulu_matches_model [Spec.CurrentPreset.Valid]
   obtain ⟨⟨dn, up⟩, hh, hT⟩ := Spec.specM_bind_ok hT
   obtain ⟨x, hx, hT⟩ := Spec.specM_bind_ok hT
   have hxlen : x.2.length = (rustStateToSpec rustState).validators.length := by
-    rw [(Spec.passM_rows _ _ _ _ hx).1, Spec.rowsOf_length]
+    rw [(Spec.passOverRows_rows _ _ _ _ hx).1, Spec.rowsOf_length]
   have htarget : current + Spec.P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < Spec.UINT64_SIZE := by
     rw [Spec.get_current_epoch_ok_eq hcur]; exact Spec.P_slot_target_lt hslot
   -- The step context.

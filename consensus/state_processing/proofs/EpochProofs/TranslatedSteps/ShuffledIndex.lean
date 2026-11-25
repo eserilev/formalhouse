@@ -17,13 +17,13 @@ namespace EpochProofs
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 /-- The Rust trait that hashes for the shuffle. -/
-abbrev ShuffleHashInst (H : Type) := swap_or_not_shuffle.shuffle_hash.ShuffleHash H
+abbrev ShuffleHash (H : Type) := swap_or_not_shuffle.shuffle_hash.ShuffleHash H
 
 /-- The bytes of a Lighthouse byte list. -/
 def byteValues (l : List U8) : List UInt8 := l.map (fun b => UInt8.ofNat b.val)
 
 /-- `inst.hash` computes `o.hash` and does not fail. -/
-def HashMatches {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle) : Prop :=
+def HashMatches {H : Type} (inst : ShuffleHash H) (o : Spec.Oracle) : Prop :=
   ∀ s : Slice U8, ∃ d, inst.hash s = ok d ∧ byteValues d.val = (o.hash (byteValues s.val)).toList
 
 theorem byteValues_length (l : List U8) : (byteValues l).length = l.length := by simp [byteValues]
@@ -204,7 +204,7 @@ theorem first_u64_spec (digest : Array U8 32#usize) :
   rw [e7, e6, e5, e4, e3, e2, e1, hc _ _ i1_post, littleEndianValue_take8 _ (by simp)]
   simp [i_post, i2_post, i6_post, i10_post, i14_post, i18_post, i22_post, i26_post]
 
-theorem hash_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle) (hH : HashMatches inst o)
+theorem hash_spec {H : Type} (inst : ShuffleHash H) (o : Spec.Oracle) (hH : HashMatches inst o)
     (s : Slice U8) : inst.hash s ⦃ d => byteValues d.val = (o.hash (byteValues s.val)).toList
     ⦄ := by
   obtain ⟨d, hd, hdb⟩ := hH s
@@ -238,11 +238,11 @@ theorem cast_u64_of_usize (x : Usize) :
 theorem usize_max_ge : 2 ^ 32 - 1 ≤ Usize.max := by
   rcases System.Platform.numBits_eq with hb | hb <;> simp [Usize.max_def, Usize.numBits, hb]
 
-theorem shuffle_round_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle)
+theorem shuffle_round_spec {H : Type} (inst : ShuffleHash H) (o : Spec.Oracle)
     (hH : HashMatches inst o) (seed : Array U8 32#usize) (index : Usize) (round : U8) (n : Usize)
     (hn : 0 < n.val) (hn24 : n.val ≤ 2 ^ 24) (hi : index.val < n.val) :
     swap_or_not_shuffle.compute_shuffled_index_with.shuffle_round inst seed index round n ⦃ r =>
-      r.val = Spec.sigma o (byteValues seed.val) n.val round.val index.val ⦄ := by
+      r.val = Spec.swapOrNotRound o (byteValues seed.val) n.val round.val index.val ⦄ := by
   unfold swap_or_not_shuffle.compute_shuffled_index_with.shuffle_round
   step*
   step with hash_spec inst o hH as ⟨a1, ha1⟩
@@ -279,7 +279,7 @@ theorem shuffle_round_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracl
         let i9 ← byte >>> i8
         let i10 ← i9 % 2#u8
         if i10 = 1#u8 then ok flip else ok index) ⦃ r =>
-          r.val = Spec.sigma o (byteValues seed.val) n.val round.val index.val ⦄ := by
+          r.val = Spec.swapOrNotRound o (byteValues seed.val) n.val round.val index.val ⦄ := by
     intro position hposv
     step*
     case hy => rcases System.Platform.numBits_eq with h | h <;> simp [h]
@@ -306,7 +306,7 @@ theorem shuffle_round_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracl
         rw [hbit, i10_post, i9_post, i8_post, Nat.shiftRight_eq_div_pow]
         simp only [byte_post, i7_post, i6_post]
       have hlt2 : i10.val < 2 := by rw [i10_post]; exact Nat.mod_lt _ (by decide)
-      simp only [Spec.sigma, ← hflip, ← hposv, ← hb10]
+      simp only [Spec.swapOrNotRound, ← hflip, ← hposv, ← hb10]
       rename_i hc
     · have : i10.val = 1 := by rw [hc]; rfl
       simp [this]
@@ -322,10 +322,11 @@ theorem shuffle_round_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracl
     exact tail index (by omega)
 
 theorem shuffledIndexAfterRounds_succ (o : Spec.Oracle) (seed : List UInt8) (n r x : Nat) :
-    Spec.shuffledIndexAfterRounds o seed n (r + 1) x = Spec.sigma o seed n r (Spec.shuffledIndexAfterRounds o seed n r x) := by
+    Spec.shuffledIndexAfterRounds o seed n (r + 1) x =
+      Spec.swapOrNotRound o seed n r (Spec.shuffledIndexAfterRounds o seed n r x) := by
   simp [Spec.shuffledIndexAfterRounds, List.range_succ, List.foldl_append]
 
-theorem rounds_loop_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle)
+theorem rounds_loop_spec {H : Type} (inst : ShuffleHash H) (o : Spec.Oracle)
     (hH : HashMatches inst o) (n : Usize) (seed : Array U8 32#usize) (R : U8) (index : Usize)
     (round : U8) (x0 : Nat) (hn : 0 < n.val) (hn24 : n.val ≤ 2 ^ 24) (hr : round.val ≤ R.val)
     (hidx : index.val = Spec.shuffledIndexAfterRounds o (byteValues seed.val) n.val round.val x0)
@@ -349,14 +350,14 @@ theorem rounds_loop_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle)
       step*
       refine ⟨by scalar_tac, ?_, ?_, by scalar_tac⟩
       · rw [hj1, round1_post, shuffledIndexAfterRounds_succ, hj]
-      · rw [hj1]; exact Spec.sigma_lt _ _ _ _ _ hn hjn
+      · rw [hj1]; exact Spec.swapOrNotRound_lt _ _ _ _ _ hn hjn
     · rename_i hge
       have : rd.val = R.val := by scalar_tac
       simp only [spec_ok]
       rw [hj, this]
   · exact ⟨hr, hidx, hi⟩
 
-theorem compute_shuffled_index_with_spec {H : Type} (inst : ShuffleHashInst H)
+theorem compute_shuffled_index_with_spec {H : Type} (inst : ShuffleHash H)
     (o : Spec.Oracle) (hH : HashMatches inst o) (index n : Usize) (seed : Array U8 32#usize)
     (R : U8) (hn24 : n.val ≤ 2 ^ 24) (hi : index.val < n.val) :
     swap_or_not_shuffle.compute_shuffled_index_with.compute_shuffled_index_with inst index n seed R
@@ -382,7 +383,7 @@ theorem compute_shuffled_index_with_spec {H : Type} (inst : ShuffleHashInst H)
   exact ⟨r, rfl, hr⟩
 
 /-- The Lighthouse shuffle equals the reference `compute_shuffled_index`. -/
-theorem compute_shuffled_index_with_eq {H : Type} (inst : ShuffleHashInst H) (p : Spec.Preset)
+theorem compute_shuffled_index_with_eq {H : Type} (inst : ShuffleHash H) (p : Spec.Preset)
     (o : Spec.Oracle) (hH : HashMatches inst o) (index n : Usize) (seed : Array U8 32#usize)
     (seedSpec : Spec.Bytes32) (hseed : byteValues seed.val = seedSpec.toList) (R : U8)
     (hR : R.val = p.SHUFFLE_ROUND_COUNT) (hn24 : n.val ≤ 2 ^ 24) (hi : index.val < n.val) :

@@ -3,7 +3,7 @@ import EpochProofs.Spec.CurrentPreset
 import EpochProofs.Generated
 
 /-!
-# The contracts of the epoch tail writes
+# The contracts of the state writes after the single-pass loop
 
 The writes after the single-pass loop in `single_pass.rs` are generic over small traits. Aeneas
 translates the generic code, but not the implementations over the milhouse lists. The theorems
@@ -21,9 +21,8 @@ about these writes.
 - `is_valid_signature` is the spec `is_valid_deposit_signature`.
 - `add_validator` is the spec `add_validator_to_registry` and returns the new index, below
   `VALIDATOR_REGISTRY_LIMIT = 2^40` validators (the milhouse list fails at the limit, the spec has
-  no limit). It fails when the spec fails. Without the limit the contract was false for every
-  implementation with a deposit: each call returns a `Usize` index one larger than the last, and
-  the contract holds at every state it returns.
+  no limit). It fails when the spec fails. Without the limit, no
+  implementation with a deposit satisfies the contract, because a `Usize` index has a maximum.
 - `update_effective_balance` is the effective balance update of one validator. It fails when the
   spec fails.
 
@@ -50,16 +49,16 @@ abbrev LighthouseDepositWrites (S D E : Type) :=
 
 /-- Trusted: what the `DepositWrites` implementation in `single_pass.rs` does. `toSpec` gives the
 spec state that an implementation value holds, `depositToSpec` the spec deposit of a deposit, and
-`postOf` the postponed deposits that the value holds. -/
+`postponedDeposits` the postponed deposits that the value holds. -/
 structure DepositWritesMatchSpec [EpochProofs.Spec.CurrentPreset] {S D E : Type}
     (implementation : LighthouseDepositWrites S D E) (oracle : Spec.Oracle)
     (toSpec : S → Spec.BeaconState) (depositToSpec : D → Spec.PendingDeposit)
-    (postOf : S → List Spec.PendingDeposit) : Prop where
+    (postponedDeposits : S → List Spec.PendingDeposit) : Prop where
   write_queue : ∀ (s : S) (next : Usize) (dbtc : U64),
     next.val ≤ (toSpec s).pending_deposits.length →
     ∃ s', implementation.write_queue s next dbtc = ok (.Ok (), s') ∧
       toSpec s' = { toSpec s with
-        pending_deposits := (toSpec s).pending_deposits.drop next.val ++ postOf s
+        pending_deposits := (toSpec s).pending_deposits.drop next.val ++ postponedDeposits s
         deposit_balance_to_consume := dbtc.val }
   validator_index : ∀ (s : S) (d : D), ∃ r s', implementation.validator_index s d = ok (.Ok r, s') ∧
     toSpec s' = toSpec s ∧
@@ -96,36 +95,43 @@ structure DepositWritesMatchSpec [EpochProofs.Spec.CurrentPreset] {S D E : Type}
 abbrev LighthousePaymentWrites (S E : Type) :=
     per_epoch_processing.list_writes.BuilderPaymentWrites S E
 
-/-- Trusted: what the `BuilderPaymentWrites` implementation in `single_pass.rs` does. `wview` and
-`pview` give the builder pending withdrawals and payments that an implementation value holds. -/
+/-- Trusted: what the `BuilderPaymentWrites` implementation in `single_pass.rs` does.
+`pendingWithdrawals` and
+`pendingPayments` give the builder pending withdrawals and payments that an implementation value
+holds. -/
 structure BuilderPaymentWritesMatchSpec {S E : Type} (implementation : LighthousePaymentWrites S E)
-    (wview : S → List types.builder.builder_pending_withdrawal.BuilderPendingWithdrawal)
-    (pview : S → List types.builder.builder_pending_payment.BuilderPendingPayment) : Prop where
+    (pendingWithdrawals : S → List
+    types.builder.builder_pending_withdrawal.BuilderPendingWithdrawal)
+    (pendingPayments : S → List types.builder.builder_pending_payment.BuilderPendingPayment) : Prop
+    where
   payments : ∀ (s : S), ∃ v : alloc.vec.Vec types.builder.builder_pending_payment.BuilderPendingPayment,
-    implementation.payments s = ok (.Ok v) ∧ v.val = pview s
+    implementation.payments s = ok (.Ok v) ∧ v.val = pendingPayments s
   push_withdrawal : ∀ (s : S) (w : types.builder.builder_pending_withdrawal.BuilderPendingWithdrawal),
-    ∃ s', implementation.push_withdrawal s w = ok (.Ok (), s') ∧ wview s' = wview s ++ [w] ∧
-      pview s' = pview s
+    ∃ s', implementation.push_withdrawal s w = ok (.Ok (), s') ∧ pendingWithdrawals s' =
+      pendingWithdrawals s ++ [w] ∧
+      pendingPayments s' = pendingPayments s
   set_payments : ∀ (s : S)
     (v : alloc.vec.Vec types.builder.builder_pending_payment.BuilderPendingPayment),
-    v.val.length = (pview s).length →
-    ∃ s', implementation.set_payments s v = ok (.Ok (), s') ∧ pview s' = v.val ∧ wview s' = wview s
+    v.val.length = (pendingPayments s).length →
+    ∃ s', implementation.set_payments s v = ok (.Ok (), s') ∧ pendingPayments s' = v.val ∧
+      pendingWithdrawals s' = pendingWithdrawals s
 
 /-- The Rust trait `WindowWrites`. -/
 abbrev LighthouseWindowWrites (W T E : Type) := per_epoch_processing.list_writes.WindowWrites W T E
 
 /-- Trusted: what a `WindowWrites` implementation in `single_pass.rs` does. `toSpec` gives the list
-that a value holds, `committed` the window it wrote back to the state, `itemToSpec` the entry of an
-item, `itemOk` the items that fit an entry, and `N` the window length. -/
+that a value holds, `committedWindow` the window it wrote back to the state, `itemToSpec` the entry
+of an item, `itemFits` the items that fit an entry, and `windowLength` the window length. -/
 structure PtcWindowWritesMatchSpec {W T E α : Type} (implementation : LighthouseWindowWrites W T E)
     (toSpec : W → List α)
-    (committed : W → List α) (itemToSpec : T → α) (itemOk : T → Prop) (N : Nat) : Prop where
+    (committedWindow : W → List α) (itemToSpec : T → α) (itemFits : T → Prop)
+    (windowLength : Nat) : Prop where
   pop_front : ∀ (w : W) (n : Usize), n.val ≤ (toSpec w).length →
     ∃ w', implementation.pop_front w n = ok (.Ok (), w') ∧ toSpec w' = (toSpec w).drop n.val
-  push : ∀ (w : W) (t : T), itemOk t → (toSpec w).length < N →
+  push : ∀ (w : W) (t : T), itemFits t → (toSpec w).length < windowLength →
     ∃ w', implementation.push w t = ok (.Ok (), w') ∧ toSpec w' = toSpec w ++ [itemToSpec t]
-  commit : ∀ (w : W), (toSpec w).length = N →
-    ∃ w', implementation.commit w = ok (.Ok (), w') ∧ committed w' = toSpec w
+  commit : ∀ (w : W), (toSpec w).length = windowLength →
+    ∃ w', implementation.commit w = ok (.Ok (), w') ∧ committedWindow w' = toSpec w
 
 /-- The Rust trait `EffectiveBalanceWrites`. -/
 abbrev LighthouseEffectiveBalanceWrites (S E : Type) :=

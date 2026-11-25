@@ -59,10 +59,10 @@ theorem pivotOf_eq {checks : SignatureChecks} {o : Spec.Oracle}
   rw [hash_eq ho (data := seed.toArray.push (UInt8.ofNat round)) (by simp [toArray_toList]), ← littleEndianValue_eq]
   congr 2
 
-theorem sigma_eq {checks : SignatureChecks} {o : Spec.Oracle}
+theorem swapOrNotRound_eq {checks : SignatureChecks} {o : Spec.Oracle}
     (ho : OracleMatches preset checks o) (seed : Bytes32) (n round x : Nat) :
-    Spec.sigma o seed.toList n round x = Shuffle.indexRound seed n round x := by
-  unfold Spec.sigma Shuffle.indexRound Shuffle.swapOrNot
+    Spec.swapOrNotRound o seed.toList n round x = Shuffle.indexRound seed n round x := by
+  unfold Spec.swapOrNotRound Shuffle.indexRound Shuffle.swapOrNot
   rw [pivotOf_eq ho]
   have hbit (position : Nat) : (Spec.bitOf o seed.toList round position ≠ 0) ↔
       Shuffle.bitAt (Shuffle.bucketBits seed round (position / 256)) position = true := by
@@ -92,7 +92,7 @@ theorem shuffledIndexAfterRounds_eq {checks : SignatureChecks} {o : Spec.Oracle}
     (ho : OracleMatches preset checks o) (seed : Bytes32) (n rounds x : Nat) :
     Spec.shuffledIndexAfterRounds o seed.toList n rounds x = Shuffle.shuffledIndex rounds seed n x := by
   rw [Shuffle.shuffledIndex_eq_foldl]
-  simp only [Spec.shuffledIndexAfterRounds, sigma_eq ho]
+  simp only [Spec.shuffledIndexAfterRounds, swapOrNotRound_eq ho]
 
 theorem compute_shuffled_index_eq {checks : SignatureChecks} {o : Spec.Oracle}
     (hbounds : CommitteeBounds preset) (ho : OracleMatches preset checks o) (seed : Bytes32)

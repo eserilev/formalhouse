@@ -27,27 +27,27 @@ theorem SameResultOrBothFail.bind_map {α β γ : Type} {x : SpecM α} {y : Spec
     exact hk b hy
 
 /-- Two passes, then the rest, equal one pass of both steps, then the rest. -/
-theorem passM_seq_bothSteps {A B R γ : Type} (f : A → R → SpecM (A × R))
+theorem passOverRows_seq_bothSteps {A B R γ : Type} (f : A → R → SpecM (A × R))
     (g : B → R → SpecM (B × R)) (a : A) (b : B) (rs : List R)
     (K : A → B × List R → SpecM γ) :
-    SameResultOrBothFail (do let x ← passM f a rs; let y ← passM g b x.2; K x.1 y)
-      (do let z ← passM (bothSteps f g) (a, b) rs; K z.1.1 (z.1.2, z.2)) := by
-  have h : (do let x ← passM f a rs; let y ← passM g b x.2; K x.1 y) =
+    SameResultOrBothFail (do let x ← passOverRows f a rs; let y ← passOverRows g b x.2; K x.1 y)
+      (do let z ← passOverRows (bothSteps f g) (a, b) rs; K z.1.1 (z.1.2, z.2)) := by
+  have h : (do let x ← passOverRows f a rs; let y ← passOverRows g b x.2; K x.1 y) =
       (twoPasses f g a b rs >>= fun z => K z.1.1 (z.1.2, z.2)) := by
     simp only [twoPasses, bind, Except.bind, pure, Except.pure]
-    cases passM f a rs with
+    cases passOverRows f a rs with
     | error e => rfl
     | ok x =>
       dsimp only
-      cases passM g b x.2 <;> rfl
+      cases passOverRows g b x.2 <;> rfl
   rw [h]
   exact SameResultOrBothFail.bind (two_passes_eq_one_pass f g a b rs) (fun _ _ => SameResultOrBothFail.refl _)
 
 /-- A step that keeps the row key keeps the keys of a whole pass. -/
-theorem passM_rowKey {A : Type} (f : A → Row → SpecM (A × Row))
+theorem passOverRows_rowKey {A : Type} (f : A → Row → SpecM (A × Row))
     (hf : ∀ a r x, f a r = .ok x → rowKey x.2 = rowKey r) (a : A) (rows : List Row)
-    (y : A × List Row) (h : passM f a rows = .ok y) : y.2.map rowKey = rows.map rowKey :=
-  passM_map_eq f rowKey hf a rows y h
+    (y : A × List Row) (h : passOverRows f a rows = .ok y) : y.2.map rowKey = rows.map rowKey :=
+  passOverRows_map_eq f rowKey hf a rows y h
 
 theorem withRows_withRows (state : BeaconState) (rows rows' : List Row) :
     (state.withRows rows).withRows rows' = state.withRows rows' := rfl
@@ -89,12 +89,12 @@ def BeaconState.withRowsChurn (state : BeaconState) (churn : Epoch × Gwei) (row
 def fourPasses (p : Preset) (total_active_balance : Gwei) (previous_epoch : Epoch)
     (in_leak : Bool) (ctx : RewardsContext) (current_epoch activation_epoch : Nat)
     (target per : Uint64) (state : BeaconState) : SpecM BeaconState := do
-  let y1 ← passM (inactivityRowStep p previous_epoch in_leak) () (rowsOf state)
-  let y2 ← passM (rewardsRowStep p ctx) () y1.2
-  let y3 ← passM (registryRowStep p total_active_balance current_epoch
+  let y1 ← passOverRows (inactivityRowStep p previous_epoch in_leak) () (rowsOf state)
+  let y2 ← passOverRows (rewardsRowStep p ctx) () y1.2
+  let y3 ← passOverRows (registryRowStep p total_active_balance current_epoch
     state.finalized_checkpoint.epoch activation_epoch)
     (state.earliest_exit_epoch, state.exit_balance_to_consume) y2.2
-  let y4 ← passM (slashingsRowStep p target per) () y3.2
+  let y4 ← passOverRows (slashingsRowStep p target per) () y3.2
   pure (state.withRowsChurn y3.1 y4.2)
 
 /-- The four separate passes, with the registry pass reading `registry_total` for the churn and
@@ -123,11 +123,11 @@ theorem spec_passes_eq_rows_tab (p : Preset) (total_active_balance registry_tota
   apply SameResultOrBothFail.bind_map (process_inactivity_updates_rows p state current_epoch previous_epoch
     in_leak hrows hcurrent hgenesis hprevious hleak)
   intro y1 hy1
-  have hk1 := passM_rowKey _ (fun a r x h => by
+  have hk1 := passOverRows_rowKey _ (fun a r x h => by
     obtain ⟨u, r'⟩ := x
     rw [inactivityRowStep_preserves p previous_epoch in_leak a u r r' h]; rfl) () _ y1 hy1
   have hv1 : y1.2.map (·.validator) = state.validators := by
-    rw [passM_map_eq _ (·.validator) (fun a r x h => by
+    rw [passOverRows_map_eq _ (·.validator) (fun a r x h => by
       obtain ⟨u, r'⟩ := x
       rw [inactivityRowStep_preserves p previous_epoch in_leak a u r r' h]) () _ y1 hy1,
       rowsOf_map_validator]
@@ -141,7 +141,7 @@ theorem spec_passes_eq_rows_tab (p : Preset) (total_active_balance registry_tota
   apply SameResultOrBothFail.bind_map h2
   intro y2 hy2
   have hk2 : y2.2.map rowKey = (rowsOf state).map rowKey := by
-    rw [passM_rowKey _ (fun a r x h => by
+    rw [passOverRows_rowKey _ (fun a r x h => by
       rw [rewardsRowStep_preserves p ctx a r x h]; rfl) () _ y2 hy2, hk1]
   rw [withRows_withRows]
   have hR2 : rowsOf (state.withRows y2.2) = y2.2 := rowsOf_withRows state y2.2 hk2
@@ -152,7 +152,7 @@ theorem spec_passes_eq_rows_tab (p : Preset) (total_active_balance registry_tota
   apply SameResultOrBothFail.bind_map h3
   intro y3 hy3
   have hk3 : y3.2.map rowKey = (rowsOf state).map rowKey := by
-    rw [passM_rowKey _ (fun a r x h => by
+    rw [passOverRows_rowKey _ (fun a r x h => by
       rw [registryRowStep_preserves p registry_total current_epoch
         state.finalized_checkpoint.epoch activation_epoch a r x h]; rfl) _ _ y3 hy3, hk2]
   have hR3 : rowsOf (state.withRowsChurn y3.1 y3.2) = y3.2 := rowsOf_withRows state y3.2 hk3
@@ -162,7 +162,7 @@ theorem spec_passes_eq_rows_tab (p : Preset) (total_active_balance registry_tota
   rw [hR3] at h4
   refine SameResultOrBothFail.trans h4 (SameResultOrBothFail.of_eq ?_)
   simp only [Functor.map, Except.map, bind, Except.bind, pure, Except.pure]
-  cases passM (slashingsRowStep p (current_epoch + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) ()
+  cases passOverRows (slashingsRowStep p (current_epoch + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) ()
     y3.2 <;> rfl
 
 theorem spec_passes_eq_rows (p : Preset) (total_active_balance : Gwei) (state : BeaconState)
@@ -194,22 +194,23 @@ theorem fourPasses_eq_single_pass (p : Preset) (total_active_balance : Gwei) (pr
     SameResultOrBothFail (fourPasses p total_active_balance previous_epoch in_leak ctx current_epoch
         activation_epoch target per state)
       ((fun z => state.withRowsChurn z.1.1.2 z.2) <$>
-        passM (singlePassStep p total_active_balance previous_epoch in_leak ctx current_epoch
+        passOverRows (singlePassStep p total_active_balance previous_epoch in_leak ctx current_epoch
           state.finalized_checkpoint.epoch activation_epoch target per)
           ((((), ()), (state.earliest_exit_epoch, state.exit_balance_to_consume)), ())
           (rowsOf state)) := by
   unfold fourPasses singlePassStep
-  refine SameResultOrBothFail.trans (passM_seq_bothSteps _ _ () () (rowsOf state) (fun _ y2 => do
-    let y3 ← passM (registryRowStep p total_active_balance current_epoch
+  refine SameResultOrBothFail.trans
+    (passOverRows_seq_bothSteps _ _ () () (rowsOf state) (fun _ y2 => do
+    let y3 ← passOverRows (registryRowStep p total_active_balance current_epoch
       state.finalized_checkpoint.epoch activation_epoch)
       (state.earliest_exit_epoch, state.exit_balance_to_consume) y2.2
-    let y4 ← passM (slashingsRowStep p target per) () y3.2
+    let y4 ← passOverRows (slashingsRowStep p target per) () y3.2
     pure (state.withRowsChurn y3.1 y4.2))) ?_
-  refine SameResultOrBothFail.trans (passM_seq_bothSteps _ _ ((), ())
+  refine SameResultOrBothFail.trans (passOverRows_seq_bothSteps _ _ ((), ())
     (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state) (fun _ y3 => do
-    let y4 ← passM (slashingsRowStep p target per) () y3.2
+    let y4 ← passOverRows (slashingsRowStep p target per) () y3.2
     pure (state.withRowsChurn y3.1 y4.2))) ?_
-  refine SameResultOrBothFail.trans (passM_seq_bothSteps _ _ (((), ()),
+  refine SameResultOrBothFail.trans (passOverRows_seq_bothSteps _ _ (((), ()),
     (state.earliest_exit_epoch, state.exit_balance_to_consume)) () (rowsOf state)
     (fun x y4 => pure (state.withRowsChurn x.2 y4.2))) ?_
   apply SameResultOrBothFail.of_eq
@@ -236,7 +237,7 @@ theorem separate_passes_eq_single_pass_tab (p : Preset) (total_active_balance re
       let s3 ← process_registry_updates p registry_total s2
       process_slashings p total_active_balance s3)
     ((fun z => state.withRowsChurn z.1.1.2 z.2) <$>
-      passM (singlePassStep p registry_total previous_epoch in_leak ctx current_epoch
+      passOverRows (singlePassStep p registry_total previous_epoch in_leak ctx current_epoch
         state.finalized_checkpoint.epoch activation_epoch
         (current_epoch + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per)
         ((((), ()), (state.earliest_exit_epoch, state.exit_balance_to_consume)), ())
@@ -266,7 +267,7 @@ theorem separate_passes_eq_single_pass (p : Preset) (total_active_balance : Gwei
       let s3 ← process_registry_updates p total_active_balance s2
       process_slashings p total_active_balance s3)
     ((fun z => state.withRowsChurn z.1.1.2 z.2) <$>
-      passM (singlePassStep p total_active_balance previous_epoch in_leak ctx current_epoch
+      passOverRows (singlePassStep p total_active_balance previous_epoch in_leak ctx current_epoch
         state.finalized_checkpoint.epoch activation_epoch
         (current_epoch + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per)
         ((((), ()), (state.earliest_exit_epoch, state.exit_balance_to_consume)), ())

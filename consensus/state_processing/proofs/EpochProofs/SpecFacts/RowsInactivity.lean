@@ -5,9 +5,10 @@ import EpochProofs.SpecFacts.InactivityUpdates
 # `process_inactivity_updates` as a pass over rows
 
 `inactivityRowStep` updates the inactivity score of one row. It reads only that row.
-`process_inactivity_updates_rows` shows that the spec gives the same `ok` values as a `passM` of
-this step over all rows. The spec fails before its loop when `get_eligible_validator_indices`
-fails. The pass fails on the first bad row instead, so the theorem states `SameResultOrBothFail`.
+`process_inactivity_updates_rows` shows that the spec gives the same `ok` values as a
+`passOverRows` of this step over all rows. The spec fails before its loop when
+`get_eligible_validator_indices` fails. The pass fails on the first bad row instead, so the theorem
+states `SameResultOrBothFail`.
 -/
 
 namespace EpochProofs.Spec
@@ -271,9 +272,9 @@ theorem foldlM_inactivityLoopStep_rows (p : Preset) (previous_epoch : Epoch) (in
     ((rs.filter Eb).map (·.index)).foldlM (inactivityLoopStep p participating in_leak)
         (pre ++ rs.map (·.inactivity_score) ++ post) =
       (fun x => pre ++ x.2.map (·.inactivity_score) ++ post) <$>
-        passM (inactivityRowStep p previous_epoch in_leak) () rs
+        passOverRows (inactivityRowStep p previous_epoch in_leak) () rs
   | [], pre, post, _, _, _ => by
-    simp [passM, pure, Except.pure, Functor.map, Except.map]
+    simp [passOverRows, pure, Except.pure, Functor.map, Except.map]
   | r :: rs, pre, post, hidx, helig, hpart => by
     simp only [List.map_cons, List.length_cons, List.range'_succ, List.cons.injEq] at hidx
     obtain ⟨hr, hrs⟩ := hidx
@@ -281,14 +282,14 @@ theorem foldlM_inactivityLoopStep_rows (p : Preset) (previous_epoch : Epoch) (in
       foldlM_inactivityLoopStep_rows p previous_epoch in_leak participating Eb rs pre' post
         (by rw [h]; exact hrs) (fun r' h' => helig r' (by simp [h']))
         (fun r' h' => hpart r' (by simp [h']))
-    rw [passM_cons]
+    rw [passOverRows_cons]
     simp only [inactivityRowStep, helig r (by simp), bind, Except.bind, pure, Except.pure]
     cases hE : Eb r
     · simp only [List.filter_cons, hE, Bool.false_eq_true, if_false]
       have h := ih (pre ++ [r.inactivity_score]) (by simp)
       simp only [List.map_cons, List.append_assoc, List.cons_append, List.nil_append] at h ⊢
       rw [h]
-      cases passM (inactivityRowStep p previous_epoch in_leak) () rs <;>
+      cases passOverRows (inactivityRowStep p previous_epoch in_leak) () rs <;>
         simp [Functor.map, Except.map]
     · simp only [List.filter_cons, hE, if_true, List.map_cons, List.foldlM_cons]
       have hp : decide (pre.length ∈ participating) = rowHitsTarget previous_epoch r := by
@@ -303,7 +304,7 @@ theorem foldlM_inactivityLoopStep_rows (p : Preset) (previous_epoch : Epoch) (in
         have h := ih (pre ++ [s]) (by simp)
         simp only [List.append_assoc, List.cons_append, List.nil_append] at h
         rw [h]
-        cases passM (inactivityRowStep p previous_epoch in_leak) () rs <;>
+        cases passOverRows (inactivityRowStep p previous_epoch in_leak) () rs <;>
           simp [Functor.map, Except.map]
 
 /-- The row step changes only `inactivity_score`. -/
@@ -325,11 +326,11 @@ theorem inactivityRowStep_preserves (p : Preset) (previous_epoch : Epoch) (in_le
         rw [← h.2]
 
 /-- If the step fails on some row, the pass fails. -/
-theorem passM_error {R : Type} (f : Unit → R → SpecM (Unit × R)) :
-    ∀ (rs : List R), (∃ r ∈ rs, ∃ e, f () r = .error e) → ∃ e, passM f () rs = .error e
+theorem passOverRows_error {R : Type} (f : Unit → R → SpecM (Unit × R)) :
+    ∀ (rs : List R), (∃ r ∈ rs, ∃ e, f () r = .error e) → ∃ e, passOverRows f () rs = .error e
   | [], h => by simp at h
   | r :: rs, h => by
-    rw [passM_cons]
+    rw [passOverRows_cons]
     cases hr : f () r with
     | error e => exact ⟨e, rfl⟩
     | ok y =>
@@ -338,7 +339,7 @@ theorem passM_error {R : Type} (f : Unit → R → SpecM (Unit × R)) :
         rcases List.mem_cons.mp hr' with h | h
         · subst h; rw [hr] at he; cases he
         · exact h
-      obtain ⟨e', he'⟩ := passM_error f rs ⟨r', hr'', e, he⟩
+      obtain ⟨e', he'⟩ := passOverRows_error f rs ⟨r', hr'', e, he⟩
       exact ⟨e', by simp only [bind, Except.bind, he']⟩
 
 /-- After genesis, `process_inactivity_updates` is a pass of `inactivityRowStep` over the
@@ -351,7 +352,7 @@ theorem process_inactivity_updates_rows (p : Preset) (state : BeaconState)
     (hleak : is_in_inactivity_leak p state = .ok in_leak) :
     SameResultOrBothFail (process_inactivity_updates p state)
       ((fun x => state.withRows x.2) <$>
-        passM (inactivityRowStep p previous_epoch in_leak) () (rowsOf state)) := by
+        passOverRows (inactivityRowStep p previous_epoch in_leak) () (rowsOf state)) := by
   have hne : (previous_epoch == current_epoch) = false := by
     simp only [get_previous_epoch, bind, Except.bind, hcurrent, pure, Except.pure,
       Except.ok.injEq] at hprevious
@@ -368,7 +369,8 @@ theorem process_inactivity_updates_rows (p : Preset) (state : BeaconState)
       unfold process_inactivity_updates
       simp only [bind, Except.bind, hcurrent, hg, he1, Bool.false_eq_true, if_false, pure,
         Except.pure]
-    obtain ⟨e2, he2⟩ := passM_error (inactivityRowStep p previous_epoch in_leak) (rowsOf state)
+    obtain ⟨e2, he2⟩ := passOverRows_error (inactivityRowStep p previous_epoch in_leak)
+      (rowsOf state)
       (by
         obtain ⟨r, hr, e, he⟩ := hbad
         exact ⟨r, hr, e, by simp [inactivityRowStep, he, bind, Except.bind]⟩)
@@ -393,13 +395,13 @@ theorem process_inactivity_updates_rows (p : Preset) (state : BeaconState)
     simp only [List.nil_append, List.append_nil, rowsOf_map_inactivity_score state hrows.2.1] at h
     rw [h]
     apply SameResultOrBothFail.of_eq
-    cases hpass : passM (inactivityRowStep p previous_epoch in_leak) () (rowsOf state) with
+    cases hpass : passOverRows (inactivityRowStep p previous_epoch in_leak) () (rowsOf state) with
     | error e => rfl
     | ok x =>
-      have hv := passM_map_eq _ (·.validator)
+      have hv := passOverRows_map_eq _ (·.validator)
         (fun a r y h => by rw [inactivityRowStep_preserves p previous_epoch in_leak a y.1 r y.2 h])
         () _ x hpass
-      have hb := passM_map_eq _ (·.balance)
+      have hb := passOverRows_map_eq _ (·.balance)
         (fun a r y h => by rw [inactivityRowStep_preserves p previous_epoch in_leak a y.1 r y.2 h])
         () _ x hpass
       rw [rowsOf_map_validator] at hv

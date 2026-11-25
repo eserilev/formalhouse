@@ -17,7 +17,7 @@ flags after the spec's registry update, on valid states.
 namespace EpochProofs.Spec
 
 /-- What the loop reads from one deposit and its validator. -/
-structure DepositSpecView where
+structure DepositInfo where
   slot : Slot
   amount : Gwei
   eth1_bridge_blocked : Bool
@@ -41,7 +41,7 @@ structure DepositLoopResult where
 
 /-- One iteration of the loop. -/
 def depositStep (p : Preset) (finalized_slot available_for_processing : Nat)
-    (s : DepositLoopState) (v : DepositSpecView) : SpecM DepositLoopResult := do
+    (s : DepositLoopState) (v : DepositInfo) : SpecM DepositLoopResult := do
   if v.eth1_bridge_blocked || v.slot > finalized_slot
       || s.next_deposit_index ≥ p.MAX_PENDING_DEPOSITS_PER_EPOCH then
     pure ⟨s, true, false⟩
@@ -58,7 +58,7 @@ def depositStep (p : Preset) (finalized_slot available_for_processing : Nat)
 
 /-- The loop: run `depositStep` until it stops or the views run out. -/
 def depositLoop (p : Preset) (finalized_slot available_for_processing : Nat) :
-    DepositLoopState → List DepositSpecView → SpecM DepositLoopResult
+    DepositLoopState → List DepositInfo → SpecM DepositLoopResult
   | s, [] => pure ⟨s, false, false⟩
   | s, v :: vs => do
     let r ← depositStep p finalized_slot available_for_processing s v
@@ -66,7 +66,7 @@ def depositLoop (p : Preset) (finalized_slot available_for_processing : Nat) :
 
 /-- The decisions of `process_pending_deposits`. -/
 def depositDecisions (p : Preset) (finalized_slot deposit_balance_to_consume
-    activation_churn_limit : Nat) (views : List DepositSpecView) :
+    activation_churn_limit : Nat) (views : List DepositInfo) :
     SpecM (Nat × Gwei × List Bool) := do
   let available_for_processing ← uint64Add deposit_balance_to_consume activation_churn_limit
   let r ← depositLoop p finalized_slot available_for_processing ⟨0, 0, []⟩ views
@@ -76,7 +76,7 @@ def depositDecisions (p : Preset) (finalized_slot deposit_balance_to_consume
   pure (r.state.next_deposit_index, new_deposit_balance_to_consume, r.state.postponed)
 
 theorem depositLoop_append (p : Preset) (finalized_slot available : Nat)
-    (s : DepositLoopState) (l1 l2 : List DepositSpecView) :
+    (s : DepositLoopState) (l1 l2 : List DepositInfo) :
     depositLoop p finalized_slot available s (l1 ++ l2) = (do
       let r ← depositLoop p finalized_slot available s l1
       if r.stopped then pure r else depositLoop p finalized_slot available r.state l2) := by
@@ -238,10 +238,10 @@ theorem predictedStatus_eq_post_registry (p : Preset)
         simp [hlt]
       · have hg := hejected hej.1.1 hej.1.2 hej.2 hfar
         have hwf := hvalid hfar
-        have hfitsShuffle : ¬ g.withdrawable_epoch < current_epoch + 1 := by
+        have hn1 : ¬ g.withdrawable_epoch < current_epoch + 1 := by
           rw [hwd]; exact Nat.not_lt.mpr (Nat.le_trans hge (Nat.le_add_right _ _))
         have hn2 : ¬ FAR_FUTURE_EPOCH < current_epoch + 1 := Nat.not_lt.mpr (Nat.le_of_lt hnext)
-        simp [hg, hwf, hfitsShuffle, hn2, hej.1.1, hej.1.2, hej.2]
+        simp [hg, hwf, hn1, hn2, hej.1.1, hej.1.2, hej.2]
     · -- The activation step or nothing. Exit and withdrawable epochs do not change.
       rename_i _ hnej
       split at hreg <;> (simp only [pure, Except.pure, Except.ok.injEq] at hreg; subst hreg)
@@ -255,7 +255,7 @@ theorem predictedStatus_eq_post_registry (p : Preset)
         · simp [ha]
 
 theorem depositLoop_split (p : Preset) (fs avail : Nat) (init st : DepositLoopState)
-    (views : List DepositSpecView) (i : Nat) (v : DepositSpecView) (hget : views[i]? = some v)
+    (views : List DepositInfo) (i : Nat) (v : DepositInfo) (hget : views[i]? = some v)
     (hst : depositLoop p fs avail init (views.take i) = .ok ⟨st, false, false⟩) :
     depositLoop p fs avail init views = (do
       let r ← depositStep p fs avail st v
@@ -269,7 +269,7 @@ theorem depositLoop_split (p : Preset) (fs avail : Nat) (init st : DepositLoopSt
   simp only [bind, Except.bind, Bool.false_eq_true, if_false, depositLoop]
 
 theorem depositLoop_stop_at (p : Preset) (fs avail : Nat) (init st : DepositLoopState)
-    (views : List DepositSpecView) (i : Nat) (v : DepositSpecView) (hget : views[i]? = some v)
+    (views : List DepositInfo) (i : Nat) (v : DepositInfo) (hget : views[i]? = some v)
     (hst : depositLoop p fs avail init (views.take i) = .ok ⟨st, false, false⟩)
     (r : DepositLoopResult) (hr : depositStep p fs avail st v = .ok r) (hstop : r.stopped = true) :
     depositLoop p fs avail init views = .ok r := by
@@ -277,7 +277,7 @@ theorem depositLoop_stop_at (p : Preset) (fs avail : Nat) (init st : DepositLoop
   simp [bind, Except.bind, hstop, pure, Except.pure]
 
 theorem depositLoop_error_at (p : Preset) (fs avail : Nat) (init st : DepositLoopState)
-    (views : List DepositSpecView) (i : Nat) (v : DepositSpecView) (hget : views[i]? = some v)
+    (views : List DepositInfo) (i : Nat) (v : DepositInfo) (hget : views[i]? = some v)
     (hst : depositLoop p fs avail init (views.take i) = .ok ⟨st, false, false⟩)
     (e : SpecError) (hr : depositStep p fs avail st v = .error e) :
     depositLoop p fs avail init views = .error e := by
@@ -285,7 +285,7 @@ theorem depositLoop_error_at (p : Preset) (fs avail : Nat) (init st : DepositLoo
   rfl
 
 theorem depositLoop_next_at (p : Preset) (fs avail : Nat) (init st : DepositLoopState)
-    (views : List DepositSpecView) (i : Nat) (v : DepositSpecView) (hget : views[i]? = some v)
+    (views : List DepositInfo) (i : Nat) (v : DepositInfo) (hget : views[i]? = some v)
     (hst : depositLoop p fs avail init (views.take i) = .ok ⟨st, false, false⟩)
     (st' : DepositLoopState) (hr : depositStep p fs avail st v = .ok ⟨st', false, false⟩) :
     depositLoop p fs avail init (views.take (i + 1)) = .ok ⟨st', false, false⟩ := by
@@ -296,7 +296,7 @@ theorem depositLoop_next_at (p : Preset) (fs avail : Nat) (init st : DepositLoop
   simp [bind, Except.bind, depositLoop, hr, pure, Except.pure]
 
 theorem depositLoop_end (p : Preset) (fs avail : Nat) (init : DepositLoopState)
-    (views : List DepositSpecView) (i : Nat) (hi : views.length ≤ i) (x : DepositLoopResult)
+    (views : List DepositInfo) (i : Nat) (hi : views.length ≤ i) (x : DepositLoopResult)
     (hst : depositLoop p fs avail init (views.take i) = .ok x) :
     depositLoop p fs avail init views = .ok x := by
   rw [List.take_of_length_le hi] at hst

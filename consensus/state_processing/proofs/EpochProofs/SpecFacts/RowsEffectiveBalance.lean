@@ -5,7 +5,7 @@ import EpochProofs.SpecFacts.EffectiveBalanceUpdates
 # `process_effective_balance_updates` as a pass over rows
 
 `effectiveBalanceRowStep` applies `newEffectiveBalance` to one row, with the thresholds already
-known. `process_effective_balance_updates_rows` shows that the spec loop is a `passM` of this
+known. `process_effective_balance_updates_rows` shows that the spec loop is a `passOverRows` of this
 step over `rowsOf state`.
 -/
 
@@ -37,20 +37,20 @@ theorem mapM_effectiveBalanceStep (p : Preset) (balances : List Gwei)
     ∀ (rows : List Row), (∀ r ∈ rows, balances[r.index]? = some r.balance) →
       (rows.map fun r => (r.validator, r.index)).mapM (effectiveBalanceStep p balances) =
         (fun x => x.2.map (·.validator)) <$>
-          passM (effectiveBalanceRowStep p downward upward) () rows
-  | [], _ => by simp [passM, pure, Except.pure, Functor.map, Except.map]
+          passOverRows (effectiveBalanceRowStep p downward upward) () rows
+  | [], _ => by simp [passOverRows, pure, Except.pure, Functor.map, Except.map]
   | r :: rs, hbal => by
     have hr := hbal r (List.mem_cons_self ..)
     have ih := mapM_effectiveBalanceStep p balances downward upward hthresholds rs
       (fun r' h => hbal r' (List.mem_cons_of_mem _ h))
-    simp only [List.map_cons, List.mapM_cons, passM_cons, effectiveBalanceStep,
+    simp only [List.map_cons, List.mapM_cons, passOverRows_cons, effectiveBalanceStep,
       effectiveBalanceRowStep, hr, hthresholds, ih, bind, Except.bind, pure, Except.pure,
       Functor.map, Except.map]
     cases newEffectiveBalance p downward upward r.validator r.balance with
     | error e => rfl
     | ok b =>
       simp only
-      cases passM (effectiveBalanceRowStep p downward upward) () rs <;> rfl
+      cases passOverRows (effectiveBalanceRowStep p downward upward) () rs <;> rfl
 
 /-- Each row of a state holds the balance at its index, if the lengths match. -/
 theorem rowsOf_balance_getElem? (state : BeaconState)
@@ -69,17 +69,17 @@ theorem process_effective_balance_updates_rows (p : Preset) (state : BeaconState
     (hrows : ListLengthsMatch state) :
     process_effective_balance_updates p state =
       (fun x => state.withRows x.2) <$>
-        passM (effectiveBalanceRowStep p downward upward) () (rowsOf state) := by
+        passOverRows (effectiveBalanceRowStep p downward upward) () (rowsOf state) := by
   obtain ⟨hbal, hscores, -, -⟩ := hrows
   rw [process_effective_balance_updates_eq, ← rowsOf_map_pair,
     mapM_effectiveBalanceStep p state.balances downward upward hthresholds (rowsOf state)
       (rowsOf_balance_getElem? state hbal)]
-  cases hpass : passM (effectiveBalanceRowStep p downward upward) () (rowsOf state) with
+  cases hpass : passOverRows (effectiveBalanceRowStep p downward upward) () (rowsOf state) with
   | error e => rfl
   | ok y =>
-    have hb := passM_map_eq _ (·.balance) (fun a r x hx => by
+    have hb := passOverRows_map_eq _ (·.balance) (fun a r x hx => by
       rw [effectiveBalanceRowStep_preserves _ _ _ a r x hx]) () (rowsOf state) y hpass
-    have hs := passM_map_eq _ (·.inactivity_score) (fun a r x hx => by
+    have hs := passOverRows_map_eq _ (·.inactivity_score) (fun a r x hx => by
       rw [effectiveBalanceRowStep_preserves _ _ _ a r x hx]) () (rowsOf state) y hpass
     rw [rowsOf_map_balance state hbal] at hb
     rw [rowsOf_map_inactivity_score state hscores] at hs
@@ -91,7 +91,7 @@ theorem process_effective_balance_updates_rows_sameResultOrBothFail (p : Preset)
     (hrows : ListLengthsMatch state) :
     SameResultOrBothFail (process_effective_balance_updates p state)
       ((fun x => state.withRows x.2) <$>
-        passM (effectiveBalanceRowStep p downward upward) () (rowsOf state)) :=
+        passOverRows (effectiveBalanceRowStep p downward upward) () (rowsOf state)) :=
   SameResultOrBothFail.of_eq (process_effective_balance_updates_rows p state downward upward hthresholds hrows)
 
 end EpochProofs.Spec

@@ -430,7 +430,7 @@ def decOf [CurrentPreset] (s1 : BeaconState) (total_active_balance : Gwei) (curr
   depositDecisions P finalized_slot s1.deposit_balance_to_consume
     (← get_activation_churn_limit P total_active_balance)
     ((s1.pending_deposits.take P.MAX_PENDING_DEPOSITS_PER_EPOCH).map
-      (lighthouseDepositView s1 current_epoch))
+      (lighthouseDepositInfo s1 current_epoch))
 
 /-- The handled deposits of a decision, with their postponed flags. -/
 def handledOf' (s1 : BeaconState) (x : Nat × Gwei × List Bool) :
@@ -600,7 +600,7 @@ theorem specTail_inner [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM
     (hviews : (s1.pending_deposits.take P.MAX_PENDING_DEPOSITS_PER_EPOCH).map
         (specDepositView S5 (cur + 1)) =
       (s1.pending_deposits.take P.MAX_PENDING_DEPOSITS_PER_EPOCH).map
-        (lighthouseDepositView s1 cur))
+        (lighthouseDepositInfo s1 cur))
     (hlen5 : S5.balances.length = S5.validators.length)
     (hbs5 : ∀ i (h : i < S5.balances.length), S5.balances[i] < UINT64_SIZE) :
     SameResultOrBothFail (specTailG o tab B K S5)
@@ -958,10 +958,10 @@ theorem pass_pubkeys [CurrentPreset] (ctx : LighthouseStepContext) (bf : Row →
     (hcurrent : ctx.current_epoch + 1 < UINT64_SIZE)
     (hactivation : compute_activation_exit_epoch P ctx.current_epoch =
       .ok activation_epoch)
-    (h : passM (fun c r => lighthouseRowStep P ctx (bf r) c r) churn0 (rowsOf s1) =
+    (h : passOverRows (fun c r => lighthouseRowStep P ctx (bf r) c r) churn0 (rowsOf s1) =
       .ok (churn, rows)) :
     (rows.map (·.validator)).map (·.pubkey) = s1.validators.map (·.pubkey) := by
-  obtain ⟨hlen, hget⟩ := passM_rows_registry ctx bf s1 churn0 churn rows activation_epoch
+  obtain ⟨hlen, hget⟩ := passOverRows_rows_registry ctx bf s1 churn0 churn rows activation_epoch
     hfinalized hexit hcurrent hactivation h
   apply List.ext_getElem
   · simp [hlen]
@@ -978,7 +978,7 @@ theorem specRest_nf [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM Be
     (s1 : BeaconState) (current_epoch : Epoch)
     (tab : Gwei) (ctx : LighthouseStepContext) (bf : Row → Gwei)
     (churn : Epoch × Gwei) (rows : List Row) (activation_epoch : Epoch)
-    (hpass : passM (fun c r => lighthouseRowStep P ctx (bf r) c r)
+    (hpass : passOverRows (fun c r => lighthouseRowStep P ctx (bf r) c r)
       (s1.earliest_exit_epoch, s1.exit_balance_to_consume) (rowsOf s1) = .ok (churn, rows))
     (hctxcur : ctx.current_epoch = current_epoch)
     (hctxfin : ctx.finalized_epoch = s1.finalized_checkpoint.epoch)
@@ -1026,7 +1026,7 @@ theorem specRest_nf [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM Be
 theorem epochRest_nf [CurrentPreset] (o : Oracle) (s1 : BeaconState) (current_epoch : Epoch)
     (total_active_balance : Gwei) (ctx : LighthouseStepContext) (bf : Row → Gwei)
     (churn : Epoch × Gwei) (rows : List Row) (activation_epoch : Epoch)
-    (hpass : passM (fun c r => lighthouseRowStep P ctx (bf r) c r)
+    (hpass : passOverRows (fun c r => lighthouseRowStep P ctx (bf r) c r)
       (s1.earliest_exit_epoch, s1.exit_balance_to_consume) (rowsOf s1) = .ok (churn, rows))
     (hctxcur : ctx.current_epoch = current_epoch)
     (hctxfin : ctx.finalized_epoch = s1.finalized_checkpoint.epoch)

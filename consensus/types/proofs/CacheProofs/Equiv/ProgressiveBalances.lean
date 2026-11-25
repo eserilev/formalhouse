@@ -219,7 +219,7 @@ theorem change_if_flag_ok (s : Slice LighthouseBalance) (flags : U8) (i : Usize)
     · simp only [hf, if_false, Bool.false_eq_true]; rw [set_self _ _ _ hb]
 
 
-/-- Three flag totals with the same minimum, as `ab` shows them. -/
+/-- Three flag totals with the same minimum, as `balanceValues` shows them. -/
 def threeTotals (R : Nat → Nat) (m : Nat) : List (Nat × Nat) := [(R 0, m), (R 1, m), (R 2, m)]
 
 theorem ab_length (l : List LighthouseBalance) : (balanceValues l).length =
@@ -1004,7 +1004,7 @@ theorem effective_balance_change_correct (incr : Nat) (s s' : Spec.BeaconState)
     rw [wOf_eb] at h; exact h
   have hle := fun g => wOf_le_flagSum s.validators s.current_epoch_participation
     s.current_epoch g j v cflags.val hv hcp
-  -- For an unslashed validator, `contrib` is `has_flag`.
+  -- For an unslashed validator, `countsForFlag` is `has_flag`.
   have hcontrib : ∀ g < 3, v.slashed = false →
       countsForFlag v cflags.val s.current_epoch g = Spec.has_flag cflags.val g := by
     intro g hg hs

@@ -47,14 +47,15 @@ local macro "c_close" : tactic => `(tactic| (
 /-! ## Block operations -/
 
 /-- The Fulu `initiate_validator_exit` keeps the queue and the registry size. -/
-theorem initiate_validator_exit_fulu_cstep (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem initiate_validator_exit_fulu_cstep (p : Preset) (f : FuluConfig)
+    (hc : FuluConfigMatchesPreset p f)
     (tab : Gwei) (s s' : BeaconState) (index : ValidatorIndex)
     (h : initiate_validator_exit_fulu p f tab s index = .ok s') : CStep s s' := by
   rw [initiate_validator_exit_fulu_eq p f hc] at h
   exact initiate_validator_exit_cstep p _ s s' index h
 
 /-- The Fulu `slash_validator` keeps the queue and the registry size. -/
-theorem slash_validator_fulu_cstep (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem slash_validator_fulu_cstep (p : Preset) (f : FuluConfig) (hc : FuluConfigMatchesPreset p f)
     (s s' : BeaconState) (index : ValidatorIndex) (whistleblower_index : Option ValidatorIndex)
     (h : slash_validator_fulu p f s index whistleblower_index = .ok s') : CStep s s' := by
   have hlen := (slash_validator_fulu_ok p f hc s s' index whistleblower_index h).2.1
@@ -73,14 +74,14 @@ theorem slash_validator_fulu_cstep (p : Preset) (f : FuluConfig) (hc : FuluCompa
 
 /-- The Fulu `process_proposer_slashing` keeps the queue and the registry size. -/
 theorem process_proposer_slashing_fulu_cstep (p : Preset) (o : Oracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (s s' : BeaconState) (ps : ProposerSlashing)
+    (hc : FuluConfigMatchesPreset p f) (s s' : BeaconState) (ps : ProposerSlashing)
     (h : process_proposer_slashing_fulu p o f s ps = .ok s') : CStep s s' := by
   obtain ⟨_, _, -, -, -, hsl⟩ := process_proposer_slashing_fulu_ok p o f s s' ps h
   exact slash_validator_fulu_cstep p f hc s s' _ none hsl
 
 /-- The Fulu `process_attester_slashing` keeps the queue and the registry size. -/
 theorem process_attester_slashing_fulu_cstep (p : Preset) (o : Oracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (s s' : BeaconState) (as : AttesterSlashing)
+    (hc : FuluConfigMatchesPreset p f) (s s' : BeaconState) (as : AttesterSlashing)
     (h : process_attester_slashing_fulu p o f s as = .ok s') : CStep s s' := by
   unfold process_attester_slashing_fulu at h
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
@@ -108,13 +109,14 @@ theorem process_attestation_fulu_cstep (p : Preset) (o : Oracle) (s s' : BeaconS
 
 /-- The Fulu `process_voluntary_exit` keeps the queue and the registry size. -/
 theorem process_voluntary_exit_fulu_cstep (p : Preset) (o : Oracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (s s' : BeaconState) (e : SignedVoluntaryExit)
+    (hc : FuluConfigMatchesPreset p f) (s s' : BeaconState) (e : SignedVoluntaryExit)
     (h : process_voluntary_exit_fulu p o f s e = .ok s') : CStep s s' := by
   obtain ⟨tab, -, -, -, -, -, -, hi⟩ := process_voluntary_exit_fulu_initiate p o f hc s s' e h
   exact initiate_validator_exit_cstep p tab s s' _ hi
 
 /-- The Fulu `process_withdrawal_request` keeps the queue and the registry size. -/
-theorem process_withdrawal_request_fulu_cstep (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem process_withdrawal_request_fulu_cstep (p : Preset) (f : FuluConfig)
+    (hc : FuluConfigMatchesPreset p f)
     (s s' : BeaconState) (withdrawal_request : WithdrawalRequest)
     (h : process_withdrawal_request_fulu p f s withdrawal_request = .ok s') : CStep s s' := by
   unfold process_withdrawal_request_fulu at h
@@ -191,7 +193,7 @@ theorem process_consolidation_request_fulu_rstep (p : Preset) (f : FuluConfig)
 
 /-- The Fulu `process_operations` keeps `ConsolidationsInRange`. -/
 theorem process_operations_fulu_inRange (p : Preset) (o : Oracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (s s' : BeaconState) (body : FuluBeaconBlockBody)
+    (hc : FuluConfigMatchesPreset p f) (s s' : BeaconState) (body : FuluBeaconBlockBody)
     (h : process_operations_fulu p o f s body = .ok s') (hs : ConsolidationsInRange s) :
     ConsolidationsInRange s' :=
   process_operations_fulu_inv p o f ConsolidationsInRange
@@ -242,7 +244,8 @@ theorem process_withdrawals_fulu_cstep (p : Preset) (s s' : BeaconState)
 
 /-- The Fulu `process_block` keeps `ConsolidationsInRange`. -/
 theorem process_block_fulu_inRange (p : Preset) (o : Oracle) (fo : FuluOracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (c : FuluBlockConfig) (fs fs' : FuluState) (block : FuluBeaconBlock)
+    (hc : FuluConfigMatchesPreset p f) (c : FuluBlockConfig) (fs fs' : FuluState)
+    (block : FuluBeaconBlock)
     (h : process_block_fulu p o fo f c fs block = .ok fs')
     (hs : ConsolidationsInRange fs.state) : ConsolidationsInRange fs'.state :=
   process_block_fulu_inv p o fo f c ConsolidationsInRange
@@ -292,7 +295,7 @@ theorem process_historical_summaries_update_cstep (p : Preset) (o : Oracle) (s s
   all_goals (cases h; exact CStep.refl _)
 
 /-- The Fulu `process_epoch` keeps `ConsolidationsInRange`. -/
-theorem process_epoch_fulu_inRange (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem process_epoch_fulu_inRange (p : Preset) (f : FuluConfig) (hc : FuluConfigMatchesPreset p f)
     (o : Oracle) (s s' : BeaconState) (h : process_epoch_fulu p f o s = .ok s')
     (hs : ConsolidationsInRange s) : ConsolidationsInRange s' :=
   process_epoch_fulu_inv p f hc o ConsolidationsInRange
@@ -318,7 +321,7 @@ theorem process_epoch_fulu_inRange (p : Preset) (f : FuluConfig) (hc : FuluCompa
     s s' h hs
 
 /-- `process_slots_fulu` with the Fulu `process_epoch` keeps `ConsolidationsInRange`. -/
-theorem process_slots_fulu_inRange (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem process_slots_fulu_inRange (p : Preset) (f : FuluConfig) (hc : FuluConfigMatchesPreset p f)
     (o : Oracle) (fo : FuluOracle) (fs fs' : FuluState) (slot : Slot)
     (h : process_slots_fulu p o fo (process_epoch_fulu p f o) fs slot = .ok fs')
     (hs : ConsolidationsInRange fs.state) : ConsolidationsInRange fs'.state :=
@@ -329,7 +332,7 @@ theorem process_slots_fulu_inRange (p : Preset) (f : FuluConfig) (hc : FuluCompa
 
 /-- `state_transition_fulu` keeps `ConsolidationsInRange`. -/
 theorem state_transition_fulu_inRange (p : Preset) (o : Oracle) (fo : FuluOracle)
-    (f : FuluConfig) (hc : FuluCompat p f) (c : FuluBlockConfig) (fs fs' : FuluState)
+    (f : FuluConfig) (hc : FuluConfigMatchesPreset p f) (c : FuluBlockConfig) (fs fs' : FuluState)
     (signed_block : FuluSignedBeaconBlock) (validate_result : Bool)
     (hs : ConsolidationsInRange fs.state)
     (h : state_transition_fulu p o fo f c fs signed_block validate_result = .ok fs') :

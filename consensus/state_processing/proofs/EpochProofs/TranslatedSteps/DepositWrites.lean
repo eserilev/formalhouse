@@ -90,7 +90,7 @@ theorem foldlM_take_succ' {α β : Type} (f : β → α → SpecM β) (b x : β)
   cases f x l[i] <;> rfl
 
 theorem depositLoop_next_le [CurrentPreset] (fs avail : Nat) :
-    ∀ (vs : List DepositSpecView) (ls : DepositLoopState) (r : DepositLoopResult),
+    ∀ (vs : List DepositInfo) (ls : DepositLoopState) (r : DepositLoopResult),
       depositLoop P fs avail ls vs = .ok r →
       r.state.next_deposit_index ≤ ls.next_deposit_index + vs.length
   | [], ls, r, h => by
@@ -100,7 +100,7 @@ theorem depositLoop_next_le [CurrentPreset] (fs avail : Nat) :
   | v :: vs, ls, r, h => by
     simp only [depositLoop] at h
     obtain ⟨r1, h1, h⟩ := specM_bind_ok h
-    rcases depositStep_cases fs avail ls v r1 h1 with ⟨hs, hst⟩ | ⟨hs, -, hfitsShuffle, -⟩
+    rcases depositStep_cases fs avail ls v r1 h1 with ⟨hs, hst⟩ | ⟨hs, -, hn1, -⟩
     · simp only [hs, if_true, pure, Except.pure, Except.ok.injEq] at h
       subst h
       rw [hst]

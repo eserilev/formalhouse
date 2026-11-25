@@ -144,7 +144,7 @@ theorem exampleFuluState_epochBeforeCommitteeStepsFulu
     (o : Oracle) : epochBeforeCommitteeStepsFulu P FC o exampleFuluState = .ok exampleFuluState := by
   rfl
 
-theorem exampleGloasState_eb : ∀ v ∈ exampleGloasState.validators,
+theorem exampleGloasState_effectiveBalances : ∀ v ∈ exampleGloasState.validators,
     v.effective_balance = P.MAX_EFFECTIVE_BALANCE_ELECTRA := by
   decide +kernel
 
@@ -163,9 +163,10 @@ theorem exampleGloasState_committeeStepPreconditions (o : Oracle) :
   proposerHasCandidate := by decide +kernel
   enoughActiveForPtc := by decide +kernel
   syncSelectionEnds seed := selectionEnds_full P o exampleGloasState _ seed _ true (by decide +kernel)
-    (exampleGloasState_active_lt _) exampleGloasState_eb (by decide +kernel)
+    (exampleGloasState_active_lt _) exampleGloasState_effectiveBalances (by decide +kernel)
   proposerSelectionEnds seed := selectionEnds_full P o exampleGloasState _ seed _ true (by decide +kernel)
-    (fun j hj => exampleGloasState_active_lt _ j (List.mem_of_mem_filter hj)) exampleGloasState_eb
+    (fun j hj => exampleGloasState_active_lt _ j (List.mem_of_mem_filter hj))
+      exampleGloasState_effectiveBalances
       (by decide +kernel)
   ptcSelectionEnds slot hslot l hl seed := by
     have he : slot / P.SLOTS_PER_EPOCH = 2 := hslot
@@ -182,7 +183,7 @@ theorem exampleGloasState_committeeStepPreconditions (o : Oracle) :
       have := ptc_len_pos _ (slot % P.SLOTS_PER_EPOCH) _ P_slots_pos h32
       simp at hl2; omega
     exact selectionEnds_full P o exampleGloasState l' seed _ false hne
-      (fun j hj => exampleGloasState_active_lt _ j (hl3 j hj)) exampleGloasState_eb
+      (fun j hj => exampleGloasState_active_lt _ j (hl3 j hj)) exampleGloasState_effectiveBalances
       (by decide +kernel)
 
 /-- The Gloas committee conditions hold at `exampleGloasState`, for every oracle that accepts the
@@ -239,7 +240,7 @@ theorem exampleGloasState_genesisInvariants : GenesisInvariants exampleGloasStat
   consolidationsInRange := by unfold ConsolidationsInRange; decide +kernel
   withdrawableEpochsFitUint64 := by unfold WithdrawableEpochsFitUint64; decide +kernel
 
-theorem exampleGloasState_reachableInvariants : EpochInputInvariants exampleGloasState := by
+theorem exampleGloasState_epochInputInvariants : EpochInputInvariants exampleGloasState := by
   unfold EpochInputInvariants EpochInputInvariantsFor EpochInputInvariantsWithPubkeys BasicEpochInputInvariants EpochEndInvariants BalancesFarFromOverflow
   refine ⟨⟨⟨⟨exampleGloasState_genesisInvariants.checkpointsInOrder, exampleGloasState_listLengthsMatch, ?_⟩, by decide +kernel, ?_,
     exampleGloasState_genesisInvariants.exitEpochsAreUint64,
@@ -265,16 +266,16 @@ theorem gloas_assumptions_hold_for_example (o : Oracle)
     (exampleGloasState_epochBeforeCommitteeSteps o)
     ⟨rfl, exampleGloasState_listLengthsMatch, by decide +kernel⟩
   obtain ⟨s', hs', -⟩ := hokc
-  refine ⟨exampleGloasState_genesisInvariants, exampleGloasState_reachableInvariants,
+  refine ⟨exampleGloasState_genesisInvariants, exampleGloasState_epochInputInvariants,
     exampleGloasState_pubkeys, exampleGloasState_vectors, exampleGloasState_atLastSlotOfEpoch,
     by decide +kernel, exampleGloasState_supplyAndTimeLimits, hc,
     exampleGloasState_epochBeforeCommitteeSteps o, s', ?_⟩
   rw [process_epoch_committees, exampleGloasState_epochBeforeCommitteeSteps, tot_bind_ok]
   exact hs'
 
-theorem exampleFuluState_eb : ∀ v ∈ exampleFuluState.validators,
+theorem exampleFuluState_effectiveBalances : ∀ v ∈ exampleFuluState.validators,
     v.effective_balance = P.MAX_EFFECTIVE_BALANCE_ELECTRA :=
-  exampleGloasState_eb
+  exampleGloasState_effectiveBalances
 
 theorem exampleFuluState_atCommitteeStepState (o : Oracle)
     (hk : ∀ v ∈ exampleFuluState.validators,
@@ -285,9 +286,11 @@ theorem exampleFuluState_atCommitteeStepState (o : Oracle)
   exact ⟨⟨by decide +kernel, by decide +kernel, by decide +kernel, hk⟩,
     ⟨by decide +kernel, by decide +kernel,
       fun seed => selectionEnds_full P o exampleFuluState _ seed _ true (by decide +kernel)
-        (fun j hj => active_lt exampleFuluState _ j hj) exampleFuluState_eb (by decide +kernel),
+        (fun j hj => active_lt exampleFuluState _ j hj) exampleFuluState_effectiveBalances
+          (by decide +kernel),
       fun seed => selectionEnds_full P o exampleFuluState _ seed _ true (by decide +kernel)
-        (fun j hj => active_lt exampleFuluState _ j hj) exampleFuluState_eb (by decide +kernel)⟩⟩
+        (fun j hj => active_lt exampleFuluState _ j hj) exampleFuluState_effectiveBalances
+          (by decide +kernel)⟩⟩
 
 theorem exampleFuluState_listLengthsMatch : ListLengthsMatch exampleFuluState := exampleGloasState_listLengthsMatch
 
@@ -311,8 +314,8 @@ theorem exampleFuluState_genesisInvariants : GenesisInvariants exampleFuluState 
   consolidationsInRange := exampleGloasState_genesisInvariants.consolidationsInRange
   withdrawableEpochsFitUint64 := exampleGloasState_genesisInvariants.withdrawableEpochsFitUint64
 
-theorem exampleFuluState_reachableInvariants : EpochInputInvariants exampleFuluState :=
-    exampleGloasState_reachableInvariants
+theorem exampleFuluState_epochInputInvariants : EpochInputInvariants exampleFuluState :=
+    exampleGloasState_epochInputInvariants
 
 theorem exampleFuluState_fuluVectors : exampleFuluState.FuluVectorLengths P :=
     exampleGloasState_fuluVectors
@@ -335,7 +338,7 @@ theorem fulu_assumptions_hold_for_example (o : Oracle)
   obtain ⟨s', hs', -⟩ := committeesOkFulu_of o exampleFuluState
     (by decide +kernel) hc exampleFuluState
     (exampleFuluState_epochBeforeCommitteeStepsFulu o) ⟨rfl, exampleFuluState_listLengthsMatch, by decide +kernel⟩
-  refine ⟨exampleFuluState_genesisInvariants, exampleFuluState_reachableInvariants,
+  refine ⟨exampleFuluState_genesisInvariants, exampleFuluState_epochInputInvariants,
     exampleFuluState_fuluVectors, exampleGloasState_atLastSlotOfEpoch, by decide +kernel,
     exampleFuluState_supplyAndTimeLimits, hc, exampleFuluState_epochBeforeCommitteeStepsFulu o, s', ?_⟩
   rw [process_epoch_fulu_committees, exampleFuluState_epochBeforeCommitteeStepsFulu, tot_bind_ok]
@@ -346,14 +349,14 @@ theorem fulu_assumptions_hold_for_example (o : Oracle)
 theorem gloas_agreement_assumptions_hold_for_example :
     EpochInputInvariants exampleGloasState ∧ AtLastSlotOfEpoch exampleGloasState ∧
       exampleGloasState.historical_summaries.length < LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT :=
-  ⟨exampleGloasState_reachableInvariants, exampleGloasState_atLastSlotOfEpoch,
+  ⟨exampleGloasState_epochInputInvariants, exampleGloasState_atLastSlotOfEpoch,
     exampleGloasState_atLastSlotOfEpoch.2.2⟩
 
 /-- The state hypotheses of the Fulu agreement theorem hold at `exampleFuluState`. -/
 theorem fulu_agreement_assumptions_hold_for_example :
     EpochInputInvariants exampleFuluState ∧ AtLastSlotOfEpoch exampleFuluState ∧
       exampleFuluState.historical_summaries.length < LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT :=
-  ⟨exampleFuluState_reachableInvariants, exampleFuluState_atLastSlotOfEpoch,
+  ⟨exampleFuluState_epochInputInvariants, exampleFuluState_atLastSlotOfEpoch,
     exampleFuluState_atLastSlotOfEpoch.2.2⟩
 
 /-- At `exampleGloasState`, the Lean model of Lighthouse's Gloas epoch and the transcription agree,
@@ -362,7 +365,7 @@ theorem lighthouse_model_gloas_epoch_agrees_pyspec_for_example (o : Oracle) :
     SameResultOrBothFail (process_epoch_lighthouse o exampleGloasState)
       (process_epoch P o exampleGloasState) :=
   Formalhouse.lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants o
-    exampleGloasState_reachableInvariants exampleGloasState_atLastSlotOfEpoch
+    exampleGloasState_epochInputInvariants exampleGloasState_atLastSlotOfEpoch
 
 end Minimal
 
@@ -508,7 +511,7 @@ theorem gloas_ethlib_assumptions_hold_for_example (checks : SignatureChecks) :
     unfold RoomForDeposits
     decide +kernel
   have hinvariants : EpochInputInvariants (toSpecState (exampleEthLibState .glamsterdam)) :=
-    toSpecState_exampleGloas ▸ exampleGloasState_reachableInvariants
+    toSpecState_exampleGloas ▸ exampleGloasState_epochInputInvariants
   have hboundary : AtLastSlotOfEpoch (toSpecState (exampleEthLibState .glamsterdam)) :=
     toSpecState_exampleGloas ▸ exampleGloasState_atLastSlotOfEpoch
   have hchain : Formalhouse.GloasChainConditions oracle
@@ -542,7 +545,7 @@ theorem fulu_ethlib_assumptions_hold_for_example (checks : SignatureChecks) :
     unfold RoomForDeposits
     decide +kernel
   have hinvariants : EpochInputInvariants (toSpecState (exampleEthLibState .fusaka)) :=
-    toSpecState_exampleFulu ▸ exampleFuluState_reachableInvariants
+    toSpecState_exampleFulu ▸ exampleFuluState_epochInputInvariants
   have hboundary : AtLastSlotOfEpoch (toSpecState (exampleEthLibState .fusaka)) :=
     toSpecState_exampleFulu ▸ exampleFuluState_atLastSlotOfEpoch
   have hchain : Formalhouse.FuluChainConditions oracle

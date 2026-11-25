@@ -5,7 +5,7 @@ import EpochProofs.SpecFacts.SinglePass
 
 A row holds what the per-validator epoch steps read and write for one validator. `rowsOf` cuts
 a state into rows, and `withRows` writes rows back. Each per-validator pass of the spec is a
-`passM` over these rows.
+`passOverRows` over these rows.
 -/
 
 namespace EpochProofs.Spec

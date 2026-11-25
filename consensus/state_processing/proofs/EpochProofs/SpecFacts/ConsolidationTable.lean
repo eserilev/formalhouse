@@ -22,7 +22,7 @@ namespace EpochProofs.Spec
 
 /-- The table row of validator `i`. Past the registry, it says that the validator does not exist. -/
 def localRow (vs : List Validator) (i : Nat) : LocalValidator :=
-  (vs[i]?.map globalLocal).getD ⟨false, false, 0, 0⟩
+  (vs[i]?.map consolidationValidatorOf).getD ⟨false, false, 0, 0⟩
 
 /-- The table rows of the validators in `idx`. -/
 def tableRows (vs : List Validator) (idx : List Nat) : List LocalValidator :=
@@ -38,13 +38,14 @@ def writeBack (bs : List Gwei) (idx : List Nat) (tb : List Gwei) : List Gwei :=
   (idx.zip tb).foldl (fun acc p => if p.1 < acc.length then acc.set p.1 p.2 else acc) bs
 
 theorem localExists_tableRows {vs : List Validator} {idx : List Nat} {x : Nat} (hx : x ∈ idx) :
-    localExists (tableRows vs idx) (idx.idxOf x) = localExists (vs.map globalLocal) x := by
+    localExists (tableRows vs idx) (idx.idxOf x) =
+      localExists (vs.map consolidationValidatorOf) x := by
   have hlt := List.idxOf_lt_length_of_mem hx
   unfold localExists tableRows
   rw [List.getElem?_map, List.getElem?_eq_getElem hlt, List.getElem_idxOf hlt,
     List.getElem?_map]
   unfold localRow
-  cases h : vs[x]? <;> simp [h, globalLocal]
+  cases h : vs[x]? <;> simp [h, consolidationValidatorOf]
 
 theorem tableRows_getElem? {vs : List Validator} {idx : List Nat} {x : Nat} (hx : x ∈ idx) :
     (tableRows vs idx)[idx.idxOf x]? = some (localRow vs x) := by
@@ -100,7 +101,7 @@ theorem consolidationStep_table {vs : List Validator} {idx : List Nat} (hnd : id
     (ne : Nat) {B : List Gwei} (hB : B.length = vs.length) (n : Nat) {s t : Nat}
     (hs : s ∈ idx) (ht : t ∈ idx) :
     consolidationStep (tableRows vs idx) ne (tableBalances B idx, n) (idx.idxOf s, idx.idxOf t) =
-      (consolidationStep (vs.map globalLocal) ne (B, n) (s, t)).map
+      (consolidationStep (vs.map consolidationValidatorOf) ne (B, n) (s, t)).map
         fun r => (toTable idx r.1, r.2) := by
   have hrs := tableRows_getElem? (vs := vs) hs
   have hbs := tableBalances_getElem? (bs := B) hs
@@ -112,22 +113,24 @@ theorem consolidationStep_table {vs : List Validator} {idx : List Nat} (hnd : id
   case neg =>
     simp [consolidationStep, hes, localExists_global, hsx, Except.map, throw, throwThe,
       MonadExceptOf.throw, bind, Except.bind]
-  have hrow : localRow vs s = globalLocal vs[s] := by
+  have hrow : localRow vs s = consolidationValidatorOf vs[s] := by
     simp [localRow, List.getElem?_eq_getElem hsx]
   have hsb : s < B.length := by rw [hB]; exact hsx
   by_cases hsl : vs[s].slashed = true
-  · simp [consolidationStep, hes, localExists_global, hsx, listGet, hrs, hrow, hsl, globalLocal,
+  · simp [consolidationStep, hes, localExists_global, hsx, listGet, hrs, hrow, hsl,
+      consolidationValidatorOf,
       Except.map, bind, Except.bind, pure, Except.pure, toTable]
   by_cases hwe : vs[s].withdrawable_epoch > ne
   · simp [consolidationStep, hes, localExists_global, hsx, listGet, hrs, hrow, hsl, hwe,
-      globalLocal, Except.map, bind, Except.bind, pure, Except.pure, toTable]
+      consolidationValidatorOf, Except.map, bind, Except.bind, pure, Except.pure, toTable]
   have hlen1 : (tableBalances B idx).length = idx.length := tableBalances_length _ _
   have hset1 := tableBalances_set hnd hs hsb
     (saturating_sub B[s] (min B[s] vs[s].effective_balance))
   by_cases htx : t < vs.length
   case neg =>
     simp [consolidationStep, hes, het, localExists_global, hsx, htx, listGet, listSet, hrs, hrow,
-      hsl, hwe, globalLocal, decrease_balance, hbs, List.getElem?_eq_getElem hsb, hsb, hlen1,
+      hsl, hwe, consolidationValidatorOf, decrease_balance, hbs, List.getElem?_eq_getElem hsb, hsb,
+        hlen1,
       hlts, Except.map, bind, Except.bind, pure, Except.pure, throw, throwThe,
       MonadExceptOf.throw]
   have htb : t < (B.set s (saturating_sub B[s] (min B[s] vs[s].effective_balance))).length := by
@@ -139,7 +142,8 @@ theorem consolidationStep_table {vs : List Validator} {idx : List Nat} (hnd : id
     simp [hlen1]
   simp only [consolidationStep, hes, het, localExists_global, hsx, htx, decide_true,
     Bool.not_true, Bool.false_eq_true, if_false, listGet, hrs, hrow, List.getElem?_map,
-    List.getElem?_eq_getElem hsx, Option.map_some, globalLocal, hsl, hwe, decrease_balance,
+    List.getElem?_eq_getElem hsx, Option.map_some, consolidationValidatorOf, hsl, hwe,
+      decrease_balance,
     increase_balance, listSet, hbs, List.getElem?_eq_getElem hsb, Option.getD_some, hsb, if_true,
     hlen1, hlts, hltt, hlen2, hbt, List.getElem?_eq_getElem htb, htb, bind, Except.bind, pure,
     Except.pure, Except.map, ← hset1, tableBalances_length]
@@ -152,7 +156,7 @@ theorem consolidationStep_table {vs : List Validator} {idx : List Nat} (hnd : id
 target balance. -/
 theorem consolidationStep_full_ok {vs : List Validator} (ne : Nat) {B : List Gwei} (n : Nat)
     (s t : Nat) {r} (hB : B.length = vs.length)
-    (hr : consolidationStep (vs.map globalLocal) ne (B, n) (s, t) = .ok r) :
+    (hr : consolidationStep (vs.map consolidationValidatorOf) ne (B, n) (s, t) = .ok r) :
     r.1.1 = B ∨ ∃ x y, r.1.1 = (B.set s x).set t y := by
   by_cases hsx : s < vs.length
   case neg =>
@@ -160,17 +164,19 @@ theorem consolidationStep_full_ok {vs : List Validator} (ne : Nat) {B : List Gwe
       bind, Except.bind] at hr
   have hsb : s < B.length := by rw [hB]; exact hsx
   by_cases hsl : vs[s].slashed = true
-  · simp [consolidationStep, localExists_global, hsx, hsl, listGet, globalLocal, bind,
+  · simp [consolidationStep, localExists_global, hsx, hsl, listGet, consolidationValidatorOf, bind,
       Except.bind, pure, Except.pure] at hr
     left; subst hr; rfl
   by_cases hwe : vs[s].withdrawable_epoch > ne
-  · simp [consolidationStep, localExists_global, hsx, hsl, hwe, listGet, globalLocal, bind,
+  · simp [consolidationStep, localExists_global, hsx, hsl, hwe, listGet, consolidationValidatorOf,
+      bind,
       Except.bind, pure, Except.pure] at hr
     left; subst hr; rfl
   by_cases htx : t < vs.length
   case neg =>
     simp [consolidationStep, localExists_global, hsx, hsl, hwe, htx, listGet, listSet,
-      globalLocal, decrease_balance, hsb, bind, Except.bind, pure, Except.pure, throw, throwThe,
+      consolidationValidatorOf, decrease_balance, hsb, bind, Except.bind, pure, Except.pure, throw,
+        throwThe,
       MonadExceptOf.throw] at hr
   right
   have htb : t < (B.set s (saturating_sub B[s] (min B[s] vs[s].effective_balance))).length := by
@@ -178,7 +184,8 @@ theorem consolidationStep_full_ok {vs : List Validator} (ne : Nat) {B : List Gwe
   revert hr
   simp only [consolidationStep, localExists_global, hsx, htx, decide_true, Bool.not_true,
     Bool.false_eq_true, if_false, listGet, List.getElem?_map, List.getElem?_eq_getElem hsx,
-    Option.map_some, globalLocal, hsl, hwe, decrease_balance, increase_balance, listSet,
+    Option.map_some, consolidationValidatorOf, hsl, hwe, decrease_balance, increase_balance,
+      listSet,
     List.getElem?_eq_getElem hsb, hsb, if_true, List.getElem?_eq_getElem htb, htb, bind,
     Except.bind, pure, Except.pure]
   cases uint64Add _ _ with
@@ -245,14 +252,14 @@ theorem stepLoop_count {vs : List LocalValidator} (ne : Nat) (pairs : List (Nat 
 
 theorem consolidationStep_length {vs : List Validator} (ne : Nat) {B : List Gwei} (n : Nat)
     (c : Nat × Nat) {r} (hB : B.length = vs.length)
-    (hr : consolidationStep (vs.map globalLocal) ne (B, n) c = .ok r) :
+    (hr : consolidationStep (vs.map consolidationValidatorOf) ne (B, n) c = .ok r) :
     r.1.1.length = B.length := by
   rcases consolidationStep_full_ok ne n c.1 c.2 hB hr with h | ⟨x, y, h⟩ <;> simp [h]
 
 theorem consolidationStep_agreeOut {vs : List Validator} {idx : List Nat} (ne : Nat)
     {B0 B : List Gwei} (n : Nat) {s t : Nat} (hs : s ∈ idx) (ht : t ∈ idx)
     (hB : B.length = vs.length) (hag : AgreeOut B0 B idx) {r}
-    (hr : consolidationStep (vs.map globalLocal) ne (B, n) (s, t) = .ok r) :
+    (hr : consolidationStep (vs.map consolidationValidatorOf) ne (B, n) (s, t) = .ok r) :
     AgreeOut B0 r.1.1 idx := by
   refine ⟨(consolidationStep_length ne n _ hB hr).trans hag.1, fun i hi => ?_⟩
   have his : s ≠ i := fun h => hi (h ▸ hs)
@@ -268,7 +275,7 @@ theorem stepLoop_table {vs : List Validator} {idx : List Nat} (hnd : idx.Nodup) 
     (hB : B.length = vs.length) (n : Nat) :
     stepLoop (consolidationStep (tableRows vs idx) ne) (toTable idx (B, n))
         (pairs.map fun p => (idx.idxOf p.1, idx.idxOf p.2)) =
-      (stepLoop (consolidationStep (vs.map globalLocal) ne) (B, n) pairs).map
+      (stepLoop (consolidationStep (vs.map consolidationValidatorOf) ne) (B, n) pairs).map
         fun r => (toTable idx r.1, r.2) := by
   induction pairs generalizing B n with
   | nil => simp [stepLoop, pure, Except.pure, Except.map]
@@ -278,7 +285,7 @@ theorem stepLoop_table {vs : List Validator} {idx : List Nat} (hnd : idx.Nodup) 
     simp only [List.map_cons, stepLoop]
     rw [show toTable idx (B, n) = (tableBalances B idx, n) from rfl,
       consolidationStep_table hnd ne hB n hs ht]
-    cases hr : consolidationStep (vs.map globalLocal) ne (B, n) p with
+    cases hr : consolidationStep (vs.map consolidationValidatorOf) ne (B, n) p with
     | error e => simp [Except.map, bind, Except.bind]
     | ok r =>
       obtain ⟨⟨B', n'⟩, stop⟩ := r
@@ -292,7 +299,7 @@ theorem stepLoop_table {vs : List Validator} {idx : List Nat} (hnd : idx.Nodup) 
 theorem stepLoop_agreeOut {vs : List Validator} {idx : List Nat} (ne : Nat)
     (pairs : List (Nat × Nat)) (hin : PairsIn idx pairs) (B0 B : List Gwei) (n : Nat)
     (hB : B.length = vs.length) (hag : AgreeOut B0 B idx) {r}
-    (hr : stepLoop (consolidationStep (vs.map globalLocal) ne) (B, n) pairs = .ok r) :
+    (hr : stepLoop (consolidationStep (vs.map consolidationValidatorOf) ne) (B, n) pairs = .ok r) :
     AgreeOut B0 r.1.1 idx := by
   induction pairs generalizing B n with
   | nil =>
@@ -302,7 +309,7 @@ theorem stepLoop_agreeOut {vs : List Validator} {idx : List Nat} (ne : Nat)
     obtain ⟨hs, ht⟩ := hin p (List.mem_cons_self ..)
     have hin' : PairsIn idx ps := fun q hq => hin q (List.mem_cons_of_mem _ hq)
     unfold stepLoop at hr
-    cases hstep : consolidationStep (vs.map globalLocal) ne (B, n) p with
+    cases hstep : consolidationStep (vs.map consolidationValidatorOf) ne (B, n) p with
     | error e => rw [hstep] at hr; simp [bind, Except.bind] at hr
     | ok r1 =>
       rw [hstep] at hr

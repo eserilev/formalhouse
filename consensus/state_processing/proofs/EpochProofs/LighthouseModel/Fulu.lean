@@ -254,7 +254,7 @@ theorem lighthouse_single_pass_eq_spec_supply_fulu [CurrentPreset] [CurrentFuluC
       let s3 ← process_registry_updates P (fuluChurnTotal total_active_balance) s2
       process_slashings P total_active_balance s3)
     ((fun y => state.withRowsChurn y.1 y.2) <$>
-      passM (fun churn r => lighthouseRowStep P
+      passOverRows (fun churn r => lighthouseRowStep P
           (lighthouseContextOf state (fuluChurnTotal total_active_balance) current_epoch rctx per)
           (base_reward r) churn r)
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
@@ -285,12 +285,12 @@ theorem lighthouse_single_pass_eq_spec_supply_fulu [CurrentPreset] [CurrentFuluC
       (by rw [htab]; exact hbase _ hr) (by rw [htab]; exact htotal) k hk hincrements
       (heffective i hiv) (hmax _ (List.getElem_mem hiv)) (hbalance i hiv) hfinalized hcurrent64
       hactivation (hexit i hiv)
-  rw [passM_congr _ _ (rowsOf state) (fun churn r hr => hstep churn r hr)]
-  rw [passM_proj (singlePassStep P (fuluChurnTotal total_active_balance)
+  rw [passOverRows_congr _ _ (rowsOf state) (fun churn r hr => hstep churn r hr)]
+  rw [passOverRows_proj (singlePassStep P (fuluChurnTotal total_active_balance)
     rctx.previous_epoch rctx.in_leak rctx current_epoch state.finalized_checkpoint.epoch
     activation_epoch (current_epoch + P.EPOCHS_PER_SLASHINGS_VECTOR / 2) per)
     (fun c => ((((), ()), c), ())) (fun b => b.1.2) (fun _ => rfl) (fun _ => rfl)]
-  cases passM _ _ (rowsOf state) <;> rfl
+  cases passOverRows _ _ (rowsOf state) <;> rfl
 
 /-- `genesis_passes_eq_single_pass` with the registry total `registry_total`. -/
 theorem genesis_passes_eq_single_pass_tab (p : Preset) (total_active_balance registry_total : Gwei)
@@ -306,7 +306,7 @@ theorem genesis_passes_eq_single_pass_tab (p : Preset) (total_active_balance reg
       let s3 ← process_registry_updates p registry_total s2
       process_slashings p total_active_balance s3)
     ((fun z => state.withRowsChurn z.1.1 z.2) <$>
-      passM (bothSteps (registryRowStep p registry_total GENESIS_EPOCH
+      passOverRows (bothSteps (registryRowStep p registry_total GENESIS_EPOCH
           state.finalized_checkpoint.epoch activation_epoch)
         (slashingsRowStep p (GENESIS_EPOCH + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per))
         ((state.earliest_exit_epoch, state.exit_balance_to_consume), ()) (rowsOf state)) := by
@@ -314,13 +314,13 @@ theorem genesis_passes_eq_single_pass_tab (p : Preset) (total_active_balance reg
   simp only [bind, Except.bind]
   rw [process_rewards_and_penalties_genesis p total_active_balance state hcurrent]
   dsimp only
-  refine SameResultOrBothFail.trans ?_ (passM_seq_bothSteps _ _ _ () (rowsOf state)
+  refine SameResultOrBothFail.trans ?_ (passOverRows_seq_bothSteps _ _ _ () (rowsOf state)
     (fun c y => pure (state.withRowsChurn c y.2)))
   apply SameResultOrBothFail.bind_map (process_registry_updates_rows p registry_total state
     GENESIS_EPOCH activation_epoch hrows hcurrent hactivation)
   intro y3 hy3
   have hk3 : y3.2.map rowKey = (rowsOf state).map rowKey :=
-    passM_rowKey _ (fun a r x h => by
+    passOverRows_rowKey _ (fun a r x h => by
       rw [registryRowStep_preserves p registry_total GENESIS_EPOCH
         state.finalized_checkpoint.epoch activation_epoch a r x h]; rfl) _ _ y3 hy3
   have hR3 : rowsOf (state.withRowsChurn y3.1 y3.2) = y3.2 := rowsOf_withRows state y3.2 hk3
@@ -331,7 +331,7 @@ theorem genesis_passes_eq_single_pass_tab (p : Preset) (total_active_balance reg
   rw [hR3] at h4
   refine SameResultOrBothFail.trans h4 (SameResultOrBothFail.of_eq ?_)
   simp only [Functor.map, Except.map, bind, Except.bind, pure, Except.pure]
-  cases passM (slashingsRowStep p (GENESIS_EPOCH + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) ()
+  cases passOverRows (slashingsRowStep p (GENESIS_EPOCH + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) ()
     y3.2 <;> rfl
 
 /-- `lighthouse_single_pass_eq_spec_genesis` for Fulu. -/
@@ -355,7 +355,7 @@ theorem lighthouse_single_pass_eq_spec_genesis_fulu [CurrentPreset] [CurrentPres
       let s3 ← process_registry_updates P (fuluChurnTotal total_active_balance) s2
       process_slashings P total_active_balance s3)
     ((fun y => state.withRowsChurn y.1 y.2) <$>
-      passM (fun churn r => lighthouseRowStep P
+      passOverRows (fun churn r => lighthouseRowStep P
           (lighthouseContextOf state (fuluChurnTotal total_active_balance) GENESIS_EPOCH rctx per)
           (base_reward r) churn r)
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
@@ -383,20 +383,20 @@ theorem lighthouse_single_pass_eq_spec_genesis_fulu [CurrentPreset] [CurrentPres
       (by simpa only [lighthouseContextOf] using hfinalized)
       (by simp only [lighthouseContextOf, GENESIS_EPOCH, UINT64_SIZE]; decide) hactivation
         (hexit i hiv)
-  rw [passM_congr _ _ (rowsOf state) (fun churn r hr => hstep churn r hr)]
-  rw [passM_proj (bothSteps (registryRowStep P (fuluChurnTotal total_active_balance)
+  rw [passOverRows_congr _ _ (rowsOf state) (fun churn r hr => hstep churn r hr)]
+  rw [passOverRows_proj (bothSteps (registryRowStep P (fuluChurnTotal total_active_balance)
       GENESIS_EPOCH state.finalized_checkpoint.epoch activation_epoch)
       (slashingsRowStep P
         (GENESIS_EPOCH + P.EPOCHS_PER_SLASHINGS_VECTOR / 2) per))
     (fun c => (c, ())) (fun b => b.1) (fun _ => rfl) (fun _ => rfl)]
-  cases passM _ _ (rowsOf state) <;> rfl
+  cases passOverRows _ _ (rowsOf state) <;> rfl
 
 /-- The Fulu spec steps after the four passes give the same `ok` results as `tailNFG` at the
 Fulu churn total, with `epochRest2Fulu` after the consolidations. -/
 theorem epochRestFulu_nf [CurrentPreset] [CurrentPreset.Valid] [CurrentFuluConfig] (o : Oracle) (s1 : BeaconState) (current_epoch : Epoch)
     (total_active_balance : Gwei) (ctx : LighthouseStepContext) (bf : Row → Gwei)
     (churn : Epoch × Gwei) (rows : List Row) (activation_epoch : Epoch)
-    (hpass : passM (fun c r => lighthouseRowStep P ctx (bf r) c r)
+    (hpass : passOverRows (fun c r => lighthouseRowStep P ctx (bf r) c r)
       (s1.earliest_exit_epoch, s1.exit_balance_to_consume) (rowsOf s1) = .ok (churn, rows))
     (hctxcur : ctx.current_epoch = current_epoch)
     (hctxfin : ctx.finalized_epoch = s1.finalized_checkpoint.epoch)

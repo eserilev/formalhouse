@@ -5,8 +5,8 @@ import EpochProofs.SpecFacts.Slashings
 # `process_slashings` as a pass over rows
 
 `slashingsRowStep` applies `slashingBalanceStep` to one row. `process_slashings_rows` shows that
-`process_slashings` is a `passM` of this step over `rowsOf state`. This file also holds general
-lemmas: rows round-trip to the state lists, and a pass keeps the fields that its step keeps.
+`process_slashings` is a `passOverRows` of this step over `rowsOf state`. This file also holds
+general lemmas: rows round-trip to the state lists, and a pass keeps the fields that its step keeps.
 -/
 
 namespace EpochProofs.Spec
@@ -54,25 +54,25 @@ theorem rowsOf_map_pair (state : BeaconState) :
     simp [rowsOf_getElem]
 
 /-- If each step keeps `g` of its row, the pass keeps `g` of all rows. -/
-theorem passM_map_eq {A R B : Type} (f : A → R → SpecM (A × R)) (g : R → B)
+theorem passOverRows_map_eq {A R B : Type} (f : A → R → SpecM (A × R)) (g : R → B)
     (hf : ∀ a r x, f a r = .ok x → g x.2 = g r) :
-    ∀ (a : A) (rows : List R) (y : A × List R), passM f a rows = .ok y →
+    ∀ (a : A) (rows : List R) (y : A × List R), passOverRows f a rows = .ok y →
       y.2.map g = rows.map g := by
   intro a rows
   induction rows generalizing a with
   | nil =>
     intro y h
-    simp only [passM, pure, Except.pure, Except.ok.injEq] at h
+    simp only [passOverRows, pure, Except.pure, Except.ok.injEq] at h
     subst h
     rfl
   | cons r rs ih =>
     intro y h
-    rw [passM_cons] at h
+    rw [passOverRows_cons] at h
     cases hx : f a r with
     | error e => simp [hx, bind, Except.bind] at h
     | ok x =>
       simp only [hx, bind, Except.bind] at h
-      cases hy : passM f x.1 rs with
+      cases hy : passOverRows f x.1 rs with
       | error e => simp [hy] at h
       | ok z =>
         simp only [hy, pure, Except.pure, Except.ok.injEq] at h
@@ -123,12 +123,13 @@ theorem foldlM_slashingLoopStep (p : Preset) (target per : Uint64) :
       rows.map (·.index) = List.range' pre.length rows.length →
       (rows.map fun r => (r.validator, r.index)).foldlM (slashingLoopStep p target per)
           (pre ++ rows.map (·.balance)) =
-        (fun x => pre ++ x.2.map (·.balance)) <$> passM (slashingsRowStep p target per) () rows
-  | [], pre, _ => by simp [passM, pure, Except.pure, Functor.map, Except.map]
+        (fun x => pre ++ x.2.map (·.balance)) <$> passOverRows (slashingsRowStep p target per) ()
+          rows
+  | [], pre, _ => by simp [passOverRows, pure, Except.pure, Functor.map, Except.map]
   | r :: rs, pre, hidx => by
     simp only [List.map_cons, List.length_cons, List.range'_succ, List.cons.injEq] at hidx
     obtain ⟨hr, hrs⟩ := hidx
-    simp only [List.map_cons, List.foldlM_cons, passM_cons, hr, slashingLoopStep_row]
+    simp only [List.map_cons, List.foldlM_cons, passOverRows_cons, hr, slashingLoopStep_row]
     simp only [slashingsRowStep, bind, Except.bind, Functor.map, Except.map]
     cases slashingBalanceStep p target per r.validator r.balance with
     | error e => rfl
@@ -139,7 +140,7 @@ theorem foldlM_slashingLoopStep (p : Preset) (target per : Uint64) :
       simp only [List.append_assoc, List.cons_append, List.nil_append] at ih
       rw [ih]
       simp only [Functor.map, Except.map]
-      cases passM (slashingsRowStep p target per) () rs <;> simp
+      cases passOverRows (slashingsRowStep p target per) () rs <;> simp
 
 /-- `process_slashings` is a pass of `slashingsRowStep` over the rows, once the preamble
 succeeds. -/
@@ -151,7 +152,7 @@ theorem process_slashings_rows (p : Preset) (total_active_balance : Gwei) (state
     (hrows : ListLengthsMatch state) :
     process_slashings p total_active_balance state =
       (fun x => state.withRows x.2) <$>
-        passM (slashingsRowStep p (epoch + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) ()
+        passOverRows (slashingsRowStep p (epoch + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) ()
           (rowsOf state) := by
   obtain ⟨hbal, hscores, -, -⟩ := hrows
   rw [process_slashings_eq p total_active_balance state epoch hepoch htarget, hpre]
@@ -159,13 +160,13 @@ theorem process_slashings_rows (p : Preset) (total_active_balance : Gwei) (state
     (rowsOf state) [] (by simpa using rowsOf_map_index state)
   rw [rowsOf_map_pair, List.nil_append, rowsOf_map_balance state hbal] at hfold
   simp only [bind, Except.bind, hfold]
-  cases hpass : passM (slashingsRowStep p (epoch + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) ()
+  cases hpass : passOverRows (slashingsRowStep p (epoch + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) ()
       (rowsOf state) with
   | error e => rfl
   | ok y =>
-    have hv := passM_map_eq _ (·.validator) (fun a r x hx => by
+    have hv := passOverRows_map_eq _ (·.validator) (fun a r x hx => by
       rw [slashingsRowStep_preserves _ _ _ a r x hx]) () (rowsOf state) y hpass
-    have hs := passM_map_eq _ (·.inactivity_score) (fun a r x hx => by
+    have hs := passOverRows_map_eq _ (·.inactivity_score) (fun a r x hx => by
       rw [slashingsRowStep_preserves _ _ _ a r x hx]) () (rowsOf state) y hpass
     rw [rowsOf_map_validator] at hv
     rw [rowsOf_map_inactivity_score state hscores] at hs
@@ -181,7 +182,7 @@ theorem process_slashings_rows_sameResultOrBothFail (p : Preset) (total_active_b
     (hrows : ListLengthsMatch state) :
     SameResultOrBothFail (process_slashings p total_active_balance state)
       ((fun x => state.withRows x.2) <$>
-        passM (slashingsRowStep p (epoch + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) ()
+        passOverRows (slashingsRowStep p (epoch + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) ()
           (rowsOf state)) :=
   SameResultOrBothFail.of_eq (process_slashings_rows p total_active_balance state epoch hepoch htarget
     adjusted per hpre hrows)

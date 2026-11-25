@@ -22,9 +22,9 @@ namespace EpochProofs.Spec
 
 /-- The flags that Lighthouse predicts for the validator of a deposit, from the state before the
 single pass. A deposit for an unknown pubkey has neither flag. -/
-def lighthouseDepositView [CurrentPreset] (s : BeaconState) (current_epoch : Epoch)
+def lighthouseDepositInfo [CurrentPreset] (s : BeaconState) (current_epoch : Epoch)
     (d : PendingDeposit) :
-    DepositSpecView :=
+    DepositInfo :=
   match s.validators[(s.validators.map (·.pubkey)).idxOf d.pubkey]? with
   | some v =>
     let st := predictedStatus P true true (registryFieldsOf v (0, 0))
@@ -63,7 +63,7 @@ def lighthouseDepositPlan [CurrentPreset] (s : BeaconState) (total_active_balanc
   let finalized_slot ←
     compute_start_slot_at_epoch P s.finalized_checkpoint.epoch
   let views := (s.pending_deposits.take P.MAX_PENDING_DEPOSITS_PER_EPOCH).map
-    (lighthouseDepositView s current_epoch)
+    (lighthouseDepositInfo s current_epoch)
   let (next, dbtc, postponed) ← depositDecisions P finalized_slot
     s.deposit_balance_to_consume (← get_activation_churn_limit P total_active_balance)
     views
@@ -109,7 +109,7 @@ def lighthouseFullTailG [CurrentPreset] (o : Oracle) (rt : Gwei → Gwei)
   let (downward, upward) ← hysteresisThresholds P
   let named := validatorsInConsolidations s
   let ctx := lighthouseContextOf s (rt total_active_balance) current_epoch rctx per
-  let (churn, rows) ← passM (fun churn r => lighthouseValidatorStep P ctx downward upward
+  let (churn, rows) ← passOverRows (fun churn r => lighthouseValidatorStep P ctx downward upward
       ⟨lighthouseBaseReward total_active_balance r, plan.topups.getD r.index 0,
         decide (r.index ∈ named)⟩
       churn r)
@@ -152,7 +152,7 @@ def setEB (s : BeaconState) (i : Nat) (e : Gwei) : BeaconState :=
 
 /-- The spec's flags for the validator of a deposit, read in state `s`. -/
 def specDepositView (s : BeaconState) (next_epoch : Epoch) (d : PendingDeposit) :
-    DepositSpecView :=
+    DepositInfo :=
   match s.validators[(s.validators.map (·.pubkey)).idxOf d.pubkey]? with
   | some v => ⟨d.slot, d.amount, false, decide (v.exit_epoch < FAR_FUTURE_EPOCH),
       decide (v.withdrawable_epoch < next_epoch)⟩

@@ -578,6 +578,7 @@ checks, which validates the key. -/
 structure CommitteeStateFacts [CurrentPreset] (o : Oracle) (s : BeaconState) : Prop where
   slot : s.slot + 8192 < 2 ^ 64
   randao : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR
+  /-- At most `2^40` validators. -/
   registryBelowLimit : s.validators.length ≤ 2 ^ 40
   effectiveBalancesBelowMax : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000
   lookahead : s.proposer_lookahead.length = 2 * P.SLOTS_PER_EPOCH
@@ -959,27 +960,27 @@ invariant of reachable states: the registry limit is `VALIDATOR_REGISTRY_LIMIT`,
 balance bound is `EffectiveBalancesValid`, the two lengths are SSZ vector lengths, and a deposit adds a validator
 only after its signature checks, which validates the key. -/
 structure CommitteeStepFacts [CurrentPreset] (o : Oracle) (s : BeaconState) : Prop where
+  /-- At most `2^40` validators. -/
   registryBelowLimit : s.validators.length ≤ 2 ^ 40
   effectiveBalancesBelowMax : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000
   proposerLookaheadLength : s.proposer_lookahead.length = 2 * P.SLOTS_PER_EPOCH
   ptcWindowLength : s.ptc_window.length = 3 * P.SLOTS_PER_EPOCH
+  /-- Each pubkey passes the BLS `KeyValidate` check. -/
   pubkeysValid : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true
 
 /-- The part of `CommitteeStepFacts` that is not yet carried from the epoch input: the registry
 limit `2^40` and valid public keys. The effective balance cap is carried
 (`epochBeforeCommitteeSteps_effective_balances`), and the two lengths hold on every EthLib state. -/
 structure RegistryAllowsSelection (o : Oracle) (s : BeaconState) : Prop where
+  /-- At most `2^40` validators. -/
   registryBelowLimit : s.validators.length ≤ 2 ^ 40
+  /-- Each pubkey passes the BLS `KeyValidate` check. -/
   pubkeysValid : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true
 
 /-- The committee conditions at the epoch input `t`: the state conditions and the pyspec
 preconditions hold at the state that the epoch passes to the committee steps
-(`epochBeforeCommitteeSteps`). That state is a function of `t`, so this is one fact about one state.
-
-An earlier version stated them at every state `s` with `SameSlotAndLengths t s`.
-`SameSlotAndLengths` fixes only
-the slot, the list lengths and the RANDAO length, so it admits `t` with every validator list
-emptied, where `syncCommitteeHasCandidate` fails: that hypothesis was false for every `t`. -/
+(`epochBeforeCommitteeSteps`). That state is a function of `t`, so this is one fact about one
+state. -/
 def AtCommitteeStepState [CurrentPreset] (o : Oracle) (t : BeaconState) : Prop :=
   ∀ s, epochBeforeCommitteeSteps P o t = .ok s → CommitteeStepFacts o s ∧ CommitteeStepPreconditions o s
 

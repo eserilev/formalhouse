@@ -5,7 +5,7 @@ import EpochProofs.LighthouseModel.Order
 /-!
 # Justification and finalization, composed from the translated function
 
-`justification` is `process_justification_and_finalization` of `altair.rs` with
+`translatedJustification` is `process_justification_and_finalization` of `altair.rs` with
 `weigh_justification_and_finalization.rs`: the reads of the epochs, the bits and the balances,
 the translated `weigh_justification`, and the checkpoint and bit writes. The reads and the writes
 are untranslated code (`UntranslatedJustification`), each with the fact that links it to the spec

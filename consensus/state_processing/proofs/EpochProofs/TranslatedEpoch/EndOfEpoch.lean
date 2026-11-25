@@ -4,14 +4,14 @@ import EpochProofs.TranslatedSteps.EpochCommittees
 import EpochProofs.LighthouseModel.Order
 
 /-!
-# The epoch tail, composed from the translated functions
+# The end of the epoch, composed from the translated functions
 
-`tail` is the end of `altair.rs` `process_epoch`: the eth1, slashings and RANDAO resets
-(`resets.rs`), the historical summaries update, the participation rotation and the sync
+`translatedEndOfEpoch` is the end of `altair.rs` `process_epoch`: the eth1, slashings and RANDAO
+resets (`resets.rs`), the historical summaries update, the participation rotation and the sync
 committee update. The checks and indices are the translated functions of `tail_updates.rs`, and
 the next sync committee indices are the translated `next_sync_committee_indices`. The reads and
 the writes are untranslated code (`UntranslatedEndOfEpoch`), each with the fact that links it to
-the spec (`UntranslatedEndOfEpochFacts`). `translatedEndOfEpoch_matches_model` shows that `tail`
+the spec (`UntranslatedEndOfEpochFacts`). `translatedEndOfEpoch_matches_model` shows that it
 returns the state of the model `lighthouseStepsAfterPtcWindow`.
 -/
 
@@ -106,7 +106,7 @@ structure UntranslatedEndOfEpoch (RustState : Type) where
   syncDue : RustState → Option Bool
   writeCurrentSync : RustState → Option RustState
   Hash : Type
-  hash : ShuffleHashInst Hash
+  hash : ShuffleHash Hash
   effectiveBalances : EffectiveBalanceSource RustState
   syncIndices : RustState → Slice Usize
   syncDomain : Array U8 4#usize

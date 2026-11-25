@@ -181,7 +181,7 @@ def lighthouseSinglePassThenFulu [CurrentPreset] [CurrentFuluConfig]
   let (downward, upward) ← hysteresisThresholds P
   let named := validatorsInConsolidations s
   let ctx := lighthouseContextOf s (fuluChurnTotal total_active_balance) current_epoch rctx per
-  let x ← passM (fun churn r => lighthouseValidatorStep P ctx downward upward
+  let x ← passOverRows (fun churn r => lighthouseValidatorStep P ctx downward upward
       ⟨lighthouseBaseReward total_active_balance r, plan.topups.getD r.index 0,
         decide (r.index ∈ named)⟩
       churn r)

@@ -258,7 +258,7 @@ theorem byteValues_take_drop (b b0 : List U8) (n : Nat) (pre src : List U8)
   rw [← List.take_append_drop n b, h1, h2]
   simp [byteValues]
 
-theorem hash_with_u64_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle)
+theorem hash_with_u64_spec {H : Type} (inst : ShuffleHash H) (o : Spec.Oracle)
     (hH : HashMatches inst o) (seed : Array U8 32#usize) (x : U64) :
     types.state.balance_weighted_selection.hash_with_u64 inst seed x ⦃ d =>
       byteValues d.val = (o.hash (byteValues seed.val ++ Spec.uint_to_bytes 8 x.val)).toList ⦄ := by
@@ -282,7 +282,7 @@ theorem hash_with_u64_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracl
   simp only [Array.to_slice, Slice.from_val, this, hb1, byteValues_append, hbytes]
 
 /-- The translated `compute_seed` hashes the domain, the epoch and the RANDAO mix. -/
-theorem compute_seed_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle)
+theorem compute_seed_spec {H : Type} (inst : ShuffleHash H) (o : Spec.Oracle)
     (hH : HashMatches inst o) (domain : Array U8 4#usize) (epoch : U64) (mix : Array U8 32#usize) :
     types.state.balance_weighted_selection.compute_seed inst domain epoch mix ⦃ d =>
       byteValues d.val = (o.hash (byteValues domain.val ++ Spec.uint_to_bytes 8 epoch.val ++
@@ -311,7 +311,7 @@ theorem compute_seed_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle
     rw [← e, h3]
   simp only [Array.to_slice, Slice.from_val, this, hb2, hb1, byteValues_append, hbytes]
 
-theorem random_value_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle)
+theorem random_value_spec {H : Type} (inst : ShuffleHash H) (o : Spec.Oracle)
     (hH : HashMatches inst o) (seed : Array U8 32#usize) (i : Usize) :
     types.state.balance_weighted_selection.random_value inst seed i ⦃ v =>
       v.val = Spec.littleEndianValue

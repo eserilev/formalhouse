@@ -9,19 +9,19 @@ import EpochProofs.LighthouseModel.SpecToCommonStepOrder
 /-!
 # The single pass, composed from the translated functions
 
-`singlePass` is `process_epoch_single_pass` of `single_pass.rs` up to the builder payments, as one
-Lean function: the translated `step_context`, `single_pass_rows`, `apply_deposit_writes`,
-`process_on_table`, `update_effective_balances_at` and `apply_builder_pending_payments`, joined by
-the untranslated code (`UntranslatedSinglePass`, `UntranslatedBuilderPayments`): the trait
-implementations over the milhouse lists, the borrows of the state by each wrapper, and the values
-read from the state and the spec. `translatedSinglePass_matches_model` shows that, under the
+`translatedSinglePass` is `process_epoch_single_pass` of `single_pass.rs` up to the builder
+payments, as one Lean function: the translated `step_context`, `single_pass_rows`,
+`apply_deposit_writes`, `process_on_table`, `update_effective_balances_at` and
+`apply_builder_pending_payments`, joined by the untranslated code (`UntranslatedSinglePass`,
+`UntranslatedBuilderPayments`): the trait implementations over the milhouse lists, the borrows of
+the state by each wrapper, and the values read from the state and the spec.
+`translatedSinglePass_matches_model` shows that, under the
 trusted facts about the untranslated code (`UntranslatedSinglePassFacts`,
 `UntranslatedBuilderPaymentsFacts`), it returns the state of the model `lighthouseSinglePass`, the
 single pass of `process_epoch_lighthouse`. `translatedSinglePassBeforePayments` stops before the
 builder payments; the Fulu epoch uses it (`TranslatedEpoch/Fulu.lean`).
 
-The first part of the file proves the frame facts of the model steps that the composition needs:
-which fields each step after the loop keeps.
+The first part of the file proves which fields each model step after the loop keeps.
 -/
 
 namespace EpochProofs.Spec
@@ -39,7 +39,7 @@ theorem lighthouseSinglePassThen_order_eq [CurrentPreset] (oracle : Oracle) (s :
   repeat' split
   all_goals rfl
 
-/-! ## Frame facts of the model steps -/
+/-! ## The fields that the model steps keep -/
 
 /-- A `for` loop in `SpecM` keeps every property that each successful pass keeps. -/
 theorem forIn_keep {α β : Type} (P : β → Prop)
@@ -681,7 +681,7 @@ theorem translatedSinglePass_matches_model [Spec.CurrentPreset.Valid]
   obtain ⟨⟨dn, up⟩, hh, hT⟩ := Spec.specM_bind_ok hT
   obtain ⟨x, hx, hT⟩ := Spec.specM_bind_ok hT
   have hxlen : x.2.length = (rustStateToSpec rustState).validators.length := by
-    rw [(Spec.passM_rows _ _ _ _ hx).1, Spec.rowsOf_length]
+    rw [(Spec.passOverRows_rows _ _ _ _ hx).1, Spec.rowsOf_length]
   simp only [Spec.lighthouseDepositsConsolidationsPayments_eq] at hT
   obtain ⟨s6, h6, h7⟩ := Spec.specM_bind_ok hT
   have htarget : current + Spec.P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < Spec.UINT64_SIZE := by

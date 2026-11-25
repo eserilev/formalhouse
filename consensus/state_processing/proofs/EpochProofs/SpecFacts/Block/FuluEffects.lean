@@ -8,12 +8,12 @@ This file gives each Fulu block function the effect facts that the Gloas functio
 `SpecFacts/Block/*`: `EBStable`, `BalancesUp`, `CheckpointsStable` (from
 `SpecFacts/FuluTransition`), `ExitOrder`, `SlashEffect`, `SlashFields` and `RequestEffect`.
 
-Most Fulu functions differ from the Gloas ones only in the exit churn. Under `FuluCompat`, the
-Fulu `initiate_validator_exit` and `compute_exit_epoch_and_update_churn` are the Gloas functions
-at `fuluTotalActiveBalance` (`initiate_validator_exit_fulu_eq`,
-`compute_exit_epoch_and_update_churn_fulu_eq`). The Gloas facts about these two functions hold for
-every total, so they carry over. The consolidation churn is the Electra one, so
-`compute_consolidation_epoch_and_update_churn_fulu` gets its own bound.
+Most Fulu functions differ from the Gloas ones only in the exit churn. Under
+`FuluConfigMatchesPreset`, the Fulu `initiate_validator_exit` and
+`compute_exit_epoch_and_update_churn` are the Gloas functions at `fuluTotalActiveBalance`
+(`initiate_validator_exit_fulu_eq`, `compute_exit_epoch_and_update_churn_fulu_eq`). The Gloas facts
+about these two functions hold for every total, so they carry over. The consolidation churn is the
+Electra one, so `compute_consolidation_epoch_and_update_churn_fulu` gets its own bound.
 -/
 
 namespace EpochProofs.Spec
@@ -57,7 +57,8 @@ open FuluEffectsFacts
 /-! ## Exits -/
 
 /-- The effects of the Fulu `initiate_validator_exit`. -/
-theorem initiate_validator_exit_fulu_effects (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem initiate_validator_exit_fulu_effects (p : Preset) (f : FuluConfig)
+    (hc : FuluConfigMatchesPreset p f)
     (tab : Gwei) (s s' : BeaconState) (index : ValidatorIndex)
     (h : initiate_validator_exit_fulu p f tab s index = .ok s') :
     EBStable s s' ∧ CheckpointsStable s s' ∧ (ExitOrder s → ExitOrder s') ∧
@@ -68,7 +69,7 @@ theorem initiate_validator_exit_fulu_effects (p : Preset) (f : FuluConfig) (hc :
 /-- A successful Fulu voluntary exit is `initiate_validator_exit` on the original state, for an
 active validator with no exit. -/
 theorem process_voluntary_exit_fulu_initiate (p : Preset) (o : Oracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (s s' : BeaconState) (e : SignedVoluntaryExit)
+    (hc : FuluConfigMatchesPreset p f) (s s' : BeaconState) (e : SignedVoluntaryExit)
     (h : process_voluntary_exit_fulu p o f s e = .ok s') :
     ∃ tab cur v, s.validators[e.message.validator_index]? = some v ∧
       get_current_epoch p s = .ok cur ∧ is_active_validator v cur ∧
@@ -94,7 +95,7 @@ theorem process_voluntary_exit_fulu_initiate (p : Preset) (o : Oracle) (f : Fulu
 /-- The effects of a Fulu voluntary exit. Only the exiting validator changes, by
 `ExitChange`. -/
 theorem process_voluntary_exit_fulu_effects (p : Preset) (o : Oracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (s s' : BeaconState) (e : SignedVoluntaryExit)
+    (hc : FuluConfigMatchesPreset p f) (s s' : BeaconState) (e : SignedVoluntaryExit)
     (h : process_voluntary_exit_fulu p o f s e = .ok s') :
     EBStable s s' ∧ CheckpointsStable s s' ∧ (ExitOrder s → ExitOrder s') ∧ BalancesUp s s' ∧
       (∀ j, j ≠ e.message.validator_index → s'.validators[j]? = s.validators[j]?) ∧
@@ -126,7 +127,7 @@ theorem slash_validator_fulu_initiate_ok (p : Preset) (f : FuluConfig) (s s1 : B
 
 /-- The Fulu `slash_validator` changes only the validator at `i`, by `SlashChange`. The balance
 at `i` drops by at most the slashing penalty. No other balance drops. -/
-theorem slash_validator_fulu_ok (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem slash_validator_fulu_ok (p : Preset) (f : FuluConfig) (hc : FuluConfigMatchesPreset p f)
     (s s' : BeaconState) (i : ValidatorIndex) (w : Option ValidatorIndex)
     (h : slash_validator_fulu p f s i w = .ok s') :
     CheckpointsStable s s' ∧
@@ -196,7 +197,8 @@ theorem slash_validator_fulu_ok (p : Preset) (f : FuluConfig) (hc : FuluCompat p
         exact Nat.le_trans (Nat.le_trans hle2 hle3) (Nat.le_add_right _ _)
 
 /-- The Fulu `slash_validator` on a validator that is not slashed has `SlashEffect`. -/
-theorem slash_validator_fulu_slashEffect (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem slash_validator_fulu_slashEffect (p : Preset) (f : FuluConfig)
+    (hc : FuluConfigMatchesPreset p f)
     (s s' : BeaconState) (i : ValidatorIndex) (w : Option ValidatorIndex)
     (hns : ∀ v, s.validators[i]? = some v → v.slashed = false)
     (h : slash_validator_fulu p f s i w = .ok s') : SlashEffect p s s' := by
@@ -225,7 +227,8 @@ theorem slash_validator_fulu_slashEffect (p : Preset) (f : FuluConfig) (hc : Ful
     · exact .inl (hne hj)
 
 /-- The Fulu `slash_validator` on a validator that is not slashed has `SlashFields`. -/
-theorem slash_validator_fulu_slashFields (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem slash_validator_fulu_slashFields (p : Preset) (f : FuluConfig)
+    (hc : FuluConfigMatchesPreset p f)
     (s s' : BeaconState) (i : ValidatorIndex) (w : Option ValidatorIndex)
     (hns : ∀ v, s.validators[i]? = some v → v.slashed = false)
     (h : slash_validator_fulu p f s i w = .ok s') : SlashFields p s s' := by
@@ -261,7 +264,7 @@ theorem process_proposer_slashing_fulu_ok (p : Preset) (o : Oracle) (f : FuluCon
 after. Its balance drops by at most `effective_balance / MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA`.
 No other balance drops, and no other validator changes. -/
 theorem process_proposer_slashing_fulu_effects (p : Preset) (o : Oracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (s s' : BeaconState) (ps : ProposerSlashing)
+    (hc : FuluConfigMatchesPreset p f) (s s' : BeaconState) (ps : ProposerSlashing)
     (h : process_proposer_slashing_fulu p o f s ps = .ok s') :
     EBStable s s' ∧ CheckpointsStable s s' ∧ (ExitOrder s → ExitOrder s') ∧ SlashEffect p s s' ∧
       (∀ j, j ≠ ps.signed_header_1.message.proposer_index →
@@ -289,7 +292,7 @@ theorem process_proposer_slashing_fulu_effects (p : Preset) (o : Oracle) (f : Fu
 
 /-- A Fulu attester slashing has `SlashEffect` and `SlashFields`. -/
 theorem process_attester_slashing_fulu_ok (p : Preset) (o : Oracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (s s' : BeaconState) (as : AttesterSlashing)
+    (hc : FuluConfigMatchesPreset p f) (s s' : BeaconState) (as : AttesterSlashing)
     (h : process_attester_slashing_fulu p o f s as = .ok s') :
     SlashEffect p s s' ∧ SlashFields p s s' := by
   unfold process_attester_slashing_fulu at h
@@ -325,7 +328,7 @@ theorem process_attester_slashing_fulu_ok (p : Preset) (o : Oracle) (f : FuluCon
 slashed before and is slashed after, and by at most
 `effective_balance / MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA`. -/
 theorem process_attester_slashing_fulu_effects (p : Preset) (o : Oracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (s s' : BeaconState) (as : AttesterSlashing)
+    (hc : FuluConfigMatchesPreset p f) (s s' : BeaconState) (as : AttesterSlashing)
     (h : process_attester_slashing_fulu p o f s as = .ok s') :
     EBStable s s' ∧ CheckpointsStable s s' ∧ (ExitOrder s → ExitOrder s') ∧
       SlashFields p s s' ∧
@@ -382,7 +385,7 @@ private theorem exit_churn_effect {p : Preset} {tab : Gwei} {s : BeaconState} {x
 /-- The Fulu `process_withdrawal_request` keeps balances. A full exit goes through
 `initiate_validator_exit`. A partial withdrawal only writes the exit churn and the queue. -/
 theorem process_withdrawal_request_fulu_effect (p : Preset) (f : FuluConfig)
-    (hc : FuluCompat p f) (s s' : BeaconState) (withdrawal_request : WithdrawalRequest)
+    (hc : FuluConfigMatchesPreset p f) (s s' : BeaconState) (withdrawal_request : WithdrawalRequest)
     (h : process_withdrawal_request_fulu p f s withdrawal_request = .ok s') :
     s'.balances = s.balances ∧ RequestEffect p s s' := by
   unfold process_withdrawal_request_fulu at h

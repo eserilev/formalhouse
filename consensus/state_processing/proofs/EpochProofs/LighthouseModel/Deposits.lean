@@ -205,7 +205,8 @@ def applyIf [CurrentPreset] (o : Oracle) (pp : Bool) (T : BeaconState) (d : Pend
 
 /-- The spec loop on views: one `depositStep`, then the apply of a deposit that is not
 postponed. It also collects the postponed deposits. -/
-def decideApplyLoop [CurrentPreset] (o : Oracle) (fs avail : Nat) (view : PendingDeposit → DepositSpecView) :
+def decideApplyLoop [CurrentPreset] (o : Oracle) (fs avail : Nat)
+    (view : PendingDeposit → DepositInfo) :
     DepositLoopState → List PendingDeposit → BeaconState → List PendingDeposit →
       SpecM (DepositLoopResult × List PendingDeposit × BeaconState)
   | ls, post, T, [] => pure (⟨ls, false, false⟩, post, T)
@@ -271,7 +272,7 @@ theorem forIn_depBody_decideApply [CurrentPreset] (o : Oracle) (fs avail next : 
 
 /-- One `depositStep` either stops and keeps the loop state, or handles the deposit: it adds
 one to the index and appends the postponed flag. -/
-theorem depositStep_cases [CurrentPreset] (fs avail : Nat) (ls : DepositLoopState) (v : DepositSpecView)
+theorem depositStep_cases [CurrentPreset] (fs avail : Nat) (ls : DepositLoopState) (v : DepositInfo)
     (r : DepositLoopResult) (h : depositStep P fs avail ls v = .ok r) :
     (r.stopped = true ∧ r.state = ls) ∨
       (r.stopped = false ∧ r.churn_reached = false ∧
@@ -287,7 +288,7 @@ theorem depositStep_cases [CurrentPreset] (fs avail : Nat) (ls : DepositLoopStat
 
 /-- The loop only appends postponed flags, one for each handled deposit. -/
 theorem depositLoop_growth [CurrentPreset] (fs avail : Nat) :
-    ∀ (vs : List DepositSpecView) (ls : DepositLoopState) (r : DepositLoopResult),
+    ∀ (vs : List DepositInfo) (ls : DepositLoopState) (r : DepositLoopResult),
       depositLoop P fs avail ls vs = .ok r →
       ∃ flags : List Bool, r.state.postponed = ls.postponed ++ flags ∧
         r.state.next_deposit_index = ls.next_deposit_index + flags.length
@@ -298,14 +299,14 @@ theorem depositLoop_growth [CurrentPreset] (fs avail : Nat) :
   | v :: vs, ls, r, h => by
     simp only [depositLoop] at h
     obtain ⟨r1, h1, h⟩ := specM_bind_ok h
-    rcases depositStep_cases fs avail ls v r1 h1 with ⟨hs, hst⟩ | ⟨hs, -, hfitsShuffle, hp1⟩
+    rcases depositStep_cases fs avail ls v r1 h1 with ⟨hs, hst⟩ | ⟨hs, -, hn1, hp1⟩
     · simp only [hs, if_true, pure, Except.pure, Except.ok.injEq] at h
       subst h
       exact ⟨[], by rw [hst]; simp, by rw [hst]; rfl⟩
     · simp only [hs, Bool.false_eq_true, if_false] at h
       obtain ⟨flags, hp, hn⟩ := depositLoop_growth fs avail vs r1.state r h
       rw [hp1] at hp
-      rw [hfitsShuffle] at hn
+      rw [hn1] at hn
       refine ⟨(!v.is_withdrawn && v.is_exited) :: flags, by simp [hp], by simp [hn]; omega⟩
 
 /-- Applying handled deposits keeps `ValExt`. -/
@@ -338,7 +339,8 @@ def postponedOf (hd : List (PendingDeposit × Bool)) : List PendingDeposit :=
   (hd.filter (·.2)).map (·.1)
 
 /-- `decideApplyLoop` succeeds exactly when the decisions succeed and the handled deposits apply. -/
-theorem decideApplyLoop_iff [CurrentPreset] (o : Oracle) (fs avail : Nat) (view : PendingDeposit → DepositSpecView) :
+theorem decideApplyLoop_iff [CurrentPreset] (o : Oracle) (fs avail : Nat)
+    (view : PendingDeposit → DepositInfo) :
     ∀ (l : List PendingDeposit) (ls : DepositLoopState) (post : List PendingDeposit)
       (T : BeaconState) (r : DepositLoopResult) (post' : List PendingDeposit)
       (T' : BeaconState),
@@ -360,7 +362,7 @@ theorem decideApplyLoop_iff [CurrentPreset] (o : Oracle) (fs avail : Nat) (view 
     cases h1 : depositStep P fs avail ls (view d) with
     | error e => simp [bind, Except.bind]
     | ok r1 =>
-      rcases depositStep_cases fs avail ls (view d) r1 h1 with ⟨hs, hst⟩ | ⟨hs, -, hfitsShuffle,
+      rcases depositStep_cases fs avail ls (view d) r1 h1 with ⟨hs, hst⟩ | ⟨hs, -, hn1,
         hp1⟩
       · simp only [bind, Except.bind, hs, if_true, pure, Except.pure, Except.ok.injEq,
           Prod.mk.injEq]
@@ -378,7 +380,7 @@ theorem decideApplyLoop_iff [CurrentPreset] (o : Oracle) (fs avail : Nat) (view 
               (d, !(view d).is_withdrawn && (view d).is_exited) :: handledOf l r1.state r := by
           intro flags hpf hnf
           have hk : r.state.next_deposit_index - ls.next_deposit_index = flags.length + 1 := by
-            rw [hnf, hfitsShuffle]; omega
+            rw [hnf, hn1]; omega
           have hk1 : r.state.next_deposit_index - r1.state.next_deposit_index = flags.length := by
             rw [hnf]; omega
           simp only [handledOf, hk, hk1, hpf, hp1, List.take_succ_cons, List.append_assoc,

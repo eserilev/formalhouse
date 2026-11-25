@@ -175,7 +175,7 @@ theorem state_transition_fulu_reach [CurrentPreset] [CurrentPreset.Valid] [Curre
   obtain ⟨hinv1, hlt1⟩ := process_slots_fulu_reach o fo fs _ hslot64 hs fs1 h1
   have hs1 := process_slots_fulu_process_epoch_slot _ _ o fo fs fs1 _ h1
   obtain ⟨hffg1, hrows1, hd1, hx1, -, s0, n, h0, hb1, -, hstrict⟩ := hinv1
-  have hfitsShuffle := hstrict hlt1
+  have hn1 := hstrict hlt1
   have hblock : ∀ fs2, process_block_fulu P o fo FC c fs1
       signed_block.message = .ok fs2 → StateInvariants fs2.state := by
     intro fs2 h2
@@ -227,13 +227,21 @@ def ActiveBalanceBoundedFulu [CurrentPreset] [CurrentFuluConfig] (o : Oracle) (f
 
 /-- The invariants of the start state: the facts of a genesis state. -/
 structure GenesisInvariants [CurrentPreset] (s : BeaconState) : Prop where
+  /-- The checkpoints are in order. -/
   checkpointsInOrder : CheckpointsInOrder P s
+  /-- The per-validator lists have one length. -/
   listLengthsMatch : ListLengthsMatch s
+  /-- Each withdrawable epoch is late enough after the exit epoch. -/
   exitToWithdrawableDelay : ExitToWithdrawableDelay P s
+  /-- Each exit epoch is a `uint64`. -/
   exitEpochsAreUint64 : ExitEpochsAreUint64 s
+  /-- Each effective balance is at most `4/3` of the balance, as right after the updates. -/
   afterEffectiveBalanceUpdates : AfterEffectiveBalanceUpdates P s
+  /-- No two validators share a pubkey. -/
   pubkeysUnique : PubkeysUnique s
+  /-- Each pending consolidation names validators of the registry. -/
   consolidationsInRange : ConsolidationsInRange s
+  /-- Each withdrawable epoch is a `uint64`. -/
   withdrawableEpochsFitUint64 : WithdrawableEpochsFitUint64 s
 
 /-- Every reachable Fulu state has the invariant. -/

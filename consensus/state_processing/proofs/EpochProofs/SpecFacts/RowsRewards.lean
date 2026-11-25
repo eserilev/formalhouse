@@ -6,7 +6,7 @@ import EpochProofs.SpecFacts.RewardsAndPenalties
 
 `rewardsRowStep` computes the four deltas of one row with `rewardDeltas` and applies them with
 `rewardsSequential`. `process_rewards_and_penalties_rows` shows that the spec pass gives the same
-`ok` values as a `passM` of this step over `rowsOf state`.
+`ok` values as a `passOverRows` of this step over `rowsOf state`.
 -/
 
 namespace EpochProofs.Spec
@@ -178,19 +178,20 @@ private theorem mapM_not_ok {α β : Type} (f : α → SpecM β) (l : List α) (
   exact hf _ (hget i hi (by omega))
 
 /-- A pass with a `Unit` accumulator is a `mapM`. -/
-private theorem passM_unit {R : Type} (f : Unit → R → SpecM (Unit × R)) :
-    ∀ (rs : List R), passM f () rs = (fun ys => ((), ys)) <$> rs.mapM (fun r => Prod.snd <$> f () r)
+private theorem passOverRows_unit {R : Type} (f : Unit → R → SpecM (Unit × R)) :
+    ∀ (rs : List R), passOverRows f () rs = (fun ys => ((), ys)) <$>
+      rs.mapM (fun r => Prod.snd <$> f () r)
   | [] => rfl
   | r :: rs => by
-    rw [passM_cons, List.mapM_cons]
+    rw [passOverRows_cons, List.mapM_cons]
     cases hf : f () r with
     | error e => rfl
     | ok x =>
       obtain ⟨⟨⟩, x2⟩ := x
-      show (passM f () rs >>= fun y => pure (y.fst, x2 :: y.snd)) =
+      show (passOverRows f () rs >>= fun y => pure (y.fst, x2 :: y.snd)) =
         (fun ys => ((), ys)) <$> ((Prod.snd <$> Except.ok ((), x2)) >>= fun a =>
           rs.mapM (fun r => Prod.snd <$> f () r) >>= fun b => pure (a :: b))
-      rw [passM_unit f rs]
+      rw [passOverRows_unit f rs]
       generalize rs.mapM (fun r => Prod.snd <$> f () r) = m
       cases m <;> rfl
 
@@ -1023,9 +1024,10 @@ private theorem withRows_balances (state : BeaconState) (hrows : ListLengthsMatc
 /-- The single pass succeeds with `v` exactly when `v` is good. -/
 private theorem single_pass_ok_iff (p : Preset) (ctx : RewardsContext) (state : BeaconState)
     (hrows : ListLengthsMatch state) (v : BeaconState) :
-    (fun x => state.withRows x.2) <$> passM (rewardsRowStep p ctx) () (rowsOf state) = .ok v ↔
+    (fun x => state.withRows x.2) <$> passOverRows (rewardsRowStep p ctx) () (rowsOf state) = .ok v
+      ↔
       RewardsGood p ctx state v := by
-  rw [passM_unit, map_ok_iff]
+  rw [passOverRows_unit, map_ok_iff]
   constructor
   · intro ⟨x, hx, hv⟩
     obtain ⟨ys, hys, rfl⟩ := (map_ok_iff _ _ _).mp hx
@@ -1265,7 +1267,8 @@ theorem process_rewards_and_penalties_rows (p : Preset) (total_active_balance : 
     (hgenesis : current_epoch ≠ GENESIS_EPOCH) (ctx : RewardsContext)
     (hctx : rewardsContextOf p total_active_balance state = .ok ctx) :
     SameResultOrBothFail (process_rewards_and_penalties p total_active_balance state)
-      ((fun x => state.withRows x.2) <$> passM (rewardsRowStep p ctx) () (rowsOf state)) := by
+      ((fun x => state.withRows x.2) <$> passOverRows (rewardsRowStep p ctx) ()
+        (rowsOf state)) := by
   obtain ⟨hprevious, hsource, htarget, hhead, hactive, hleak, htab⟩ :=
     rewardsContextOf_ok p total_active_balance state ctx hctx
   subst htab

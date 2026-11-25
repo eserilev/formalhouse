@@ -488,14 +488,14 @@ theorem process_justification_and_finalization_total [CurrentPreset] [CurrentPre
 /-! ## Passes over rows -/
 
 /-- A pass whose step succeeds on every row succeeds. -/
-theorem passM_total {A R : Type} (f : A → R → SpecM (A × R)) (rows : List R)
-    (hf : ∀ a r, r ∈ rows → ∃ x, f a r = .ok x) (a : A) : ∃ y, passM f a rows = .ok y := by
+theorem passOverRows_total {A R : Type} (f : A → R → SpecM (A × R)) (rows : List R)
+    (hf : ∀ a r, r ∈ rows → ∃ x, f a r = .ok x) (a : A) : ∃ y, passOverRows f a rows = .ok y := by
   induction rows generalizing a with
   | nil => exact ⟨_, rfl⟩
   | cons r rs ih =>
     obtain ⟨x, hx⟩ := hf a r (by simp)
     obtain ⟨y, hy⟩ := ih (fun a r' h => hf a r' (by simp [h])) x.1
-    exact ⟨_, by rw [passM_cons, hx, tot_bind_ok, hy, tot_bind_ok]; rfl⟩
+    exact ⟨_, by rw [passOverRows_cons, hx, tot_bind_ok, hy, tot_bind_ok]; rfl⟩
 
 /-! ## Effective balance updates -/
 
@@ -531,7 +531,7 @@ theorem process_effective_balance_updates_total [CurrentPreset] (s : BeaconState
       (fun s' => ∃ vs : List Validator, vs.length = s.validators.length ∧
         s' = { s with validators := vs }) := by
   rw [process_effective_balance_updates_rows P s _ _ tot_hysteresis hrows]
-  obtain ⟨y, hy⟩ := passM_total (effectiveBalanceRowStep P 250000000 1250000000)
+  obtain ⟨y, hy⟩ := passOverRows_total (effectiveBalanceRowStep P 250000000 1250000000)
     (rowsOf s) (fun a r hr => by
       have hrb : r.balance ∈ s.balances := by
         rw [← rowsOf_map_balance s hrows.1]; exact List.mem_map_of_mem hr
@@ -542,11 +542,11 @@ theorem process_effective_balance_updates_total [CurrentPreset] (s : BeaconState
       exact ⟨_, by simp only [effectiveBalanceRowStep, he, tot_bind_ok]; rfl⟩) ()
   rw [hy]
   refine ⟨_, rfl, ?_⟩
-  have hb2 := passM_map_eq _ (·.balance) (fun a r x hx => by
+  have hb2 := passOverRows_map_eq _ (·.balance) (fun a r x hx => by
     rw [effectiveBalanceRowStep_preserves _ _ _ a r x hx]) () (rowsOf s) y hy
-  have hs2 := passM_map_eq _ (·.inactivity_score) (fun a r x hx => by
+  have hs2 := passOverRows_map_eq _ (·.inactivity_score) (fun a r x hx => by
     rw [effectiveBalanceRowStep_preserves _ _ _ a r x hx]) () (rowsOf s) y hy
-  have hk := passM_rowKey _ (fun a r x h => by
+  have hk := passOverRows_rowKey _ (fun a r x h => by
     obtain ⟨u, r'⟩ := x
     rw [effectiveBalanceRowStep_preserves _ _ _ a r _ h]; rfl) () _ y hy
   rw [rowsOf_map_balance s hrows.1] at hb2

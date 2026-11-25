@@ -306,7 +306,8 @@ theorem process_slot_fulu_len (p : Preset) (o : Oracle) (fo : FuluOracle) (fs fs
   all_goals (cases h; len_close)
 
 /-- The Fulu `process_epoch` keeps `ListLengthsMatch`. -/
-theorem process_epoch_fulu_listLengthsMatch (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem process_epoch_fulu_listLengthsMatch (p : Preset) (f : FuluConfig)
+    (hc : FuluConfigMatchesPreset p f)
     (o : Oracle) (s s' : BeaconState) (h : process_epoch_fulu p f o s = .ok s') (hs : ListLengthsMatch s) :
     ListLengthsMatch s' :=
   process_epoch_fulu_inv p f hc o ListLengthsMatch
@@ -332,7 +333,8 @@ theorem process_epoch_fulu_listLengthsMatch (p : Preset) (f : FuluConfig) (hc : 
     s s' h hs
 
 /-- `process_slots_fulu` with the Fulu `process_epoch` keeps `ListLengthsMatch`. -/
-theorem process_slots_fulu_listLengthsMatch (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem process_slots_fulu_listLengthsMatch (p : Preset) (f : FuluConfig)
+    (hc : FuluConfigMatchesPreset p f)
     (o : Oracle) (fo : FuluOracle) (fs fs' : FuluState) (slot : Slot)
     (h : process_slots_fulu p o fo (process_epoch_fulu p f o) fs slot = .ok fs')
     (hs : ListLengthsMatch fs.state) : ListLengthsMatch fs'.state :=
@@ -343,7 +345,7 @@ theorem process_slots_fulu_listLengthsMatch (p : Preset) (f : FuluConfig) (hc : 
 
 /-- `state_transition_fulu` keeps `ListLengthsMatch`. -/
 theorem state_transition_fulu_listLengthsMatch (p : Preset) (o : Oracle) (fo : FuluOracle) (f : FuluConfig)
-    (hc : FuluCompat p f) (c : FuluBlockConfig) (fs fs' : FuluState)
+    (hc : FuluConfigMatchesPreset p f) (c : FuluBlockConfig) (fs fs' : FuluState)
     (signed_block : FuluSignedBeaconBlock) (validate_result : Bool) (hs : ListLengthsMatch fs.state)
     (h : state_transition_fulu p o fo f c fs signed_block validate_result = .ok fs') :
     ListLengthsMatch fs'.state :=

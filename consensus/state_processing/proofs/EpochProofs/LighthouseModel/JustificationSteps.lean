@@ -10,8 +10,8 @@ function, then reads the block roots and writes the checkpoints and the bits. Li
 the block roots from the state before the update, so the model reads them from `s`.
 
 Lighthouse reads the three balances from the progressive balances cache and the total active
-balance cache. `lighthouseJustificationAndFinalization` takes the spec values. Stack #27 proves
-that the caches hold these values.
+balance cache. `lighthouseJustificationAndFinalization` takes the spec values. The cache proofs
+prove that correct caches hold these values.
 
 A Lighthouse state always has four justification bits (`BitVector<U4>`). For a list of another
 length, `lighthouseJustificationAndFinalization` runs the spec function. No Lighthouse state
@@ -20,6 +20,7 @@ reaches this case.
 
 namespace EpochProofs.Spec
 
+/-- The four justification bits, as the Rust struct holds them. -/
 structure LighthouseJustificationBits where
   bit0 : Bool
   bit1 : Bool
@@ -27,12 +28,14 @@ structure LighthouseJustificationBits where
   bit3 : Bool
   deriving DecidableEq, Repr
 
+/-- The finalized checkpoint after the update: unchanged, or an old justified checkpoint. -/
 inductive LighthouseNewFinalized where
   | unchanged
   | oldPreviousJustified
   | oldCurrentJustified
   deriving DecidableEq, Repr
 
+/-- What `weigh_justification` in `justification.rs` returns. -/
 structure LighthouseJustificationOutcome where
   justify_previous : Bool
   justify_current : Bool
@@ -40,12 +43,15 @@ structure LighthouseJustificationOutcome where
   finalized : LighthouseNewFinalized
   deriving DecidableEq, Repr
 
+/-- One finalization rule. When it is enabled and `source_epoch + offset` is the current epoch, the
+result is `choice`, else it is `finalized`. -/
 def lighthouseFinalizeStep (enabled : Bool) (source_epoch offset current_epoch : Uint64)
     (choice finalized : LighthouseNewFinalized) : SpecM LighthouseNewFinalized :=
   if enabled then do
     if (← uint64Add source_epoch offset) = current_epoch then pure choice else pure finalized
   else pure finalized
 
+/-- The decisions of `weigh_justification` in `justification.rs`. -/
 def lighthouseWeighJustification (current_epoch old_previous_justified_epoch
     old_current_justified_epoch : Uint64) (bits : LighthouseJustificationBits)
     (total_active_balance previous_target_balance current_target_balance : Gwei) :
@@ -66,6 +72,7 @@ def lighthouseWeighJustification (current_epoch old_previous_justified_epoch
     old_current_justified_epoch 1 current_epoch .oldCurrentJustified finalized
   pure { justify_previous, justify_current, bits, finalized }
 
+/-- The decisions and the writes of `weigh_justification_and_finalization.rs`. -/
 def lighthouseWeighJustificationAndFinalization (p : Preset) (s : BeaconState)
     (total_active_balance previous_target_balance current_target_balance : Gwei) :
     SpecM BeaconState := do
@@ -103,6 +110,7 @@ def lighthouseWeighJustificationAndFinalization (p : Preset) (s : BeaconState)
   | .oldCurrentJustified =>
     pure { state with finalized_checkpoint := old_current_justified_checkpoint }
 
+/-- Lighthouse's `process_justification_and_finalization`. -/
 def lighthouseJustificationAndFinalization (p : Preset) (state : BeaconState) : SpecM BeaconState :=
   if state.justification_bits.length ≠ JUSTIFICATION_BITS_LENGTH then
     process_justification_and_finalization p state

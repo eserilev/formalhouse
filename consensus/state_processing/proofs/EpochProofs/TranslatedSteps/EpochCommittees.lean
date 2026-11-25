@@ -18,7 +18,7 @@ theorem takes the facts about the untranslated code as hypotheses:
 
 - `SeedMixMatches`: `get_seed_mix` reads the RANDAO mix that `get_seed` reads.
 - the index lists: the active (and unslashed) validators, or the committees of each slot that
-  the committee cache holds (see the committee cache proofs, eserilev/lighthouse-aeneas #28).
+  the committee cache holds (see `consensus/types/proofs`).
 - `EffectiveBalancesMatch`: `BeaconState::get_effective_balance` reads the registry.
 -/
 
@@ -45,7 +45,7 @@ def SeedMixMatches (p : Spec.Preset) (state : Spec.BeaconState) (epoch : Nat)
     (mix : Array U8 32#usize) : Prop :=
   ∀ m, Spec.seedMix p state epoch = .ok m → byteValues mix.val = m.toList
 
-theorem compute_seed_eq {H : Type} (inst : ShuffleHashInst H) (p : Spec.Preset)
+theorem compute_seed_eq {H : Type} (inst : ShuffleHash H) (p : Spec.Preset)
     (o : Spec.Oracle) (hH : HashMatches inst o) (state : Spec.BeaconState)
     (domainSpec : Spec.DomainType)
     (domain : Array U8 4#usize) (hdomain : byteValues domain.val = domainSpec.toList) (epoch : U64)
@@ -70,7 +70,7 @@ structure SelectionConstantsMatch (p : Spec.Preset) (c : LighthouseSelectionCons
   slots_per_epoch : c.slots_per_epoch.val = p.SLOTS_PER_EPOCH
 
 /-- `next_sync_committee_indices` equals `get_next_sync_committee_indices`. -/
-theorem next_sync_committee_indices_spec {H B : Type} (inst : ShuffleHashInst H)
+theorem next_sync_committee_indices_spec {H B : Type} (inst : ShuffleHash H)
     (ebi : EffectiveBalanceSource B) (balances : B) (p : Spec.Preset) (o : Spec.Oracle)
     (hH : HashMatches inst o)
     (state : Spec.BeaconState)
@@ -160,7 +160,7 @@ theorem spec_proposers_get (p : Spec.Preset) (o : Spec.Oracle) (state : Spec.Bea
     · rename_i a ha; rw [ha, Except.ok.inj hget]
     · simp [throw, throwThe, MonadExceptOf.throw] at hget
 
-theorem proposer_at_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EffectiveBalanceSource B)
+theorem proposer_at_spec {H B : Type} (inst : ShuffleHash H) (ebi : EffectiveBalanceSource B)
     (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
     (state : Spec.BeaconState)
     (hEB : EffectiveBalancesMatch ebi balances (state.validators.map (·.effective_balance)))
@@ -205,7 +205,7 @@ theorem u64_saturating_add_one' (x : U64) (h : x.val < 2 ^ 64 - 1) :
 
 /-- `compute_proposer_indices` equals the reference, for the epoch that starts at
 `start_slot`. -/
-theorem compute_proposer_indices_spec {H B : Type} (inst : ShuffleHashInst H)
+theorem compute_proposer_indices_spec {H B : Type} (inst : ShuffleHash H)
     (ebi : EffectiveBalanceSource B)
     (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
     (state : Spec.BeaconState)
@@ -377,7 +377,7 @@ theorem get_beacon_proposer_indices_frame (p : Spec.Preset) (o : Spec.Oracle)
       Spec.get_beacon_proposer_indices p o state e := rfl
 
 /-- `next_proposer_lookahead` equals `process_proposer_lookahead`. -/
-theorem next_proposer_lookahead_spec {H B : Type} (inst : ShuffleHashInst H)
+theorem next_proposer_lookahead_spec {H B : Type} (inst : ShuffleHash H)
     (ebi : EffectiveBalanceSource B)
     (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
     (state : Spec.BeaconState)
@@ -455,7 +455,7 @@ theorem next_proposer_lookahead_spec {H B : Type} (inst : ShuffleHashInst H)
   rw [List.take_of_length_le (by simp)]
 
 /-- Lighthouse `compute_ptc` equals the reference selection of `compute_ptc`. -/
-theorem compute_ptc_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EffectiveBalanceSource B)
+theorem compute_ptc_spec {H B : Type} (inst : ShuffleHash H) (ebi : EffectiveBalanceSource B)
     (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
     (state : Spec.BeaconState)
     (hEB : EffectiveBalancesMatch ebi balances (state.validators.map (·.effective_balance)))
@@ -583,7 +583,7 @@ def ptcIndexValues (v : alloc.vec.Vec (alloc.vec.Vec Usize)) : List (List Nat) :
 
 /-- `ptc_for_epoch` returns the PTCs of the slots of `epoch`, for any `epoch`: `ptcs[k]` is
 `compute_ptc(state, start_slot + k)`. -/
-theorem ptc_for_epoch_spec_gen {H B : Type} (inst : ShuffleHashInst H)
+theorem ptc_for_epoch_spec_gen {H B : Type} (inst : ShuffleHash H)
     (ebi : EffectiveBalanceSource B)
     (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
     (state : Spec.BeaconState)
@@ -694,7 +694,7 @@ theorem ptc_for_epoch_spec_gen {H B : Type} (inst : ShuffleHashInst H)
   exact ⟨v, rfl, hv⟩
 
 /-- `ptc_for_epoch` returns the PTCs that `process_ptc_window` appends. -/
-theorem ptc_for_epoch_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EffectiveBalanceSource B)
+theorem ptc_for_epoch_spec {H B : Type} (inst : ShuffleHash H) (ebi : EffectiveBalanceSource B)
     (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
     (state : Spec.BeaconState)
     (hEB : EffectiveBalancesMatch ebi balances (state.validators.map (·.effective_balance)))

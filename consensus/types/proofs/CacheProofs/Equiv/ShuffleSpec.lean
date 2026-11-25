@@ -4,9 +4,9 @@ import CacheProofs.Spec.CommitteeCache
 /-!
 # `compute_shuffled_permutation` in closed form
 
-`sigma r` is one round of the swap-or-not shuffle on one index. `shuffledIndexAfterRounds` applies the rounds
-`0, 1, ..., R - 1` in order. `compute_shuffled_permutation_eq` proves that the reference
-returns `[shuffledIndexAfterRounds i for i in range(n)]` for `0 < n ≤ 2^24` and `R ≤ 256`.
+`swapOrNotRound r` is one round of the swap-or-not shuffle on one index. `shuffledIndexAfterRounds`
+applies the rounds `0, 1, ..., R - 1` in order. `compute_shuffled_permutation_eq` proves that the
+reference returns `[shuffledIndexAfterRounds i for i in range(n)]` for `0 < n ≤ 2^24` and `R ≤ 256`.
 
 `sha256` is any function that returns 32 bytes.
 -/
@@ -27,17 +27,18 @@ def bitOf (sha256 : List Nat → List Nat) (seed : List Nat) (r position : Nat) 
   (sha256 (seed ++ [r] ++ le4 (position / 256))).getD (position % 256 / 8) 0 / 2 ^ (position % 8) % 2
 
 /-- One round of the shuffle on index `x`. -/
-def sigma (sha256 : List Nat → List Nat) (seed : List Nat) (n r x : Nat) : Nat :=
+def swapOrNotRound (sha256 : List Nat → List Nat) (seed : List Nat) (n r x : Nat) : Nat :=
   let flip := (pivotOf sha256 seed n r + n - x) % n
   if bitOf sha256 seed r (max x flip) ≠ 0 then flip else x
 
 /-- Rounds `0, ..., R - 1` on index `x`. -/
 def shuffledIndexAfterRounds (sha256 : List Nat → List Nat) (seed : List Nat) (n R x : Nat) : Nat :=
-  (List.range R).foldl (fun y r => sigma sha256 seed n r y) x
+  (List.range R).foldl (fun y r => swapOrNotRound sha256 seed n r y) x
 
-theorem sigma_lt (sha256 : List Nat → List Nat) (seed : List Nat) (n r x : Nat) (hn : 0 < n)
-    (hx : x < n) : sigma sha256 seed n r x < n := by
-  unfold sigma
+theorem swapOrNotRound_lt (sha256 : List Nat → List Nat) (seed : List Nat) (n r x : Nat)
+    (hn : 0 < n)
+    (hx : x < n) : swapOrNotRound sha256 seed n r x < n := by
+  unfold swapOrNotRound
   dsimp only
   split
   · exact Nat.mod_lt _ hn
@@ -45,16 +46,16 @@ theorem sigma_lt (sha256 : List Nat → List Nat) (seed : List Nat) (n r x : Nat
 
 theorem foldl_sigma_lt (sha256 : List Nat → List Nat) (seed : List Nat) (n : Nat) (hn : 0 < n)
     (rs : List Nat) (x : Nat) (hx : x < n) :
-    rs.foldl (fun y r => sigma sha256 seed n r y) x < n := by
+    rs.foldl (fun y r => swapOrNotRound sha256 seed n r y) x < n := by
   induction rs generalizing x with
   | nil => exact hx
-  | cons r rs ih => exact ih _ (sigma_lt _ _ _ _ _ hn hx)
+  | cons r rs ih => exact ih _ (swapOrNotRound_lt _ _ _ _ _ hn hx)
 
 theorem shuffledIndexAfterRounds_lt (sha256 : List Nat → List Nat) (seed : List Nat) (n R x : Nat) (hn : 0 < n)
     (hx : x < n) : shuffledIndexAfterRounds sha256 seed n R x < n :=
   foldl_sigma_lt _ _ _ hn _ _ hx
 
-/-- The inner loop body sets `indices[i]` to `sigma r indices[i]`. -/
+/-- The inner loop body sets `indices[i]` to `swapOrNotRound r indices[i]`. -/
 theorem foldl_set_sigma (f : Nat → Nat) (l : List Nat) (k : Nat) (hk : k ≤ l.length) :
     (List.range k).foldl (fun a i => a.set i (f (a.getD i 0))) l =
       (l.take k).map f ++ l.drop k := by
@@ -100,8 +101,8 @@ theorem forIn_yield {ε α β : Type} (l : List α) (b : β)
 
 theorem foldl_map_sigma (sha256 : List Nat → List Nat) (seed : List Nat) (n : Nat)
     (rs : List Nat) (l : List Nat) :
-    rs.foldl (fun l r => l.map (sigma sha256 seed n r)) l =
-      l.map (fun x => rs.foldl (fun y r => sigma sha256 seed n r y) x) := by
+    rs.foldl (fun l r => l.map (swapOrNotRound sha256 seed n r)) l =
+      l.map (fun x => rs.foldl (fun y r => swapOrNotRound sha256 seed n r y) x) := by
   induction rs generalizing l with
   | nil => simp
   | cons r rs ih => simp [ih, List.map_map, Function.comp_def]
@@ -116,7 +117,7 @@ theorem compute_shuffled_permutation_eq (p : Preset) (sha256 : List Nat → List
       .ok ((List.range n).map (shuffledIndexAfterRounds sha256 seed n p.SHUFFLE_ROUND_COUNT)) := by
   unfold compute_shuffled_permutation
   dsimp only
-  rw [forIn_yield _ _ _ (fun l r => l.map (sigma sha256 seed n r)) (ValidIndices n)]
+  rw [forIn_yield _ _ _ (fun l r => l.map (swapOrNotRound sha256 seed n r)) (ValidIndices n)]
   · show Except.ok _ = _
     rw [foldl_map_sigma]
     rfl
@@ -126,7 +127,7 @@ theorem compute_shuffled_permutation_eq (p : Preset) (sha256 : List Nat → List
     have hr' : r < 256 := by omega
     have hp : pivotOf sha256 seed n r < n := Nat.mod_lt _ hn
     simp only [uint8ToBytes, hr', if_true, uint64Mod, Nat.ne_of_gt hn, if_false, pure_bind]
-    rw [forIn_yield _ _ _ (fun a i => a.set i (sigma sha256 seed n r (a.getD i 0)))
+    rw [forIn_yield _ _ _ (fun a i => a.set i (swapOrNotRound sha256 seed n r (a.getD i 0)))
       (ValidIndices n) ha]
     · have hlen := ha.1
       rw [foldl_set_sigma _ _ _ (by omega), List.take_of_length_le (by omega),
@@ -134,7 +135,7 @@ theorem compute_shuffled_permutation_eq (p : Preset) (sha256 : List Nat → List
       refine ⟨rfl, by simp [hlen], ?_⟩
       intro y hy
       obtain ⟨x, hx, rfl⟩ := List.mem_map.mp hy
-      exact sigma_lt _ _ _ _ _ hn (ha.2 x hx)
+      exact swapOrNotRound_lt _ _ _ _ _ hn (ha.2 x hx)
     · intro i hi b hb
       rw [List.mem_range] at hi
       have hib : i < b.length := by rw [hb.1]; exact hi
@@ -167,6 +168,6 @@ theorem compute_shuffled_permutation_eq (p : Preset) (sha256 : List Nat → List
       intro y hy
       rcases List.mem_or_eq_of_mem_set hy with h | h
       · exact hb.2 y h
-      · rw [h]; exact sigma_lt _ _ _ _ _ hn hidx
+      · rw [h]; exact swapOrNotRound_lt _ _ _ _ _ hn hidx
 
 end CacheProofs.Shuffle

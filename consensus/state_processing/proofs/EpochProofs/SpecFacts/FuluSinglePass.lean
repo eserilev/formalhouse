@@ -49,7 +49,7 @@ theorem lighthouse_single_pass_eq_spec_fulu [CurrentPreset] [CurrentFuluConfig] 
         s2
       process_slashings P total_active_balance s3)
     ((fun y => state.withRowsChurn y.1 y.2) <$>
-      passM (fun churn r => lighthouseRowStep P
+      passOverRows (fun churn r => lighthouseRowStep P
           (lighthouseContextOf state (fuluTotalActiveBalance P FC total_active_balance)
             current_epoch rctx per) (base_reward r) churn r)
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
@@ -82,12 +82,12 @@ theorem lighthouse_single_pass_eq_spec_fulu [CurrentPreset] [CurrentFuluConfig] 
       (by rw [htab]; exact hbase _ hr) (by rw [htab]; exact htotal) hincrements
       (hentry.effective_balance i hiv) (hentry.supply i hiv) hfinalized hcurrent64 hactivation
       (hentry.exit_epoch i hiv)
-  rw [passM_congr _ _ (rowsOf state) (fun churn r hr => hstep churn r hr)]
-  rw [passM_proj (singlePassStep P
+  rw [passOverRows_congr _ _ (rowsOf state) (fun churn r hr => hstep churn r hr)]
+  rw [passOverRows_proj (singlePassStep P
     (fuluTotalActiveBalance P FC total_active_balance) rctx.previous_epoch
     rctx.in_leak rctx current_epoch state.finalized_checkpoint.epoch activation_epoch
     (current_epoch + P.EPOCHS_PER_SLASHINGS_VECTOR / 2) per)
     (fun c => ((((), ()), c), ())) (fun b => b.1.2) (fun _ => rfl) (fun _ => rfl)]
-  cases passM _ _ (rowsOf state) <;> rfl
+  cases passOverRows _ _ (rowsOf state) <;> rfl
 
 end EpochProofs.Spec
