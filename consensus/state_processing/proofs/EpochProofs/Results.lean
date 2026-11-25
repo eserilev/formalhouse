@@ -52,9 +52,10 @@ theorem FuluThenGloasRun.invariants (h : FuluThenGloasRun oracle fuluOracle bloc
 
 omit [Spec.CurrentPreset.Valid] [Spec.CurrentFuluConfig.Valid] in
 /-- A Gloas epoch input is the last slot of an epoch, and the next slot fits in `u64`. With
-`HistoricalSummariesBelowLimit`, this is `AtLastSlotOfEpoch`. -/
+room in the list of historical summaries, this is `AtLastSlotOfEpoch`. -/
 theorem FuluThenGloasRun.atLastSlotOfEpoch (h : FuluThenGloasRun oracle fuluOracle blockConfig
-    upgradeConfig fuluStart s) (hhist : Spec.HistoricalSummariesBelowLimit s) :
+    upgradeConfig fuluStart s) (hhist : s.historical_summaries.length <
+      Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT) :
     Spec.AtLastSlotOfEpoch s := by
   have hs : s.slot = h.gloas.beforeLastSlot.slot :=
     (Spec.process_slot_frame _ oracle _ _ h.gloas.lastSlot).2
@@ -72,7 +73,8 @@ theorem FuluOnlyRun.invariants (h : FuluOnlyRun oracle fuluOracle blockConfig fu
 omit [Spec.CurrentPreset.Valid] [Spec.CurrentFuluConfig.Valid] in
 /-- A Fulu epoch input is the last slot of an epoch, and the next slot fits in `u64`. -/
 theorem FuluOnlyRun.atLastSlotOfEpoch (h : FuluOnlyRun oracle fuluOracle blockConfig fuluStart s)
-    (hhist : Spec.HistoricalSummariesBelowLimit s) : Spec.AtLastSlotOfEpoch s := by
+    (hhist : s.historical_summaries.length <
+    Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT) : Spec.AtLastSlotOfEpoch s := by
   obtain ⟨-, -, -, path, rfl⟩ := h
   have hs : path.epochInput.state.slot = path.beforeLastSlot.state.slot :=
     (Spec.process_slot_fulu_frame _ oracle fuluOracle _ _ path.lastSlot).2.1
@@ -239,7 +241,7 @@ Lean model of Lighthouse's epoch and the transcription's give the same state, or
 pyspec precondition. -/
 theorem lighthouse_model_gloas_epoch_agrees_pyspec
     (hrun : FuluThenGloasRun oracle fuluOracle blockConfig upgradeConfig fuluStart s)
-    (hhistBelowLimit : Spec.HistoricalSummariesBelowLimit s) :
+    (hhistBelowLimit : s.historical_summaries.length < Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse oracle s)
       (Spec.process_epoch Spec.P oracle s) :=
   lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants oracle hrun.invariants
@@ -248,7 +250,7 @@ theorem lighthouse_model_gloas_epoch_agrees_pyspec
 /-- Fulu, against the hand-written pyspec transcription. -/
 theorem lighthouse_model_fulu_epoch_agrees_pyspec
     (hrun : FuluOnlyRun oracle fuluOracle blockConfig fuluStart s)
-    (hhistBelowLimit : Spec.HistoricalSummariesBelowLimit s) :
+    (hhistBelowLimit : s.historical_summaries.length < Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse_fulu oracle s)
       (Spec.process_epoch_fulu Spec.P Spec.FC oracle s) :=
   Spec.lighthouse_fulu_epoch_sameResultOrBothFail oracle s hrun.invariants
@@ -269,12 +271,13 @@ that EthLib needs. -/
 theorem epochRoom (presetMatches : PresetMatchesEthLib preset config)
     {fork : _root_.EthLib.Base.Fork} {electra : .pectra ≤ fork} {state : BeaconState preset fork}
     (roomForDeposits : RoomForDeposits electra state)
-    (historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit (toSpecState state)) :
+    (historicalSummariesBelowLimit : (toSpecState state).historical_summaries.length <
+    Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT) :
     EpochRoom electra state := by
   refine ⟨roomForDeposits,
     Nat.lt_of_lt_of_le ?_ presetMatches.historicalRootsLimit⟩
   have h := historicalSummariesBelowLimit
-  rw [Spec.HistoricalSummariesBelowLimit,
+  rw [
     toSpecState_historical_summaries _ (Nat.le_trans (by decide) electra)] at h
   simpa [readList] using h
 

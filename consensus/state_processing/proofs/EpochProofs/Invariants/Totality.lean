@@ -4,14 +4,15 @@ import EpochProofs.Spec.CurrentPreset
 /-!
 # The spec epoch succeeds on reachable states
 
-`SameResultOrBothFail` says that the Lighthouse model returns `ok v` exactly when the spec returns `ok v`. This
-file proves the other half of liveness: the spec `process_epoch` returns `ok` at the last slot
-of an epoch, on mainnet.
+`SameResultOrBothFail` says that the Lighthouse model returns `ok v` exactly when the spec returns
+`ok v`. This file proves the other half of liveness: the spec `process_epoch` returns `ok` at the
+last slot of an epoch, on mainnet.
 
 Each step gets a lemma of the form "the step returns `ok`, and the facts that the next steps
 read still hold". `process_epoch_total` chains them. The per-validator steps and the pending
-deposits are the hypotheses `MidOk` and `DepOk`, which `TotalityRows.lean` proves. The committee
-steps are the hypothesis `CommitteesOk`, which `TotalityCommittees.lean` proves.
+deposits are the hypotheses `StepsToSlashingsSucceed` and `PendingDepositsSucceed`, which
+`TotalityRows.lean` proves. The committee steps are the hypothesis `CommitteesOk`, which
+`TotalityCommittees.lean` proves.
 
 Error sources and why they do not fire:
 - `get_block_root` computes `start_slot + SLOTS_PER_HISTORICAL_ROOT`. This raises when the slot
@@ -771,7 +772,7 @@ structure TailFrame [CurrentPreset] (t s : BeaconState) : Prop where
 
 /-- The facts that the last three steps read: the slot, the RANDAO mixes and the per-validator
 lists. -/
-structure CommFrame [CurrentPreset] (t s : BeaconState) : Prop where
+structure SameSlotAndLengths [CurrentPreset] (t s : BeaconState) : Prop where
   slot : s.slot = t.slot
   rows : ListLengthsMatch s
   randao : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR
@@ -789,14 +790,14 @@ structure DepFrame [CurrentPreset] (t s : BeaconState) : Prop where
 
 /-- The inactivity, rewards, registry and slashings steps succeed after justification and
 finalization. `TotalityRows.lean` proves it (`midOk_of_supplyAndTimeLimits`). -/
-def MidOk [CurrentPreset] (t : BeaconState) : Prop :=
+def StepsToSlashingsSucceed [CurrentPreset] (t : BeaconState) : Prop :=
   ∀ s1, JFShape t s1 → s1.finalized_checkpoint.epoch ≤ t.slot / P.SLOTS_PER_EPOCH →
     (t.slot / P.SLOTS_PER_EPOCH ≠ 0 → s1.finalized_checkpoint.epoch + 1 ≤ t.slot / P.SLOTS_PER_EPOCH) →
     OkWith (specFourSteps P s1) (fun s => TailFrame t s ∧ DepFrame t s)
 
 /-- `process_pending_deposits` succeeds after the eth1 data reset. `TotalityRows.lean` proves it
 (`depOk_of_supplyAndTimeLimits`). -/
-def DepOk [CurrentPreset] (o : Oracle) (t : BeaconState) : Prop :=
+def PendingDepositsSucceed [CurrentPreset] (o : Oracle) (t : BeaconState) : Prop :=
   ∀ s tab, TailFrame t s → DepFrame t s → get_total_active_balance P s = .ok tab →
     OkWith (process_pending_deposits P tab (apply_pending_deposit P o) s)
       (TailFrame t)
@@ -827,7 +828,8 @@ theorem epochBeforeCommitteeSteps_parts (p : Preset) (o : Oracle) (s : BeaconSta
 /-- The sync committee, proposer lookahead and PTC window steps succeed on the state that
 `epochBeforeCommitteeSteps` returns. `committeesOk_of` proves it. -/
 def CommitteesOk [CurrentPreset] (o : Oracle) (t : BeaconState) : Prop :=
-  ∀ s, epochBeforeCommitteeSteps P o t = .ok s → CommFrame t s → OkWith (committeeSteps P o s)
+  ∀ s, epochBeforeCommitteeSteps P o t = .ok s → SameSlotAndLengths t s →
+    OkWith (committeeSteps P o s)
     (fun _ => True)
 
 theorem tot_cp [CurrentPreset] [CurrentPreset.Valid] {a b x : Nat} (hab : a ≤ b)
@@ -861,13 +863,14 @@ theorem tot_tab_lt [CurrentPreset] [CurrentPreset.Valid] (s : BeaconState) (h : 
   exact ⟨tab, ht, Nat.lt_of_le_of_lt hle (tot_max_lt64 h)⟩
 
 /-- The steps before the committee steps succeed on mainnet at the last slot of an epoch, from
-the reachable-state facts at the epoch input and the open steps, and keep `CommFrame`. -/
+the reachable-state facts at the epoch input and the open steps, and keep `SameSlotAndLengths`. -/
 theorem epochBeforeCommitteeSteps_total [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (t : BeaconState)
     (hrows : ListLengthsMatch t)
     (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % P.SLOTS_PER_EPOCH = 0)
     (hvec : t.VectorLengths P) (hffg : CheckpointsInOrder P t)
-    (hsup : totalEffectiveBalance t < 2 ^ 60) (hmid : MidOk t) (hdep : DepOk o t) :
-    ∃ s, epochBeforeCommitteeSteps P o t = .ok s ∧ CommFrame t s := by
+    (hsup : totalEffectiveBalance t < 2 ^ 60) (hmid : StepsToSlashingsSucceed t)
+    (hdep : PendingDepositsSucceed o t) :
+    ∃ s, epochBeforeCommitteeSteps P o t = .ok s ∧ SameSlotAndLengths t s := by
   have hslot64 : t.slot < 2 ^ 64 := Nat.lt_of_le_of_lt (Nat.le_add_right _ _) hslot
   obtain ⟨hbr, -, -, -, hbits, -⟩ := hvec
   have hcp := tot_cp hffg.1.2 hffg.2 hslot64
@@ -956,7 +959,8 @@ reachable-state facts at its input and the open steps. -/
 theorem process_epoch_total [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (t : BeaconState) (hrows : ListLengthsMatch t)
     (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % P.SLOTS_PER_EPOCH = 0)
     (hvec : t.VectorLengths P) (hffg : CheckpointsInOrder P t)
-    (hsup : totalEffectiveBalance t < 2 ^ 60) (hmid : MidOk t) (hdep : DepOk o t)
+    (hsup : totalEffectiveBalance t < 2 ^ 60) (hmid : StepsToSlashingsSucceed t)
+    (hdep : PendingDepositsSucceed o t)
     (hcomm : CommitteesOk o t) :
     ∃ s', process_epoch P o t = .ok s' := by
   obtain ⟨s, hs, hf⟩ := epochBeforeCommitteeSteps_total o t hrows hslot hlast hvec hffg hsup hmid hdep

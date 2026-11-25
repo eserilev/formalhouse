@@ -50,7 +50,7 @@ theorem progressive_balances_correct_after_updates {incr : Nat}
     {start finish : CacheProofs.Spec.BeaconState}
     {c0 c : LighthouseProgressiveBalancesCache}
     (hc0 : ProgressiveBalancesCacheCorrect incr start c0)
-    (hup : CacheUpkeep incr start finish c0 c) :
+    (hup : ProgressiveBalancesUpdates incr (start, c0) (finish, c)) :
     ProgressiveBalancesCacheCorrect incr finish c :=
   ProgressiveBalancesUpdates.correct hup hc0
 

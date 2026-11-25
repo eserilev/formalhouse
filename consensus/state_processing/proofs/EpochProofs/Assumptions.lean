@@ -50,7 +50,8 @@ structure GloasChainConditions (oracle : Spec.Oracle) (state : Spec.BeaconState)
   /-- The slot is far below `2^64`. The pyspec `get_block_root` raises near `2^64`. -/
   slotFarFromOverflow : state.slot + 8192 < 2 ^ 64
   /-- Lighthouse's list of historical summaries has room. -/
-  historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit state
+  historicalSummariesBelowLimit : state.historical_summaries.length <
+    Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT
 
 variable [Spec.CurrentFuluConfig]
 
@@ -67,7 +68,8 @@ structure FuluChainConditions (oracle : Spec.Oracle) (state : Spec.BeaconState) 
   /-- The slot is far below `2^64`. -/
   slotFarFromOverflow : state.slot + 8192 < 2 ^ 64
   /-- Lighthouse's list of historical summaries has room. -/
-  historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit state
+  historicalSummariesBelowLimit : state.historical_summaries.length <
+    Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT
 
 end Chain
 
@@ -129,15 +131,14 @@ structure GloasCacheAssumptions {PubkeyMap : Type}
     (pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey)
     (pubkeyMap : PubkeyMap) (state : Spec.BeaconState) : Prop where
   /-- The progressive balances cache was correct at a state `start` of this epoch, and each write
-  since then ran its cache update (`CacheUpkeep`). -/
+  since then ran its cache update (`ProgressiveBalancesUpdates`). -/
   progressiveBalances :
     ∃ (start : CacheProofs.Spec.BeaconState)
       (startCache : CacheProofs.ProgressiveBalances.LighthouseProgressiveBalancesCache),
       CacheProofs.ProgressiveBalances.ProgressiveBalancesCacheCorrect
         Spec.P.EFFECTIVE_BALANCE_INCREMENT start startCache ∧
-      CacheUpkeep Spec.P.EFFECTIVE_BALANCE_INCREMENT start
-        (progressiveBalancesStateOf state (state.slot / Spec.P.SLOTS_PER_EPOCH)) startCache
-          progressiveCache
+      ProgressiveBalancesUpdates Spec.P.EFFECTIVE_BALANCE_INCREMENT (start, startCache)
+        (progressiveBalancesStateOf state (state.slot / Spec.P.SLOTS_PER_EPOCH), progressiveCache)
   /-- The epoch cache holds the total active balance of an earlier state `built`. That state has
   the same effective balances and the same active validators. -/
   epochCache : ∃ built : Spec.BeaconState,

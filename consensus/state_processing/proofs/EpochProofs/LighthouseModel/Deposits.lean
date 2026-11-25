@@ -298,14 +298,14 @@ theorem depositLoop_growth [CurrentPreset] (fs avail : Nat) :
   | v :: vs, ls, r, h => by
     simp only [depositLoop] at h
     obtain ⟨r1, h1, h⟩ := specM_bind_ok h
-    rcases depositStep_cases fs avail ls v r1 h1 with ⟨hs, hst⟩ | ⟨hs, -, hn1, hp1⟩
+    rcases depositStep_cases fs avail ls v r1 h1 with ⟨hs, hst⟩ | ⟨hs, -, hfitsShuffle, hp1⟩
     · simp only [hs, if_true, pure, Except.pure, Except.ok.injEq] at h
       subst h
       exact ⟨[], by rw [hst]; simp, by rw [hst]; rfl⟩
     · simp only [hs, Bool.false_eq_true, if_false] at h
       obtain ⟨flags, hp, hn⟩ := depositLoop_growth fs avail vs r1.state r h
       rw [hp1] at hp
-      rw [hn1] at hn
+      rw [hfitsShuffle] at hn
       refine ⟨(!v.is_withdrawn && v.is_exited) :: flags, by simp [hp], by simp [hn]; omega⟩
 
 /-- Applying handled deposits keeps `ValExt`. -/
@@ -360,7 +360,8 @@ theorem decideApplyLoop_iff [CurrentPreset] (o : Oracle) (fs avail : Nat) (view 
     cases h1 : depositStep P fs avail ls (view d) with
     | error e => simp [bind, Except.bind]
     | ok r1 =>
-      rcases depositStep_cases fs avail ls (view d) r1 h1 with ⟨hs, hst⟩ | ⟨hs, -, hn1, hp1⟩
+      rcases depositStep_cases fs avail ls (view d) r1 h1 with ⟨hs, hst⟩ | ⟨hs, -, hfitsShuffle,
+        hp1⟩
       · simp only [bind, Except.bind, hs, if_true, pure, Except.pure, Except.ok.injEq,
           Prod.mk.injEq]
         constructor
@@ -377,7 +378,7 @@ theorem decideApplyLoop_iff [CurrentPreset] (o : Oracle) (fs avail : Nat) (view 
               (d, !(view d).is_withdrawn && (view d).is_exited) :: handledOf l r1.state r := by
           intro flags hpf hnf
           have hk : r.state.next_deposit_index - ls.next_deposit_index = flags.length + 1 := by
-            rw [hnf, hn1]; omega
+            rw [hnf, hfitsShuffle]; omega
           have hk1 : r.state.next_deposit_index - r1.state.next_deposit_index = flags.length := by
             rw [hnf]; omega
           simp only [handledOf, hk, hk1, hpf, hp1, List.take_succ_cons, List.append_assoc,

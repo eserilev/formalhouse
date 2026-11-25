@@ -345,14 +345,14 @@ theorem fulu_assumptions_hold_for_example (o : Oracle)
 /-- The state hypotheses of the Gloas agreement theorem hold at `exampleGloasState`. -/
 theorem gloas_agreement_assumptions_hold_for_example :
     EpochInputInvariants exampleGloasState ∧ AtLastSlotOfEpoch exampleGloasState ∧
-      HistoricalSummariesBelowLimit exampleGloasState :=
+      exampleGloasState.historical_summaries.length < LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT :=
   ⟨exampleGloasState_reachableInvariants, exampleGloasState_atLastSlotOfEpoch,
     exampleGloasState_atLastSlotOfEpoch.2.2⟩
 
 /-- The state hypotheses of the Fulu agreement theorem hold at `exampleFuluState`. -/
 theorem fulu_agreement_assumptions_hold_for_example :
     EpochInputInvariants exampleFuluState ∧ AtLastSlotOfEpoch exampleFuluState ∧
-      HistoricalSummariesBelowLimit exampleFuluState :=
+      exampleFuluState.historical_summaries.length < LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT :=
   ⟨exampleFuluState_reachableInvariants, exampleFuluState_atLastSlotOfEpoch,
     exampleFuluState_atLastSlotOfEpoch.2.2⟩
 

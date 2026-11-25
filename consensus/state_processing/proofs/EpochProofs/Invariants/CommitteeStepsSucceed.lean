@@ -12,8 +12,8 @@ runs returns.
 
 The theorems here take that directly. `SelOk` says that one selection returns at least `size`
 items, all of them candidates. Each theorem asks `SelOk` only for the selections that the step
-runs, with the seeds that it computes. With that and the state facts (`CommFacts`), the step
-succeeds.
+runs, with the seeds that it computes. With that and the state facts (`CommitteeStateFacts`), the
+step succeeds.
 
 The proofs are those of `TotalityCommittees.lean` with `compute_balance_weighted_selection_total`
 replaced by the `SelOk` hypothesis.
@@ -44,7 +44,7 @@ without them: `eth_aggregate_pubkeys` asserts `KeyValidate` on each key, and the
 and the shuffle arithmetic are checked. Each holds on reachable states: the slot is far from `2^64`, the RANDAO vector
 has its SSZ length, the registry limit is `2^40`, the effective balance is at most
 `MAX_EFFECTIVE_BALANCE_ELECTRA` (`EffectiveBalancesValid`), and a deposit adds a validator only after its signature
-checks. `CommFacts` without the two vector lengths, which hold on every EthLib state. -/
+checks. `CommitteeStateFacts` without the two vector lengths, which hold on every EthLib state. -/
 structure SelFacts [CurrentPreset] (o : Oracle) (s : BeaconState) : Prop where
   slot : s.slot + 8192 < 2 ^ 64
   randao : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR
@@ -53,8 +53,9 @@ structure SelFacts [CurrentPreset] (o : Oracle) (s : BeaconState) : Prop where
   keys : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true
 
 /-- `SelFacts` at the state `s` that the epoch passes to the committee steps, from the epoch
-input `t`: the slot and RANDAO length come from `CommFrame`. -/
-theorem SelFacts.of_frame [CurrentPreset] {o : Oracle} {t s : BeaconState} (hfr : CommFrame t s)
+input `t`: the slot and RANDAO length come from `SameSlotAndLengths`. -/
+theorem SelFacts.of_frame [CurrentPreset] {o : Oracle} {t s : BeaconState}
+    (hfr : SameSlotAndLengths t s)
     (hslot : t.slot + 8192 < 2 ^ 64) (h : RegistryAllowsSelection o s)
     (hebMax : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000) : SelFacts o s :=
   ⟨hfr.slot ▸ hslot, hfr.randao, h.registryBelowLimit, hebMax, h.pubkeysValid⟩

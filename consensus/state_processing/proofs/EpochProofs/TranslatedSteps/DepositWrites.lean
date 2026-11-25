@@ -100,7 +100,7 @@ theorem depositLoop_next_le [CurrentPreset] (fs avail : Nat) :
   | v :: vs, ls, r, h => by
     simp only [depositLoop] at h
     obtain ⟨r1, h1, h⟩ := specM_bind_ok h
-    rcases depositStep_cases fs avail ls v r1 h1 with ⟨hs, hst⟩ | ⟨hs, -, hn1, -⟩
+    rcases depositStep_cases fs avail ls v r1 h1 with ⟨hs, hst⟩ | ⟨hs, -, hfitsShuffle, -⟩
     · simp only [hs, if_true, pure, Except.pure, Except.ok.injEq] at h
       subst h
       rw [hst]
@@ -144,9 +144,6 @@ end Spec
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
-/-- The Rust `DepositWritesError`. -/
-abbrev LighthouseDWError (E : Type) := per_epoch_processing.deposit_writes.DepositWritesError E
-
 
 theorem slice_get_some {α : Type} (s : Slice α) (i : Usize) (h : i.val < s.val.length) :
     core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice α) s i = ok (some s.val[i.val]) := by
@@ -156,7 +153,7 @@ theorem slice_get_some {α : Type} (s : Slice α) (i : Usize) (h : i.val < s.val
 /-- What a deposit write returns, in spec terms. -/
 def DepositWritesResultMatchesModel {S E A : Type} (view : S → Spec.BeaconState)
     (spec : Spec.SpecM Spec.BeaconState) :
-    core.result.Result A (LighthouseDWError E) × S → Prop
+    core.result.Result A (per_epoch_processing.deposit_writes.DepositWritesError E) × S → Prop
   | (.Ok _, s') => spec = .ok (view s')
   | (.Err _, _) => ∃ e, spec = .error e
 
@@ -245,7 +242,8 @@ theorem update_effective_balances_loop_spec [EpochProofs.Spec.CurrentPreset] {S 
 on. -/
 def NewPost {S E : Type} (view : S → Spec.BeaconState) (L0 : Nat)
     (spec : Spec.SpecM Spec.BeaconState) :
-    core.result.Result (alloc.vec.Vec Usize) (LighthouseDWError E) × S → Prop
+    core.result.Result (alloc.vec.Vec Usize)
+      (per_epoch_processing.deposit_writes.DepositWritesError E) × S → Prop
   | (.Ok added, s') => spec = .ok (view s') ∧ L0 ≤ (view s').validators.length ∧
       added.val.map (·.val) = List.range' L0 ((view s').validators.length - L0)
   | (.Err _, _) => ∃ e, spec = .error e

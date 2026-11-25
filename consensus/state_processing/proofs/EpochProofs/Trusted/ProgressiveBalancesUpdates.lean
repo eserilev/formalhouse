@@ -87,11 +87,4 @@ inductive ProgressiveBalancesUpdates (incr : Nat) :
   | step {x y z} : ProgressiveBalancesUpdate incr x y → ProgressiveBalancesUpdates incr y z →
       ProgressiveBalancesUpdates incr x z
 
-/-- Between the state `start` and the state `finish` of one
-epoch, with caches `c0` and `c`, Lighthouse runs the updates of a `ProgressiveBalancesUpdates`. -/
-def CacheUpkeep (incr : Nat) (start finish : CacheProofs.Spec.BeaconState)
-    (c0 c : LighthouseProgressiveBalancesCache) :
-    Prop :=
-  ProgressiveBalancesUpdates incr (start, c0) (finish, c)
-
 end EpochProofs.CacheReads

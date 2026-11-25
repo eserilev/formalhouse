@@ -369,15 +369,10 @@ theorem reachable_state_transition_sameResultOrBothFail_last [CurrentPreset] [Cu
   dsimp only
   exact sameResultOrBothFail_bind hslots fun _ _ => SameResultOrBothFail.refl _
 
-/-- `historical_summaries` is below the Lighthouse limit. -/
-def HistoricalSummariesBelowLimit (t : BeaconState) : Prop :=
-  t.historical_summaries.length < LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT
-
 /-- The whole Lighthouse epoch in the Lighthouse order: on mainnet, from every reachable state,
 `state_transition` with `process_epoch_lighthouse` has the same `ok` results as the spec
 `state_transition`. Beyond the hypotheses of `lighthouse_full_epoch_state_transition_sameResultOrBothFail`,
-`historical_summaries` is below the Lighthouse limit at each epoch boundary (`HistoricalSummariesBelowLimit` in the
-economic facts). -/
+`historical_summaries` is below the Lighthouse limit at each epoch boundary. -/
 theorem lighthouse_order_epoch_state_transition_sameResultOrBothFail [CurrentPreset] [CurrentPreset.Valid] (o : Oracle)
     (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
     (hffg : CheckpointsInOrder P init) (hrows : ListLengthsMatch init)
@@ -386,7 +381,8 @@ theorem lighthouse_order_epoch_state_transition_sameResultOrBothFail [CurrentPre
     (hcr : ConsolidationsInRange init) (hw : WithdrawableEpochsFitUint64 init)
     (hsupply : ActiveBalanceBounded o max_blobs_per_block GLOAS_FORK_EPOCH init)
     (hinputCondition : AtEveryEpochInput o max_blobs_per_block GLOAS_FORK_EPOCH init
-      (fun t => BalancesFarFromOverflow t ∧ HistoricalSummariesBelowLimit t))
+      (fun t => BalancesFarFromOverflow t ∧ t.historical_summaries.length <
+        LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT))
     (s : BeaconState) (hr : ReachableByBlocks o max_blobs_per_block GLOAS_FORK_EPOCH init s)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (hslot64 : signed_block.message.slot < 2 ^ 64) :
@@ -395,14 +391,16 @@ theorem lighthouse_order_epoch_state_transition_sameResultOrBothFail [CurrentPre
       (state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
         validate_result) := by
   have hecon1 : AtEveryEpochInput o max_blobs_per_block GLOAS_FORK_EPOCH init
-      (fun t => (BalancesFarFromOverflow t ∧ HistoricalSummariesBelowLimit t) ∧ PubkeysUnique t ∧ ConsolidationsInRange t) := by
+      (fun t => (BalancesFarFromOverflow t ∧ t.historical_summaries.length <
+        LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT) ∧ PubkeysUnique t ∧ ConsolidationsInRange t) := by
     intro s' t t1 hr' hreach ht hz
     have htail := hreach.tail (reachable_tail o _ _ init hpk hcr s' hr')
     exact ⟨hinputCondition s' t t1 hr' hreach ht hz,
       (SamePubkeys.of_eq (process_slot_frame _ o _ _ ht).1.1).pubkeysUnique htail.1,
       (process_slot_cstep _ o _ _ ht).inRange htail.2⟩
   have hecon2 : AtEveryEpochInput o max_blobs_per_block GLOAS_FORK_EPOCH init
-      (fun t => ((BalancesFarFromOverflow t ∧ HistoricalSummariesBelowLimit t) ∧ PubkeysUnique t ∧ ConsolidationsInRange t) ∧
+      (fun t => ((BalancesFarFromOverflow t ∧ t.historical_summaries.length <
+        LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT) ∧ PubkeysUnique t ∧ ConsolidationsInRange t) ∧
         WithdrawableEpochsFitUint64 t ∧ NoWithdrawableEpochWithoutExit t) := by
     intro s' t t1 hr' hreach ht hz
     have hstart : ExitToWithdrawableDelay P s' ∧ WithdrawableEpochsFitUint64 s' :=

@@ -20,12 +20,9 @@ the referenced indices is `validatorsInConsolidations`. This is what the `BTreeS
 
 namespace EpochProofs.Spec
 
-/-- The table row of an index past the registry. -/
-def missingRow : LocalValidator := ⟨false, false, 0, 0⟩
-
-/-- The table row of validator `i`. -/
+/-- The table row of validator `i`. Past the registry, it says that the validator does not exist. -/
 def localRow (vs : List Validator) (i : Nat) : LocalValidator :=
-  (vs[i]?.map globalLocal).getD missingRow
+  (vs[i]?.map globalLocal).getD ⟨false, false, 0, 0⟩
 
 /-- The table rows of the validators in `idx`. -/
 def tableRows (vs : List Validator) (idx : List Nat) : List LocalValidator :=
@@ -47,7 +44,7 @@ theorem localExists_tableRows {vs : List Validator} {idx : List Nat} {x : Nat} (
   rw [List.getElem?_map, List.getElem?_eq_getElem hlt, List.getElem_idxOf hlt,
     List.getElem?_map]
   unfold localRow
-  cases h : vs[x]? <;> simp [h, missingRow, globalLocal]
+  cases h : vs[x]? <;> simp [h, globalLocal]
 
 theorem tableRows_getElem? {vs : List Validator} {idx : List Nat} {x : Nat} (hx : x ∈ idx) :
     (tableRows vs idx)[idx.idxOf x]? = some (localRow vs x) := by

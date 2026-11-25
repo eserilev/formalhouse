@@ -1089,7 +1089,7 @@ theorem state_transition_epochInv [CurrentPreset] [CurrentPreset.Valid] (o : Ora
   have hs1 := process_slots_process_epoch_slot _ o s s1 _ h1
   have hn0 := hinv.2.2.2.2
   have hinv1 := process_slots_epochInv o s0 r E n s s1 _ hblockE h1 hinv
-  obtain ⟨hb1, hd1, hE1, hag1, hn1⟩ := hinv1
+  obtain ⟨hb1, hd1, hE1, hag1, hfitsShuffle⟩ := hinv1
   have htab1 : ∀ tab, get_total_active_balance P s1 = .ok tab →
       tab ≤ 139000000000000000 := by
     intro tab ht

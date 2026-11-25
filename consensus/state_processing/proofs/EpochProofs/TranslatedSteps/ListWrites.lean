@@ -63,9 +63,6 @@ end Spec
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
-/-- The Rust `ListWritesError`. -/
-abbrev LighthouseLWError (E : Type) := per_epoch_processing.list_writes.ListWritesError E
-
 /-! ## Builder pending payments -/
 
 theorem push_withdrawals_loop_spec {S E : Type} (inst : LighthousePaymentWrites S E)
@@ -208,7 +205,7 @@ theorem apply_builder_pending_payments_equiv [EpochProofs.Spec.CurrentPreset] {S
 
 /-- What an effective balance loop returns, in spec terms. -/
 def EbPost {S E : Type} (view : S → Spec.BeaconState) (spec : Spec.SpecM Spec.BeaconState) :
-    core.result.Result Unit (LighthouseLWError E) × S → Prop
+    core.result.Result Unit (per_epoch_processing.list_writes.ListWritesError E) × S → Prop
   | (.Ok _, s') => spec = .ok (view s')
   | (.Err _, _) => ∃ e, spec = .error e
 

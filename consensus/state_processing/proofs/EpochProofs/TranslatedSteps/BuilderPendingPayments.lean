@@ -303,13 +303,9 @@ theorem quorum_equiv (p : Spec.Preset) (total_active_balance slots_per_epoch : U
           resultToSpec]
         rfl
 
-/-- A Rust address, read as a spec address. -/
-def addressToSpec (a : alloy_primitives.bits.address.Address) : Spec.ExecutionAddress :=
-  ⟨(a.val.map fun b => UInt8.ofNat b.val).toArray, by simp⟩
-
 /-- A Rust withdrawal, read as a spec withdrawal. -/
 def withdrawalToSpec (w : LighthouseWithdrawal) : Spec.BuilderPendingWithdrawal :=
-  { fee_recipient := addressToSpec w.fee_recipient
+  { fee_recipient := ⟨(w.fee_recipient.val.map fun b => UInt8.ofNat b.val).toArray, by simp⟩
     amount := w.amount.val
     builder_index := w.builder_index.val }
 
@@ -321,7 +317,7 @@ def paymentToSpec (p : LighthousePayment) : Spec.BuilderPendingPayment :=
 
 theorem paymentToSpec_default : paymentToSpec lighthouseDefaultPayment =
     Spec.BuilderPendingPayment.empty := by
-  simp only [paymentToSpec, withdrawalToSpec, addressToSpec, lighthouseDefaultPayment,
+  simp only [paymentToSpec, withdrawalToSpec, lighthouseDefaultPayment,
     Spec.BuilderPendingPayment.empty, Spec.BuilderPendingWithdrawal.empty,
     alloy_primitives.bits.fixed.FixedBytes.ZERO]
   congr 2

@@ -238,10 +238,10 @@ theorem predictedStatus_eq_post_registry (p : Preset)
         simp [hlt]
       · have hg := hejected hej.1.1 hej.1.2 hej.2 hfar
         have hwf := hvalid hfar
-        have hn1 : ¬ g.withdrawable_epoch < current_epoch + 1 := by
+        have hfitsShuffle : ¬ g.withdrawable_epoch < current_epoch + 1 := by
           rw [hwd]; exact Nat.not_lt.mpr (Nat.le_trans hge (Nat.le_add_right _ _))
         have hn2 : ¬ FAR_FUTURE_EPOCH < current_epoch + 1 := Nat.not_lt.mpr (Nat.le_of_lt hnext)
-        simp [hg, hwf, hn1, hn2, hej.1.1, hej.1.2, hej.2]
+        simp [hg, hwf, hfitsShuffle, hn2, hej.1.1, hej.1.2, hej.2]
     · -- The activation step or nothing. Exit and withdrawable epochs do not change.
       rename_i _ hnej
       split at hreg <;> (simp only [pure, Except.pure, Except.ok.injEq] at hreg; subst hreg)

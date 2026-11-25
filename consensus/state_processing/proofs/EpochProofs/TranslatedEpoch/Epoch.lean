@@ -100,7 +100,11 @@ structure UntranslatedEpochFacts (code : UntranslatedEpochCode RustState RustErr
   /-- The proposer lookahead. -/
   lookahead : UntranslatedLookaheadFacts code.lookahead oracle rustStateToSpec
   /-- The proposer candidates are the active, unslashed validators. -/
-  proposerIndices : ProposerCandidatesGloas code.lookahead rustStateToSpec
+  proposerIndices : ∀ t l, (Spec.get_active_validator_indices (rustStateToSpec t)
+    (code.lookahead.epoch t).val).filterM
+        (fun index => do pure !(← Spec.listGet (rustStateToSpec t).validators index).slashed) =
+          .ok l →
+      (code.lookahead.proposerIndices t).val.map (·.val) = l
   /-- The PTC window. -/
   ptcWindow : UntranslatedPtcWindowFacts code.lookahead code.ptcWindow oracle rustStateToSpec
   /-- The resets, the historical summaries, the participation rotation and the sync committees. -/

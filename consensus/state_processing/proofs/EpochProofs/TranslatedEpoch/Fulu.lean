@@ -157,30 +157,19 @@ variable {RustState RustError : Type}
 
 variable [Spec.CurrentPreset] [Spec.CurrentFuluConfig]
 
-/-- The Fulu proposer candidates: the active validators at the lookahead epoch. -/
-def ProposerCandidatesFulu (lookaheadCode : UntranslatedLookahead RustState)
-    (rustStateToSpec : RustState → Spec.BeaconState) : Prop :=
-  ∀ t, (lookaheadCode.proposerIndices t).val.map (·.val) =
-    Spec.get_active_validator_indices (rustStateToSpec t) (lookaheadCode.epoch t).val
-
-/-- A probability fact at the lookahead input: each Electra proposer loop ends before its last
-pass. -/
-def LookaheadFin (lookaheadCode : UntranslatedLookahead RustState) (oracle : Spec.Oracle)
-    (rustStateToSpec : RustState → Spec.BeaconState)
-    (rustState : RustState) : Prop :=
-  ∀ s, Spec.ProposerSelectionEnds Spec.P oracle (rustStateToSpec rustState)
-    (Spec.get_active_validator_indices (rustStateToSpec rustState)
-      (lookaheadCode.epoch rustState).val) s
-
 omit [Spec.CurrentFuluConfig] in
 /-- The composed Fulu lookahead returns the state of `process_proposer_lookahead_fulu`. -/
 theorem translatedLookaheadFulu_matches_model [Spec.CurrentPreset.Valid] [Spec.CurrentPreset.Bounds]
     (lookaheadCode : UntranslatedLookahead RustState)
     (oracle : Spec.Oracle) (rustStateToSpec : RustState → Spec.BeaconState)
     (hL : UntranslatedLookaheadFacts lookaheadCode oracle rustStateToSpec)
-    (hpi : ProposerCandidatesFulu lookaheadCode rustStateToSpec) (rustState : RustState)
-    (hn1 : LookaheadN1 lookaheadCode rustState)
-    (hfin : LookaheadFin lookaheadCode oracle rustStateToSpec rustState)
+    (hpi : ∀ t, (lookaheadCode.proposerIndices t).val.map (·.val) =
+      Spec.get_active_validator_indices (rustStateToSpec t) (lookaheadCode.epoch t).val)
+        (rustState : RustState)
+    (hfitsShuffle : (lookaheadCode.proposerIndices rustState).val.length ≤ 2 ^ 24)
+    (hfin : ∀ s, Spec.ProposerSelectionEnds Spec.P oracle (rustStateToSpec rustState)
+      (Spec.get_active_validator_indices (rustStateToSpec rustState)
+        (lookaheadCode.epoch rustState).val) s)
     (hpl : (rustStateToSpec rustState).proposer_lookahead.length =
       (Spec.P.MIN_SEED_LOOKAHEAD + 1) * Spec.P.SLOTS_PER_EPOCH)
     (s1 : Spec.BeaconState)
@@ -204,7 +193,7 @@ theorem translatedLookaheadFulu_matches_model [Spec.CurrentPreset.Valid] [Spec.C
       (hL.epoch rustState) (hpi rustState) hfin (lookaheadCode.mix rustState)
     (hL.mix rustState) (lookaheadCode.startSlot rustState) hstart
       (lookaheadCode.constants rustState) (hL.constants rustState)
-    slots_lt_2_32 hn1 hL.usize64 s1 h1
+    slots_lt_2_32 hfitsShuffle hL.usize64 s1 h1
   obtain ⟨r, hr, v, rfl, hv⟩ := spec_imp_exists hla
   unfold translatedLookahead
   rw [hr]
@@ -341,7 +330,8 @@ structure UntranslatedEpochFactsFulu (code : UntranslatedEpochCodeFulu RustState
   /-- The proposer lookahead. -/
   lookahead : UntranslatedLookaheadFacts code.lookahead oracle rustStateToSpec
   /-- The proposer candidates are the active validators. -/
-  proposerIndices : ProposerCandidatesFulu code.lookahead rustStateToSpec
+  proposerIndices : ∀ t, (code.lookahead.proposerIndices t).val.map (·.val) =
+      Spec.get_active_validator_indices (rustStateToSpec t) (code.lookahead.epoch t).val
   /-- The resets, the historical summaries, the participation rotation and the sync committees. -/
   endOfEpoch : UntranslatedEndOfEpochFacts code.endOfEpoch oracle rustStateToSpec
   /-- At most `2^24` proposer candidates enter the shuffle. -/

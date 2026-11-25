@@ -333,7 +333,7 @@ theorem fulu_fork_state_genesisInvariants [CurrentPreset] [CurrentPreset.Valid] 
     (hslot64 : slot < 2 ^ 64) (hreach : ReachableBySlotsBeforeFulu o fo fs slot t) (hlt : t.state.slot < slot)
     (ht : process_slot_fulu P o fo t = .ok t1)
     (hz : (t1.state.slot + 1) % P.SLOTS_PER_EPOCH = 0)
-    (he : process_epoch_fulu_m o t1.state = .ok s2) :
+    (he : process_epoch_fulu P FC o t1.state = .ok s2) :
     GenesisInvariants { s2 with slot := s2.slot + 1 } := by
   have hst := loopInv_steps_fulu o fo slot fs.state.slot hslot64
   have hs := reachable_fulu_inv o fo c init hi hsupply fs hr
@@ -366,7 +366,7 @@ theorem fulu_gloas_fork_genesisInvariants [CurrentPreset] [CurrentPreset.Valid] 
     (hslot64 : slot < 2 ^ 64) (hreach : ReachableBySlotsBeforeFulu o fo fs slot t) (hlt : t.state.slot < slot)
     (ht : process_slot_fulu P o fo t = .ok t1)
     (hz : (t1.state.slot + 1) % P.SLOTS_PER_EPOCH = 0)
-    (he : process_epoch_fulu_m o t1.state = .ok s2)
+    (he : process_epoch_fulu P FC o t1.state = .ok s2)
     (hup : upgrade_to_gloas P o uc
       { t1 with state := { s2 with slot := s2.slot + 1 } } = .ok g) :
     GenesisInvariants g :=
@@ -385,7 +385,7 @@ theorem fulu_then_gloas_sameResultOrBothFail [CurrentPreset] [CurrentPreset.Vali
     (hslot64 : slot < 2 ^ 64) (hreach : ReachableBySlotsBeforeFulu o fo fs slot t) (hlt : t.state.slot < slot)
     (ht : process_slot_fulu P o fo t = .ok t1)
     (hz : (t1.state.slot + 1) % P.SLOTS_PER_EPOCH = 0)
-    (he : process_epoch_fulu_m o t1.state = .ok s2)
+    (he : process_epoch_fulu P FC o t1.state = .ok s2)
     (hup : upgrade_to_gloas P o uc
       { t1 with state := { s2 with slot := s2.slot + 1 } } = .ok g)
     (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch)

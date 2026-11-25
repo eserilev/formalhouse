@@ -5,7 +5,8 @@ import EpochProofs.Spec.PresetBounds
 /-!
 # The per-validator epoch steps and the pending deposits succeed
 
-`process_epoch_total` takes two step facts, `MidOk` and `DepOk`. This file proves both on
+`process_epoch_total` takes two step facts, `StepsToSlashingsSucceed` and `PendingDepositsSucceed`.
+This file proves both on
 mainnet, from the facts at the epoch input and `SupplyAndTimeLimits`.
 
 The four per-validator steps (inactivity, rewards, registry, slashings) run as passes over rows.
@@ -13,7 +14,8 @@ Each row step returns `ok` when its row and the pass state have small values, an
 small for the next row.
 
 Error sources and why they do not fire:
-- Inactivity: `score + INACTIVITY_SCORE_BIAS`. `SupplyAndTimeLimits.scores` keeps scores below `2^22`.
+- Inactivity: `score + INACTIVITY_SCORE_BIAS`. `SupplyAndTimeLimits.scores` keeps scores below
+  `2^22`.
 - Rewards: `base_reward * weight * participating_increments`. The base reward is at most
   `2048 * 2023907` Gwei because the total active balance is at least `10^9`, and the
   participating increments are at most `2^57 / 10^9` (`SupplyAndTimeLimits.supply`). The inactivity
@@ -21,15 +23,15 @@ Error sources and why they do not fire:
   the scores.
 - Registry: `compute_exit_epoch_and_update_churn`. An ejected validator has at most
   `EJECTION_BALANCE` and the exit churn is at least `MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA`, so
-  each exit adds one epoch at most. `SupplyAndTimeLimits.churn` and `SupplyAndTimeLimits.count` keep the earliest
-  exit epoch below `2^63`.
+  each exit adds one epoch at most. `SupplyAndTimeLimits.churn` and `SupplyAndTimeLimits.count`
+  keep the earliest exit epoch below `2^63`.
 - Slashings: `penalty_per_increment * increments`. The penalty per increment is at most
   `2 * 10^9`.
 - Pending deposits: the churn sums and `increase_balance`. `SupplyAndTimeLimits.funds` bounds the
   balances, the pending deposits and `deposit_balance_to_consume` together.
 
-`SupplyAndTimeLimits.participation` bounds the reward sum: each flag's participating increments are at
-most `1024` times the active increments.
+`SupplyAndTimeLimits.participation` bounds the reward sum: each flag's participating increments are
+at most `1024` times the active increments.
 -/
 
 namespace EpochProofs.Spec
@@ -852,7 +854,8 @@ theorem trw_rewards_genesis [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset
 /-- The inactivity, rewards, registry and slashings steps after justification and
 finalization, with one total active balance `tab` and the registry update at the churn total
 `g tab`. Gloas uses `g = id`. Fulu uses `fuluChurnTotal`. -/
-def MidCore [CurrentPreset] (g : Gwei → Gwei) (t : BeaconState) : Prop :=
+def StepsToSlashingsSucceedWithChurnTotal [CurrentPreset] (g : Gwei → Gwei)
+    (t : BeaconState) : Prop :=
   ∀ s1, JFShape t s1 → s1.finalized_checkpoint.epoch ≤ t.slot / P.SLOTS_PER_EPOCH →
     (t.slot / P.SLOTS_PER_EPOCH ≠ 0 → s1.finalized_checkpoint.epoch + 1 ≤ t.slot / P.SLOTS_PER_EPOCH) →
     ∀ tab, get_total_active_balance P s1 = .ok tab →
@@ -869,7 +872,7 @@ theorem midCore_of_supplyAndTimeLimits [CurrentPreset] [CurrentPreset.Valid] [Cu
     (heb : EffectiveBalancesValid P t) (hrl : t.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
     (hsll : t.slashings.length = P.EPOCHS_PER_SLASHINGS_VECTOR)
     (hcons : ConsolidationsInRange t) (hsl : t.slashings.sum * 3 < 2 ^ 64)
-    (hrb : SupplyAndTimeLimits t) : MidCore g t := by
+    (hrb : SupplyAndTimeLimits t) : StepsToSlashingsSucceedWithChurnTotal g t := by
   intro s1 hshape hfin0 hfin tab htab
   obtain ⟨cp1, cp2, cp3, bits, hs1⟩ := hshape
   have hv1 : s1.validators = t.validators := by rw [hs1]
@@ -1036,7 +1039,7 @@ justification and finalization, under `SupplyAndTimeLimits`. -/
 theorem midOk_of_supplyAndTimeLimits [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (t : BeaconState) (hrows : ListLengthsMatch t) (hslot : t.slot + 8192 < 2 ^ 64)
     (heb : EffectiveBalancesValid P t) (hvec : t.VectorLengths P)
     (hcons : ConsolidationsInRange t) (hsl : t.slashings.sum * 3 < 2 ^ 64)
-    (hrb : SupplyAndTimeLimits t) : MidOk t := by
+    (hrb : SupplyAndTimeLimits t) : StepsToSlashingsSucceed t := by
   intro s1 hshape hfin0 hfin
   have hcore := midCore_of_supplyAndTimeLimits id (fun x hx => Nat.lt_trans hx (by decide)) t hrows hslot
     heb hvec.2.2.1 hvec.2.2.2.1 hcons hsl hrb s1 hshape hfin0 hfin
@@ -1157,13 +1160,15 @@ theorem DepInv.skip {s : BeaconState} {avail : Nat} {a : PendingDeposit}
 
 /-- `process_pending_deposits` at the churn total `g tab` succeeds after the eth1 data reset.
 Gloas uses `g = id`. Fulu uses `fuluChurnTotal`. -/
-def DepCore [CurrentPreset] (g : Gwei → Gwei) (o : Oracle) (t : BeaconState) : Prop :=
+def PendingDepositsSucceedWithChurnTotal [CurrentPreset] (g : Gwei → Gwei) (o : Oracle)
+    (t : BeaconState) : Prop :=
   ∀ s tab, TailFrame t s → DepFrame t s → get_total_active_balance P s = .ok tab →
     OkWith (process_pending_deposits P (g tab) (apply_pending_deposit P o)
       s) (TailFrame t)
 
 theorem depCore_of_supplyAndTimeLimits [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (g : Gwei → Gwei) (o : Oracle) (t : BeaconState)
-    (hslot0 : t.slot + 8192 < 2 ^ 64) (hrb : SupplyAndTimeLimits t) : DepCore g o t := by
+    (hslot0 : t.slot + 8192 < 2 ^ 64)
+    (hrb : SupplyAndTimeLimits t) : PendingDepositsSucceedWithChurnTotal g o t := by
   intro s tab hf hd htab
   have hteb : @LT.lt Nat _ (totalEffectiveBalance t) (2 ^ 57) := hrb.effectiveBalancesBounded
   have hfunds : @LT.lt Nat _ (t.balances.sum + (t.pending_deposits.map (·.amount)).sum +
@@ -1303,7 +1308,7 @@ theorem depCore_of_supplyAndTimeLimits [CurrentPreset] [CurrentPreset.Valid] [Cu
     · exact OkWith.pure (hframe _ rfl rfl rfl rfl rfl rfl rfl rfl rfl)
 
 theorem depOk_of_supplyAndTimeLimits [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (o : Oracle) (t : BeaconState) (hslot0 : t.slot + 8192 < 2 ^ 64)
-    (hrb : SupplyAndTimeLimits t) : DepOk o t :=
+    (hrb : SupplyAndTimeLimits t) : PendingDepositsSucceed o t :=
   depCore_of_supplyAndTimeLimits id o t hslot0 hrb
 
 /-! ## The whole epoch -/

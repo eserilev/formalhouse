@@ -20,9 +20,6 @@ open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 open state_processing.per_epoch_processing.single_pass_step (ValidatorRow ExitChurn StepContext RowInputs)
 
-/-- The Rust `RowsError`. -/
-abbrev LighthouseRowsError (E : Type) := per_epoch_processing.registry_rows.RowsError E
-
 /-- The exit churn as numbers: the earliest exit epoch and the exit balance to consume. -/
 def exitChurnToSpec (ch : ExitChurn) : Spec.Epoch × Spec.Gwei :=
   (ch.earliest_exit_epoch.val, ch.exit_balance_to_consume.val)
@@ -74,7 +71,7 @@ def StepMatchesModel {R E : Type} (inst : LighthouseRegistryRows R E) (view : R 
 /-- What the loop returns, in spec terms. -/
 def LoopResultMatchesModel {R E : Type} (view : R → List Spec.Row)
     (spec : Spec.SpecM ((Spec.Epoch × Spec.Gwei) × List Spec.Row)) :
-    core.result.Result ExitChurn (LighthouseRowsError E) × R → Prop
+    core.result.Result ExitChurn (per_epoch_processing.registry_rows.RowsError E) × R → Prop
   | (.Ok ch', s') => spec = .ok (exitChurnToSpec ch', view s')
   | (.Err (.Step e), _) => spec = .error (arithErrorToSpec e)
   | (.Err (.Rows _), _) => False

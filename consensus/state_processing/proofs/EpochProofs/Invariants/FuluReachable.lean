@@ -24,13 +24,9 @@ namespace EpochProofs.Spec
 
 open FuluTransitionFacts
 
-/-- The Fulu `process_epoch` on mainnet. -/
-abbrev process_epoch_fulu_m [CurrentPreset] [CurrentFuluConfig] (o : Oracle) : BeaconState → SpecM BeaconState :=
-  process_epoch_fulu P FC o
-
 /-- The Fulu `process_epoch` keeps `ExitToWithdrawableDelay`. -/
 theorem process_epoch_fulu_exitDelay [CurrentPreset] [CurrentFuluConfig] [CurrentFuluConfig.Valid] (o : Oracle) (s s' : BeaconState)
-    (h : process_epoch_fulu_m o s = .ok s') (hs : ExitToWithdrawableDelay P s) :
+    (h : process_epoch_fulu P FC o s = .ok s') (hs : ExitToWithdrawableDelay P s) :
     ExitToWithdrawableDelay P s' :=
   process_epoch_fulu_validators_inv _ _ fuluCompat o (ExitToWithdrawableDelay P)
     (fun _ _ hv hs => ExitToWithdrawableDelay.of_validators_eq hv hs)
@@ -41,7 +37,8 @@ theorem process_epoch_fulu_exitDelay [CurrentPreset] [CurrentFuluConfig] [Curren
 
 /-- The Fulu `process_epoch` keeps `ExitEpochsAreUint64`. -/
 theorem process_epoch_fulu_exitEpochsU64 [CurrentPreset] [CurrentFuluConfig] [CurrentFuluConfig.Valid] (o : Oracle) (s s' : BeaconState)
-    (h : process_epoch_fulu_m o s = .ok s') (hs : ExitEpochsAreUint64 s) : ExitEpochsAreUint64 s' :=
+    (h : process_epoch_fulu P FC o s = .ok s')
+    (hs : ExitEpochsAreUint64 s) : ExitEpochsAreUint64 s' :=
   process_epoch_fulu_validators_inv _ _ fuluCompat o ExitEpochsAreUint64
     (fun _ _ hv hs => ExitEpochsAreUint64.of_validators_eq hv hs)
     (fun _ _ _ h' hs => process_registry_updates_exitEpochsU64 _ _ _ _ h' hs)
@@ -51,7 +48,8 @@ theorem process_epoch_fulu_exitEpochsU64 [CurrentPreset] [CurrentFuluConfig] [Cu
 
 /-- The Fulu `process_epoch` keeps `WithdrawableEpochsFitUint64`. -/
 theorem process_epoch_fulu_withdrawableU64 [CurrentPreset] [CurrentFuluConfig] [CurrentFuluConfig.Valid] (o : Oracle) (s s' : BeaconState)
-    (h : process_epoch_fulu_m o s = .ok s') (hs : WithdrawableEpochsFitUint64 s) : WithdrawableEpochsFitUint64 s' :=
+    (h : process_epoch_fulu P FC o s = .ok s')
+    (hs : WithdrawableEpochsFitUint64 s) : WithdrawableEpochsFitUint64 s' :=
   process_epoch_fulu_validators_inv _ _ fuluCompat o WithdrawableEpochsFitUint64
     (fun _ _ hv hs => WithdrawableEpochsFitUint64.of_validators_eq hv hs)
     (fun _ _ _ h' hs => process_registry_updates_withdrawableU64 _ _ _ _ h' hs)
@@ -69,7 +67,7 @@ theorem loopInv_steps_fulu [CurrentPreset] [CurrentPreset.Valid] [CurrentFuluCon
     (∀ fs fs', process_slot_fulu P o fo fs = .ok fs' → fs.state.slot < slot →
       SlotLoopInvariants start fs.state → SlotLoopInvariants start fs'.state) ∧
     (∀ s s', s.slot < slot → (s.slot + 1) % P.SLOTS_PER_EPOCH = 0 →
-      process_epoch_fulu_m o s = .ok s' → SlotLoopInvariants start s → PostEpoch start s') ∧
+      process_epoch_fulu P FC o s = .ok s' → SlotLoopInvariants start s → PostEpoch start s') ∧
     (∀ s, s.slot < slot → (s.slot + 1) % P.SLOTS_PER_EPOCH = 0 →
       SlotLoopInvariants start s → EpochEndInvariants s) ∧
     (∀ s, (s.slot + 1) % P.SLOTS_PER_EPOCH = 0 → PostEpoch start s →
@@ -99,7 +97,7 @@ theorem loopInv_steps_fulu [CurrentPreset] [CurrentPreset.Valid] [CurrentFuluCon
 theorem process_slots_loop_fulu_reach [CurrentPreset] [CurrentPreset.Valid] [CurrentFuluConfig] [CurrentFuluConfig.Valid] (o : Oracle) (fo : FuluOracle) (slot : Slot)
     (start : Slot) (hslot64 : slot < 2 ^ 64) :
     ∀ fuel (fs fs' : FuluState), SlotLoopInvariants start fs.state →
-      process_slots_loop_fulu P o fo (process_epoch_fulu_m o) slot fuel fs =
+      process_slots_loop_fulu P o fo (process_epoch_fulu P FC o) slot fuel fs =
         .ok fs' → SlotLoopInvariants start fs'.state := by
   have hst := loopInv_steps_fulu o fo slot start hslot64
   intro fuel
@@ -146,7 +144,7 @@ theorem process_slots_loop_fulu_reach [CurrentPreset] [CurrentPreset.Valid] [Cur
 old slot, at a later slot. -/
 theorem process_slots_fulu_reach [CurrentPreset] [CurrentPreset.Valid] [CurrentFuluConfig] [CurrentFuluConfig.Valid] (o : Oracle) (fo : FuluOracle) (fs : FuluState) (slot : Slot)
     (hslot64 : slot < 2 ^ 64) (hs : StateInvariants fs.state) :
-    ∀ fs1, process_slots_fulu P o fo (process_epoch_fulu_m o) fs slot = .ok fs1 →
+    ∀ fs1, process_slots_fulu P o fo (process_epoch_fulu P FC o) fs slot = .ok fs1 →
       SlotLoopInvariants fs.state.slot fs1.state ∧ fs.state.slot < fs1.state.slot := by
   intro fs1 h
   have hslot := process_slots_fulu_process_epoch_slot _ _ o fo _ _ _ h
@@ -166,7 +164,7 @@ theorem state_transition_fulu_reach [CurrentPreset] [CurrentPreset.Valid] [Curre
     (fs fs' : FuluState) (signed_block : FuluSignedBeaconBlock) (validate_result : Bool)
     (hslot64 : signed_block.message.slot < 2 ^ 64)
     (hbits : signed_block.message.body.sync_aggregate.sync_committee_bits.length ≤ P.SYNC_COMMITTEE_SIZE)
-    (htab : ∀ fs1, process_slots_fulu P o fo (process_epoch_fulu_m o) fs
+    (htab : ∀ fs1, process_slots_fulu P o fo (process_epoch_fulu P FC o) fs
       signed_block.message.slot = .ok fs1 → ∀ tab,
         get_total_active_balance P fs1.state = .ok tab → tab ≤ 139000000000000000)
     (hs : StateInvariants fs.state)
@@ -177,7 +175,7 @@ theorem state_transition_fulu_reach [CurrentPreset] [CurrentPreset.Valid] [Curre
   obtain ⟨hinv1, hlt1⟩ := process_slots_fulu_reach o fo fs _ hslot64 hs fs1 h1
   have hs1 := process_slots_fulu_process_epoch_slot _ _ o fo fs fs1 _ h1
   obtain ⟨hffg1, hrows1, hd1, hx1, -, s0, n, h0, hb1, -, hstrict⟩ := hinv1
-  have hn1 := hstrict hlt1
+  have hfitsShuffle := hstrict hlt1
   have hblock : ∀ fs2, process_block_fulu P o fo FC c fs1
       signed_block.message = .ok fs2 → StateInvariants fs2.state := by
     intro fs2 h2
@@ -223,7 +221,7 @@ def ActiveBalanceBoundedFulu [CurrentPreset] [CurrentFuluConfig] (o : Oracle) (f
     Prop :=
   ∀ (fs fs1 : FuluState) (signed_block : FuluSignedBeaconBlock),
     ReachableByBlocksFulu o fo c init fs →
-    process_slots_fulu P o fo (process_epoch_fulu_m o) fs
+    process_slots_fulu P o fo (process_epoch_fulu P FC o) fs
       signed_block.message.slot = .ok fs1 →
     ∀ tab, get_total_active_balance P fs1.state = .ok tab → tab ≤ 139000000000000000
 
@@ -279,7 +277,7 @@ inductive ReachableBySlotsBeforeFulu [CurrentPreset] [CurrentFuluConfig] (o : Or
   | epoch {t t1 : FuluState} {s2 : BeaconState} : ReachableBySlotsBeforeFulu o fo fs slot t →
       t.state.slot < slot → process_slot_fulu P o fo t = .ok t1 →
       (t1.state.slot + 1) % P.SLOTS_PER_EPOCH = 0 →
-      process_epoch_fulu_m o t1.state = .ok s2 →
+      process_epoch_fulu P FC o t1.state = .ok s2 →
       ReachableBySlotsBeforeFulu o fo fs slot { t1 with state := { s2 with slot := s2.slot + 1 } }
 
 /-- The slot loop keeps `SlotLoopInvariants`. -/

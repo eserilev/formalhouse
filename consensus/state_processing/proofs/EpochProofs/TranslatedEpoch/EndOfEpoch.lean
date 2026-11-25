@@ -185,12 +185,6 @@ def translatedEndOfEpoch (code : UntranslatedEndOfEpoch RustState)
   | none => ok none
   | some rustState5 => translatedSyncCommitteeUpdate code rustState5
 
-/-- At the sync committee update, at most `2^24` active validators of the next epoch enter the
-shuffle. -/
-def SyncN1 (code : UntranslatedEndOfEpoch RustState) (rustState : RustState) : Prop :=
-  ∀ rustState', code.writeCurrentSync rustState = some rustState' →
-    (code.syncIndices rustState').val.length ≤ 2 ^ 24
-
 variable [Spec.CurrentPreset]
 
 /-- The trusted facts about the untranslated code. Each read reads the state it is given and
@@ -387,7 +381,9 @@ theorem translatedResets_matches_model [Spec.CurrentPreset.Valid]
 theorem translatedSyncCommitteeUpdate_matches_model (code : UntranslatedEndOfEpoch RustState)
     (oracle : Spec.Oracle) (rustStateToSpec : RustState → Spec.BeaconState)
     (hL : UntranslatedEndOfEpochFacts code oracle rustStateToSpec) (rustState5 : RustState)
-    (hn1 : SyncN1 code rustState5) (T : Spec.BeaconState)
+    (hfitsShuffle : ∀ rustState', code.writeCurrentSync rustState5 = some rustState' →
+      (code.syncIndices rustState').val.length ≤ 2 ^ 24)
+    (T : Spec.BeaconState)
     (h : Spec.process_sync_committee_updates Spec.P oracle (rustStateToSpec rustState5) = .ok T) :
     ∃ rustState', translatedSyncCommitteeUpdate code rustState5 = ok (some rustState') ∧
       rustStateToSpec rustState' = T := by
@@ -414,7 +410,7 @@ theorem translatedSyncCommitteeUpdate_matches_model (code : UntranslatedEndOfEpo
     (code.syncEpoch rustState6) (hL.syncEpoch rustState6) (hL.syncIndices rustState6)
       (code.syncMix rustState6) (hL.syncMix rustState6)
     code.syncSize hL.syncSize (code.syncConstants rustState6) (hL.syncConstants rustState6)
-      (hn1 rustState6 hw6)
+      (hfitsShuffle rustState6 hw6)
     hL.usize64 idx hidx
   obtain ⟨r, hr, v, rfl, hv⟩ := spec_imp_exists hsync
   rw [hr]
@@ -432,8 +428,10 @@ theorem translatedEndOfEpoch_matches_model [Spec.CurrentPreset.Valid]
     (code : UntranslatedEndOfEpoch RustState) (oracle : Spec.Oracle)
     (rustStateToSpec : RustState → Spec.BeaconState)
     (hL : UntranslatedEndOfEpochFacts code oracle rustStateToSpec) (rustState : RustState)
-    (hn1 : ∀ rustState5, translatedResets code rustState = ok (some rustState5) →
-    SyncN1 code rustState5) (T : Spec.BeaconState)
+    (hfitsShuffle : ∀ rustState5, translatedResets code rustState = ok (some rustState5) →
+      ∀ rustState', code.writeCurrentSync rustState5 = some rustState' →
+      (code.syncIndices rustState').val.length ≤ 2 ^ 24)
+    (T : Spec.BeaconState)
     (h : Spec.lighthouseStepsAfterPtcWindow oracle (rustStateToSpec rustState) = .ok T) :
     ∃ rustState', translatedEndOfEpoch code rustState = ok (some rustState') ∧
       rustStateToSpec rustState' = T := by
@@ -443,7 +441,7 @@ theorem translatedEndOfEpoch_matches_model [Spec.CurrentPreset.Valid]
     translatedResets_matches_model code oracle rustStateToSpec hL rustState t5 h5
   obtain ⟨rustState', hs, hv'⟩ :=
     translatedSyncCommitteeUpdate_matches_model code oracle rustStateToSpec hL rustState5
-    (hn1 rustState5 hr) T (by rw [hv5]; exact h)
+    (hfitsShuffle rustState5 hr) T (by rw [hv5]; exact h)
   refine ⟨rustState', ?_, hv'⟩
   unfold translatedEndOfEpoch
   rw [hr]

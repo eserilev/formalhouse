@@ -571,11 +571,11 @@ def activeUnslashedIndices (s : BeaconState) (e : Nat) : List ValidatorIndex :=
 /-! ## The three steps -/
 
 /-- State facts that the three committee steps read. Each one holds on reachable states: the
-slot bound and the RANDAO length are in `CommFrame`, the registry limit is
+slot bound and the RANDAO length are in `SameSlotAndLengths`, the registry limit is
 `VALIDATOR_REGISTRY_LIMIT`, `effective_balance ≤ MAX_EFFECTIVE_BALANCE_ELECTRA` is `EffectiveBalancesValid`, the
 two vector lengths are SSZ lengths, and a deposit adds a validator only after its signature
 checks, which validates the key. -/
-structure CommFacts [CurrentPreset] (o : Oracle) (s : BeaconState) : Prop where
+structure CommitteeStateFacts [CurrentPreset] (o : Oracle) (s : BeaconState) : Prop where
   slot : s.slot + 8192 < 2 ^ 64
   randao : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR
   registryBelowLimit : s.validators.length ≤ 2 ^ 40
@@ -830,10 +830,11 @@ theorem CommitteeStepPreconditions.congr [CurrentPreset] {o : Oracle} {s1 s2 : B
     simp only [SelectionEnds, effectiveBalancesOf_congr hv]
     exact h6 slot hslot l hl seed
 
-theorem CommFacts.congr [CurrentPreset] {o : Oracle} {s1 s2 : BeaconState} (hs : s1.slot = s2.slot)
+theorem CommitteeStateFacts.congr [CurrentPreset] {o : Oracle} {s1 s2 : BeaconState}
+    (hs : s1.slot = s2.slot)
     (hv : s1.validators = s2.validators) (hr : s1.randao_mixes = s2.randao_mixes)
     (hl : s1.proposer_lookahead = s2.proposer_lookahead) (hw : s1.ptc_window = s2.ptc_window)
-    (h : CommFacts o s2) : CommFacts o s1 := by
+    (h : CommitteeStateFacts o s2) : CommitteeStateFacts o s1 := by
   obtain ⟨h1, h2, h3, h4, h5, h6, h7⟩ := h
   exact ⟨hs ▸ h1, hr ▸ h2, hv ▸ h3, hv ▸ h4, hl ▸ h5, hw ▸ h6, hv ▸ h7⟩
 
@@ -864,7 +865,8 @@ theorem process_sync_committee_updates_total [CurrentPreset] [CurrentPreset.Vali
 
 /-- The sync committee, proposer lookahead and PTC window steps succeed from the state facts and
 the pyspec preconditions. -/
-theorem committee_steps_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (o : Oracle) (s : BeaconState) (hf : CommFacts o s)
+theorem committee_steps_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds]
+    (o : Oracle) (s : BeaconState) (hf : CommitteeStateFacts o s)
     (hp : CommitteeStepPreconditions o s) :
     OkWith (do
       let s ← process_sync_committee_updates P o s
@@ -872,7 +874,7 @@ theorem committee_steps_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPres
       process_ptc_window P o s) (fun _ => True) := by
   obtain ⟨s1, h1, e1s, e1v, e1r, e1l, e1w⟩ := process_sync_committee_updates_total o s hf.slot
     hf.randao hf.registryBelowLimit hf.effectiveBalancesBelowMax hf.keys hp.syncCommitteeHasCandidate hp.syncSelectionEnds
-  have hf1 := CommFacts.congr e1s e1v e1r e1l e1w hf
+  have hf1 := CommitteeStateFacts.congr e1s e1v e1r e1l e1w hf
   have hp1 := CommitteeStepPreconditions.congr e1s e1v e1r hp
   rw [h1, tot_bind_ok]
   obtain ⟨s2, h2, e2s, e2v, e2r, e2w⟩ := process_proposer_lookahead_total o s1 hf1.slot hf1.randao
@@ -952,7 +954,7 @@ theorem process_ptc_window_few_active_error [CurrentPreset] [CurrentPreset.Valid
 
 /-! ## `CommitteesOk` -/
 
-/-- The state facts that the three committee steps read beyond `CommFrame`. Each one is an
+/-- The state facts that the three committee steps read beyond `SameSlotAndLengths`. Each one is an
 invariant of reachable states: the registry limit is `VALIDATOR_REGISTRY_LIMIT`, the effective
 balance bound is `EffectiveBalancesValid`, the two lengths are SSZ vector lengths, and a deposit adds a validator
 only after its signature checks, which validates the key. -/
@@ -974,7 +976,8 @@ structure RegistryAllowsSelection (o : Oracle) (s : BeaconState) : Prop where
 preconditions hold at the state that the epoch passes to the committee steps
 (`epochBeforeCommitteeSteps`). That state is a function of `t`, so this is one fact about one state.
 
-An earlier version stated them at every state `s` with `CommFrame t s`. `CommFrame` fixes only
+An earlier version stated them at every state `s` with `SameSlotAndLengths t s`.
+`SameSlotAndLengths` fixes only
 the slot, the list lengths and the RANDAO length, so it admits `t` with every validator list
 emptied, where `syncCommitteeHasCandidate` fails: that hypothesis was false for every `t`. -/
 def AtCommitteeStepState [CurrentPreset] (o : Oracle) (t : BeaconState) : Prop :=

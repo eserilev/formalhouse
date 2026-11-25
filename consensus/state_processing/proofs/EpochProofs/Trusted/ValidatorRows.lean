@@ -51,13 +51,6 @@ structure RowInputsMatchSpec (p : Spec.Preset) (previous_epoch : Spec.Epoch) (i 
   in_consolidation : i.in_consolidation = inputs.in_consolidation
   effective_balance_limit : i.effective_balance_limit.val = Spec.get_max_effective_balance p r.validator
 
-/-- The result of `apply_step` for a `single_pass_step` result. -/
-def rowsResult {E : Type} :
-    core.result.Result (ValidatorRow × ExitChurn) safe_arith.ArithError →
-      core.result.Result ExitChurn (per_epoch_processing.registry_rows.RowsError E)
-  | .Ok (_, ch') => .Ok ch'
-  | .Err e => .Err (.Step e)
-
 /-- Trusted: what the `RegistryRows` implementation in `single_pass.rs` does. `toSpec` gives the
 spec rows that an implementation value holds, and `inputsOf` gives the spec inputs of a row. -/
 structure ValidatorRowsMatchSpec {R E : Type} (implementation : LighthouseRegistryRows R E)
@@ -71,7 +64,9 @@ structure ValidatorRowsMatchSpec {R E : Type} (implementation : LighthouseRegist
     (toSpec s)[i.val]? = some r →
     ∃ lr ri, RowMatches lr r ∧ RowInputsMatchSpec p c.previous_epoch.val ri (inputsOf r) r ∧
       ∀ res, per_epoch_processing.single_pass_step.single_pass_step lr ri ch c k = ok res →
-        ∃ s', implementation.apply_step s i ch c k = ok (rowsResult res, s') ∧
+        ∃ s', implementation.apply_step s i ch c k = ok (match res with
+            | .Ok (_, ch') => .Ok ch'
+            | .Err e => .Err (.Step e), s') ∧
           ∀ lr' ch', res = .Ok (lr', ch') → toSpec s' = (toSpec s).set i.val (rowAfter r lr')
 
 end EpochProofs

@@ -139,15 +139,6 @@ def translatedPtcWindow (lookaheadCode : UntranslatedLookahead RustState)
   | .Err _ => ok none
   | .Ok _ => ok (some (ptcCode.windowReturn rustState w))
 
-/-- At the lookahead input, at most `2^24` proposer candidates enter the shuffle. -/
-def LookaheadN1 (lookaheadCode : UntranslatedLookahead RustState) (rustState : RustState) : Prop :=
-  (lookaheadCode.proposerIndices rustState).val.length ≤ 2 ^ 24
-
-/-- At the PTC window input, at most `2^24` validators of each slot enter the selection. -/
-def PtcN1 (ptcCode : UntranslatedPtcWindow RustState RustError) (rustState : RustState) : Prop :=
-  ∀ k (hk : k < (ptcCode.committees rustState).val.length),
-    ((ptcCode.committees rustState).val[k]).val.length ≤ 2 ^ 24
-
 variable [Spec.CurrentPreset]
 
 /-- The trusted facts about the untranslated code. The reads read the state they are given and
@@ -179,14 +170,6 @@ structure UntranslatedLookaheadFacts (lookaheadCode : UntranslatedLookahead Rust
     ∃ t', lookaheadCode.writeLookahead t v = some t' ∧
       rustStateToSpec t' = { rustStateToSpec t with proposer_lookahead := v.val.map (·.val) }
   usize64 : Usize.max = U64.max
-
-/-- The Gloas proposer candidates: the active, unslashed validators at the lookahead epoch. -/
-def ProposerCandidatesGloas (lookaheadCode : UntranslatedLookahead RustState)
-    (rustStateToSpec : RustState → Spec.BeaconState) : Prop :=
-  ∀ t l, (Spec.get_active_validator_indices (rustStateToSpec t) (lookaheadCode.epoch t).val).filterM
-      (fun index => do pure !(← Spec.listGet (rustStateToSpec t).validators index).slashed) = .ok l
-        →
-    (lookaheadCode.proposerIndices t).val.map (·.val) = l
 
 /-- The trusted facts about the untranslated code. -/
 structure UntranslatedPtcWindowFacts (lookaheadCode : UntranslatedLookahead RustState)
@@ -225,8 +208,12 @@ theorem translatedLookahead_matches_model [Spec.CurrentPreset.Valid] [Spec.Curre
     (lookaheadCode : UntranslatedLookahead RustState)
     (oracle : Spec.Oracle) (rustStateToSpec : RustState → Spec.BeaconState)
     (hL : UntranslatedLookaheadFacts lookaheadCode oracle rustStateToSpec)
-    (hpi : ProposerCandidatesGloas lookaheadCode rustStateToSpec) (rustState : RustState)
-    (hn1 : LookaheadN1 lookaheadCode rustState)
+    (hpi : ∀ t l, (Spec.get_active_validator_indices (rustStateToSpec t)
+    (lookaheadCode.epoch t).val).filterM
+        (fun index => do pure !(← Spec.listGet (rustStateToSpec t).validators index).slashed) =
+          .ok l →
+      (lookaheadCode.proposerIndices t).val.map (·.val) = l) (rustState : RustState)
+    (hfitsShuffle : (lookaheadCode.proposerIndices rustState).val.length ≤ 2 ^ 24)
     (hpl : (rustStateToSpec rustState).proposer_lookahead.length =
       (Spec.P.MIN_SEED_LOOKAHEAD + 1) * Spec.P.SLOTS_PER_EPOCH)
     (s1 : Spec.BeaconState) (h1 : Spec.process_proposer_lookahead Spec.P oracle
@@ -250,7 +237,7 @@ theorem translatedLookahead_matches_model [Spec.CurrentPreset.Valid] [Spec.Curre
       (hL.epoch rustState) (hpi rustState) (lookaheadCode.mix rustState)
     (hL.mix rustState) (lookaheadCode.startSlot rustState) hstart
       (lookaheadCode.constants rustState) (hL.constants rustState)
-    slots_lt_2_32 hn1 hL.usize64 s1 h1
+    slots_lt_2_32 hfitsShuffle hL.usize64 s1 h1
   obtain ⟨r, hr, v, rfl, hv⟩ := spec_imp_exists hla
   unfold translatedLookahead
   rw [hr]
@@ -269,7 +256,9 @@ theorem translatedPtcWindow_matches_model [Spec.CurrentPreset.Valid]
     (oracle : Spec.Oracle) (rustStateToSpec : RustState → Spec.BeaconState)
     (hL : UntranslatedLookaheadFacts lookaheadCode oracle rustStateToSpec)
     (hP : UntranslatedPtcWindowFacts lookaheadCode ptcCode oracle rustStateToSpec)
-    (rustState : RustState) (hn1 : PtcN1 ptcCode rustState)
+    (rustState : RustState) 
+    (hfitsShuffle : ∀ k (hk : k < (ptcCode.committees rustState).val.length),
+      ((ptcCode.committees rustState).val[k]).val.length ≤ 2 ^ 24)
     (hptc : (rustStateToSpec rustState).ptc_window.length =
       (Spec.P.MIN_SEED_LOOKAHEAD + 2) * Spec.P.SLOTS_PER_EPOCH)
     (s2 : Spec.BeaconState) (h2 : Spec.process_ptc_window Spec.P oracle (rustStateToSpec rustState)
@@ -288,7 +277,7 @@ theorem translatedPtcWindow_matches_model [Spec.CurrentPreset.Valid]
       ptcCode.ptcDomain
     hP.ptcDomain (lookaheadCode.epoch rustState) (hL.epoch rustState) (lookaheadCode.mix rustState)
       (hL.mix rustState) (lookaheadCode.startSlot rustState)
-    hstart (hP.committees rustState) hn1 ptcCode.ptcSize hP.ptcSize
+    hstart (hP.committees rustState) hfitsShuffle ptcCode.ptcSize hP.ptcSize
       (lookaheadCode.constants rustState)
     (hL.constants rustState) Spec.P_slots_pos hL.usize64 s2 h2
   obtain ⟨r2, hr2, ptcs, rfl, hptcs⟩ := spec_imp_exists hptc4
