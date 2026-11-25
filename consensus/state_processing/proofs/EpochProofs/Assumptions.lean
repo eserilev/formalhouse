@@ -18,8 +18,8 @@ import EpochProofs.Compose.Fulu
 - The run, `GloasEpochRun` and `FuluEpochRun`: the state is an input of `process_epoch` on a chain
   from a start state with the facts of a genesis state. The total stake stays below its bounds.
 - The chain, `GloasChainAssumptions` and `FuluChainAssumptions`: what the epoch needs to succeed.
-- The caches, `GloasCacheProvenance` and its variants: where each cache that the Gloas epoch reads
-  came from. The Fulu model reads the spec values, so the Fulu theorems take no cache facts.
+- The caches, `GloasCacheAssumptions`: where each cache that the Gloas epoch reads came from. The
+  Fulu model reads the spec values, so the Fulu theorems take no cache facts.
 - The untranslated Rust, `GloasRustGlueFacts` and `FuluRustGlueFacts`: what the code that Aeneas
   does not translate does.
 -/
@@ -140,85 +140,37 @@ section Chain
 
 variable [Spec.PresetCfg]
 
-/-- The assumptions about the chain at a Gloas epoch input (README, "Assumptions about the
-chain"), beyond the run. `t` ranges over the one state that the spec epoch passes to its
-committee steps (`epochToCommittees`, a function of `s`). Without the first three, the pyspec
-raises. -/
-structure GloasChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop where
-  /-- Pyspec precondition: a validator is active at the next epoch, a sync committee
-  candidate. -/
-  syncCandidate : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →
-    Spec.get_active_validator_indices t (t.slot / Spec.P.SLOTS_PER_EPOCH + 1) ≠ []
-  /-- Pyspec precondition: an unslashed validator is active two epochs ahead, a proposer
-  candidate. -/
-  proposerCandidate : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →
-    Spec.unslashedActive t (t.slot / Spec.P.SLOTS_PER_EPOCH + 2) ≠ []
-  /-- Pyspec precondition: at least `SLOTS_PER_EPOCH` validators are active two epochs
-  ahead. With fewer, the first slot of that epoch has an empty PTC and `compute_ptc`
-  asserts. -/
-  enoughActiveForPtc : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →
-    Spec.P.SLOTS_PER_EPOCH ≤
-      (Spec.get_active_validator_indices t (t.slot / Spec.P.SLOTS_PER_EPOCH + 2)).length
-  /-- Hash output: the sync committee selection ends within `2^64` passes. -/
-  syncSelectionEnds : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t → ∀ seed,
-    Spec.SelFin Spec.P o t
-      (Spec.get_active_validator_indices t (t.slot / Spec.P.SLOTS_PER_EPOCH + 1))
-      seed Spec.P.SYNC_COMMITTEE_SIZE true
-  /-- Hash output: the proposer selection ends within `2^64` passes. -/
-  proposerSelectionEnds : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t → ∀ seed,
-    Spec.SelFin Spec.P o t (Spec.unslashedActive t (t.slot / Spec.P.SLOTS_PER_EPOCH + 2)) seed 1
-      true
-  /-- Hash output: each PTC selection of the epoch two ahead ends within `2^64` passes. -/
-  ptcSelectionEnds : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t → ∀ slot,
-    slot / Spec.P.SLOTS_PER_EPOCH = t.slot / Spec.P.SLOTS_PER_EPOCH + 2 → ∀ l,
-    Spec.ptcIndices Spec.P o t (slot / Spec.P.SLOTS_PER_EPOCH) slot = .ok l →
-      ∀ seed, Spec.SelFin Spec.P o t l seed Spec.P.PTC_SIZE false
-  /-- Physical limits (`PhysicalLimits`): inactivity scores below `2^22`, the effective
-  balance sum, funds, exit queue and validator count bounds, and the participation bound. -/
-  physicalLimits : Spec.PhysicalLimits s
-  /-- Physical limit: the slot is `8192` below `2^64`. The pyspec `get_block_root` raises
-  above. -/
-  slotFarFromOverflow : s.slot + 8192 < 2 ^ 64
-  /-- Physical limit: fewer than `2^24` historical summaries, Lighthouse's list limit. -/
-  historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit s
-  /-- Reachable-state facts not yet carried to the epoch, at `t` (`SelectionStateFacts`): at most
-  `2^40` validators, valid pubkeys. -/
-  committeeStepStateFacts : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →
-    Spec.SelectionStateFacts o t
+/-- What the Gloas epoch needs from the chain, beyond the run, to succeed. -/
+structure GloasChainAssumptions (oracle : Spec.Oracle) (state : Spec.BeaconState) : Prop where
+  /-- `committeeInput` is the state before the three committee steps. There, the pyspec does not
+  raise, each selection ends, the registry is below its limit and the pubkeys are valid. -/
+  committeeSteps : ∀ committeeInput,
+    Spec.epochToCommittees Spec.P oracle state = .ok committeeInput →
+      Spec.CommitteeStepPreconds oracle committeeInput ∧
+      Spec.SelectionStateFacts oracle committeeInput
+  /-- The supply and time bounds. -/
+  physicalLimits : Spec.PhysicalLimits state
+  /-- The slot is far below `2^64`. The pyspec `get_block_root` raises near `2^64`. -/
+  slotFarFromOverflow : state.slot + 8192 < 2 ^ 64
+  /-- Lighthouse's list of historical summaries has room. -/
+  historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit state
 
 variable [Spec.FuluCfg]
 
-/-- The assumptions about the chain at a Fulu epoch input, beyond the run. `t` ranges over the
-one state that the spec epoch passes to its committee steps (`epochToCommitteesFulu`). In Fulu, a
-slashed proposer candidate counts, and there is no PTC. -/
-structure FuluChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop where
-  /-- Pyspec precondition: a validator is active at the next epoch, a sync committee
-  candidate. -/
-  syncCandidate : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t →
-    Spec.get_active_validator_indices t (t.slot / Spec.P.SLOTS_PER_EPOCH + 1) ≠ []
-  /-- Pyspec precondition: a validator is active two epochs ahead, a proposer candidate. A
-  slashed validator counts. -/
-  proposerCandidate : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t →
-    Spec.get_active_validator_indices t (t.slot / Spec.P.SLOTS_PER_EPOCH + 2) ≠ []
-  /-- Hash output: the sync committee selection ends within `2^64` passes. -/
-  syncSelectionEnds : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t → ∀ seed,
-    Spec.SelFin Spec.P o t
-      (Spec.get_active_validator_indices t (t.slot / Spec.P.SLOTS_PER_EPOCH + 1))
-      seed Spec.P.SYNC_COMMITTEE_SIZE true
-  /-- Hash output: the proposer selection ends within `2^64` passes. -/
-  proposerSelectionEnds : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t → ∀ seed,
-    Spec.SelFin Spec.P o t
-      (Spec.get_active_validator_indices t (t.slot / Spec.P.SLOTS_PER_EPOCH + 2)) seed 1 true
-  /-- Physical limits: the inactivity scores, supply, funds, exits and validator count. -/
-  physicalLimits : Spec.PhysicalLimits s
-  /-- Physical limit: the slot is `8192` below `2^64`. -/
-  slotFarFromOverflow : s.slot + 8192 < 2 ^ 64
-  /-- Physical limit: fewer than `2^24` historical summaries. -/
-  historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit s
-  /-- Reachable-state facts not yet carried, at `t` (`SelectionStateFacts`): registry size,
-  valid pubkeys. -/
-  committeeStepStateFacts : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t →
-    Spec.SelectionStateFacts o t
+/-- What the Fulu epoch needs from the chain, beyond the run, to succeed. -/
+structure FuluChainAssumptions (oracle : Spec.Oracle) (state : Spec.BeaconState) : Prop where
+  /-- `committeeInput` is the state before the two committee steps. There, the pyspec does not
+  raise, each selection ends, the registry is below its limit and the pubkeys are valid. -/
+  committeeSteps : ∀ committeeInput,
+    Spec.epochToCommitteesFulu Spec.P Spec.FC oracle state = .ok committeeInput →
+      Spec.FuluCommitteeStepPreconds oracle committeeInput ∧
+      Spec.SelectionStateFacts oracle committeeInput
+  /-- The supply and time bounds. -/
+  physicalLimits : Spec.PhysicalLimits state
+  /-- The slot is far below `2^64`. -/
+  slotFarFromOverflow : state.slot + 8192 < 2 ^ 64
+  /-- Lighthouse's list of historical summaries has room. -/
+  historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit state
 
 end Chain
 
@@ -233,80 +185,34 @@ open EpochProofs.CacheBridge
 
 variable [Spec.PresetCfg]
 
-/-- Where each cache that the Gloas epoch reads came from. -/
-structure GloasCacheProvenance {M : Type} (progressiveCache : CacheProofs.PB.LhCache)
-    (totalActiveBalance : U64)
-    (pubkeyMapOps : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
-    (s : Spec.BeaconState) : Prop where
-  /-- The progressive balances cache (`LhCache`, the `Inner` of Lighthouse's
-  `ProgressiveBalancesCache`) is correct for the epoch input at its current epoch. -/
-  progressive : CacheProofs.PB.Coherent Spec.P.EFFECTIVE_BALANCE_INCREMENT
-    (pbState s (s.slot / Spec.P.SLOTS_PER_EPOCH)) progressiveCache
-  /-- The epoch cache total was built at a state `b` of the same epoch that agrees with the
-  epoch input on which validators are active (`ActiveAgree`): it is the active effective
-  balance sum of `b`. -/
-  epochCache : ∃ b : Spec.BeaconState, Spec.ActiveAgree (s.slot / Spec.P.SLOTS_PER_EPOCH) b s ∧
-    totalActiveBalance.val = CacheProofs.EpochCache.activeSum
-      (CacheProofs.EpochCache.activeAt (b.validators.map ecValidator)
-        (s.slot / Spec.P.SLOTS_PER_EPOCH))
-      (b.validators.map (·.effective_balance))
-  /-- The pubkey cache `pubkeyMap` is a cache built at an earlier state `b'`, whose pubkeys are a
-  prefix of the input's, and then completed by `update_pubkey_cache` (`insertAll`), over a map
-  with the `IndexMapLaws`. -/
-  pubkeyCache : ∃ view : M → Spec.BLSPubkey → Option Usize,
-    CacheProofs.IndexMapLaws pubkeyMapOps view ∧
-    ∃ (b' : Spec.BeaconState) (m0 : M) (len0 len : Usize),
-      b'.validators.map (·.pubkey) <+: s.validators.map (·.pubkey) ∧
-      CacheProofs.Coherent view m0 len0 (b'.validators.map (·.pubkey)) ∧
-      CacheProofs.insertAll pubkeyMapOps m0 len0 ((s.validators.map (·.pubkey)).drop len0.val) =
-        ok (some (pubkeyMap, len))
-
-/-- `GloasCacheProvenance` with the progressive balances cache kept up to date since a state of
-the epoch, instead of correct at the input. -/
-structure GloasCacheProvenanceUpkeep {M : Type} (progressiveCache : CacheProofs.PB.LhCache)
-    (totalActiveBalance : U64)
-    (pubkeyMapOps : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
-    (s : Spec.BeaconState) : Prop where
-  /-- The progressive balances cache was correct at a state `start` of the epoch (after a fresh
-  build, or after the epoch transition), and every write since ran its cache update
-  (`CacheUpkeep`). -/
-  progressive : ∃ (start : CacheProofs.Spec.BeaconState) (cache0 : CacheProofs.PB.LhCache),
-    CacheProofs.PB.Coherent Spec.P.EFFECTIVE_BALANCE_INCREMENT start cache0 ∧
-    CacheUpkeep Spec.P.EFFECTIVE_BALANCE_INCREMENT start
-      (pbState s (s.slot / Spec.P.SLOTS_PER_EPOCH)) cache0 progressiveCache
-  /-- As `GloasCacheProvenance.epochCache`. -/
-  epochCache : ∃ b : Spec.BeaconState, Spec.ActiveAgree (s.slot / Spec.P.SLOTS_PER_EPOCH) b s ∧
-    totalActiveBalance.val = CacheProofs.EpochCache.activeSum
-      (CacheProofs.EpochCache.activeAt (b.validators.map ecValidator)
-        (s.slot / Spec.P.SLOTS_PER_EPOCH))
-      (b.validators.map (·.effective_balance))
-  /-- As `GloasCacheProvenance.pubkeyCache`. -/
-  pubkeyCache : ∃ view : M → Spec.BLSPubkey → Option Usize,
-    CacheProofs.IndexMapLaws pubkeyMapOps view ∧
-    ∃ (b' : Spec.BeaconState) (m0 : M) (len0 len : Usize),
-      b'.validators.map (·.pubkey) <+: s.validators.map (·.pubkey) ∧
-      CacheProofs.Coherent view m0 len0 (b'.validators.map (·.pubkey)) ∧
-      CacheProofs.insertAll pubkeyMapOps m0 len0 ((s.validators.map (·.pubkey)).drop len0.val) =
-        ok (some (pubkeyMap, len))
-
-/-- The cache facts stated at the epoch input itself: each cache is the one built from the
-input. -/
-structure GloasCacheProvenanceAtInput {M : Type} (progressiveCache : CacheProofs.PB.LhCache)
-    (totalActiveBalance : U64)
-    (pubkeyMapOps : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
-    (s : Spec.BeaconState) : Prop where
-  /-- As `GloasCacheProvenance.progressive`. -/
-  progressive : CacheProofs.PB.Coherent Spec.P.EFFECTIVE_BALANCE_INCREMENT
-    (pbState s (s.slot / Spec.P.SLOTS_PER_EPOCH)) progressiveCache
-  /-- The epoch cache total is the active effective balance sum of the input. -/
-  epochCache : totalActiveBalance.val = CacheProofs.EpochCache.activeSum
-    (CacheProofs.EpochCache.activeAt (s.validators.map ecValidator)
-      (s.slot / Spec.P.SLOTS_PER_EPOCH))
-    (s.validators.map (·.effective_balance))
-  /-- The pubkey cache is correct for the pubkeys of the input. -/
-  pubkeyCache : ∃ view : M → Spec.BLSPubkey → Option Usize,
-    CacheProofs.IndexMapLaws pubkeyMapOps view ∧
-    ∃ len : Usize, CacheProofs.Coherent view pubkeyMap len (s.validators.map (·.pubkey))
+/-- What the proofs assume about the caches that the Gloas epoch reads. Lean does not check it. -/
+structure GloasCacheAssumptions {PubkeyMap : Type}
+    (progressiveCache : CacheProofs.PB.LhCache) (cachedTotal : U64)
+    (pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey)
+    (pubkeyMap : PubkeyMap) (state : Spec.BeaconState) : Prop where
+  /-- The progressive balances cache was correct at a state `start` of this epoch, and each write
+  since then ran its cache update (`CacheUpkeep`). -/
+  progressiveBalances :
+    ∃ (start : CacheProofs.Spec.BeaconState) (startCache : CacheProofs.PB.LhCache),
+      CacheProofs.PB.Coherent Spec.P.EFFECTIVE_BALANCE_INCREMENT start startCache ∧
+      CacheUpkeep Spec.P.EFFECTIVE_BALANCE_INCREMENT start
+        (pbState state (state.slot / Spec.P.SLOTS_PER_EPOCH)) startCache progressiveCache
+  /-- The epoch cache holds the total active balance of an earlier state `built`. That state has
+  the same effective balances and the same active validators. -/
+  epochCache : ∃ built : Spec.BeaconState,
+    Spec.ActiveAgree (state.slot / Spec.P.SLOTS_PER_EPOCH) built state ∧
+    cachedTotal.val = ((built.validators.filter
+      (Spec.is_active_validator · (state.slot / Spec.P.SLOTS_PER_EPOCH))).map
+        (·.effective_balance)).sum
+  /-- The pubkey cache was correct at an earlier state `built`. Then `update_pubkey_cache` added
+  the pubkeys that came after it. The map behaves as a finite map (`IndexMapLaws`). -/
+  pubkeyCache : ∃ lookup : PubkeyMap → Spec.BLSPubkey → Option Usize,
+    CacheProofs.IndexMapLaws pubkeyMapOps lookup ∧
+    ∃ (built : Spec.BeaconState) (builtMap : PubkeyMap) (builtLength length : Usize),
+      built.validators.map (·.pubkey) <+: state.validators.map (·.pubkey) ∧
+      CacheProofs.Coherent lookup builtMap builtLength (built.validators.map (·.pubkey)) ∧
+      CacheProofs.insertAll pubkeyMapOps builtMap builtLength
+        ((state.validators.map (·.pubkey)).drop builtLength.val) = ok (some (pubkeyMap, length))
 
 end Caches
 

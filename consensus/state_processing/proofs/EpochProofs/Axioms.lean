@@ -757,6 +757,7 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Formalhouse.lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants
 #print axioms EpochProofs.Formalhouse.rewards_overflow_example
 #print axioms EpochProofs.Formalhouse.ptc_committees_from_cache
+#print axioms EpochProofs.Formalhouse.gloas_cache_reads_correct
 #print axioms EpochProofs.Formalhouse.lighthouse_model_gloas_epoch_agrees_pyspec
 #print axioms EpochProofs.Formalhouse.lighthouse_model_fulu_epoch_agrees_pyspec
 #print axioms EpochProofs.Formalhouse.lighthouse_model_gloas_epoch_agrees_pyspec_mainnet

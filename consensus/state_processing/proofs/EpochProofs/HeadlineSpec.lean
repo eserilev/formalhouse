@@ -77,46 +77,58 @@ section Caches
 
 variable [Spec.PresetCfg.Bounds]
 
-/-- The progressive balances cache gives the spec's flag attesting balances: for each of the
-three flags, the current epoch total and, after the first epoch, the previous epoch total. -/
-def ProgressiveBalancesReadsCorrect (progressiveCache : LhCache) (s : Spec.BeaconState) :
-    Prop :=
-  (∀ f : Usize, f.val < 3 → ∃ x : U64,
-    lhCurrentEpochFlagAttestingBalance progressiveCache f = ok (.Ok x) ∧
-    (Spec.get_unslashed_participating_indices Spec.P s f.val (s.slot / Spec.P.SLOTS_PER_EPOCH) >>=
-      Spec.get_total_balance Spec.P s) = .ok x.val) ∧
-  (∀ f : Usize, f.val < 3 → 0 < s.slot / Spec.P.SLOTS_PER_EPOCH →
-    ∃ x : U64, lhPreviousEpochFlagAttestingBalance progressiveCache f = ok (.Ok x) ∧
-    (Spec.get_unslashed_participating_indices Spec.P s f.val
-        (s.slot / Spec.P.SLOTS_PER_EPOCH - 1) >>=
-      Spec.get_total_balance Spec.P s) = .ok x.val)
+/-- The cache reads of the Gloas epoch give the spec values. The committee cache read of the PTC
+window step is a separate theorem, `ptc_committees_from_cache`. -/
+structure GloasCacheReadsCorrect {PubkeyMap : Type} (progressiveCache : LhCache)
+    (cachedTotal : U64)
+    (pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey)
+    (pubkeyMap : PubkeyMap) (state : Spec.BeaconState) : Prop where
+  /-- For each flag, the current epoch total is the spec total. -/
+  currentEpochFlagBalances : ∀ flag : Usize, flag.val < 3 → ∃ total : U64,
+    lhCurrentEpochFlagAttestingBalance progressiveCache flag = ok (.Ok total) ∧
+    (Spec.get_unslashed_participating_indices Spec.P state flag.val
+        (state.slot / Spec.P.SLOTS_PER_EPOCH) >>=
+      Spec.get_total_balance Spec.P state) = .ok total.val
+  /-- For each flag, after the first epoch, the previous epoch total is the spec total. -/
+  previousEpochFlagBalances : ∀ flag : Usize, flag.val < 3 →
+    0 < state.slot / Spec.P.SLOTS_PER_EPOCH → ∃ total : U64,
+      lhPreviousEpochFlagAttestingBalance progressiveCache flag = ok (.Ok total) ∧
+      (Spec.get_unslashed_participating_indices Spec.P state flag.val
+          (state.slot / Spec.P.SLOTS_PER_EPOCH - 1) >>=
+        Spec.get_total_balance Spec.P state) = .ok total.val
+  /-- The total active balance, floored at one increment, is the spec total. -/
+  totalActiveBalance : ∀ increment : U64, increment.val = Spec.P.EFFECTIVE_BALANCE_INCREMENT →
+    ∃ total, types.state.total_active_balance.floor_total_active_balance cachedTotal increment =
+      ok total ∧ Spec.get_total_active_balance Spec.P state = .ok total.val
+  /-- The pubkey cache gives the first validator with the pubkey, as the spec lookup does. -/
+  pubkeyLookup : ∀ pubkey, ∃ result, pubkeyMapOps.get_index pubkeyMap pubkey = ok result ∧
+    result.map (·.val) =
+      if pubkey ∈ state.validators.map (·.pubkey)
+      then some ((state.validators.map (·.pubkey)).idxOf pubkey) else none
 
-/-- The epoch cache's total active balance, floored at one increment as Lighthouse reads it, is
-the spec's `get_total_active_balance`. -/
-def EpochCacheTotalCorrect (totalActiveBalance : U64) (s : Spec.BeaconState) : Prop :=
-  ∀ inc : U64, inc.val = Spec.P.EFFECTIVE_BALANCE_INCREMENT →
-    ∃ r, types.state.total_active_balance.floor_total_active_balance totalActiveBalance inc =
-      ok r ∧ Spec.get_total_active_balance Spec.P s = .ok r.val
-
-/-- The pubkey cache lookup (`pubkeyMapOps.get_index pubkeyMap`) of every pubkey returns the first
-validator with that pubkey, and `none` exactly when no validator has it. -/
-def PubkeyLookupCorrect {M : Type}
-    (pubkeyMapOps : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
-    (s : Spec.BeaconState) : Prop :=
-  ∀ pk, ∃ r, pubkeyMapOps.get_index pubkeyMap pk = ok r ∧
-    (r.map (·.val)).bind (fun i => s.validators[i]?) =
-      s.validators[(s.validators.map (·.pubkey)).idxOf pk]? ∧
-    (r.isSome ↔ pk ∈ s.validators.map (·.pubkey)) ∧
-    ∀ i, r.map (·.val) = some i → i = (s.validators.map (·.pubkey)).idxOf pk
-
-/-- The cache reads of the Gloas epoch give the spec values: the progressive balances cache, the
-epoch cache total and the pubkey cache. The committee cache read of the PTC window step is
-`ptc_committees_from_cache`, a separate theorem. -/
-def GloasCacheReadsCorrect {M : Type} (progressiveCache : LhCache) (totalActiveBalance : U64)
-    (pubkeyMapOps : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
-    (s : Spec.BeaconState) : Prop :=
-  ProgressiveBalancesReadsCorrect progressiveCache s ∧
-    EpochCacheTotalCorrect totalActiveBalance s ∧ PubkeyLookupCorrect pubkeyMapOps pubkeyMap s
+omit [Spec.PresetCfg.Bounds] in
+/-- At every Gloas epoch input of a run, the cache reads give the spec values, when the cache
+assumptions hold. -/
+theorem gloas_cache_reads_correct {PubkeyMap : Type} {progressiveCache : LhCache}
+    {cachedTotal : U64} {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
+    {pubkeyMap : PubkeyMap}
+    (run : GloasEpochRun oracle fuluOracle blockConfig upgradeConfig fuluStart s)
+    (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap s) :
+    GloasCacheReadsCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap s := by
+  have hin := run.invariants
+  obtain ⟨start, startCache, hstart, hupdates⟩ := caches.progressiveBalances
+  obtain ⟨built, hagree, htotal⟩ := caches.epochCache
+  obtain ⟨lookup, laws, earlier, builtMap, builtLength, length, hprefix, hbuilt, hinsert⟩ :=
+    caches.pubkeyCache
+  rw [← activeSum_eq_active_balances] at htotal
+  obtain ⟨h1, h2, h3⟩ := lh_cache_reads_mainnet s hin.1.1.1.2.1 hin.1.1.2.2.2.2 progressiveCache
+    (coherent_of_upkeep hstart hupdates) cachedTotal
+    (epoch_cache_total_carry cachedTotal.val htotal hagree)
+  refine ⟨h1, h2, h3, fun pubkey => ?_⟩
+  obtain ⟨result, hget, hresult⟩ := CacheProofs.get_coherent_of_nodup laws
+    (pubkey_cache_carry laws hprefix hbuilt hinsert) hin.1.2.1 pubkey
+  rw [Spec.idxOf_pubkey_eq] at hresult
+  exact ⟨result, hget, by convert hresult⟩
 
 omit [Spec.FuluCfg] [Spec.FuluCfg.Ok] in
 /-- The committee cache read of the PTC window step: for any state `st` at which Lighthouse

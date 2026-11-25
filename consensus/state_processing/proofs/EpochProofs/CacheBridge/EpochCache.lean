@@ -231,4 +231,38 @@ theorem lh_base_reward_eq (p : EpochProofs.Spec.Preset) (s : EpochProofs.Spec.Be
   exact rewardsBaseReward_of_altair p cfg ⟨vs, cur⟩ index.val v _ r.val rfl rfl hv' htotal hT64
     hspec
 
+theorem activeSumFrom_eq_active_balances (vs : List EpochProofs.Spec.Validator) (epoch : Nat) :
+    ∀ pre : List EpochProofs.Spec.Validator,
+      CacheProofs.EpochCache.activeSumFrom
+        (CacheProofs.EpochCache.activeAt ((pre ++ vs).map ecValidator) epoch) pre.length
+        (vs.map (·.effective_balance)) =
+      ((vs.filter (EpochProofs.Spec.is_active_validator · epoch)).map (·.effective_balance)).sum := by
+  induction vs with
+  | nil => intro pre; rfl
+  | cons v vs ih =>
+    intro pre
+    have h := ih (pre ++ [v])
+    rw [List.append_assoc, List.singleton_append, List.length_append] at h
+    simp only [List.length_singleton] at h
+    simp only [List.map_cons, CacheProofs.EpochCache.activeSumFrom]
+    rw [h]
+    have hact : CacheProofs.EpochCache.activeAt ((pre ++ v :: vs).map ecValidator) epoch
+        pre.length = EpochProofs.Spec.is_active_validator v epoch := by
+      unfold CacheProofs.EpochCache.activeAt
+      simp
+      rfl
+    rw [hact]
+    by_cases hv : EpochProofs.Spec.is_active_validator v epoch = true
+    · simp [List.filter_cons, hv]
+    · simp [List.filter_cons, hv]
+
+/-- The total of the epoch cache model is the sum of the effective balances of the active
+validators. -/
+theorem activeSum_eq_active_balances (vs : List EpochProofs.Spec.Validator) (epoch : Nat) :
+    CacheProofs.EpochCache.activeSum
+      (CacheProofs.EpochCache.activeAt (vs.map ecValidator) epoch)
+      (vs.map (·.effective_balance)) =
+    ((vs.filter (EpochProofs.Spec.is_active_validator · epoch)).map (·.effective_balance)).sum :=
+  activeSumFrom_eq_active_balances vs epoch []
+
 end EpochProofs.CacheBridge
