@@ -176,7 +176,7 @@ def OnbPost {S D B E : Type} (p : Spec.Preset) (o : Spec.Oracle)
   (∀ err, r.2.2.2 = some err → ∃ e, specFold p o pubkeys state0 (deps.val.map depositToSpec) =
     .error e)
 
-theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
+theorem onboard_loop_spec {S D B E : Type} (inst : LighthouseOnboarding S D B E)
     (cloneInst : core.clone.Clone D) (p : Spec.Preset) (o : Spec.Oracle)
     (pubkeys : List Spec.BLSPubkey) (depositToSpec : D → Spec.PendingDeposit)
     (builderToSpec : B → Spec.Builder)
@@ -541,7 +541,7 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
 `onboard_builders_from_pending_deposits` on a state with an empty builder registry: if the spec
 succeeds, Lighthouse returns the kept deposits and the builders of the spec result, and if the
 spec fails, Lighthouse fails. -/
-theorem onboard_spec {S D B E : Type} (inst : LhOnboarding S D B E)
+theorem onboard_spec {S D B E : Type} (inst : LighthouseOnboarding S D B E)
     (cloneInst : core.clone.Clone D) (p : Spec.Preset) (o : Spec.Oracle)
     (pubkeys : List Spec.BLSPubkey) (depositToSpec : D → Spec.PendingDeposit)
     (builderToSpec : B → Spec.Builder)

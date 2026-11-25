@@ -5,7 +5,7 @@ import EpochProofs.Sanity.Invariants.PubkeysUnique
 # Validator pubkeys are unique, for Fulu
 
 This file is `PubkeysUnique.lean` for the Fulu functions. Every Fulu block step keeps the
-pubkey list (`PkSame`). The Fulu `process_epoch` keeps `PubkeysUnique` with the Gloas epoch
+pubkey list (`SamePubkeys`). The Fulu `process_epoch` keeps `PubkeysUnique` with the Gloas epoch
 lemmas: a pending deposit appends a validator only for a pubkey that is not in the list. So
 `state_transition_fulu` keeps `PubkeysUnique`.
 -/
@@ -17,14 +17,14 @@ open FuluLengthsSanity
 /-- The Fulu `initiate_validator_exit` keeps the pubkeys. -/
 theorem initiate_validator_exit_fulu_pkSame {p : Preset} {f : FuluConfig} (hc : FuluCompat p f)
     {tab : Gwei} {s s' : BeaconState} {index : Nat}
-    (h : initiate_validator_exit_fulu p f tab s index = .ok s') : PkSame s s' := by
+    (h : initiate_validator_exit_fulu p f tab s index = .ok s') : SamePubkeys s s' := by
   rw [initiate_validator_exit_fulu_eq p f hc] at h
   exact initiate_validator_exit_pkSame h
 
 /-- The Fulu `slash_validator` keeps the pubkeys. -/
 theorem slash_validator_fulu_pkSame (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
     (s s' : BeaconState) (i : ValidatorIndex) (w : Option ValidatorIndex)
-    (h : slash_validator_fulu p f s i w = .ok s') : PkSame s s' := by
+    (h : slash_validator_fulu p f s i w = .ok s') : SamePubkeys s s' := by
   obtain ⟨-, hlen, hother, ⟨v, v', hv, hv', hch⟩, -⟩ := slash_validator_fulu_ok p f hc s s' i w h
   refine .of_pointwise hlen fun j u u' hu hu' => ?_
   by_cases hj : j = i
@@ -41,14 +41,14 @@ theorem slash_validator_fulu_pkSame (p : Preset) (f : FuluConfig) (hc : FuluComp
 /-- The Fulu `process_proposer_slashing` keeps the pubkeys. -/
 theorem process_proposer_slashing_fulu_pkSame (p : Preset) (o : Oracle) (f : FuluConfig)
     (hc : FuluCompat p f) (s s' : BeaconState) (ps : ProposerSlashing)
-    (h : process_proposer_slashing_fulu p o f s ps = .ok s') : PkSame s s' := by
+    (h : process_proposer_slashing_fulu p o f s ps = .ok s') : SamePubkeys s s' := by
   obtain ⟨_, _, -, -, -, hsl⟩ := process_proposer_slashing_fulu_ok p o f s s' ps h
   exact slash_validator_fulu_pkSame p f hc s s' _ none hsl
 
 /-- The Fulu `process_attester_slashing` keeps the pubkeys. -/
 theorem process_attester_slashing_fulu_pkSame (p : Preset) (o : Oracle) (f : FuluConfig)
     (hc : FuluCompat p f) (s s' : BeaconState) (as : AttesterSlashing)
-    (h : process_attester_slashing_fulu p o f s as = .ok s') : PkSame s s' := by
+    (h : process_attester_slashing_fulu p o f s as = .ok s') : SamePubkeys s s' := by
   obtain ⟨heff, hf⟩ := process_attester_slashing_fulu_ok p o f hc s s' as h
   refine .of_pointwise heff.2.1 fun j v v' hv hv' => ?_
   rcases hf j v v' hv hv' with rfl | ⟨-, hch⟩
@@ -58,14 +58,14 @@ theorem process_attester_slashing_fulu_pkSame (p : Preset) (o : Oracle) (f : Ful
 /-- The Fulu `process_voluntary_exit` keeps the pubkeys. -/
 theorem process_voluntary_exit_fulu_pkSame (p : Preset) (o : Oracle) (f : FuluConfig)
     (hc : FuluCompat p f) (s s' : BeaconState) (e : SignedVoluntaryExit)
-    (h : process_voluntary_exit_fulu p o f s e = .ok s') : PkSame s s' := by
+    (h : process_voluntary_exit_fulu p o f s e = .ok s') : SamePubkeys s s' := by
   obtain ⟨tab, -, -, -, -, -, -, hi⟩ := process_voluntary_exit_fulu_initiate p o f hc s s' e h
   exact initiate_validator_exit_pkSame hi
 
 /-- The Fulu `process_withdrawal_request` keeps the pubkeys. -/
 theorem process_withdrawal_request_fulu_pkSame (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
     (s s' : BeaconState) (withdrawal_request : WithdrawalRequest)
-    (h : process_withdrawal_request_fulu p f s withdrawal_request = .ok s') : PkSame s s' := by
+    (h : process_withdrawal_request_fulu p f s withdrawal_request = .ok s') : SamePubkeys s s' := by
   unfold process_withdrawal_request_fulu at h
   simp only [initiate_validator_exit_fulu_eq p f hc,
     compute_exit_epoch_and_update_churn_fulu_eq p f hc] at h
@@ -73,13 +73,13 @@ theorem process_withdrawal_request_fulu_pkSame (p : Preset) (f : FuluConfig) (hc
   repeat' split at h
   all_goals first
     | (cases h; done)
-    | (cases h; exact PkSame.refl _)
+    | (cases h; exact SamePubkeys.refl _)
     | exact initiate_validator_exit_pkSame ‹initiate_validator_exit _ _ _ _ = .ok _›
     | (cases h; exact initiate_validator_exit_pkSame ‹initiate_validator_exit _ _ _ _ = .ok _›)
     | (cases h
        obtain ⟨-, -, -, hv, -, -⟩ := compute_exit_epoch_and_update_churn_bound p _ s _ _ _
          ‹compute_exit_epoch_and_update_churn _ _ _ _ = .ok _›
-       exact PkSame.of_eq hv)
+       exact SamePubkeys.of_eq hv)
 
 /-- Splits the binds and `if`s of a successful run without `simp`. -/
 local macro "peel_ok" h:ident : tactic => `(tactic| repeat' first
@@ -94,7 +94,7 @@ theorem consolidation_exit_fulu_pkSame {p : Preset} {f : FuluConfig} {tab : Gwei
     (hr : compute_consolidation_epoch_and_update_churn_fulu p f tab s x = .ok r)
     (hl : listSet r.2.validators i v' = .ok l) (hv : listGet s.validators i = .ok v)
     (hv' : v'.pubkey = v.pubkey) (pc : List PendingConsolidation) :
-    PkSame s { r.2 with validators := l, pending_consolidations := pc } := by
+    SamePubkeys s { r.2 with validators := l, pending_consolidations := pc } := by
   obtain ⟨e, s1⟩ := r
   obtain ⟨-, -, -, hvs, -, -⟩ :=
     compute_consolidation_epoch_and_update_churn_fulu_bound p f tab s s1 x e hr
@@ -107,11 +107,11 @@ theorem consolidation_exit_fulu_pkSame {p : Preset} {f : FuluConfig} {tab : Gwei
 theorem process_consolidation_request_fulu_pkSame (p : Preset) (f : FuluConfig)
     (s s' : BeaconState) (consolidation_request : ConsolidationRequest)
     (h : process_consolidation_request_fulu p f s consolidation_request = .ok s') :
-    PkSame s s' := by
+    SamePubkeys s s' := by
   unfold process_consolidation_request_fulu at h
   peel_ok h
   all_goals first
-    | (cases h; exact PkSame.refl _)
+    | (cases h; exact SamePubkeys.refl _)
     | exact switch_to_compounding_validator_pkSame h
     | (cases h
        refine consolidation_exit_fulu_pkSame
@@ -128,11 +128,11 @@ theorem process_operations_fulu_pubkeysUnique (p : Preset) (o : Oracle) (f : Ful
     (fun _ _ _ h' hs => (process_proposer_slashing_fulu_pkSame p o f hc _ _ _ h').pubkeysUnique hs)
     (fun _ _ _ h' hs => (process_attester_slashing_fulu_pkSame p o f hc _ _ _ h').pubkeysUnique hs)
     (fun _ _ _ h' hs =>
-      (PkSame.of_eq (process_attestation_fulu_effects p o _ _ _ h').2.2.2.2).pubkeysUnique hs)
+      (SamePubkeys.of_eq (process_attestation_fulu_effects p o _ _ _ h').2.2.2.2).pubkeysUnique hs)
     (fun _ _ _ h' hs => (process_voluntary_exit_fulu_pkSame p o f hc _ _ _ h').pubkeysUnique hs)
     (fun _ _ _ h' hs =>
       (process_bls_to_execution_change_pkSame p o _ _ _ h').pubkeysUnique hs)
-    (fun _ _ _ h' hs => (PkSame.of_eq (by cases h'; rfl)).pubkeysUnique hs)
+    (fun _ _ _ h' hs => (SamePubkeys.of_eq (by cases h'; rfl)).pubkeysUnique hs)
     (fun _ _ _ h' hs => (process_withdrawal_request_fulu_pkSame p f hc _ _ _ h').pubkeysUnique hs)
     (fun _ _ _ h' hs => (process_consolidation_request_fulu_pkSame p f _ _ _ h').pubkeysUnique hs)
     s s' body h hs
@@ -144,15 +144,17 @@ theorem process_block_fulu_pubkeysUnique (p : Preset) (o : Oracle) (fo : FuluOra
     (hs : PubkeysUnique fs.state) : PubkeysUnique fs'.state :=
   process_block_fulu_inv p o fo f c PubkeysUnique
     (fun _ _ _ h' hs =>
-      (PkSame.of_eq (process_block_header_fulu_frame p o fo _ _ _ h').1).pubkeysUnique hs)
+      (SamePubkeys.of_eq (process_block_header_fulu_frame p o fo _ _ _ h').1).pubkeysUnique hs)
     (fun _ _ _ h' hs =>
-      (PkSame.of_eq (process_withdrawals_fulu_frame p _ _ _ h').1).pubkeysUnique hs)
-    (fun _ _ _ h' hs => (PkSame.of_eq (process_randao_frame p o _ _ _ h').1.1).pubkeysUnique hs)
-    (fun _ _ _ h' hs => (PkSame.of_eq (process_eth1_data_frame p _ _ _ h').1.1).pubkeysUnique hs)
+      (SamePubkeys.of_eq (process_withdrawals_fulu_frame p _ _ _ h').1).pubkeysUnique hs)
+    (fun _ _ _ h' hs => (SamePubkeys.of_eq (process_randao_frame p o _ _ _ h').1.1).pubkeysUnique
+      hs)
+    (fun _ _ _ h' hs => (SamePubkeys.of_eq (process_eth1_data_frame p _ _ _ h').1.1).pubkeysUnique
+      hs)
     (fun _ _ _ h' hs => process_operations_fulu_pubkeysUnique p o f hc _ _ _ h' hs)
     (fun _ _ _ h' hs => by
       obtain ⟨hfr, -⟩ := process_sync_aggregate_frame p o _ _ _ h'
-      exact (PkSame.of_eq (by rw [hfr])).pubkeysUnique hs)
+      exact (SamePubkeys.of_eq (by rw [hfr])).pubkeysUnique hs)
     fs fs' block h hs
 
 /-- The Fulu `process_epoch` keeps `PubkeysUnique`. -/
@@ -160,23 +162,28 @@ theorem process_epoch_fulu_pubkeysUnique [CurrentPreset] (p : Preset) (f : FuluC
     (o : Oracle) (s s' : BeaconState) (h : process_epoch_fulu p f o s = .ok s')
     (hs : PubkeysUnique s) : PubkeysUnique s' :=
   process_epoch_fulu_inv p f hc o PubkeysUnique
-    (fun _ _ h' hs => (PkSame.of_eq
+    (fun _ _ h' hs => (SamePubkeys.of_eq
       (process_justification_and_finalization_frame p _ _ h').1.1).pubkeysUnique hs)
-    (fun _ _ h' hs => (PkSame.of_eq (process_inactivity_updates_validators p _ _ h')).pubkeysUnique hs)
+    (fun _ _ h' hs => (SamePubkeys.of_eq
+      (process_inactivity_updates_validators p _ _ h')).pubkeysUnique hs)
     (fun _ _ _ h' hs =>
-      (PkSame.of_eq (process_rewards_and_penalties_validators p _ _ _ h')).pubkeysUnique hs)
+      (SamePubkeys.of_eq (process_rewards_and_penalties_validators p _ _ _ h')).pubkeysUnique hs)
     (fun _ _ _ h' hs => (process_registry_updates_pkSame p _ _ _ h').pubkeysUnique hs)
-    (fun _ _ _ h' hs => (PkSame.of_eq (process_slashings_validators p _ _ _ h')).pubkeysUnique hs)
-    (fun _ _ h' hs => (PkSame.of_eq (process_eth1_data_reset_frame p _ _ h').1.1).pubkeysUnique hs)
+    (fun _ _ _ h' hs => (SamePubkeys.of_eq (process_slashings_validators p _ _ _ h')).pubkeysUnique
+      hs)
+    (fun _ _ h' hs => (SamePubkeys.of_eq (process_eth1_data_reset_frame p _ _ h').1.1).pubkeysUnique
+      hs)
     (fun _ _ _ h' hs => process_pending_deposits_pubkeysUnique p o _ _ _ h' hs)
     (fun _ _ h' hs =>
-      (PkSame.of_eq (process_pending_consolidations_validators p _ _ h')).pubkeysUnique hs)
+      (SamePubkeys.of_eq (process_pending_consolidations_validators p _ _ h')).pubkeysUnique hs)
     (fun _ _ h' hs => (process_effective_balance_updates_pkSame p _ _ h').pubkeysUnique hs)
-    (fun _ _ h' hs => (PkSame.of_eq (process_slashings_reset_frame p _ _ h').1.1).pubkeysUnique hs)
+    (fun _ _ h' hs => (SamePubkeys.of_eq (process_slashings_reset_frame p _ _ h').1.1).pubkeysUnique
+      hs)
     (fun _ _ h' hs =>
-      (PkSame.of_eq (process_randao_mixes_reset_frame p _ _ h').1.1).pubkeysUnique hs)
+      (SamePubkeys.of_eq (process_randao_mixes_reset_frame p _ _ h').1.1).pubkeysUnique hs)
     (fun _ _ h' hs =>
-      (PkSame.of_eq (process_historical_summaries_update_frame p o _ _ h').1.1).pubkeysUnique hs)
+      (SamePubkeys.of_eq (process_historical_summaries_update_frame p o _ _ h').1.1).pubkeysUnique
+        hs)
     (fun _ hs => hs)
     (fun _ _ h' hs => by
       obtain ⟨_, _, rfl⟩ := process_sync_committee_updates_fulu_shape p o _ _ h'
@@ -192,7 +199,8 @@ theorem process_slots_fulu_pubkeysUnique [CurrentPreset] (p : Preset) (f : FuluC
     (h : process_slots_fulu p o fo (process_epoch_fulu p f o) fs slot = .ok fs')
     (hs : PubkeysUnique fs.state) : PubkeysUnique fs'.state :=
   process_slots_fulu_inv p o fo (process_epoch_fulu p f o) PubkeysUnique
-    (fun _ _ h' hs => (PkSame.of_eq (process_slot_fulu_frame p o fo _ _ h').1.1).pubkeysUnique hs)
+    (fun _ _ h' hs => (SamePubkeys.of_eq (process_slot_fulu_frame p o fo _ _ h').1.1).pubkeysUnique
+      hs)
     (fun _ _ h' hs => process_epoch_fulu_pubkeysUnique p f hc o _ _ h' hs)
     (fun _ _ hs => hs) fs fs' slot hs h
 

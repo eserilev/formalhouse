@@ -5,9 +5,9 @@ import EpochProofs.Sanity.Invariants.LighthouseTailViews
 /-!
 # The common form of the two epoch tails
 
-`tailNF` is the order of steps that both tails reach. `s1` is the state after justification and
-finalization, and `S4` is the state after the inactivity, rewards, registry and slashings
-steps. The deposit decisions read `s1`; the other steps act on `S4`.
+`stepsAfterSinglePassCommonOrder` is the order of steps that both tails reach. `s1` is the state
+after justification and finalization, and `S4` is the state after the inactivity, rewards, registry
+and slashings steps. The deposit decisions read `s1`; the other steps act on `S4`.
 -/
 
 namespace EpochProofs.Spec
@@ -23,7 +23,7 @@ def tailNFG [CurrentPreset] (o : Oracle) (K : BeaconState → SpecM BeaconState)
     s1.deposit_balance_to_consume
     (← get_activation_churn_limit P total_active_balance)
     ((s1.pending_deposits.take P.MAX_PENDING_DEPOSITS_PER_EPOCH).map
-      (lhDepositView s1 current_epoch))
+      (lighthouseDepositView s1 current_epoch))
   let handled := (s1.pending_deposits.take next).zip postponed
   let pubkeys := s1.validators.map (·.pubkey)
   let n := s1.validators.length
@@ -31,17 +31,18 @@ def tailNFG [CurrentPreset] (o : Oracle) (K : BeaconState → SpecM BeaconState)
   let sums ← (knownTopups pubkeys handled).foldlM (fun acc x => increase_balance acc x.1 x.2)
     (List.replicate n 0)
   let t1 ← addSums S4 sums
-  let t2 ← ((List.range n).filter (fun i => !decide (i ∈ named))).foldlM ebUpdateAt t1
+  let t2 ← ((List.range n).filter (fun i => !decide (i ∈ named))).foldlM updateEffectiveBalanceAt t1
   let t3 ← process_eth1_data_reset P t2
   let t4 ← writeQueue (s1.pending_deposits.drop next ++ (handled.filter (·.2)).map (·.1)) dbtc t3
   let t5 ← (newDeposits pubkeys handled).foldlM (apply_pending_deposit P o) t4
-  let t6 ← (List.range' n (t5.validators.length - n)).foldlM ebUpdateAt t5
+  let t6 ← (List.range' n (t5.validators.length - n)).foldlM updateEffectiveBalanceAt t5
   let t7 ← process_pending_consolidations P t6
-  let t8 ← named.foldlM ebUpdateAt t7
+  let t8 ← named.foldlM updateEffectiveBalanceAt t7
   K t8
 
 /-- `tailNFG` for Gloas: the builder payments, then the steps after them. -/
-def tailNF [CurrentPreset] (o : Oracle) (s1 S4 : BeaconState) (total_active_balance : Gwei)
+def stepsAfterSinglePassCommonOrder [CurrentPreset] (o : Oracle) (s1 S4 : BeaconState)
+    (total_active_balance : Gwei)
     (current_epoch : Epoch) : SpecM BeaconState :=
   tailNFG o (gloasFin o total_active_balance) s1 S4 total_active_balance current_epoch
 

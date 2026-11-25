@@ -64,14 +64,15 @@ end Spec
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 /-- The Rust `ListWritesError`. -/
-abbrev LhLWError (E : Type) := per_epoch_processing.list_writes.ListWritesError E
+abbrev LighthouseLWError (E : Type) := per_epoch_processing.list_writes.ListWritesError E
 
 /-! ## Builder pending payments -/
 
-theorem push_withdrawals_loop_spec {S E : Type} (inst : LhPaymentWrites S E)
-    (wview : S → List LhWithdrawal) (pview : S → List LhPayment)
-    (hc : BuilderPaymentWritesMatchSpec inst wview pview) (ws : Slice LhWithdrawal)
-    (w0 : List LhWithdrawal) (p0 : List LhPayment) (s : S) (i : Usize) (hi : i.val ≤ ws.length)
+theorem push_withdrawals_loop_spec {S E : Type} (inst : LighthousePaymentWrites S E)
+    (wview : S → List LighthouseWithdrawal) (pview : S → List LighthousePayment)
+    (hc : BuilderPaymentWritesMatchSpec inst wview pview) (ws : Slice LighthouseWithdrawal)
+    (w0 : List LighthouseWithdrawal) (p0 : List LighthousePayment) (s : S) (i : Usize)
+    (hi : i.val ≤ ws.length)
     (hw : wview s = w0 ++ ws.val.take i.val) (hp : pview s = p0) :
     per_epoch_processing.list_writes.push_withdrawals_loop inst s ws i ⦃ res =>
       ∃ s', res = (.Ok (), s') ∧ wview s' = w0 ++ ws.val ∧ pview s' = p0 ⦄ := by
@@ -111,10 +112,12 @@ theorem push_withdrawals_loop_spec {S E : Type} (inst : LhPaymentWrites S E)
 /-- `apply_builder_pending_payments` does what `lighthouseBuilderPendingPayments` models by hand,
 under the trusted `BuilderPaymentWritesMatchSpec`. So `builder_pending_payments_equiv` now holds
 for the Lighthouse code, not for a hand model. -/
-theorem apply_builder_pending_payments_spec [EpochProofs.Spec.CurrentPreset] {S E : Type} (inst : LhPaymentWrites S E)
-    (wview : S → List LhWithdrawal) (pview : S → List LhPayment)
+theorem apply_builder_pending_payments_spec [EpochProofs.Spec.CurrentPreset] {S E : Type}
+    (inst : LighthousePaymentWrites S E)
+    (wview : S → List LighthouseWithdrawal) (pview : S → List LighthousePayment)
     (hc : BuilderPaymentWritesMatchSpec inst wview pview) (s : S) (tab spe64 : U64) (spe : Usize)
-    (hspe : spe.val ≤ (pview s).length) (pslice : Slice LhPayment) (hps : pslice.val = pview s) :
+    (hspe : spe.val ≤ (pview s).length) (pslice : Slice LighthousePayment)
+    (hps : pslice.val = pview s) :
     per_epoch_processing.list_writes.apply_builder_pending_payments inst s tab spe64 spe 6#u64
       10#u64 ⦃ res => match res with
         | (.Ok _, s') => lighthouseBuilderPendingPayments tab spe64 spe pslice (wview s) =
@@ -168,10 +171,11 @@ theorem apply_builder_pending_payments_spec [EpochProofs.Spec.CurrentPreset] {S 
 /-- `apply_builder_pending_payments` equals the spec `process_builder_pending_payments` on the
 builder lists, under the trusted `BuilderPaymentWritesMatchSpec`. -/
 theorem apply_builder_pending_payments_equiv [EpochProofs.Spec.CurrentPreset] {S E : Type} (p : Spec.Preset)
-    (inst : LhPaymentWrites S E) (wview : S → List LhWithdrawal) (pview : S → List LhPayment)
+    (inst : LighthousePaymentWrites S E) (wview : S → List LighthouseWithdrawal)
+    (pview : S → List LighthousePayment)
     (hc : BuilderPaymentWritesMatchSpec inst wview pview) (s : S) (tab spe64 : U64) (spe : Usize)
     (hslots : spe64.val = p.SLOTS_PER_EPOCH) (hspe : spe.val = p.SLOTS_PER_EPOCH)
-    (hlen : (pview s).length = 2 * p.SLOTS_PER_EPOCH) (pslice : Slice LhPayment)
+    (hlen : (pview s).length = 2 * p.SLOTS_PER_EPOCH) (pslice : Slice LighthousePayment)
     (hps : pslice.val = pview s) :
     per_epoch_processing.list_writes.apply_builder_pending_payments inst s tab spe64 spe 6#u64
       10#u64 ⦃ res => match res with
@@ -204,21 +208,24 @@ theorem apply_builder_pending_payments_equiv [EpochProofs.Spec.CurrentPreset] {S
 
 /-- What an effective balance loop returns, in spec terms. -/
 def EbPost {S E : Type} (view : S → Spec.BeaconState) (spec : Spec.SpecM Spec.BeaconState) :
-    core.result.Result Unit (LhLWError E) × S → Prop
+    core.result.Result Unit (LighthouseLWError E) × S → Prop
   | (.Ok _, s') => spec = .ok (view s')
   | (.Err _, _) => ∃ e, spec = .error e
 
-theorem update_effective_balances_at_loop_spec [EpochProofs.Spec.CurrentPreset] {S E : Type} (inst : LhEffectiveBalanceWrites S E)
+theorem update_effective_balances_at_loop_spec [EpochProofs.Spec.CurrentPreset] {S E : Type}
+    (inst : LighthouseEffectiveBalanceWrites S E)
     (view : S → Spec.BeaconState) (hc : EffectiveBalanceWritesMatchSpec inst view)
     (idx : Slice Usize) (t0 : Spec.BeaconState) (s : S) (j : Usize) (hj : j.val ≤ idx.length)
-    (hp : ((idx.val.map (·.val)).take j.val).foldlM Spec.ebUpdateAt t0 = .ok (view s)) :
+    (hp : ((idx.val.map (·.val)).take j.val).foldlM Spec.updateEffectiveBalanceAt t0 =
+    .ok (view s)) :
     per_epoch_processing.list_writes.update_effective_balances_at_loop inst s idx j
-      ⦃ res => EbPost view ((idx.val.map (·.val)).foldlM Spec.ebUpdateAt t0) res ⦄ := by
+      ⦃ res => EbPost view ((idx.val.map (·.val)).foldlM Spec.updateEffectiveBalanceAt t0) res
+        ⦄ := by
   unfold per_epoch_processing.list_writes.update_effective_balances_at_loop
   apply loop.spec_decr_nat
     (measure := fun (x : S × Usize) => idx.length - x.2.val)
     (inv := fun (x : S × Usize) => x.2.val ≤ idx.length ∧
-      ((idx.val.map (·.val)).take x.2.val).foldlM Spec.ebUpdateAt t0 = .ok (view x.1))
+      ((idx.val.map (·.val)).take x.2.val).foldlM Spec.updateEffectiveBalanceAt t0 = .ok (view x.1))
   · rintro ⟨s1, j1⟩ ⟨hj1, hp1⟩
     dsimp only at hj1 hp1 ⊢
     unfold per_epoch_processing.list_writes.update_effective_balances_at_loop.body
@@ -232,7 +239,7 @@ theorem update_effective_balances_at_loop_spec [EpochProofs.Spec.CurrentPreset] 
       set x := idx.val[j1.val] with hxv
       have hml : j1.val < (idx.val.map (·.val)).length := by simpa using hjv
       have hget : (idx.val.map (·.val))[j1.val] = x.val := by simp [hxv]
-      cases heb : Spec.ebUpdateAt (view s1) x.val with
+      cases heb : Spec.updateEffectiveBalanceAt (view s1) x.val with
       | ok t' =>
         obtain ⟨s', hu, hv⟩ := (hc.update_effective_balance s1 x).1 t' heb
         rw [hu]
@@ -243,7 +250,7 @@ theorem update_effective_balances_at_loop_spec [EpochProofs.Spec.CurrentPreset] 
         simp only [bind_tc_ok, spec_ok]
         refine ⟨⟨by omega, ?_⟩, by omega⟩
         rw [hj', foldlM_take_succ _ _ _ _ hml, hp1, hget]
-        show Spec.ebUpdateAt (view s1) x.val = _
+        show Spec.updateEffectiveBalanceAt (view s1) x.val = _
         rw [heb, hv]
       | error e =>
         obtain ⟨e', s', hu⟩ := (hc.update_effective_balance s1 x).2 e heb
@@ -263,15 +270,16 @@ theorem update_effective_balances_at_loop_spec [EpochProofs.Spec.CurrentPreset] 
   · exact ⟨hj, hp⟩
 
 /-- The effective balance updates after the consolidations are the model step
-`(validatorsInConsolidations s).foldlM ebUpdateAt`, under the trusted
+`(validatorsInConsolidations s).foldlM updateEffectiveBalanceAt`, under the trusted
 `EffectiveBalanceWritesMatchSpec`, when the Rust indices are the model indices. Lighthouse collects
 them from a `BTreeSet`, which iterates in ascending order without duplicates, as
 `validatorsInConsolidations` sorts and removes duplicates. -/
-theorem update_effective_balances_at_spec [EpochProofs.Spec.CurrentPreset] {S E : Type} (inst : LhEffectiveBalanceWrites S E)
+theorem update_effective_balances_at_spec [EpochProofs.Spec.CurrentPreset] {S E : Type}
+    (inst : LighthouseEffectiveBalanceWrites S E)
     (view : S → Spec.BeaconState) (hc : EffectiveBalanceWritesMatchSpec inst view) (s : S)
     (idx : Slice Usize) (named : List Nat) (hidx : idx.val.map (·.val) = named) :
     per_epoch_processing.list_writes.update_effective_balances_at inst s idx
-      ⦃ res => EbPost view (named.foldlM Spec.ebUpdateAt (view s)) res ⦄ := by
+      ⦃ res => EbPost view (named.foldlM Spec.updateEffectiveBalanceAt (view s)) res ⦄ := by
   unfold per_epoch_processing.list_writes.update_effective_balances_at
   rw [← hidx]
   exact update_effective_balances_at_loop_spec inst view hc idx (view s) s 0#usize (by simp)
@@ -280,7 +288,7 @@ theorem update_effective_balances_at_spec [EpochProofs.Spec.CurrentPreset] {S E 
 
 /-! ## The PTC window shift -/
 
-theorem push_items_loop_spec {W T E α : Type} (inst : LhWindowWrites W T E)
+theorem push_items_loop_spec {W T E α : Type} (inst : LighthouseWindowWrites W T E)
     (view committed : W → List α) (itemToSpec : T → α) (itemOk : T → Prop) (N : Nat)
     (hc : PtcWindowWritesMatchSpec inst view committed itemToSpec itemOk N) (items : Slice T)
     (base : List α)
@@ -332,7 +340,7 @@ theorem push_items_loop_spec {W T E α : Type} (inst : LhWindowWrites W T E)
 /-- `shift_window` drops the first `shift` entries, appends the items and writes the window back,
 and returns `Ok`, when the window has its full length, the items replace exactly the dropped
 entries and each item fits an entry. -/
-theorem shift_window_spec {W T E α : Type} (inst : LhWindowWrites W T E)
+theorem shift_window_spec {W T E α : Type} (inst : LighthouseWindowWrites W T E)
     (view committed : W → List α) (itemToSpec : T → α) (itemOk : T → Prop) (N : Nat)
     (hc : PtcWindowWritesMatchSpec inst view committed itemToSpec itemOk N) (w : W) (shift : Usize)
     (items : Slice T) (hlen : (view w).length = N) (hshift : shift.val ≤ N)
@@ -370,7 +378,7 @@ theorem shift_window_spec {W T E α : Type} (inst : LhWindowWrites W T E)
 `ptc_for_epoch` returned its PTCs (`ptc_for_epoch_spec`), the window write succeeds and writes the
 spec window. Each PTC has `PTC_SIZE` entries (`compute_ptc_length`), so each one fits. -/
 theorem ptc_window_writes_spec {W E : Type} (p : Spec.Preset) (o : Spec.Oracle)
-    (inst : LhWindowWrites W (alloc.vec.Vec Usize) E) (view committed : W → List (List Nat))
+    (inst : LighthouseWindowWrites W (alloc.vec.Vec Usize) E) (view committed : W → List (List Nat))
     (N : Nat)
     (hc : PtcWindowWritesMatchSpec inst view committed indexValues (fun t =>
     (indexValues t).length = p.PTC_SIZE) N)

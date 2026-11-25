@@ -721,11 +721,11 @@ theorem ReachableBySlots.tail [CurrentPreset] {o : Oracle} {s t : BeaconState} (
   induction hr with
   | refl => exact hs
   | skip _ ht _ ih =>
-    exact ⟨(PkSame.of_eq (process_slot_frame _ o _ _ ht).1.1).pubkeysUnique ih.1,
+    exact ⟨(SamePubkeys.of_eq (process_slot_frame _ o _ _ ht).1.1).pubkeysUnique ih.1,
       (process_slot_cstep _ o _ _ ht).inRange ih.2⟩
   | epoch _ ht _ he ih =>
     have h1 : PubkeysUnique _ ∧ ConsolidationsInRange _ :=
-      ⟨(PkSame.of_eq (process_slot_frame _ o _ _ ht).1.1).pubkeysUnique ih.1,
+      ⟨(SamePubkeys.of_eq (process_slot_frame _ o _ _ ht).1.1).pubkeysUnique ih.1,
         (process_slot_cstep _ o _ _ ht).inRange ih.2⟩
     have h2 := process_epoch_pubkeysUnique _ o _ _ he h1.1
     have h3 := process_epoch_inRange _ o _ _ he h1.2
@@ -761,7 +761,7 @@ theorem reachable_state_transition_sameResultOrBothFail'' [CurrentPreset] [Curre
     intro s' t t1 hr' hreach ht hz
     have htail := hreach.tail (reachable_tail o _ _ init hpk hcr s' hr')
     exact ⟨hinputCondition s' t t1 hr' hreach ht hz,
-      (PkSame.of_eq (process_slot_frame _ o _ _ ht).1.1).pubkeysUnique htail.1,
+      (SamePubkeys.of_eq (process_slot_frame _ o _ _ ht).1.1).pubkeysUnique htail.1,
       (process_slot_cstep _ o _ _ ht).inRange htail.2⟩
   exact reachable_state_transition_sameResultOrBothFail' o _ _ init hffg hrows hd hx h0 hsupply _ hinputCondition' f
     (fun t ⟨hb, hslot, heb, hex, hec, hp, hc⟩ => hf t ⟨⟨hb, hslot, heb, hex, hec⟩, hp, hc⟩)

@@ -10,15 +10,16 @@ import EpochProofs.Sanity.Invariants.LighthouseOrder
 the translated `weigh_justification`, and the checkpoint and bit writes. The reads and the writes
 are untranslated code (`UntranslatedJustification`), each with the fact that links it to the spec
 (`UntranslatedJustificationFacts`). `translatedJustification_matches_model` shows that it returns
-the state of the model `lhJustificationAndFinalization`.
+the state of the model `lighthouseJustificationAndFinalization`.
 -/
 
 namespace EpochProofs.Spec
 
 /-- The writes of `weigh_justification_and_finalization.rs` after `weigh_justification`: the
 checkpoints, the block roots they read, and the bits. -/
-def lhJustificationWrite (p : Preset) (s : BeaconState) (previous_epoch current_epoch : Epoch)
-    (outcome : LhJustificationOutcome) : SpecM BeaconState := do
+def lighthouseJustificationWrite (p : Preset) (s : BeaconState)
+    (previous_epoch current_epoch : Epoch)
+    (outcome : LighthouseJustificationOutcome) : SpecM BeaconState := do
   let state := s
   let old_previous_justified_checkpoint := state.previous_justified_checkpoint
   let old_current_justified_checkpoint := state.current_justified_checkpoint
@@ -45,17 +46,17 @@ def lhJustificationWrite (p : Preset) (s : BeaconState) (previous_epoch current_
   | .oldCurrentJustified =>
     pure { state with finalized_checkpoint := old_current_justified_checkpoint }
 
-theorem lhWeighJustificationAndFinalization_eq (p : Preset) (s : BeaconState)
+theorem lighthouseWeighJustificationAndFinalization_eq (p : Preset) (s : BeaconState)
     (tab x y : Gwei) :
-    lhWeighJustificationAndFinalization p s tab x y = (do
+    lighthouseWeighJustificationAndFinalization p s tab x y = (do
       let previous_epoch ← get_previous_epoch p s
       let current_epoch ← get_current_epoch p s
-      let bits : LhJustificationBits :=
+      let bits : LighthouseJustificationBits :=
         { bit0 := ← listGet s.justification_bits 0, bit1 := ← listGet s.justification_bits 1,
           bit2 := ← listGet s.justification_bits 2, bit3 := ← listGet s.justification_bits 3 }
-      let outcome ← lhWeighJustification current_epoch s.previous_justified_checkpoint.epoch
+      let outcome ← lighthouseWeighJustification current_epoch s.previous_justified_checkpoint.epoch
         s.current_justified_checkpoint.epoch bits tab x y
-      lhJustificationWrite p s previous_epoch current_epoch outcome) := rfl
+      lighthouseJustificationWrite p s previous_epoch current_epoch outcome) := rfl
 
 end EpochProofs.Spec
 
@@ -97,7 +98,8 @@ def translatedJustification (code : UntranslatedJustification RustState)
 variable [Spec.CurrentPreset]
 
 /-- The trusted facts about the untranslated code at the state `rustState`: each read is the spec
-value, and the writes are the spec writes (`lhJustificationWrite`). The balances are cache reads. -/
+value, and the writes are the spec writes (`lighthouseJustificationWrite`). The balances are cache
+reads. -/
 structure UntranslatedJustificationFacts (code : UntranslatedJustification RustState)
     (rustStateToSpec : RustState → Spec.BeaconState) (rustState : RustState) :
     Prop where
@@ -137,18 +139,18 @@ structure UntranslatedJustificationFacts (code : UntranslatedJustification RustS
   writeOutcome : ∀ prev current outcome t,
     Spec.get_previous_epoch Spec.P (rustStateToSpec rustState) = .ok prev →
     Spec.get_current_epoch Spec.P (rustStateToSpec rustState) = .ok current →
-    Spec.lhJustificationWrite Spec.P (rustStateToSpec rustState) prev current
+    Spec.lighthouseJustificationWrite Spec.P (rustStateToSpec rustState) prev current
       (justificationOutcomeToSpec outcome) =
       .ok t →
     ∃ t', code.writeOutcome rustState outcome = some t' ∧ rustStateToSpec t' = t
 
 /-- The composed justification returns the state of the model: when
-`lhJustificationAndFinalization` returns `ok`, the Rust returns `Ok` with that state. -/
+`lighthouseJustificationAndFinalization` returns `ok`, the Rust returns `Ok` with that state. -/
 theorem translatedJustification_matches_model (code : UntranslatedJustification RustState)
     (rustStateToSpec : RustState → Spec.BeaconState) (rustState : RustState)
     (hL : UntranslatedJustificationFacts code rustStateToSpec rustState)
     (hlen : (rustStateToSpec rustState).justification_bits.length = Spec.JUSTIFICATION_BITS_LENGTH)
-    (s1 : Spec.BeaconState) (h : Spec.lhJustificationAndFinalization Spec.P
+    (s1 : Spec.BeaconState) (h : Spec.lighthouseJustificationAndFinalization Spec.P
     (rustStateToSpec rustState) = .ok s1) :
     ∃ rustState1, translatedJustification code rustState = ok (some rustState1) ∧
       rustStateToSpec rustState1 = s1 := by
@@ -156,7 +158,7 @@ theorem translatedJustification_matches_model (code : UntranslatedJustification 
       (rustStateToSpec rustState).justification_bits = [b0, b1, b2, b3] := by
     match hb : (rustStateToSpec rustState).justification_bits, hlen with
     | [b0, b1, b2, b3], _ => exact ⟨b0, b1, b2, b3, rfl⟩
-  unfold Spec.lhJustificationAndFinalization at h
+  unfold Spec.lighthouseJustificationAndFinalization at h
   rw [if_neg (by rw [hlen]; exact not_not.mpr rfl)] at h
   obtain ⟨current, hcur, h⟩ := Spec.specM_bind_ok h
   unfold translatedJustification
@@ -176,7 +178,7 @@ theorem translatedJustification_matches_model (code : UntranslatedJustification 
   obtain ⟨total, htab, h⟩ := Spec.specM_bind_ok h
   obtain ⟨px, hpx, h⟩ := Spec.specM_bind_ok h
   obtain ⟨cx, hcx, h⟩ := Spec.specM_bind_ok h
-  rw [Spec.lhWeighJustificationAndFinalization_eq, hprev, hcur, hbits] at h
+  rw [Spec.lighthouseWeighJustificationAndFinalization_eq, hprev, hcur, hbits] at h
   simp only [Spec.listGet, Bind.bind, Except.bind, Pure.pure, Except.pure,
     List.getElem?_cons_succ, List.getElem?_cons_zero] at h
   obtain ⟨r, hr, habs⟩ := spec_imp_exists (weigh_justification_equiv (code.currentEpoch rustState)

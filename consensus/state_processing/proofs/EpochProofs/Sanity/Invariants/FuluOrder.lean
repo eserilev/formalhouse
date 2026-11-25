@@ -10,8 +10,8 @@ participation rotation, the sync committee update and then the proposer lookahea
 runs the Fulu proposer lookahead inside `process_epoch_single_pass`, before these steps and
 before the eth1 reset (`single_pass.rs`, `altair.rs`).
 
-`specOrderFulu_lhOrderFulu` shows that the two orders give the same `ok` results. It is the
-Fulu version of `specOrder_lhOrder`: the Fulu lookahead reads the same fields as the Gloas
+`specOrderFulu_lighthouseOrderFulu` shows that the two orders give the same `ok` results. It is the
+Fulu version of `specOrder_lighthouseOrder`: the Fulu lookahead reads the same fields as the Gloas
 lookahead (`plFuluNew_congr`), so each swap of `LighthouseOrderTail.lean` carries over.
 -/
 
@@ -155,15 +155,16 @@ def specOrderFulu [CurrentPreset] (o : Oracle) : List (BeaconState → SpecM Bea
     process_proposer_lookahead_fulu P o]
 
 /-- The Lighthouse Fulu order: the proposer lookahead first. -/
-def lhOrderFulu [CurrentPreset] (o : Oracle) : List (BeaconState → SpecM BeaconState) :=
+def lighthouseOrderFulu [CurrentPreset] (o : Oracle) : List (BeaconState → SpecM BeaconState) :=
   [process_proposer_lookahead_fulu P o,
     process_eth1_data_reset P, process_slashings_reset P,
     process_randao_mixes_reset P, process_historical_summaries_update P o,
     pfStep, process_sync_committee_updates P o]
 
 /-- The two Fulu orders give the same `ok` results. -/
-theorem specOrderFulu_lhOrderFulu [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) (hroom : SlotRoom s) :
-    SameResultOrBothFail (runSteps (specOrderFulu o) s) (runSteps (lhOrderFulu o) s) := by
+theorem specOrderFulu_lighthouseOrderFulu [CurrentPreset] [CurrentPreset.Valid] (o : Oracle)
+    (s : BeaconState) (hroom : SlotRoom s) :
+    SameResultOrBothFail (runSteps (specOrderFulu o) s) (runSteps (lighthouseOrderFulu o) s) := by
   let e1 := process_eth1_data_reset P
   let sr := process_slashings_reset P
   let rr := process_randao_mixes_reset P

@@ -3,69 +3,70 @@ import EpochProofs.Spec.JustificationFinalization
 /-!
 # Lighthouse model: `weigh_justification_and_finalization`
 
-`lhWeighJustification` follows `justification.rs`. `lhWeighJustificationAndFinalization` follows
+`lighthouseWeighJustification` follows `justification.rs`.
+`lighthouseWeighJustificationAndFinalization` follows
 the caller in `weigh_justification_and_finalization.rs`: it reads the four bits, runs the pure
 function, then reads the block roots and writes the checkpoints and the bits. Lighthouse reads
 the block roots from the state before the update, so the model reads them from `s`.
 
 Lighthouse reads the three balances from the progressive balances cache and the total active
-balance cache. `lhJustificationAndFinalization` takes the spec values. Stack #27 proves that the
-caches hold these values.
+balance cache. `lighthouseJustificationAndFinalization` takes the spec values. Stack #27 proves
+that the caches hold these values.
 
 A Lighthouse state always has four justification bits (`BitVector<U4>`). For a list of another
-length, `lhJustificationAndFinalization` runs the spec function. No Lighthouse state reaches this
-case.
+length, `lighthouseJustificationAndFinalization` runs the spec function. No Lighthouse state
+reaches this case.
 -/
 
 namespace EpochProofs.Spec
 
-structure LhJustificationBits where
+structure LighthouseJustificationBits where
   bit0 : Bool
   bit1 : Bool
   bit2 : Bool
   bit3 : Bool
   deriving DecidableEq, Repr
 
-inductive LhNewFinalized where
+inductive LighthouseNewFinalized where
   | unchanged
   | oldPreviousJustified
   | oldCurrentJustified
   deriving DecidableEq, Repr
 
-structure LhJustificationOutcome where
+structure LighthouseJustificationOutcome where
   justify_previous : Bool
   justify_current : Bool
-  bits : LhJustificationBits
-  finalized : LhNewFinalized
+  bits : LighthouseJustificationBits
+  finalized : LighthouseNewFinalized
   deriving DecidableEq, Repr
 
-def lhFinalizeStep (enabled : Bool) (source_epoch offset current_epoch : Uint64)
-    (choice finalized : LhNewFinalized) : SpecM LhNewFinalized :=
+def lighthouseFinalizeStep (enabled : Bool) (source_epoch offset current_epoch : Uint64)
+    (choice finalized : LighthouseNewFinalized) : SpecM LighthouseNewFinalized :=
   if enabled then do
     if (← uint64Add source_epoch offset) = current_epoch then pure choice else pure finalized
   else pure finalized
 
-def lhWeighJustification (current_epoch old_previous_justified_epoch
-    old_current_justified_epoch : Uint64) (bits : LhJustificationBits)
+def lighthouseWeighJustification (current_epoch old_previous_justified_epoch
+    old_current_justified_epoch : Uint64) (bits : LighthouseJustificationBits)
     (total_active_balance previous_target_balance current_target_balance : Gwei) :
-    SpecM LhJustificationOutcome := do
+    SpecM LighthouseJustificationOutcome := do
   let threshold ← uint64Mul total_active_balance 2
   let justify_previous := decide ((← uint64Mul previous_target_balance 3) ≥ threshold)
   let justify_current := decide ((← uint64Mul current_target_balance 3) ≥ threshold)
-  let bits : LhJustificationBits :=
+  let bits : LighthouseJustificationBits :=
     { bit0 := justify_current, bit1 := bits.bit0 || justify_previous, bit2 := bits.bit1,
       bit3 := bits.bit2 }
-  let finalized ← lhFinalizeStep (bits.bit1 && bits.bit2 && bits.bit3)
+  let finalized ← lighthouseFinalizeStep (bits.bit1 && bits.bit2 && bits.bit3)
     old_previous_justified_epoch 3 current_epoch .oldPreviousJustified .unchanged
-  let finalized ← lhFinalizeStep (bits.bit1 && bits.bit2)
+  let finalized ← lighthouseFinalizeStep (bits.bit1 && bits.bit2)
     old_previous_justified_epoch 2 current_epoch .oldPreviousJustified finalized
-  let finalized ← lhFinalizeStep (bits.bit0 && bits.bit1 && bits.bit2)
+  let finalized ← lighthouseFinalizeStep (bits.bit0 && bits.bit1 && bits.bit2)
     old_current_justified_epoch 2 current_epoch .oldCurrentJustified finalized
-  let finalized ← lhFinalizeStep (bits.bit0 && bits.bit1)
+  let finalized ← lighthouseFinalizeStep (bits.bit0 && bits.bit1)
     old_current_justified_epoch 1 current_epoch .oldCurrentJustified finalized
   pure { justify_previous, justify_current, bits, finalized }
 
-def lhWeighJustificationAndFinalization (p : Preset) (s : BeaconState)
+def lighthouseWeighJustificationAndFinalization (p : Preset) (s : BeaconState)
     (total_active_balance previous_target_balance current_target_balance : Gwei) :
     SpecM BeaconState := do
   let state := s
@@ -73,10 +74,10 @@ def lhWeighJustificationAndFinalization (p : Preset) (s : BeaconState)
   let current_epoch ← get_current_epoch p state
   let old_previous_justified_checkpoint := state.previous_justified_checkpoint
   let old_current_justified_checkpoint := state.current_justified_checkpoint
-  let bits : LhJustificationBits :=
+  let bits : LighthouseJustificationBits :=
     { bit0 := ← listGet state.justification_bits 0, bit1 := ← listGet state.justification_bits 1,
       bit2 := ← listGet state.justification_bits 2, bit3 := ← listGet state.justification_bits 3 }
-  let outcome ← lhWeighJustification current_epoch old_previous_justified_checkpoint.epoch
+  let outcome ← lighthouseWeighJustification current_epoch old_previous_justified_checkpoint.epoch
     old_current_justified_checkpoint.epoch bits total_active_balance previous_target_balance
     current_target_balance
   let state := { state with previous_justified_checkpoint := old_current_justified_checkpoint }
@@ -102,7 +103,7 @@ def lhWeighJustificationAndFinalization (p : Preset) (s : BeaconState)
   | .oldCurrentJustified =>
     pure { state with finalized_checkpoint := old_current_justified_checkpoint }
 
-def lhJustificationAndFinalization (p : Preset) (state : BeaconState) : SpecM BeaconState :=
+def lighthouseJustificationAndFinalization (p : Preset) (state : BeaconState) : SpecM BeaconState :=
   if state.justification_bits.length ≠ JUSTIFICATION_BITS_LENGTH then
     process_justification_and_finalization p state
   else do
@@ -115,7 +116,7 @@ def lhJustificationAndFinalization (p : Preset) (state : BeaconState) : SpecM Be
     let total_active_balance ← get_total_active_balance p state
     let previous_target_balance ← get_total_balance p state previous_indices
     let current_target_balance ← get_total_balance p state current_indices
-    lhWeighJustificationAndFinalization p state total_active_balance previous_target_balance
+    lighthouseWeighJustificationAndFinalization p state total_active_balance previous_target_balance
       current_target_balance
 
 end EpochProofs.Spec

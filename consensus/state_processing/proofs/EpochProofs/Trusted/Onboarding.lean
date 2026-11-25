@@ -32,7 +32,7 @@ namespace EpochProofs
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 /-- The Rust trait `Onboarding`. -/
-abbrev LhOnboarding (S D B E : Type) := upgrade.builder_onboarding.Onboarding S D B E
+abbrev LighthouseOnboarding (S D B E : Type) := upgrade.builder_onboarding.Onboarding S D B E
 
 /-- The builder that `add_builder_to_registry` adds for a deposit. -/
 def onboardedBuilder (p : Spec.Preset) (d : Spec.PendingDeposit) : Spec.Builder where
@@ -44,7 +44,7 @@ def onboardedBuilder (p : Spec.Preset) (d : Spec.PendingDeposit) : Spec.Builder 
   withdrawable_epoch := Spec.FAR_FUTURE_EPOCH
 
 /-- Trusted: what the `Onboarding` implementation in `upgrade/gloas.rs` does. -/
-structure OnboardingMatchesSpec {S D B E : Type} (implementation : LhOnboarding S D B E)
+structure OnboardingMatchesSpec {S D B E : Type} (implementation : LighthouseOnboarding S D B E)
     (cloneInst : core.clone.Clone D) (p : Spec.Preset) (oracle : Spec.Oracle)
     (pubkeys : List Spec.BLSPubkey) (depositToSpec : D → Spec.PendingDeposit)
     (builderToSpec : B → Spec.Builder)

@@ -19,31 +19,32 @@ namespace EpochProofs
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 /-- The Rust `DepositView`: a pending deposit and the validator fields that the decision reads. -/
-abbrev LhDepositView := per_epoch_processing.pending_deposits.DepositView
+abbrev LighthouseDepositView := per_epoch_processing.pending_deposits.DepositView
 
 /-- The Rust `DepositConstants`. -/
-abbrev LhDepositConstants := per_epoch_processing.pending_deposits.DepositConstants
+abbrev LighthouseDepositConstants := per_epoch_processing.pending_deposits.DepositConstants
 
 /-- The Rust deposit constants have the preset values. -/
-structure DepositConstantsMatch (p : Spec.Preset) (c : LhDepositConstants) : Prop where
+structure DepositConstantsMatch (p : Spec.Preset) (c : LighthouseDepositConstants) : Prop where
   far_future_epoch : c.far_future_epoch.val = Spec.FAR_FUTURE_EPOCH
   ejection_balance : c.ejection_balance.val = p.EJECTION_BALANCE
   max_pending_deposits_per_epoch :
     c.max_pending_deposits_per_epoch.val = p.MAX_PENDING_DEPOSITS_PER_EPOCH
 
 /-- The validator epochs of a view. -/
-def viewFields (v : LhDepositView) : Spec.RegistryFields :=
+def viewFields (v : LighthouseDepositView) : Spec.RegistryFields :=
   ⟨0, v.activation_epoch.val, v.exit_epoch.val, v.withdrawable_epoch.val, 0, 0⟩
 
 /-- The spec view of a Lighthouse view. -/
-def specView (p : Spec.Preset) (c : LhDepositConstants) (current_epoch next_epoch : Nat)
-    (v : LhDepositView) : Spec.DepositSpecView :=
+def specView (p : Spec.Preset) (c : LighthouseDepositConstants) (current_epoch next_epoch : Nat)
+    (v : LighthouseDepositView) : Spec.DepositSpecView :=
   let status := Spec.predictedStatus p c.registry_updates v.is_known_validator (viewFields v)
     v.effective_balance.val current_epoch next_epoch
   ⟨v.slot.val, v.amount.val, v.eth1_bridge_blocked, status.1, status.2⟩
 
-theorem deposit_status_eq (p : Spec.Preset) (v : LhDepositView) (current_epoch next_epoch : U64)
-    (c : LhDepositConstants) (hc : DepositConstantsMatch p c) :
+theorem deposit_status_eq (p : Spec.Preset) (v : LighthouseDepositView)
+    (current_epoch next_epoch : U64)
+    (c : LighthouseDepositConstants) (hc : DepositConstantsMatch p c) :
     per_epoch_processing.pending_deposits.deposit_status v current_epoch next_epoch c =
       ok (Spec.predictedStatus p c.registry_updates v.is_known_validator (viewFields v)
         v.effective_balance.val current_epoch.val next_epoch.val) := by
@@ -72,12 +73,12 @@ theorem u64_saturating_add_one (x : U64) (h : x.val < U64.max) :
   simp at h ⊢; omega
 
 /-- The spec views of a slice of Lighthouse views. -/
-abbrev specViews (p : Spec.Preset) (c : LhDepositConstants) (current_epoch next_epoch : U64)
-    (views : Slice LhDepositView) : List Spec.DepositSpecView :=
+abbrev specViews (p : Spec.Preset) (c : LighthouseDepositConstants) (current_epoch next_epoch : U64)
+    (views : Slice LighthouseDepositView) : List Spec.DepositSpecView :=
   views.val.map (specView p c current_epoch.val next_epoch.val)
 
-theorem deposits_loop_spec (p : Spec.Preset) (views : Slice LhDepositView)
-    (finalized_slot current_epoch next_epoch available : U64) (c : LhDepositConstants)
+theorem deposits_loop_spec (p : Spec.Preset) (views : Slice LighthouseDepositView)
+    (finalized_slot current_epoch next_epoch available : U64) (c : LighthouseDepositConstants)
     (hc : DepositConstantsMatch p c)
     (processed index : U64) (postponed : alloc.vec.Vec Bool) (i : Usize)
     (hi : i.val ≤ views.val.length) (hidx : index.val ≤ i.val)
@@ -226,9 +227,9 @@ def depositDecisionsToSpec :
   | .Err e => .error (arithErrorToSpec e)
 
 /-- The translated `process_pending_deposits` makes the spec decisions, with the same errors. -/
-theorem process_pending_deposits_equiv (p : Spec.Preset) (views : Slice LhDepositView)
+theorem process_pending_deposits_equiv (p : Spec.Preset) (views : Slice LighthouseDepositView)
     (finalized_slot current_epoch next_epoch deposit_balance_to_consume churn : U64)
-    (c : LhDepositConstants) (hc : DepositConstantsMatch p c) :
+    (c : LighthouseDepositConstants) (hc : DepositConstantsMatch p c) :
     per_epoch_processing.pending_deposits.process_pending_deposits views finalized_slot
       current_epoch next_epoch deposit_balance_to_consume churn c ⦃ r =>
         depositDecisionsToSpec r =

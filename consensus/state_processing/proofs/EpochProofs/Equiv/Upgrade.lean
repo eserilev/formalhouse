@@ -41,7 +41,7 @@ theorem proposer_indices_for_epoch_spec_fulu {H B : Type} (inst : ShuffleHashIns
     (hfin : ∀ s, Spec.ProposerSelectionEnds p o state (Spec.get_active_validator_indices state epoch.val) s)
     (mix : Array U8 32#usize) (hmix : SeedMixMatches p state epoch.val mix) (start_slot : U64)
     (hstart : Spec.compute_start_slot_at_epoch p epoch.val = .ok start_slot.val)
-    (c : LhSelectionConstants) (hc : SelectionConstantsMatch p c)
+    (c : LighthouseSelectionConstants) (hc : SelectionConstantsMatch p c)
     (hn24 : indices.val.length ≤ 2 ^ 24) (hus : Usize.max = U64.max) (props : List Nat)
     (hspec : Spec.get_beacon_proposer_indices_fulu p o state epoch.val = .ok props) :
     per_epoch_processing.epoch_committees.proposer_indices_for_epoch inst ebi balances indices
@@ -139,7 +139,7 @@ theorem initialize_ptc_window_lh {H B : Type} (inst : ShuffleHashInst H)
           Spec.ptcIndices p o state epoch.val (start_slot.val + k) = .ok l →
             (committees.val[k]).val.map (·.val) = l)
         (_ : ∀ k (hk : k < committees.val.length), (committees.val[k]).val.length ≤ 2 ^ 24)
-        (ptc_size : Usize) (_ : ptc_size.val = p.PTC_SIZE) (c : LhSelectionConstants)
+        (ptc_size : Usize) (_ : ptc_size.val = p.PTC_SIZE) (c : LighthouseSelectionConstants)
         (_ : SelectionConstantsMatch p c),
         per_epoch_processing.epoch_committees.ptc_for_epoch inst ebi balances committees domain
           epoch mix start_slot ptc_size c ⦃ r =>

@@ -39,9 +39,10 @@ namespace EpochProofs
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
-theorem process_pending_deposits_postponed_len [EpochProofs.Spec.CurrentPreset] (views : Slice LhDepositView)
+theorem process_pending_deposits_postponed_len [EpochProofs.Spec.CurrentPreset]
+    (views : Slice LighthouseDepositView)
     (finalized_slot current_epoch next_epoch deposit_balance_to_consume churn : U64)
-    (c : LhDepositConstants) (hc : DepositConstantsMatch Spec.P c) :
+    (c : LighthouseDepositConstants) (hc : DepositConstantsMatch Spec.P c) :
     per_epoch_processing.pending_deposits.process_pending_deposits views finalized_slot
       current_epoch next_epoch deposit_balance_to_consume churn c ⦃ r =>
         ∀ o, r = .Ok o → o.postponed.val.length = o.next_deposit_index.val ⦄ := by

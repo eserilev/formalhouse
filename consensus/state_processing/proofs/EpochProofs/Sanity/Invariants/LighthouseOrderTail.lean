@@ -354,15 +354,16 @@ def specOrder [CurrentPreset] (o : Oracle) : List (BeaconState → SpecM BeaconS
     process_proposer_lookahead P o, process_ptc_window P o]
 
 /-- The Lighthouse order: the proposer lookahead and the PTC window first. -/
-def lhOrder [CurrentPreset] (o : Oracle) : List (BeaconState → SpecM BeaconState) :=
+def lighthouseOrder [CurrentPreset] (o : Oracle) : List (BeaconState → SpecM BeaconState) :=
   [process_proposer_lookahead P o, process_ptc_window P o,
     process_eth1_data_reset P, process_slashings_reset P,
     process_randao_mixes_reset P, process_historical_summaries_update P o,
     pfStep, process_sync_committee_updates P o]
 
 /-- The two orders give the same `ok` results. -/
-theorem specOrder_lhOrder [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) (hroom : SlotRoom s) :
-    SameResultOrBothFail (runSteps (specOrder o) s) (runSteps (lhOrder o) s) := by
+theorem specOrder_lighthouseOrder [CurrentPreset] [CurrentPreset.Valid] (o : Oracle)
+    (s : BeaconState) (hroom : SlotRoom s) :
+    SameResultOrBothFail (runSteps (specOrder o) s) (runSteps (lighthouseOrder o) s) := by
   let e1 := process_eth1_data_reset P
   let sr := process_slashings_reset P
   let rr := process_randao_mixes_reset P

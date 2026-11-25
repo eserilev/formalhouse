@@ -12,7 +12,7 @@ reads like the Rust. `LighthouseResets.lean` relates the models to the spec step
 namespace EpochProofs.Spec
 
 /-- `(slot + 1) % slots_per_eth1_voting_period == 0`, the eth1 reset check of Lighthouse. -/
-def lhEth1ResetDue (slot slots_per_eth1_voting_period : Uint64) : SpecM Bool := do
+def lighthouseEth1ResetDue (slot slots_per_eth1_voting_period : Uint64) : SpecM Bool := do
   pure ((← uint64Mod (← uint64Add slot 1) slots_per_eth1_voting_period) == 0)
 
 /-- The position of `epoch` in a vector indexed by epoch, as `BeaconState::get_slashings_index`
@@ -119,8 +119,8 @@ theorem decide_eq_zero (m : U64) : decide (m = 0#u64) = (m.val == 0) := by
 /-- The translated check of the eth1 votes reset is the model check, with the same errors. -/
 theorem eth1_data_votes_reset_due_equiv (slot period : U64) :
     per_epoch_processing.tail_updates.eth1_data_votes_reset_due slot period ⦃ r =>
-      resultToSpec id r = Spec.lhEth1ResetDue slot.val period.val ⦄ := by
-  unfold per_epoch_processing.tail_updates.eth1_data_votes_reset_due Spec.lhEth1ResetDue
+      resultToSpec id r = Spec.lighthouseEth1ResetDue slot.val period.val ⦄ := by
+  unfold per_epoch_processing.tail_updates.eth1_data_votes_reset_due Spec.lighthouseEth1ResetDue
   obtain ⟨r1, hr1, h1⟩ := spec_imp_exists (safe_add_abs slot 1#u64)
   have h1v : (1#u64 : U64).val = 1 := rfl
   rw [h1v] at h1

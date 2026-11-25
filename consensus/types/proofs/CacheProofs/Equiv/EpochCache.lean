@@ -435,13 +435,14 @@ abbrev Call := Usize × U64 × Bool
 
 /-- The untranslated code of `single_pass.rs`: it calls `update_effective_balance` for each call in
 order and stops at the first error (`?`). `none` is an error. -/
-def lhRun (s : alloc.vec.Vec U64 × U64) : List Call → Result (Option (alloc.vec.Vec U64 × U64))
+def lighthouseRun (s : alloc.vec.Vec U64 × U64) : List Call →
+    Result (Option (alloc.vec.Vec U64 × U64))
   | [] => ok (some s)
   | (i, eb, active) :: cs => do
     let (r, ebs', total') ←
       state.total_active_balance.update_effective_balance s.1 s.2 i eb active
     match r with
-    | .Ok true => lhRun (ebs', total') cs
+    | .Ok true => lighthouseRun (ebs', total') cs
     | _ => ok none
 
 /-- The calls are valid for `act`: each index is at most the current length, each flag equals
@@ -459,11 +460,11 @@ def modelRun (l : List Nat) (cs : List Call) : List Nat :=
 
 /-- Preservation over a whole call sequence: the untranslated code does not fail, and the total
 stays the sum of the active effective balances. -/
-theorem lhRun_spec (act : Nat → Bool) (cs : List Call) :
+theorem lighthouseRun_spec (act : Nat → Bool) (cs : List Call) :
     ∀ (ebs : alloc.vec.Vec U64) (total : U64),
       total.val = activeSum act (ebs.val.map (·.val)) →
       ValidCalls act (ebs.val.map (·.val)) cs →
-      ∃ ebs' total', lhRun (ebs, total) cs = ok (some (ebs', total')) ∧
+      ∃ ebs' total', lighthouseRun (ebs, total) cs = ok (some (ebs', total')) ∧
         ebs'.val.map (·.val) = modelRun (ebs.val.map (·.val)) cs ∧
         total'.val = activeSum act (ebs'.val.map (·.val)) := by
   induction cs with
@@ -480,15 +481,16 @@ theorem lhRun_spec (act : Nat → Bool) (cs : List Call) :
     rw [← hmap1] at hrest
     obtain ⟨ebs2, total2, hrun2, hmap2, hinv2⟩ := ih ebs1 total1 hinv1 hrest
     refine ⟨ebs2, total2, ?_, ?_, hinv2⟩
-    · simp only [lhRun, hrun, bind_tc_ok]; exact hrun2
+    · simp only [lighthouseRun, hrun, bind_tc_ok]; exact hrun2
     · rw [hmap2, hmap1]; rfl
 
 /-- Build: `PreEpochCache::new_for_next_epoch` starts from an empty vector and a zero total. -/
-theorem lhRun_build (act : Nat → Bool) (cs : List Call) (ValidCalls_cs : ValidCalls act [] cs) :
-    ∃ ebs' total', lhRun (alloc.vec.Vec.new U64, 0#u64) cs = ok (some (ebs', total')) ∧
+theorem lighthouseRun_build (act : Nat → Bool) (cs : List Call)
+    (ValidCalls_cs : ValidCalls act [] cs) :
+    ∃ ebs' total', lighthouseRun (alloc.vec.Vec.new U64, 0#u64) cs = ok (some (ebs', total')) ∧
       ebs'.val.map (·.val) = modelRun [] cs ∧
       total'.val = activeSum act (ebs'.val.map (·.val)) :=
-  lhRun_spec act cs (alloc.vec.Vec.new U64) 0#u64 (by simp [activeSum, activeSumFrom])
+  lighthouseRun_spec act cs (alloc.vec.Vec.new U64) 0#u64 (by simp [activeSum, activeSumFrom])
     (by simpa using ValidCalls_cs)
 
 /-! ### The spec total active balance -/
@@ -593,11 +595,11 @@ theorem single_pass_total_active_balance (cfg : Config) (vs : List Validator) (e
     (cs : List Call) (inc : U64) (hinc : inc.val = cfg.EFFECTIVE_BALANCE_INCREMENT)
     (hvalid : ValidCalls (activeAt vs epoch) [] cs)
     (hfinal : modelRun [] cs = vs.map (·.effective_balance)) :
-    ∃ ebs total, lhRun (alloc.vec.Vec.new U64, 0#u64) cs = ok (some (ebs, total)) ∧
+    ∃ ebs total, lighthouseRun (alloc.vec.Vec.new U64, 0#u64) cs = ok (some (ebs, total)) ∧
       ebs.val.map (·.val) = vs.map (·.effective_balance) ∧
       ∃ r, state.total_active_balance.floor_total_active_balance total inc = ok r ∧
         get_total_active_balance cfg ⟨vs, epoch⟩ = .ok r.val := by
-  obtain ⟨ebs, total, hrun, hmap, hinv⟩ := lhRun_build (activeAt vs epoch) cs hvalid
+  obtain ⟨ebs, total, hrun, hmap, hinv⟩ := lighthouseRun_build (activeAt vs epoch) cs hvalid
   rw [hfinal] at hmap
   refine ⟨ebs, total, hrun, hmap, ?_⟩
   exact total_active_balance_equiv cfg vs epoch _ total inc hinc hmap hinv
@@ -606,23 +608,23 @@ theorem single_pass_total_active_balance (cfg : Config) (vs : List Validator) (e
 
 /-- The loop of `compute_total_active_balance_slow` (written by hand): `safe_add_assign` over the
 active validators. `none` is an overflow. -/
-def lhSlowSum (epoch : Nat) : Nat → List Validator → Option Nat
+def lighthouseSlowSum (epoch : Nat) : Nat → List Validator → Option Nat
   | acc, [] => some acc
   | acc, v :: vs =>
     if is_active_validator v epoch then
       if acc + v.effective_balance ≤ 18446744073709551615 then
-        lhSlowSum epoch (acc + v.effective_balance) vs
+        lighthouseSlowSum epoch (acc + v.effective_balance) vs
       else none
-    else lhSlowSum epoch acc vs
+    else lighthouseSlowSum epoch acc vs
 
-theorem lhSlowSum_eq (W : List Validator) (epoch : Nat) :
+theorem lighthouseSlowSum_eq (W : List Validator) (epoch : Nat) :
     ∀ (l : List Validator) (k acc : Nat), W.drop k = l →
       acc + activeSumFrom (activeAt W epoch) k (l.map (·.effective_balance)) < 2 ^ 64 →
-      lhSlowSum epoch acc l =
+      lighthouseSlowSum epoch acc l =
         some (acc + activeSumFrom (activeAt W epoch) k (l.map (·.effective_balance))) := by
   intro l
   induction l with
-  | nil => intro k acc _ _; simp [lhSlowSum, activeSumFrom]
+  | nil => intro k acc _ _; simp [lighthouseSlowSum, activeSumFrom]
   | cons v t ih =>
     intro k acc hk hlt
     have hget : W[k]? = some v := by
@@ -634,11 +636,11 @@ theorem lhSlowSum_eq (W : List Validator) (epoch : Nat) :
     by_cases ha : is_active_validator v epoch
     · simp only [ha, if_true] at hlt ⊢
       have hfit : acc + v.effective_balance ≤ 18446744073709551615 := by omega
-      simp only [lhSlowSum, ha, if_true, hfit]
+      simp only [lighthouseSlowSum, ha, if_true, hfit]
       rw [ih (k + 1) _ hk' (by omega)]
       congr 1; omega
     · simp only [ha, Bool.false_eq_true, if_false] at hlt ⊢
-      simp only [lhSlowSum, ha, Bool.false_eq_true, if_false]
+      simp only [lighthouseSlowSum, ha, Bool.false_eq_true, if_false]
       rw [ih (k + 1) _ hk' (by omega)]
       congr 1; omega
 
@@ -647,10 +649,10 @@ the slow loop does not overflow, and the floored result equals `get_total_active
 theorem compute_total_active_balance_slow_equiv (cfg : Config) (vs : List Validator)
     (epoch : Nat) (inc : U64) (hinc : inc.val = cfg.EFFECTIVE_BALANCE_INCREMENT)
     (h : activeSum (activeAt vs epoch) (vs.map (·.effective_balance)) < 2 ^ 64) :
-    ∃ total : U64, lhSlowSum epoch 0 vs = some total.val ∧
+    ∃ total : U64, lighthouseSlowSum epoch 0 vs = some total.val ∧
       ∃ r, state.total_active_balance.floor_total_active_balance total inc = ok r ∧
         get_total_active_balance cfg ⟨vs, epoch⟩ = .ok r.val := by
-  have hs := lhSlowSum_eq vs epoch vs 0 0 rfl (by simpa [activeSum] using h)
+  have hs := lighthouseSlowSum_eq vs epoch vs 0 0 rfl (by simpa [activeSum] using h)
   let total : U64 := ⟨BitVec.ofNat _ (activeSum (activeAt vs epoch) (vs.map (·.effective_balance)))⟩
   have htv : total.val = activeSum (activeAt vs epoch) (vs.map (·.effective_balance)) := by
     simp only [total, UScalar.val, BitVec.toNat_ofNat]

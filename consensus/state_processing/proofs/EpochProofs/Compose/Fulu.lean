@@ -17,24 +17,28 @@ namespace EpochProofs.Spec
 
 /-- The Lighthouse Fulu model from the start of the single pass to the effective balance updates
 after the consolidations. -/
-def lhSinglePassFulu [CurrentPreset] [CurrentFuluConfig] (oracle : Oracle)
+def lighthouseSinglePassFulu [CurrentPreset] [CurrentFuluConfig] (oracle : Oracle)
     (s : BeaconState) : SpecM BeaconState :=
-  lhFullTailWithFulu (fun s _ plan x => lhMidCore oracle s plan (s.withRowsChurn x.1 x.2)) s
+  lighthouseSinglePassThenFulu (fun s _ plan x =>
+    lighthouseDepositsConsolidations oracle s plan (s.withRowsChurn x.1 x.2)) s
 
-theorem lhFullTailWithFulu_order_eq [CurrentPreset] [CurrentFuluConfig] (oracle : Oracle)
+theorem lighthouseSinglePassThenFulu_order_eq [CurrentPreset] [CurrentFuluConfig] (oracle : Oracle)
     (s : BeaconState) :
-    lhFullTailWithFulu (lhAfterPassOrderFulu oracle) s = lhSinglePassFulu oracle s >>=
-      lhRestOrderFulu oracle := by
-  unfold lhSinglePassFulu lhFullTailWithFulu lhAfterPassOrderFulu lhMidFulu lhMidCore
+    lighthouseSinglePassThenFulu (lighthouseStepsAfterSinglePassFulu oracle) s =
+      lighthouseSinglePassFulu oracle s >>=
+      lighthouseStepsAfterPaymentsFulu oracle := by
+  unfold lighthouseSinglePassFulu lighthouseSinglePassThenFulu lighthouseStepsAfterSinglePassFulu
+    lighthouseDepositsConsolidationsFulu lighthouseDepositsConsolidations
   simp only [bind, Except.bind]
   repeat' split
   all_goals rfl
 
 /-- The Fulu single pass does not write the proposer lookahead. -/
-theorem lhSinglePassFulu_keep [CurrentPreset] [CurrentFuluConfig] (oracle : Oracle)
+theorem lighthouseSinglePassFulu_keep [CurrentPreset] [CurrentFuluConfig] (oracle : Oracle)
     (s T : BeaconState)
-    (h : lhSinglePassFulu oracle s = .ok T) : T.proposer_lookahead = s.proposer_lookahead := by
-  unfold lhSinglePassFulu lhFullTailWithFulu at h
+    (h : lighthouseSinglePassFulu oracle s = .ok T) : T.proposer_lookahead =
+    s.proposer_lookahead := by
+  unfold lighthouseSinglePassFulu lighthouseSinglePassThenFulu at h
   obtain ⟨cur, -, h⟩ := specM_bind_ok h
   obtain ⟨tab, -, h⟩ := specM_bind_ok h
   obtain ⟨rctx, -, h⟩ := specM_bind_ok h
@@ -42,10 +46,11 @@ theorem lhSinglePassFulu_keep [CurrentPreset] [CurrentFuluConfig] (oracle : Orac
   obtain ⟨plan, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨dn, up⟩, -, h⟩ := specM_bind_ok h
   obtain ⟨x, -, h⟩ := specM_bind_ok h
-  exact (lhMidCore_keep oracle s plan x T h).2.1
+  exact (lighthouseDepositsConsolidations_keep oracle s plan x T h).2.1
 
-theorem lhRestOrderFulu_eq [CurrentPreset] (oracle : Oracle) (t : BeaconState) :
-    lhRestOrderFulu oracle t = process_proposer_lookahead_fulu P oracle t >>= lhTailOrder oracle :=
+theorem lighthouseStepsAfterPaymentsFulu_eq [CurrentPreset] (oracle : Oracle) (t : BeaconState) :
+    lighthouseStepsAfterPaymentsFulu oracle t = process_proposer_lookahead_fulu P oracle t >>=
+      lighthouseStepsAfterPtcWindow oracle :=
       rfl
 
 /-- `process_proposer_lookahead_fulu` keeps the length of the lookahead. -/
@@ -98,18 +103,18 @@ open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 open state_processing.per_epoch_processing.single_pass_step (ExitChurn StepContext)
 
 /-- `rowsContract_stepSpec` with the Fulu step: under `ValidatorRowsMatchSpec`, one `apply_step`
-call runs `lhRowStepFull` with the registry total `fuluTotalActiveBalance`. -/
-theorem rowsContract_stepSpec_fulu {R RustError : Type} (inst : LhRegistryRows R RustError)
+call runs `lighthouseValidatorStep` with the registry total `fuluTotalActiveBalance`. -/
+theorem rowsContract_stepSpec_fulu {R RustError : Type} (inst : LighthouseRegistryRows R RustError)
     (p : Spec.Preset)
     (f : Spec.FuluConfig) (hcompat : Spec.FuluCompat p f) (rustStateToSpec : R → List Spec.Row)
-    (inputsOf : Spec.Row → Spec.LhRowInputs)
+    (inputsOf : Spec.Row → Spec.LighthouseRowInputs)
     (hc : ValidatorRowsMatchSpec inst p rustStateToSpec inputsOf)
-    (c : StepContext) (ctx : Spec.LhStepContext) (hcm : ContextMatches p c ctx)
+    (c : StepContext) (ctx : Spec.LighthouseStepContext) (hcm : ContextMatches p c ctx)
     (downward upward : Spec.Uint64) (hdownward : c.downward_threshold.val = downward)
     (hupward : c.upward_threshold.val = upward)
     (k : per_epoch_processing.registry_update.RegistryConstants) (hk : RegistryConstantsMatch p k)
     (hkf : ChurnConstantsMatchFulu p f k) :
-    StepMatchesModel inst rustStateToSpec (fun churn r => Spec.lhRowStepFull p
+    StepMatchesModel inst rustStateToSpec (fun churn r => Spec.lighthouseValidatorStep p
       { ctx with total_active_balance := Spec.fuluTotalActiveBalance p f ctx.total_active_balance }
       downward upward (inputsOf r) churn r) c k := by
   intro s i ch r hr
@@ -118,32 +123,32 @@ theorem rowsContract_stepSpec_fulu {R RustError : Type} (inst : LhRegistryRows R
     ⟨rfl, hi.deposit, hi.in_consolidation, hi.effective_balance_limit⟩
   obtain ⟨res, hres, habs⟩ := spec_imp_exists (single_pass_step_equiv_fulu p f hcompat lr r hm ri _
     hi' ch c ctx hcm downward upward hdownward hupward k hk hkf)
-  have hirr : Spec.lhRowStepFull p
+  have hirr : Spec.lighthouseValidatorStep p
       { ctx with total_active_balance := Spec.fuluTotalActiveBalance p f ctx.total_active_balance }
       downward upward { inputsOf r with base_reward := ri.base_reward.val }
       (ch.earliest_exit_epoch.val, ch.exit_balance_to_consume.val) r =
-      Spec.lhRowStepFull p
+      Spec.lighthouseValidatorStep p
       { ctx with total_active_balance := Spec.fuluTotalActiveBalance p f ctx.total_active_balance }
       downward upward (inputsOf r)
       (ch.earliest_exit_epoch.val, ch.exit_balance_to_consume.val) r := by
     rcases hi.base_reward with h | h
     · rw [h]
     · rw [hcm.previous_epoch] at h
-      exact lhRowStepFull_base_reward p _ downward upward _ _ _ r h
+      exact lighthouseValidatorStep_base_reward p _ downward upward _ _ _ r h
   obtain ⟨s', happ, hview⟩ := hrun res hres
   cases res with
   | Ok v =>
     obtain ⟨lr', ch'⟩ := v
     left
     refine ⟨ch', rowAfter r lr', s', happ, ?_, hview lr' ch' rfl⟩
-    show Spec.lhRowStepFull p _ downward upward (inputsOf r)
+    show Spec.lighthouseValidatorStep p _ downward upward (inputsOf r)
       (ch.earliest_exit_epoch.val, ch.exit_balance_to_consume.val) r = _
     rw [← hirr, ← habs]
     rfl
   | Err e =>
     right
     refine ⟨e, s', happ, ?_⟩
-    show Spec.lhRowStepFull p _ downward upward (inputsOf r)
+    show Spec.lighthouseValidatorStep p _ downward upward (inputsOf r)
       (ch.earliest_exit_epoch.val, ch.exit_balance_to_consume.val) r = _
     rw [← hirr, ← habs]
     rfl
@@ -212,7 +217,7 @@ theorem translatedLookaheadFulu_matches_model [Spec.CurrentPreset.Valid] [Spec.C
   rw [hv1, hv, hs1]
   rfl
 
-/-- The composed Fulu single pass returns the state of the model `lhSinglePassFulu`. -/
+/-- The composed Fulu single pass returns the state of the model `lighthouseSinglePassFulu`. -/
 theorem translatedSinglePassFulu_matches_model [Spec.CurrentPreset.Valid]
     [Spec.CurrentFuluConfig.Valid] (code : UntranslatedSinglePass RustState RustError)
     (oracle : Spec.Oracle) (rustStateToSpec : RustState → Spec.BeaconState) (rustState : RustState)
@@ -220,10 +225,11 @@ theorem translatedSinglePassFulu_matches_model [Spec.CurrentPreset.Valid]
     (hk : RegistryConstantsMatch Spec.P code.registryConstants)
     (hkf : ChurnConstantsMatchFulu Spec.P Spec.FC code.registryConstants)
     (hslot : (rustStateToSpec rustState).slot < 2 ^ 64)
-    (T : Spec.BeaconState) (hT : Spec.lhSinglePassFulu oracle (rustStateToSpec rustState) = .ok T) :
+    (T : Spec.BeaconState) (hT : Spec.lighthouseSinglePassFulu oracle (rustStateToSpec rustState) =
+    .ok T) :
     ∃ rustState', translatedSinglePassBeforePayments code rustState = ok (some rustState') ∧
       rustStateToSpec rustState' = T := by
-  unfold Spec.lhSinglePassFulu Spec.lhFullTailWithFulu at hT
+  unfold Spec.lighthouseSinglePassFulu Spec.lighthouseSinglePassThenFulu at hT
   obtain ⟨current, hcur, hT⟩ := Spec.specM_bind_ok hT
   obtain ⟨total, htab, hT⟩ := Spec.specM_bind_ok hT
   obtain ⟨rctx, hr, hT⟩ := Spec.specM_bind_ok hT
@@ -372,12 +378,12 @@ theorem translatedEpochFulu_matches_model [Spec.CurrentPreset.Valid] [Spec.Curre
       rustStateToSpec rustState' = s' := by
   unfold Spec.process_epoch_lighthouse_fulu at h
   obtain ⟨s1, h1, h⟩ := Spec.specM_bind_ok h
-  rw [Spec.lhFullTailWithFulu_order_eq] at h
+  rw [Spec.lighthouseSinglePassThenFulu_order_eq] at h
   obtain ⟨T, hT, h⟩ := Spec.specM_bind_ok h
-  rw [Spec.lhRestOrderFulu_eq] at h
+  rw [Spec.lighthouseStepsAfterPaymentsFulu_eq] at h
   obtain ⟨t1, ht1, h⟩ := Spec.specM_bind_ok h
   obtain ⟨a, b, c, d, hs1⟩ := Spec.process_justification_and_finalization_shape _ _ _
-    ((Spec.lhJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1)
+    ((Spec.lighthouseJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1)
   obtain ⟨rustState1, hj, hv1⟩ :=
     translatedJustification_matches_model code.justification rustStateToSpec rustState
     hL.justification hjb s1 h1
@@ -386,7 +392,7 @@ theorem translatedEpochFulu_matches_model [Spec.CurrentPreset.Valid] [Spec.Curre
     (hL.singlePass rustState1 hj)
     hL.registryConstants hL.registryConstantsFulu (by rw [hv1, hs1]; exact hslot) T
     (by rw [hv1]; exact hT)
-  have hTpl := Spec.lhSinglePassFulu_keep oracle s1 T hT
+  have hTpl := Spec.lighthouseSinglePassFulu_keep oracle s1 T hT
   have r2 : (afterSinglePassFulu code rustState).run = ok (some rustState2) := run_bind_ok hj hsp
   obtain ⟨rustState3, hla, hv3⟩ :=
     translatedLookaheadFulu_matches_model code.lookahead oracle rustStateToSpec hL.lookahead

@@ -49,7 +49,7 @@ theorem record_exit_spec (m c e : U64) :
 def maxOr0 (L : List Nat) : Nat := L.foldl max 0
 
 /-- `(max_exit_epoch, max_exit_epoch_churn)` of a list of exit epochs. -/
-def closedForm (L : List Nat) : Nat × Nat := (maxOr0 L, L.count (maxOr0 L))
+def largestExitEpochAndCount (L : List Nat) : Nat × Nat := (maxOr0 L, L.count (maxOr0 L))
 
 theorem foldl_max_ge_init (L : List Nat) (a : Nat) : a ≤ L.foldl max a := by
   induction L generalizing a with
@@ -82,11 +82,12 @@ theorem maxOr0_mem (L : List Nat) (h : L ≠ []) : maxOr0 L ∈ L := by
 theorem count_le_length (L : List Nat) (a : Nat) : L.count a ≤ L.length :=
   List.count_le_length
 
-theorem closedForm_snoc (L : List Nat) (e : Nat) (hlen : L.length + 1 ≤ 18446744073709551615) :
-    recordStep (closedForm L) e = some (closedForm (L ++ [e])) := by
+theorem largestExitEpochAndCount_snoc (L : List Nat) (e : Nat)
+    (hlen : L.length + 1 ≤ 18446744073709551615) :
+    recordStep (largestExitEpochAndCount L) e = some (largestExitEpochAndCount (L ++ [e])) := by
   have hle := le_foldl_max L 0
   have hc := count_le_length L (maxOr0 L)
-  simp only [closedForm, recordStep, maxOr0_snoc]
+  simp only [largestExitEpochAndCount, recordStep, maxOr0_snoc]
   by_cases heq : e = maxOr0 L
   · subst heq
     simp [List.count_append]
@@ -103,35 +104,36 @@ theorem closedForm_snoc (L : List Nat) (e : Nat) (hlen : L.length + 1 ≤ 184467
     · have hmax : max (maxOr0 L) e = maxOr0 L := max_eq_left (by omega)
       simp [heq, hlt, hmax, List.count_append]
 
-theorem closedForm_perm {L L' : List Nat} (h : L.Perm L') : closedForm L = closedForm L' := by
+theorem largestExitEpochAndCount_perm {L L' : List Nat}
+    (h : L.Perm L') : largestExitEpochAndCount L = largestExitEpochAndCount L' := by
   have hm : maxOr0 L = maxOr0 L' := by
     unfold maxOr0
     exact h.foldl_eq' (fun x _ y _ z => by rw [max_assoc, max_assoc, max_comm x y]) 0
-  simp [closedForm, hm, h.count_eq]
+  simp [largestExitEpochAndCount, hm, h.count_eq]
 
 /-- The epoch is not `FAR_FUTURE_EPOCH`. -/
 def nonFar (e : Nat) : Bool := e ≠ Spec.FAR_FUTURE_EPOCH
 
 /-- `ExitCache::new` from `exit_cache.rs`: skip `FAR_FUTURE_EPOCH`, then record each exit. -/
-def lhBuildFrom (s : U64 × U64) :
+def lighthouseBuildFrom (s : U64 × U64) :
     List U64 → Result (core.result.Result (U64 × U64) safe_arith.ArithError)
   | [] => ok (.Ok s)
   | e :: es =>
-    if e.val = Spec.FAR_FUTURE_EPOCH then lhBuildFrom s es
+    if e.val = Spec.FAR_FUTURE_EPOCH then lighthouseBuildFrom s es
     else do
       let r ← state.exit_queue.record_exit s.1 s.2 e
       match r with
-      | .Ok s' => lhBuildFrom s' es
+      | .Ok s' => lighthouseBuildFrom s' es
       | .Err err => ok (.Err err)
 
 /-- `ExitCache::new`, from an empty cache. -/
-def lhBuild (es : List U64) := lhBuildFrom (0#u64, 0#u64) es
+def lighthouseBuild (es : List U64) := lighthouseBuildFrom (0#u64, 0#u64) es
 
-theorem lhBuildFrom_spec (es : List U64) :
-    ∀ (L : List Nat) (s : U64 × U64), (s.1.val, s.2.val) = closedForm L →
+theorem lighthouseBuildFrom_spec (es : List U64) :
+    ∀ (L : List Nat) (s : U64 × U64), (s.1.val, s.2.val) = largestExitEpochAndCount L →
       L.length + ((es.map (·.val)).filter nonFar).length ≤ 18446744073709551615 →
-      ∃ s', lhBuildFrom s es = ok (.Ok s') ∧
-        (s'.1.val, s'.2.val) = closedForm (L ++ (es.map (·.val)).filter nonFar) := by
+      ∃ s', lighthouseBuildFrom s es = ok (.Ok s') ∧
+        (s'.1.val, s'.2.val) = largestExitEpochAndCount (L ++ (es.map (·.val)).filter nonFar) := by
   induction es with
   | nil => intro L s hs _; exact ⟨s, rfl, by simpa using hs⟩
   | cons e t ih =>
@@ -139,12 +141,12 @@ theorem lhBuildFrom_spec (es : List U64) :
     by_cases hfar : e.val = Spec.FAR_FUTURE_EPOCH
     · have hf : nonFar e.val = false := by simp [nonFar, hfar]
       simp only [List.map_cons, List.filter_cons, hf] at hlen ⊢
-      simp only [lhBuildFrom, hfar, if_true]
+      simp only [lighthouseBuildFrom, hfar, if_true]
       exact ih L s hs (by simpa using hlen)
     · have hf : nonFar e.val = true := by simp [nonFar, hfar]
       simp only [List.map_cons, List.filter_cons, hf, if_true, List.length_cons] at hlen ⊢
       obtain ⟨r, hr, habs⟩ := record_exit_spec s.1 s.2 e
-      have hstep := closedForm_snoc L e.val (by omega)
+      have hstep := largestExitEpochAndCount_snoc L e.val (by omega)
       rw [← hs] at hstep
       rw [hstep] at habs
       cases r with
@@ -153,16 +155,17 @@ theorem lhBuildFrom_spec (es : List U64) :
         simp only [recordResultToSpec, Option.some.injEq] at habs
         obtain ⟨s'', h1, h2⟩ := ih (L ++ [e.val]) s' habs (by simp; omega)
         refine ⟨s'', ?_, by simpa using h2⟩
-        simp [lhBuildFrom, hfar, hr, h1]
+        simp [lighthouseBuildFrom, hfar, hr, h1]
 
 /-- Build: `ExitCache::new` holds the largest exit epoch below `FAR_FUTURE_EPOCH` (or 0) and
 the number of validators that exit at it. -/
 theorem build_eq (es : List U64) (hlen : es.length ≤ 18446744073709551615) :
-    ∃ s, lhBuild es = ok (.Ok s) ∧
-      (s.1.val, s.2.val) = closedForm ((es.map (·.val)).filter nonFar) := by
-  have h := lhBuildFrom_spec es [] (0#u64, 0#u64) (by simp [closedForm, maxOr0])
+    ∃ s, lighthouseBuild es = ok (.Ok s) ∧
+      (s.1.val, s.2.val) = largestExitEpochAndCount ((es.map (·.val)).filter nonFar) := by
+  have h := lighthouseBuildFrom_spec es
+    [] (0#u64, 0#u64) (by simp [largestExitEpochAndCount, maxOr0])
     (by simp; exact le_trans (List.length_filter_le _ _) (by simpa using hlen))
-  simpa [lhBuild] using h
+  simpa [lighthouseBuild] using h
 
 theorem churn_at_eq (m c q : U64) :
     state.exit_queue.churn_at m c q =
@@ -178,32 +181,34 @@ theorem churn_at_eq (m c q : U64) :
       simp [h1, h1', h2, this]
 
 /-- The errors of the pre-Electra exit queue code. -/
-inductive LhExitError where
+inductive LighthouseExitError where
   | arith
   | invalidEpoch
 
 /-- The last step: one epoch later when the churn of the epoch reaches the limit. -/
-def lhFinish (q ch limit : Nat) : Except LhExitError Nat :=
+def lighthouseFinish (q ch limit : Nat) : Except LighthouseExitError Nat :=
   if limit ≤ ch then (if q + 1 ≤ 18446744073709551615 then .ok (q + 1) else .error .arith)
   else .ok q
 
 /-- The pre-Electra exit queue epoch in `initiate_validator_exit` and in `single_pass.rs`. -/
-def lhExitQueueEpoch (m c delayed limit : U64) : Result (Except LhExitError Nat) := do
+def lighthouseExitQueueEpoch (m c delayed limit : U64) : Result (Except LighthouseExitError Nat) :=
+    do
   let q : U64 := if 0 < c.val then (if m.val ≤ delayed.val then delayed else m) else delayed
   let ch ← state.exit_queue.churn_at m c q
   match ch with
   | none => ok (.error .invalidEpoch)
-  | some ch => ok (lhFinish q.val ch.val limit.val)
+  | some ch => ok (lighthouseFinish q.val ch.val limit.val)
 
 /-- The result of the exit queue code, read as a spec result. -/
-def exitResultToSpec : Except LhExitError Nat → Spec.SpecM Nat
+def exitResultToSpec : Except LighthouseExitError Nat → Spec.SpecM Nat
   | .ok q => .ok q
   | .error .arith => .error .overflow
   | .error .invalidEpoch => .error .assertionFailed
 
 theorem finish_eq (q ch l : Nat) :
-    exitResultToSpec (lhFinish q ch l) = (if ch ≥ l then Spec.uint64Add q 1 else pure q) := by
-  unfold lhFinish Spec.uint64Add Spec.UINT64_SIZE
+    exitResultToSpec (lighthouseFinish q ch l) =
+      (if ch ≥ l then Spec.uint64Add q 1 else pure q) := by
+  unfold lighthouseFinish Spec.uint64Add Spec.UINT64_SIZE
   by_cases hl : l ≤ ch
   · by_cases ho : q + 1 ≤ 18446744073709551615
     · have : q + 1 < 2 ^ 64 := by omega
@@ -228,14 +233,14 @@ theorem mem_filter_nonFar_lt {l : List Nat} (hl : ∀ x ∈ l, x < 1844674407370
 theorem exit_queue_epoch_equiv (es : List U64) (delayed limit : U64)
     (hdelayed : delayed.val < Spec.FAR_FUTURE_EPOCH)
     (hlen : es.length ≤ 18446744073709551615) :
-    ∃ s, lhBuild es = ok (.Ok s) ∧
-      (do let r ← lhExitQueueEpoch s.1 s.2 delayed limit; ok (exitResultToSpec r)) =
+    ∃ s, lighthouseBuild es = ok (.Ok s) ∧
+      (do let r ← lighthouseExitQueueEpoch s.1 s.2 delayed limit; ok (exitResultToSpec r)) =
         ok (Spec.exitQueueEpoch (es.map (·.val)) delayed.val limit.val) := by
   obtain ⟨s, hb, hcf⟩ := build_eq es hlen
   refine ⟨s, hb, ?_⟩
   set F := (es.map (·.val)).filter nonFar with hF
-  have hm : s.1.val = maxOr0 F := by simp [closedForm] at hcf; exact hcf.1
-  have hc : s.2.val = F.count (maxOr0 F) := by simp [closedForm] at hcf; exact hcf.2
+  have hm : s.1.val = maxOr0 F := by simp [largestExitEpochAndCount] at hcf; exact hcf.1
+  have hc : s.2.val = F.count (maxOr0 F) := by simp [largestExitEpochAndCount] at hcf; exact hcf.2
   have hall : ∀ x ∈ F, x ≤ maxOr0 F := le_foldl_max F 0
   have hbound : ∀ x ∈ (es.map (·.val)), x < 18446744073709551616 := by
     intro x hx
@@ -251,7 +256,8 @@ theorem exit_queue_epoch_equiv (es : List U64) (delayed limit : U64)
     · have := hltF _ (maxOr0_mem F hFe)
       omega
   have hlh : ∃ qU chU : U64,
-      lhExitQueueEpoch s.1 s.2 delayed limit = ok (lhFinish qU.val chU.val limit.val) ∧
+      lighthouseExitQueueEpoch s.1 s.2 delayed limit =
+        ok (lighthouseFinish qU.val chU.val limit.val) ∧
         qU.val = q ∧ chU.val = F.count q := by
     by_cases hFe : F = []
     · have hm0 : s.1.val = 0 := by simp [hm, hFe, maxOr0]
@@ -260,10 +266,10 @@ theorem exit_queue_epoch_equiv (es : List U64) (delayed limit : U64)
       have hcz : ¬ 0 < s.2.val := by omega
       by_cases hd : delayed.val = s.1.val
       · refine ⟨delayed, s.2, ?_, hq0.symm, by simp [hc0, hFe]⟩
-        simp [lhExitQueueEpoch, hcz, churn_at_eq, hd]
+        simp [lighthouseExitQueueEpoch, hcz, churn_at_eq, hd]
       · have hlt : s.1.val < delayed.val := by omega
         refine ⟨delayed, 0#u64, ?_, hq0.symm, by simp [hFe]⟩
-        simp [lhExitQueueEpoch, hcz, churn_at_eq, hd, hlt]
+        simp [lighthouseExitQueueEpoch, hcz, churn_at_eq, hd, hlt]
     · have hpos : 0 < s.2.val := by
         rw [hc]; exact List.count_pos_iff.mpr (maxOr0_mem F hFe)
       have hqU : (if s.1.val ≤ delayed.val then delayed else s.1).val = q := by
@@ -272,13 +278,13 @@ theorem exit_queue_epoch_equiv (es : List U64) (delayed limit : U64)
         · rw [if_neg h, hq, ← hm]; omega
       by_cases h1 : q = s.1.val
       · refine ⟨_, s.2, ?_, hqU, by rw [hc, h1, hm]⟩
-        simp only [lhExitQueueEpoch, hpos, if_true, churn_at_eq, bind_tc_ok, hqU, h1]
+        simp only [lighthouseExitQueueEpoch, hpos, if_true, churn_at_eq, bind_tc_ok, hqU, h1]
       · have hgt : s.1.val < q := by omega
         have hz : F.count q = 0 := by
           apply List.count_eq_zero.mpr
           intro hmem; have := hall q hmem; omega
         refine ⟨_, 0#u64, ?_, hqU, by simp [hz]⟩
-        simp only [lhExitQueueEpoch, hpos, if_true, churn_at_eq, bind_tc_ok, hqU, h1, hgt]
+        simp only [lighthouseExitQueueEpoch, hpos, if_true, churn_at_eq, bind_tc_ok, hqU, h1, hgt]
         simp
   obtain ⟨qU, chU, hlhEq, hqv, hchv⟩ := hlh
   have hspec_filter : (es.map (·.val)).filter (· ≠ Spec.FAR_FUTURE_EPOCH) = F := by
@@ -314,9 +320,9 @@ theorem filter_set_perm (p : Nat → Bool) (l : List Nat) (i : Nat) (x : Nat)
 theorem build_set_record (es : List U64) (i : Nat) (e : U64) (hi : i < es.length)
     (hfar : es[i].val = Spec.FAR_FUTURE_EPOCH) (he : e.val ≠ Spec.FAR_FUTURE_EPOCH)
     (hlen : es.length ≤ 18446744073709551615) :
-    ∃ s r s', lhBuild es = ok (.Ok s) ∧
+    ∃ s r s', lighthouseBuild es = ok (.Ok s) ∧
       state.exit_queue.record_exit s.1 s.2 e = ok (.Ok r) ∧
-      lhBuild (es.set i e) = ok (.Ok s') ∧ r.1.val = s'.1.val ∧ r.2.val = s'.2.val := by
+      lighthouseBuild (es.set i e) = ok (.Ok s') ∧ r.1.val = s'.1.val ∧ r.2.val = s'.2.val := by
   obtain ⟨s, hb, hcf⟩ := build_eq es hlen
   obtain ⟨s', hb', hcf'⟩ := build_eq (es.set i e) (by simpa using hlen)
   have hperm : (((es.set i e).map (·.val)).filter nonFar).Perm
@@ -330,7 +336,8 @@ theorem build_set_record (es : List U64) (i : Nat) (e : U64) (hi : i < es.length
     simp at h1 h2
     omega
   obtain ⟨r, hr, habs⟩ := record_exit_spec s.1 s.2 e
-  rw [hcf, closedForm_snoc _ _ hlenF, ← closedForm_perm hperm, ← hcf'] at habs
+  rw [hcf, largestExitEpochAndCount_snoc _ _ hlenF, ← largestExitEpochAndCount_perm hperm, ← hcf']
+    at habs
   cases r with
   | Err err => simp [recordResultToSpec] at habs
   | Ok r =>

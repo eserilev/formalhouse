@@ -5,8 +5,8 @@ import EpochProofs.Spec.PresetCfg
 # The spec epoch tail in the common form
 
 `epochRest_nf` shows that the spec steps after the four passes give the same `ok` results as
-`tailNF`. The deposits are decided once, the top-ups are summed per validator, and the
-effective balance updates move next to the steps that Lighthouse runs them with.
+`stepsAfterSinglePassCommonOrder`. The deposits are decided once, the top-ups are summed per
+validator, and the effective balance updates move next to the steps that Lighthouse runs them with.
 -/
 
 namespace EpochProofs.Spec
@@ -430,7 +430,7 @@ def decOf [CurrentPreset] (s1 : BeaconState) (total_active_balance : Gwei) (curr
   depositDecisions P finalized_slot s1.deposit_balance_to_consume
     (← get_activation_churn_limit P total_active_balance)
     ((s1.pending_deposits.take P.MAX_PENDING_DEPOSITS_PER_EPOCH).map
-      (lhDepositView s1 current_epoch))
+      (lighthouseDepositView s1 current_epoch))
 
 /-- The handled deposits of a decision, with their postponed flags. -/
 def handledOf' (s1 : BeaconState) (x : Nat × Gwei × List Bool) :
@@ -456,18 +456,19 @@ def specNfAfterG [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM Beaco
   let n := s1.validators.length
   let named := validatorsInConsolidations s1
   let t1 ← addSums S4 sums
-  let t2 ← ((List.range n).filter (fun i => !decide (i ∈ named))).foldlM ebUpdateAt t1
+  let t2 ← ((List.range n).filter (fun i => !decide (i ∈ named))).foldlM updateEffectiveBalanceAt t1
   let t3 ← process_eth1_data_reset P t2
   let t4 ← writeQueue (queueOf s1 x) x.2.1 t3
   let t5 ← (newsOf s1 x).foldlM (apply_pending_deposit P o) t4
-  let t6 ← (List.range' n (t5.validators.length - n)).foldlM ebUpdateAt t5
+  let t6 ← (List.range' n (t5.validators.length - n)).foldlM updateEffectiveBalanceAt t5
   let t7 ← process_pending_consolidations P t6
-  let t8 ← named.foldlM ebUpdateAt t7
+  let t8 ← named.foldlM updateEffectiveBalanceAt t7
   let t9 ← B t8
   K t9
 
 /-- `tailNFG` in pieces. -/
-theorem tailNF_eq_spec [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM BeaconState) (s1 S4 : BeaconState)
+theorem stepsAfterSinglePassCommonOrder_eq_spec [CurrentPreset] (o : Oracle)
+    (B K : BeaconState → SpecM BeaconState) (s1 S4 : BeaconState)
     (total_active_balance : Gwei) (current_epoch : Epoch) :
     tailNFG o (fun t => B t >>= K) s1 S4 total_active_balance current_epoch =
       (decOf s1 total_active_balance current_epoch >>= fun x => sumsOf s1 x >>= fun sums =>
@@ -599,7 +600,7 @@ theorem specTail_inner [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM
     (hviews : (s1.pending_deposits.take P.MAX_PENDING_DEPOSITS_PER_EPOCH).map
         (specDepositView S5 (cur + 1)) =
       (s1.pending_deposits.take P.MAX_PENDING_DEPOSITS_PER_EPOCH).map
-        (lhDepositView s1 cur))
+        (lighthouseDepositView s1 cur))
     (hlen5 : S5.balances.length = S5.validators.length)
     (hbs5 : ∀ i (h : i < S5.balances.length), S5.balances[i] < UINT64_SIZE) :
     SameResultOrBothFail (specTailG o tab B K S5)
@@ -648,29 +649,30 @@ theorem fold_past [CurrentPreset] (F : BeaconState → SpecM BeaconState) (P : B
     (hF2 : ∀ i ∈ l, ∀ t t', P t → F t = .ok t' →
       t'.validators[i]? = t.validators[i]? ∧ t'.balances[i]? = t.balances[i]?)
     (s : BeaconState) (hs : P s) (k : BeaconState → SpecM BeaconState) :
-    SameResultOrBothFail (F s >>= fun t => l.foldlM ebUpdateAt t >>= k)
-      (l.foldlM ebUpdateAt s >>= fun t => F t >>= k) :=
-  (sameResultOrBothFail_swap_cont (A := fun t => l.foldlM ebUpdateAt t) (B := F)
+    SameResultOrBothFail (F s >>= fun t => l.foldlM updateEffectiveBalanceAt t >>= k)
+      (l.foldlM updateEffectiveBalanceAt s >>= fun t => F t >>= k) :=
+  (sameResultOrBothFail_swap_cont (A := fun t => l.foldlM updateEffectiveBalanceAt t) (B := F)
     (ebFold_commute F P l hP hF1 hF2 s hs) k).flip
 
 /-- A fold of updates keeps the number of validators. -/
 theorem ebFold_len [CurrentPreset] : ∀ (l : List Nat) (t t' : BeaconState),
-    l.foldlM ebUpdateAt t = .ok t' → t'.validators.length = t.validators.length
+    l.foldlM updateEffectiveBalanceAt t = .ok t' → t'.validators.length = t.validators.length
   | [], t, t', h => by cases h; rfl
   | i :: l, t, t', h => by
     rw [List.foldlM_cons] at h
     obtain ⟨t1, h1, h⟩ := specM_bind_ok h
-    obtain ⟨v, b, e, -, -, -, rfl⟩ := (ebUpdateAt_ok t t1 i).mp h1
+    obtain ⟨v, b, e, -, -, -, rfl⟩ := (updateEffectiveBalanceAt_ok t t1 i).mp h1
     rw [ebFold_len l _ t' h, setEB_length]
 
 /-- A fold of updates keeps `validatorsInConsolidations`. -/
 theorem ebFold_ci [CurrentPreset] : ∀ (l : List Nat) (t t' : BeaconState),
-    l.foldlM ebUpdateAt t = .ok t' → validatorsInConsolidations t' = validatorsInConsolidations t
+    l.foldlM updateEffectiveBalanceAt t = .ok t' → validatorsInConsolidations t' =
+      validatorsInConsolidations t
   | [], t, t', h => by cases h; rfl
   | i :: l, t, t', h => by
     rw [List.foldlM_cons] at h
     obtain ⟨t1, h1, h⟩ := specM_bind_ok h
-    obtain ⟨v, b, e, -, -, -, rfl⟩ := (ebUpdateAt_ok t t1 i).mp h1
+    obtain ⟨v, b, e, -, -, -, rfl⟩ := (updateEffectiveBalanceAt_ok t t1 i).mp h1
     rw [ebFold_ci l _ t' h, validatorsInConsolidations_setEB]
 
 /-- `add_validator_to_registry` keeps the pending consolidations. -/
@@ -748,10 +750,10 @@ theorem inner_py [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM Beaco
     (hsub : ∀ i ∈ named, i < n) (t7 : BeaconState) (hn : n ≤ t7.validators.length) :
     SameResultOrBothFail (B t7 >>= fun t8 =>
         process_effective_balance_updates P t8 >>= K)
-      ((ebL1 n named ++ ebL2 n t7 ++ named).foldlM ebUpdateAt t7 >>= fun t =>
+      ((ebL1 n named ++ ebL2 n t7 ++ named).foldlM updateEffectiveBalanceAt t7 >>= fun t =>
         B t >>= K) := by
   refine SameResultOrBothFail.trans (y := B t7 >>= fun t8 =>
-      (ebL1 n named ++ ebL2 n t7 ++ named).foldlM ebUpdateAt t8 >>= K)
+      (ebL1 n named ++ ebL2 n t7 ++ named).foldlM updateEffectiveBalanceAt t8 >>= K)
     (SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t8 h8 => ?_)) ?_
   · have hv := (hB.frame t7 t8 h8).1
     refine SameResultOrBothFail.trans (sameResultOrBothFail_cont (process_effective_balance_updates_fold t8) _) ?_
@@ -782,13 +784,13 @@ theorem inner_co [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM Beaco
     SameResultOrBothFail (process_pending_consolidations P t5 >>= fun t7 =>
         B t7 >>= fun t8 =>
         process_effective_balance_updates P t8 >>= K)
-      ((ebL1 n named ++ ebL2 n t5).foldlM ebUpdateAt t5 >>= fun t6 =>
+      ((ebL1 n named ++ ebL2 n t5).foldlM updateEffectiveBalanceAt t5 >>= fun t6 =>
         process_pending_consolidations P t6 >>= fun t7 =>
-        named.foldlM ebUpdateAt t7 >>= fun t8 =>
+        named.foldlM updateEffectiveBalanceAt t7 >>= fun t8 =>
         B t8 >>= K) := by
   refine SameResultOrBothFail.trans (y := process_pending_consolidations P t5 >>= fun t7 =>
-      (ebL1 n named ++ ebL2 n t5).foldlM ebUpdateAt t7 >>= fun t6 =>
-        named.foldlM ebUpdateAt t6 >>= fun t8 =>
+      (ebL1 n named ++ ebL2 n t5).foldlM updateEffectiveBalanceAt t7 >>= fun t6 =>
+        named.foldlM updateEffectiveBalanceAt t6 >>= fun t8 =>
         B t8 >>= K)
     (SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t7 h7 => ?_)) ?_
   · have hv := (consolidations_frame t5 t7 h7).1
@@ -820,17 +822,17 @@ theorem inner_news [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM Bea
         process_pending_consolidations P t5 >>= fun t7 =>
         B t7 >>= fun t8 =>
         process_effective_balance_updates P t8 >>= K)
-      ((ebL1 n named).foldlM ebUpdateAt t3 >>= fun t4 =>
+      ((ebL1 n named).foldlM updateEffectiveBalanceAt t3 >>= fun t4 =>
         ds.foldlM (apply_pending_deposit P o) t4 >>= fun t5 =>
-        (ebL2 n t5).foldlM ebUpdateAt t5 >>= fun t6 =>
+        (ebL2 n t5).foldlM updateEffectiveBalanceAt t5 >>= fun t6 =>
         process_pending_consolidations P t6 >>= fun t7 =>
-        named.foldlM ebUpdateAt t7 >>= fun t8 =>
+        named.foldlM updateEffectiveBalanceAt t7 >>= fun t8 =>
         B t8 >>= K) := by
   refine SameResultOrBothFail.trans (y := ds.foldlM (apply_pending_deposit P o) t3 >>= fun t5 =>
-      (ebL1 n named).foldlM ebUpdateAt t5 >>= fun t4 =>
-        (ebL2 n t4).foldlM ebUpdateAt t4 >>= fun t6 =>
+      (ebL1 n named).foldlM updateEffectiveBalanceAt t5 >>= fun t4 =>
+        (ebL2 n t4).foldlM updateEffectiveBalanceAt t4 >>= fun t6 =>
         process_pending_consolidations P t6 >>= fun t7 =>
-        named.foldlM ebUpdateAt t7 >>= fun t8 =>
+        named.foldlM updateEffectiveBalanceAt t7 >>= fun t8 =>
         B t8 >>= K)
     (SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t5 h5 => ?_)) ?_
   · obtain ⟨hpc, hle⟩ := applyFold_pc o ds t3 t5 h5
@@ -866,23 +868,24 @@ theorem inner_t1 [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM Beaco
         process_pending_consolidations P t5 >>= fun t7 =>
         B t7 >>= fun t8 =>
         process_effective_balance_updates P t8 >>= K)
-      ((ebL1 n named).foldlM ebUpdateAt t1 >>= fun t2 =>
+      ((ebL1 n named).foldlM updateEffectiveBalanceAt t1 >>= fun t2 =>
         process_eth1_data_reset P t2 >>= fun t3 => writeQueue q dbtc t3 >>= fun t4 =>
         ds.foldlM (apply_pending_deposit P o) t4 >>= fun t5 =>
-        (ebL2 n t5).foldlM ebUpdateAt t5 >>= fun t6 =>
+        (ebL2 n t5).foldlM updateEffectiveBalanceAt t5 >>= fun t6 =>
         process_pending_consolidations P t6 >>= fun t7 =>
-        named.foldlM ebUpdateAt t7 >>= fun t8 =>
+        named.foldlM updateEffectiveBalanceAt t7 >>= fun t8 =>
         B t8 >>= K) := by
   have hl1 : ∀ i ∈ ebL1 n named, i < n := by
     intro i hi
     unfold ebL1 at hi
     exact List.mem_range.mp (List.mem_filter.mp hi).1
   refine SameResultOrBothFail.trans (y := process_eth1_data_reset P t1 >>= fun t2 =>
-      writeQueue q dbtc t2 >>= fun t3 => (ebL1 n named).foldlM ebUpdateAt t3 >>= fun t4 =>
+      writeQueue q dbtc t2 >>= fun t3 => (ebL1 n named).foldlM updateEffectiveBalanceAt t3 >>=
+        fun t4 =>
       ds.foldlM (apply_pending_deposit P o) t4 >>= fun t5 =>
-      (ebL2 n t5).foldlM ebUpdateAt t5 >>= fun t6 =>
+      (ebL2 n t5).foldlM updateEffectiveBalanceAt t5 >>= fun t6 =>
       process_pending_consolidations P t6 >>= fun t7 =>
-      named.foldlM ebUpdateAt t7 >>= fun t8 =>
+      named.foldlM updateEffectiveBalanceAt t7 >>= fun t8 =>
       B t8 >>= K)
     (SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t2 h2 =>
       SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t3 h3 => ?_))) ?_
@@ -947,14 +950,15 @@ theorem specAfter_nf [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM B
 /-! ## The spec tail reaches the common form -/
 
 /-- After the Lighthouse pass over the rows of `s1`, the validators keep their pubkeys. -/
-theorem pass_pubkeys [CurrentPreset] (ctx : LhStepContext) (bf : Row → Gwei) (s1 : BeaconState)
+theorem pass_pubkeys [CurrentPreset] (ctx : LighthouseStepContext) (bf : Row → Gwei)
+    (s1 : BeaconState)
     (churn0 churn : Epoch × Gwei) (rows : List Row) (activation_epoch : Epoch)
     (hfinalized : ctx.finalized_epoch ≤ ctx.current_epoch)
     (hexit : ∀ i (h : i < s1.validators.length), s1.validators[i].exit_epoch ≤ FAR_FUTURE_EPOCH)
     (hcurrent : ctx.current_epoch + 1 < UINT64_SIZE)
     (hactivation : compute_activation_exit_epoch P ctx.current_epoch =
       .ok activation_epoch)
-    (h : passM (fun c r => lhRowStep P ctx (bf r) c r) churn0 (rowsOf s1) =
+    (h : passM (fun c r => lighthouseRowStep P ctx (bf r) c r) churn0 (rowsOf s1) =
       .ok (churn, rows)) :
     (rows.map (·.validator)).map (·.pubkey) = s1.validators.map (·.pubkey) := by
   obtain ⟨hlen, hget⟩ := passM_rows_registry ctx bf s1 churn0 churn rows activation_epoch
@@ -972,9 +976,9 @@ theorem pass_pubkeys [CurrentPreset] (ctx : LhStepContext) (bf : Row → Gwei) (
 `tailNFG`. `tab` is the total of the deposit churn. -/
 theorem specRest_nf [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : EBBlind B)
     (s1 : BeaconState) (current_epoch : Epoch)
-    (tab : Gwei) (ctx : LhStepContext) (bf : Row → Gwei)
+    (tab : Gwei) (ctx : LighthouseStepContext) (bf : Row → Gwei)
     (churn : Epoch × Gwei) (rows : List Row) (activation_epoch : Epoch)
-    (hpass : passM (fun c r => lhRowStep P ctx (bf r) c r)
+    (hpass : passM (fun c r => lighthouseRowStep P ctx (bf r) c r)
       (s1.earliest_exit_epoch, s1.exit_balance_to_consume) (rowsOf s1) = .ok (churn, rows))
     (hctxcur : ctx.current_epoch = current_epoch)
     (hctxfin : ctx.finalized_epoch = s1.finalized_checkpoint.epoch)
@@ -1013,15 +1017,16 @@ theorem specRest_nf [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM Be
     exact hbal4 _ (List.getElem_mem _)
   · refine SameResultOrBothFail.trans (sameResultOrBothFail_bind_comm _ _ _) ?_
     refine SameResultOrBothFail.trans (SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun x _ => sameResultOrBothFail_bind_comm _ _ _)) ?_
-    rw [tailNF_eq_spec]
+    rw [stepsAfterSinglePassCommonOrder_eq_spec]
     refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun x _ => SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun sums _ => ?_))
     exact specAfter_nf o B K hB s1 _ x sums hpk rfl hnamed
 
-/-- The spec steps after the four passes give the same `ok` results as `tailNF`. -/
+/-- The spec steps after the four passes give the same `ok` results as
+`stepsAfterSinglePassCommonOrder`. -/
 theorem epochRest_nf [CurrentPreset] (o : Oracle) (s1 : BeaconState) (current_epoch : Epoch)
-    (total_active_balance : Gwei) (ctx : LhStepContext) (bf : Row → Gwei)
+    (total_active_balance : Gwei) (ctx : LighthouseStepContext) (bf : Row → Gwei)
     (churn : Epoch × Gwei) (rows : List Row) (activation_epoch : Epoch)
-    (hpass : passM (fun c r => lhRowStep P ctx (bf r) c r)
+    (hpass : passM (fun c r => lighthouseRowStep P ctx (bf r) c r)
       (s1.earliest_exit_epoch, s1.exit_balance_to_consume) (rowsOf s1) = .ok (churn, rows))
     (hctxcur : ctx.current_epoch = current_epoch)
     (hctxfin : ctx.finalized_epoch = s1.finalized_checkpoint.epoch)
@@ -1037,7 +1042,8 @@ theorem epochRest_nf [CurrentPreset] (o : Oracle) (s1 : BeaconState) (current_ep
     (hbal4 : ∀ r ∈ rows, r.balance < 2 ^ 64)
     (hnamed : ∀ i ∈ validatorsInConsolidations s1, i < s1.validators.length) :
     SameResultOrBothFail (epochRest P o (s1.withRowsChurn churn rows))
-      (tailNF o s1 (s1.withRowsChurn churn rows) total_active_balance current_epoch) := by
+      (stepsAfterSinglePassCommonOrder o s1 (s1.withRowsChurn churn rows) total_active_balance
+        current_epoch) := by
   have hfar : current_epoch < FAR_FUTURE_EPOCH := Nat.lt_trans (Nat.lt_succ_self _) hnext
   have hcur4 : get_current_epoch P (s1.withRowsChurn churn rows) =
       .ok current_epoch := hcur

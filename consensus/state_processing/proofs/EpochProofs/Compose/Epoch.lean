@@ -134,14 +134,14 @@ theorem translatedEpoch_matches_model [Spec.CurrentPreset.Valid] [Spec.CurrentPr
   obtain ⟨-, -, -, -, hjb, -, -, hpl, -, hbpp, hptc, -⟩ := hvec
   unfold Spec.process_epoch_lighthouse at h
   obtain ⟨s1, h1, h⟩ := Spec.specM_bind_ok h
-  rw [Spec.lhFullTailWith_order_eq] at h
+  rw [Spec.lighthouseSinglePassThen_order_eq] at h
   obtain ⟨T, hT, h⟩ := Spec.specM_bind_ok h
-  rw [Spec.lhRestOrder_eq] at h
+  rw [Spec.lighthouseStepsAfterPayments_eq] at h
   obtain ⟨t1, ht1, h⟩ := Spec.specM_bind_ok h
   obtain ⟨t2, ht2, h⟩ := Spec.specM_bind_ok h
   -- Justification and finalization writes only the checkpoints and the bits.
   obtain ⟨a, b, c, d, hs1⟩ := Spec.process_justification_and_finalization_shape _ _ _
-    ((Spec.lhJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1)
+    ((Spec.lighthouseJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1)
   obtain ⟨rustState1, hj, hv1⟩ :=
     translatedJustification_matches_model code.justification rustStateToSpec rustState
     hL.justification hjb s1 h1
@@ -151,7 +151,7 @@ theorem translatedEpoch_matches_model [Spec.CurrentPreset.Valid] [Spec.CurrentPr
     (hL.singlePass rustState1 hj) (hL.builderPayments rustState1 hj) hL.registryConstants
     (by rw [hv1, hs1]; exact hslot) (by rw [hv1, hs1]; exact hbpp) T (by rw [hv1]; exact hT)
   have r2 : (afterSinglePass code rustState).run = ok (some rustState2) := run_bind_ok hj hsp
-  obtain ⟨hTpl, hTptc⟩ := Spec.lhSinglePass_keep oracle s1 T hT
+  obtain ⟨hTpl, hTptc⟩ := Spec.lighthouseSinglePass_keep oracle s1 T hT
   obtain ⟨rustState3, hla, hv3⟩ :=
     translatedLookahead_matches_model code.lookahead oracle rustStateToSpec hL.lookahead
     hL.proposerIndices rustState2

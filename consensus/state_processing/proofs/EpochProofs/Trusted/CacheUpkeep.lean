@@ -26,30 +26,33 @@ reads:
   only in epoch processing, so a block run inside an epoch does not use this step.
 
 The effective balance update and the epoch transition update are outside the epoch. The proofs of
-#64 cover them (`effective_balance_change_coherent`, `epoch_transition_coherent`).
+#64 cover them (`effective_balance_change_correct`, `epoch_transition_correct`).
 -/
 
 namespace EpochProofs.CacheBridge
 
 open Aeneas Aeneas.Std Result
-open CacheProofs.PB
+open CacheProofs.ProgressiveBalances
 
 /-- One cache update together with the spec change that it follows. -/
 inductive ProgressiveBalancesUpdate (incr : Nat) :
-    CacheProofs.Spec.BeaconState × LhCache → CacheProofs.Spec.BeaconState × LhCache → Prop
-  | attestation (s s' : CacheProofs.Spec.BeaconState) (c c' : LhCache) (e j : Nat) (f : Usize)
+    CacheProofs.Spec.BeaconState × LighthouseProgressiveBalancesCache → CacheProofs.Spec.BeaconState
+      × LighthouseProgressiveBalancesCache → Prop
+  | attestation (s s' : CacheProofs.Spec.BeaconState) (c c' : LighthouseProgressiveBalancesCache)
+      (e j : Nat) (f : Usize)
       (is_slashed : Bool) (eb : U64) (v : CacheProofs.Spec.Validator) (p : Nat)
       (hspec : CacheProofs.Spec.set_participation_flag s e j f.val = .ok s')
       (he : e = CacheProofs.Spec.get_previous_epoch s ∨ e = CacheProofs.Spec.get_current_epoch s)
       (hepoch : s.current_epoch ≤ U64.max)
-      (hv : s.validators[j]? = some v) (hp : (partAt s e)[j]? = some p)
+      (hv : s.validators[j]? = some v) (hp : (participationAt s e)[j]? = some p)
       (hnew : CacheProofs.Spec.has_flag p f.val = false)
       (hactive : CacheProofs.Spec.is_active_validator v e = true)
       (hf : f.val < 3) (hslashed : is_slashed = v.slashed) (heb : eb.val = v.effective_balance)
-      (hfit : flagSum s'.validators (partAt s' e) e f.val ≤ U64.max)
-      (hlh : lhOnNewAttestation c e is_slashed f eb = ok (.Ok c')) :
+      (hfit : unslashedFlagBalance s'.validators (participationAt s' e) e f.val ≤ U64.max)
+      (hlh : lighthouseOnNewAttestation c e is_slashed f eb = ok (.Ok c')) :
       ProgressiveBalancesUpdate incr (s, c) (s', c')
-  | slashing (s s' : CacheProofs.Spec.BeaconState) (c c' : LhCache) (j : Nat)
+  | slashing (s s' : CacheProofs.Spec.BeaconState) (c c' : LighthouseProgressiveBalancesCache)
+      (j : Nat)
       (pflags cflags : U8) (eb : U64) (v : CacheProofs.Spec.Validator)
       (hspec : CacheProofs.Spec.set_slashed s j = .ok s')
       (hv : s.validators[j]? = some v) (hs : v.slashed = false)
@@ -60,14 +63,15 @@ inductive ProgressiveBalancesUpdate (incr : Nat) :
       (hcact : ∀ f < 3, CacheProofs.Spec.has_flag cflags.val f = true →
         CacheProofs.Spec.is_active_validator v s.current_epoch = true)
       (heb : eb.val = v.effective_balance)
-      (hlh : lhOnSlashing c pflags cflags eb = ok (.Ok c')) :
+      (hlh : lighthouseOnSlashing c pflags cflags eb = ok (.Ok c')) :
       ProgressiveBalancesUpdate incr (s, c) (s', c')
   | otherWrite (s : CacheProofs.Spec.BeaconState)
-      (c : LhCache) (vs' : List CacheProofs.Spec.Validator)
-      (hprev : SameView s.validators vs' (CacheProofs.Spec.get_previous_epoch s))
-      (hcur : SameView s.validators vs' s.current_epoch) :
+      (c : LighthouseProgressiveBalancesCache) (vs' : List CacheProofs.Spec.Validator)
+      (hprev : SameFlagBalanceInputs s.validators vs' (CacheProofs.Spec.get_previous_epoch s))
+      (hcur : SameFlagBalanceInputs s.validators vs' s.current_epoch) :
       ProgressiveBalancesUpdate incr (s, c) ({ s with validators := vs' }, c)
-  | newValidator (s : CacheProofs.Spec.BeaconState) (c : LhCache) (v : CacheProofs.Spec.Validator)
+  | newValidator (s : CacheProofs.Spec.BeaconState) (c : LighthouseProgressiveBalancesCache)
+      (v : CacheProofs.Spec.Validator)
       (hplen : s.previous_epoch_participation.length = s.validators.length)
       (hclen : s.current_epoch_participation.length = s.validators.length) :
       ProgressiveBalancesUpdate incr (s, c) ({ s with
@@ -77,14 +81,16 @@ inductive ProgressiveBalancesUpdate (incr : Nat) :
 
 /-- A run of cache updates. -/
 inductive ProgressiveBalancesUpdates (incr : Nat) :
-    CacheProofs.Spec.BeaconState × LhCache → CacheProofs.Spec.BeaconState × LhCache → Prop
+    CacheProofs.Spec.BeaconState × LighthouseProgressiveBalancesCache → CacheProofs.Spec.BeaconState
+      × LighthouseProgressiveBalancesCache → Prop
   | refl (x) : ProgressiveBalancesUpdates incr x x
   | step {x y z} : ProgressiveBalancesUpdate incr x y → ProgressiveBalancesUpdates incr y z →
       ProgressiveBalancesUpdates incr x z
 
 /-- Between the state `start` and the state `finish` of one
 epoch, with caches `c0` and `c`, Lighthouse runs the updates of a `ProgressiveBalancesUpdates`. -/
-def CacheUpkeep (incr : Nat) (start finish : CacheProofs.Spec.BeaconState) (c0 c : LhCache) :
+def CacheUpkeep (incr : Nat) (start finish : CacheProofs.Spec.BeaconState)
+    (c0 c : LighthouseProgressiveBalancesCache) :
     Prop :=
   ProgressiveBalancesUpdates incr (start, c0) (finish, c)
 

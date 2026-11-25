@@ -10,7 +10,7 @@ import EpochProofs.Sanity.Invariants.Reachable
 /-!
 # The Gloas epoch with the Lighthouse single pass
 
-`process_epoch_lh` is `process_epoch` with one Lighthouse pass in place of the inactivity,
+`processEpochWithSinglePass` is `process_epoch` with one Lighthouse pass in place of the inactivity,
 rewards, registry and slashings steps. On mainnet it gives the same `ok` results as
 `process_epoch`, under facts about the state at the start of the epoch.
 -/
@@ -145,13 +145,13 @@ theorem process_registry_updates_activeKey (p : Preset) (total_active_balance : 
 
 /-! ## A supply bound in place of the participation bound -/
 
-/-- `lhRowStep_eq_singlePassStep_of_bounds` with a supply bound in place of `hincrements`.
+/-- `lighthouseRowStep_eq_singlePassStep_of_bounds` with a supply bound in place of `hincrements`.
 
 `hincrements` asked that each flag has at most 256 times the active increments. Here each flag
 has at most `k` times the active increments, for any `k ≤ 2^60 / 10^9`. A total effective
 balance below `2^60` Gwei gives such a `k`. In exchange the row has a balance below `2^62` and
 an effective balance at most `MAX_EFFECTIVE_BALANCE_ELECTRA`. -/
-theorem lhRowStep_eq_singlePassStep_of_supply [CurrentPreset] (ctx : LhStepContext)
+theorem lighthouseRowStep_eq_singlePassStep_of_supply [CurrentPreset] (ctx : LighthouseStepContext)
     (hgen : ctx.after_genesis = true) (rctx : RewardsContext)
     (r : Row) (churn : Epoch × Gwei) (base_reward : Gwei) (activation_epoch : Epoch)
     (hprev : rctx.previous_epoch = ctx.previous_epoch)
@@ -176,12 +176,12 @@ theorem lhRowStep_eq_singlePassStep_of_supply [CurrentPreset] (ctx : LhStepConte
     (hactivation : compute_activation_exit_epoch P ctx.current_epoch =
       .ok activation_epoch)
     (hexit : r.validator.exit_epoch ≤ FAR_FUTURE_EPOCH) :
-    lhRowStep P ctx base_reward churn r =
+    lighthouseRowStep P ctx base_reward churn r =
       (fun x => (x.1.1.2, x.2)) <$> singlePassStep P ctx.total_active_balance
         ctx.previous_epoch ctx.in_leak rctx ctx.current_epoch ctx.finalized_epoch
         activation_epoch ctx.slashings_target ctx.penalty_per_increment ((((), ()), churn), ())
         r := by
-  refine lhRowStep_eq_singlePassStep_flags P ctx hgen rctx r churn base_reward
+  refine lighthouseRowStep_eq_singlePassStep_flags P ctx hgen rctx r churn base_reward
     activation_epoch hprev hleak hsource htarget hhead hactive hbase ?_ (by pdecide)
     hfinalized hcurrent hactivation hexit
   intro r' deltas hi hd
@@ -598,8 +598,9 @@ theorem lighthouse_single_pass_eq_spec_supply [CurrentPreset] (total_active_bala
       let s3 ← process_registry_updates P total_active_balance s2
       process_slashings P total_active_balance s3)
     ((fun y => state.withRowsChurn y.1 y.2) <$>
-      passM (fun churn r => lhRowStep P
-          (lhContextOf state total_active_balance current_epoch rctx per) (base_reward r) churn r)
+      passM (fun churn r => lighthouseRowStep P
+          (lighthouseContextOf state total_active_balance current_epoch rctx per) (base_reward r)
+            churn r)
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
   obtain ⟨hprevious, -, -, -, -, hleak, htab⟩ :=
     rewardsContextOf_ok P total_active_balance state rctx hctx
@@ -607,7 +608,7 @@ theorem lighthouse_single_pass_eq_spec_supply [CurrentPreset] (total_active_bala
     hrows current_epoch rctx.previous_epoch rctx.in_leak hcurrent hgenesis hprevious hleak rctx
     hctx activation_epoch hactivation htarget adjusted per hpre) (SameResultOrBothFail.of_eq ?_)
   have hstep : ∀ churn r, r ∈ rowsOf state →
-      lhRowStep P (lhContextOf state total_active_balance current_epoch rctx per)
+      lighthouseRowStep P (lighthouseContextOf state total_active_balance current_epoch rctx per)
         (base_reward r) churn r =
       (fun x => (x.1.1.2, x.2)) <$> singlePassStep P total_active_balance
         rctx.previous_epoch rctx.in_leak rctx current_epoch state.finalized_checkpoint.epoch
@@ -619,7 +620,8 @@ theorem lighthouse_single_pass_eq_spec_supply [CurrentPreset] (total_active_bala
     have hrow := rowsOf_getElem state i hi
     rw [hri] at hrow
     subst hrow
-    exact lhRowStep_eq_singlePassStep_of_supply _ (by simpa [lhContextOf] using hgenesis) rctx _
+    exact lighthouseRowStep_eq_singlePassStep_of_supply _
+      (by simpa [lighthouseContextOf] using hgenesis) rctx _
       churn (base_reward _) activation_epoch
       rfl rfl rfl rfl rfl rfl
       (by rw [htab]; exact hbase _ hr) (by rw [htab]; exact htotal) k hk hincrements
@@ -632,11 +634,11 @@ theorem lighthouse_single_pass_eq_spec_supply [CurrentPreset] (total_active_bala
     (fun c => ((((), ()), c), ())) (fun b => b.1.2) (fun _ => rfl) (fun _ => rfl)]
   cases passM _ _ (rowsOf state) <;> rfl
 
-/-! ## `process_epoch_lh` -/
+/-! ## `processEpochWithSinglePass` -/
 
 /-- The base reward of a row, as the epoch cache holds it. It is 0 when `get_base_reward`
 fails, and the pass reads it only for eligible rows. -/
-def lhBaseReward [CurrentPreset] (total_active_balance : Gwei) (r : Row) : Gwei :=
+def lighthouseBaseReward [CurrentPreset] (total_active_balance : Gwei) (r : Row) : Gwei :=
   match rewardsBaseReward P total_active_balance r.validator with
   | .ok b => b
   | .error _ => 0
@@ -650,15 +652,15 @@ def specFourSteps (p : Preset) (s : BeaconState) : SpecM BeaconState := do
 
 /-- The Lighthouse single pass on mainnet: the inactivity, rewards, registry and slashings
 steps in one pass over the rows. The context comes from the state before the pass. -/
-def lhPass [CurrentPreset] (s : BeaconState) : SpecM BeaconState := do
+def lighthousePass [CurrentPreset] (s : BeaconState) : SpecM BeaconState := do
   let current_epoch ← get_current_epoch P s
   let total_active_balance ← get_total_active_balance P s
   let rctx ← rewardsContextOf P total_active_balance s
   let (_, per) ← slashingsPreamble P total_active_balance s.slashings
   (fun y => s.withRowsChurn y.1 y.2) <$>
-    passM (fun churn r => lhRowStep P
-        (lhContextOf s total_active_balance current_epoch rctx per)
-        (lhBaseReward total_active_balance r) churn r)
+    passM (fun churn r => lighthouseRowStep P
+        (lighthouseContextOf s total_active_balance current_epoch rctx per)
+        (lighthouseBaseReward total_active_balance r) churn r)
       (s.earliest_exit_epoch, s.exit_balance_to_consume) (rowsOf s)
 
 /-- The steps of `process_epoch` after `process_slashings`. -/
@@ -687,18 +689,19 @@ theorem process_epoch_parts (p : Preset) (o : Oracle) (s : BeaconState) :
   simp only [process_epoch, specFourSteps, epochRest, bind_assoc]
 
 /-- Justification and finalization, the Lighthouse single pass, then the rest of the epoch. -/
-def process_epoch_lh_core [CurrentPreset] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
+def processEpochWithSinglePass_core [CurrentPreset] (o : Oracle)
+    (s : BeaconState) : SpecM BeaconState := do
   let s1 ← process_justification_and_finalization P s
-  let s5 ← lhPass s1
+  let s5 ← lighthousePass s1
   epochRest P o s5
 
 /-- The Gloas `process_epoch` on mainnet, with the Lighthouse single pass in place of the
 inactivity, rewards, registry and slashings steps. At the genesis epoch the spec skips the
 inactivity and rewards steps. Lighthouse also skips them there, through `after_genesis`, and
 this one epoch uses the spec path. -/
-def process_epoch_lh [CurrentPreset] (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
+def processEpochWithSinglePass [CurrentPreset] (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
   if s.slot / P.SLOTS_PER_EPOCH = GENESIS_EPOCH then process_epoch P o s
-  else process_epoch_lh_core o s
+  else processEpochWithSinglePass_core o s
 
 /-! ## The state after justification and finalization -/
 
@@ -898,7 +901,7 @@ theorem rewardsBaseReward_ok_mainnet [CurrentPreset] (total_active_balance : Gwe
 
 /-! ## The whole epoch -/
 
-/-- On mainnet, away from the genesis epoch, `process_epoch_lh_core` gives the same `ok`
+/-- On mainnet, away from the genesis epoch, `processEpochWithSinglePass_core` gives the same `ok`
 results as `process_epoch`.
 
 The hypotheses are facts about the state at the start of the epoch:
@@ -913,7 +916,8 @@ The hypotheses are facts about the state at the start of the epoch:
   balances is below `2^60`. They replace the participation bound and the supply part of
   `EpochEntry`.
 - `hslashings`: three times the sum of the slashings vector fits in a `u64`. -/
-theorem process_epoch_lh_sameResultOrBothFail [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) (hrows : ListLengthsMatch s)
+theorem processEpochWithSinglePass_sameResultOrBothFail [CurrentPreset] [CurrentPreset.Valid]
+    (o : Oracle) (s : BeaconState) (hrows : ListLengthsMatch s)
     (hinv : CheckpointsInOrder P s) (current_epoch : Epoch)
     (hcurrent : get_current_epoch P s = .ok current_epoch)
     (hgenesis : current_epoch ≠ GENESIS_EPOCH)
@@ -927,9 +931,9 @@ theorem process_epoch_lh_sameResultOrBothFail [CurrentPreset] [CurrentPreset.Val
     (hbalance : ∀ i (h : i < s.validators.length), s.balances.getD i 0 < 2 ^ 62)
     (hsupply : totalEffectiveBalance s < 2 ^ 60)
     (hslashings : s.slashings.sum * 3 < UINT64_SIZE) :
-    SameResultOrBothFail (process_epoch P o s) (process_epoch_lh_core o s) := by
+    SameResultOrBothFail (process_epoch P o s) (processEpochWithSinglePass_core o s) := by
   rw [process_epoch_parts]
-  unfold process_epoch_lh_core
+  unfold processEpochWithSinglePass_core
   refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun s1 h1 => ?_)
   refine SameResultOrBothFail.bind ?_ (fun _ _ => SameResultOrBothFail.refl _)
   obtain ⟨_, _, _, _, hs1⟩ := process_justification_and_finalization_shape _ _ _ h1
@@ -1013,13 +1017,14 @@ theorem process_epoch_lh_sameResultOrBothFail [CurrentPreset] [CurrentPreset.Val
     (Nat.le_of_succ_le hfin)
     (Nat.lt_of_le_of_lt (Nat.add_le_add_left (show 1 ≤ H by omega) current_epoch) hepoch)
     htab_lo
-    _ hk ⟨hle _ hsrc, hle _ htgt, hle _ hhd⟩ (lhBaseReward tab) ?_) (SameResultOrBothFail.of_eq ?_)
+    _ hk ⟨hle _ hsrc, hle _ htgt, hle _ hhd⟩ (lighthouseBaseReward tab) ?_)
+      (SameResultOrBothFail.of_eq ?_)
   · intro r hr _
     obtain ⟨b, hb⟩ := rewardsBaseReward_ok_mainnet tab r.validator htab_lo
       (hmax1 _ (by rw [← rowsOf_map_validator]; exact List.mem_map_of_mem hr))
-    unfold lhBaseReward
+    unfold lighthouseBaseReward
     rw [hb]
-  · unfold lhPass
+  · unfold lighthousePass
     rw [hcur1, ok_bind, htab, ok_bind, hctx, ok_bind, hpre, ok_bind]
 
 /-! ## On the states at the end of an epoch -/
@@ -1043,13 +1048,14 @@ private theorem SameResultOrBothFail.symm' {α : Type} {x y : SpecM α} (h : Sam
 
 /-- On mainnet, at a state that `process_epoch` starts from, the Lighthouse epoch gives the
 same `ok` results as the spec epoch. -/
-theorem process_epoch_lh_sameResultOrBothFail' [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (t : BeaconState) (hb : EpochEndInvariants t)
+theorem processEpochWithSinglePass_sameResultOrBothFail' [CurrentPreset] [CurrentPreset.Valid]
+    (o : Oracle) (t : BeaconState) (hb : EpochEndInvariants t)
     (hslot : t.slot < 2 ^ 64) (heb : EffectiveBalancesValid P t) (hexit : ExitEpochsAreUint64 t)
     (hsupply : BalancesFarFromOverflow t) :
-    SameResultOrBothFail (process_epoch_lh o t) (process_epoch P o t) := by
+    SameResultOrBothFail (processEpochWithSinglePass o t) (process_epoch P o t) := by
   obtain ⟨hinv, hrows, hentry⟩ := hb
   obtain ⟨hbalance, htotal, hslashings⟩ := hsupply
-  unfold process_epoch_lh
+  unfold processEpochWithSinglePass
   split
   · exact SameResultOrBothFail.refl _
   rename_i hgen
@@ -1067,17 +1073,18 @@ theorem process_epoch_lh_sameResultOrBothFail' [CurrentPreset] [CurrentPreset.Va
     rw [hV', hq]
     show @LT.lt Nat _ (q + V / 2) (2 ^ 64)
     omega
-  exact SameResultOrBothFail.symm' (process_epoch_lh_sameResultOrBothFail o t hrows hinv _ hcurrent hgen hepoch hentry
+  exact SameResultOrBothFail.symm'
+    (processEpochWithSinglePass_sameResultOrBothFail o t hrows hinv _ hcurrent hgen hepoch hentry
     (fun i h => hexit _ (List.getElem_mem h)) (fun v hv => (heb v hv).2) hbalance htotal
     hslashings)
 
 
-/-- `process_epoch_lh_sameResultOrBothFail'` in the form of the `hf` hypothesis of
+/-- `processEpochWithSinglePass_sameResultOrBothFail'` in the form of the `hf` hypothesis of
 `reachable_state_transition_sameResultOrBothFail'`, with `BalancesFarFromOverflow` as the epoch condition. -/
-theorem process_epoch_lh_hf [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) :
+theorem processEpochWithSinglePass_hf [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) :
     ∀ t, BasicEpochInputInvariants BalancesFarFromOverflow t →
-      SameResultOrBothFail (process_epoch_lh o t) (process_epoch P o t) :=
+      SameResultOrBothFail (processEpochWithSinglePass o t) (process_epoch P o t) :=
   fun t ⟨hb, hslot, heb, hexit, hsupply⟩ =>
-    process_epoch_lh_sameResultOrBothFail' o t hb hslot heb hexit hsupply
+    processEpochWithSinglePass_sameResultOrBothFail' o t hb hslot heb hexit hsupply
 
 end EpochProofs.Spec

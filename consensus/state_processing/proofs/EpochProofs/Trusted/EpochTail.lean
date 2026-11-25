@@ -45,13 +45,14 @@ namespace EpochProofs
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 /-- The Rust trait `DepositWrites`. -/
-abbrev LhDepositWrites (S D E : Type) := per_epoch_processing.deposit_writes.DepositWrites S D E
+abbrev LighthouseDepositWrites (S D E : Type) :=
+    per_epoch_processing.deposit_writes.DepositWrites S D E
 
 /-- Trusted: what the `DepositWrites` implementation in `single_pass.rs` does. `toSpec` gives the
 spec state that an implementation value holds, `depositToSpec` the spec deposit of a deposit, and
 `postOf` the postponed deposits that the value holds. -/
 structure DepositWritesMatchSpec [EpochProofs.Spec.CurrentPreset] {S D E : Type}
-    (implementation : LhDepositWrites S D E) (oracle : Spec.Oracle)
+    (implementation : LighthouseDepositWrites S D E) (oracle : Spec.Oracle)
     (toSpec : S → Spec.BeaconState) (depositToSpec : D → Spec.PendingDeposit)
     (postOf : S → List Spec.PendingDeposit) : Prop where
   write_queue : ∀ (s : S) (next : Usize) (dbtc : U64),
@@ -86,17 +87,18 @@ structure DepositWritesMatchSpec [EpochProofs.Spec.CurrentPreset] {S D E : Type}
         (depositToSpec d).withdrawal_credentials (depositToSpec d).amount = .error e →
       ∃ (e' : E) (s' : S), implementation.add_validator s d = ok (.Err e', s'))
   update_effective_balance : ∀ (s : S) (i : Usize),
-    (∀ t', Spec.ebUpdateAt (toSpec s) i.val = .ok t' →
+    (∀ t', Spec.updateEffectiveBalanceAt (toSpec s) i.val = .ok t' →
       ∃ s', implementation.update_effective_balance s i = ok (.Ok (), s') ∧ toSpec s' = t') ∧
-    (∀ e, Spec.ebUpdateAt (toSpec s) i.val = .error e →
+    (∀ e, Spec.updateEffectiveBalanceAt (toSpec s) i.val = .error e →
       ∃ (e' : E) (s' : S), implementation.update_effective_balance s i = ok (.Err e', s'))
 
 /-- The Rust trait `BuilderPaymentWrites`. -/
-abbrev LhPaymentWrites (S E : Type) := per_epoch_processing.list_writes.BuilderPaymentWrites S E
+abbrev LighthousePaymentWrites (S E : Type) :=
+    per_epoch_processing.list_writes.BuilderPaymentWrites S E
 
 /-- Trusted: what the `BuilderPaymentWrites` implementation in `single_pass.rs` does. `wview` and
 `pview` give the builder pending withdrawals and payments that an implementation value holds. -/
-structure BuilderPaymentWritesMatchSpec {S E : Type} (implementation : LhPaymentWrites S E)
+structure BuilderPaymentWritesMatchSpec {S E : Type} (implementation : LighthousePaymentWrites S E)
     (wview : S → List types.builder.builder_pending_withdrawal.BuilderPendingWithdrawal)
     (pview : S → List types.builder.builder_pending_payment.BuilderPendingPayment) : Prop where
   payments : ∀ (s : S), ∃ v : alloc.vec.Vec types.builder.builder_pending_payment.BuilderPendingPayment,
@@ -110,12 +112,12 @@ structure BuilderPaymentWritesMatchSpec {S E : Type} (implementation : LhPayment
     ∃ s', implementation.set_payments s v = ok (.Ok (), s') ∧ pview s' = v.val ∧ wview s' = wview s
 
 /-- The Rust trait `WindowWrites`. -/
-abbrev LhWindowWrites (W T E : Type) := per_epoch_processing.list_writes.WindowWrites W T E
+abbrev LighthouseWindowWrites (W T E : Type) := per_epoch_processing.list_writes.WindowWrites W T E
 
 /-- Trusted: what a `WindowWrites` implementation in `single_pass.rs` does. `toSpec` gives the list
 that a value holds, `committed` the window it wrote back to the state, `itemToSpec` the entry of an
 item, `itemOk` the items that fit an entry, and `N` the window length. -/
-structure PtcWindowWritesMatchSpec {W T E α : Type} (implementation : LhWindowWrites W T E)
+structure PtcWindowWritesMatchSpec {W T E α : Type} (implementation : LighthouseWindowWrites W T E)
     (toSpec : W → List α)
     (committed : W → List α) (itemToSpec : T → α) (itemOk : T → Prop) (N : Nat) : Prop where
   pop_front : ∀ (w : W) (n : Usize), n.val ≤ (toSpec w).length →
@@ -126,17 +128,17 @@ structure PtcWindowWritesMatchSpec {W T E α : Type} (implementation : LhWindowW
     ∃ w', implementation.commit w = ok (.Ok (), w') ∧ committed w' = toSpec w
 
 /-- The Rust trait `EffectiveBalanceWrites`. -/
-abbrev LhEffectiveBalanceWrites (S E : Type) :=
+abbrev LighthouseEffectiveBalanceWrites (S E : Type) :=
   per_epoch_processing.list_writes.EffectiveBalanceWrites S E
 
 /-- Trusted: what the `EffectiveBalanceWrites` implementation in `single_pass.rs` does. -/
 structure EffectiveBalanceWritesMatchSpec [EpochProofs.Spec.CurrentPreset] {S E : Type}
-    (implementation : LhEffectiveBalanceWrites S E)
+    (implementation : LighthouseEffectiveBalanceWrites S E)
     (toSpec : S → Spec.BeaconState) : Prop where
   update_effective_balance : ∀ (s : S) (i : Usize),
-    (∀ t', Spec.ebUpdateAt (toSpec s) i.val = .ok t' →
+    (∀ t', Spec.updateEffectiveBalanceAt (toSpec s) i.val = .ok t' →
       ∃ s', implementation.update_effective_balance s i = ok (.Ok (), s') ∧ toSpec s' = t') ∧
-    (∀ e, Spec.ebUpdateAt (toSpec s) i.val = .error e →
+    (∀ e, Spec.updateEffectiveBalanceAt (toSpec s) i.val = .error e →
       ∃ (e' : E) (s' : S), implementation.update_effective_balance s i = ok (.Err e', s'))
 
 end EpochProofs

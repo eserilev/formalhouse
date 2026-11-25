@@ -4,17 +4,18 @@ import EpochProofs.Spec.PresetCfg
 /-!
 # The second half of the Lighthouse row step
 
-`lhRowStepFull` is `lhRowStep` followed by the top-up and the effective balance update of the
-row. One pass of it equals a pass of `lhRowStep`, then a pass of the second half. The second pass
-over the rows of a state equals one fold over the validator indices, and that fold equals all
-top-ups first, then the effective balance updates.
+`lighthouseValidatorStep` is `lighthouseRowStep` followed by the top-up and the effective balance
+update of the row. One pass of it equals a pass of `lighthouseRowStep`, then a pass of the second
+half. The second pass over the rows of a state equals one fold over the validator indices, and that
+fold equals all top-ups first, then the effective balance updates.
 -/
 
 namespace EpochProofs.Spec
 
-/-- The second half of `lhRowStepFull`: the top-up, then the effective balance update unless a
-consolidation names the validator. -/
-def lhRowStep2 [CurrentPreset] (downward upward : Uint64) (topup : Gwei) (named : Bool) (r : Row) :
+/-- The second half of `lighthouseValidatorStep`: the top-up, then the effective balance update
+unless a consolidation names the validator. -/
+def lighthouseRowStep2 [CurrentPreset] (downward upward : Uint64) (topup : Gwei) (named : Bool)
+    (r : Row) :
     SpecM Row := do
   let balance ← uint64Add r.balance topup
   let r := { r with balance }
@@ -24,35 +25,38 @@ def lhRowStep2 [CurrentPreset] (downward upward : Uint64) (topup : Gwei) (named 
       newEffectiveBalance P downward upward r.validator r.balance
     pure { r with validator := { r.validator with effective_balance } }
 
-/-- `lhRowStep` keeps the index of the row. -/
-theorem lhRowStep_index [CurrentPreset] (ctx : LhStepContext) (base : Gwei) (churn : Epoch × Gwei) (r : Row)
-    (x : (Epoch × Gwei) × Row) (h : lhRowStep P ctx base churn r = .ok x) :
+/-- `lighthouseRowStep` keeps the index of the row. -/
+theorem lighthouseRowStep_index [CurrentPreset] (ctx : LighthouseStepContext) (base : Gwei)
+    (churn : Epoch × Gwei) (r : Row)
+    (x : (Epoch × Gwei) × Row) (h : lighthouseRowStep P ctx base churn r = .ok x) :
     x.2.index = r.index := by
-  unfold lhRowStep at h
+  unfold lighthouseRowStep at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first
     | contradiction
     | (cases h; rfl)
 
-/-- One row of `lhRowStepFull` is `lhRowStep`, then `lhRowStep2` on the result. -/
-theorem lhRowStepFull_eq [CurrentPreset] (ctx : LhStepContext) (downward upward : Uint64)
+/-- One row of `lighthouseValidatorStep` is `lighthouseRowStep`, then `lighthouseRowStep2` on the
+result. -/
+theorem lighthouseValidatorStep_eq [CurrentPreset] (ctx : LighthouseStepContext)
+    (downward upward : Uint64)
     (bf : Row → Gwei) (td : Nat → Gwei) (nm : Nat → Bool) (c : Epoch × Gwei) (r : Row) :
-    lhRowStepFull P ctx downward upward ⟨bf r, td r.index, nm r.index⟩ c r =
-      (fun x => (x.1.1, x.2)) <$> bothSteps (fun c r => lhRowStep P ctx (bf r) c r)
+    lighthouseValidatorStep P ctx downward upward ⟨bf r, td r.index, nm r.index⟩ c r =
+      (fun x => (x.1.1, x.2)) <$> bothSteps (fun c r => lighthouseRowStep P ctx (bf r) c r)
         (fun _ r => (fun r' => ((), r')) <$>
-          lhRowStep2 downward upward (td r.index) (nm r.index) r) (c, ()) r := by
-  unfold lhRowStepFull bothSteps
+          lighthouseRowStep2 downward upward (td r.index) (nm r.index) r) (c, ()) r := by
+  unfold lighthouseValidatorStep bothSteps
   dsimp only
-  cases hx : lhRowStep P ctx (bf r) c r with
+  cases hx : lighthouseRowStep P ctx (bf r) c r with
   | error e => rfl
   | ok x =>
-    have hi := lhRowStep_index ctx (bf r) c r x hx
+    have hi := lighthouseRowStep_index ctx (bf r) c r x hx
     obtain ⟨c', r'⟩ := x
     simp only at hi
     simp only [bind, Except.bind]
     rw [← hi]
-    unfold lhRowStep2
+    unfold lighthouseRowStep2
     cases uint64Add r'.balance (td r'.index) with
     | error e => rfl
     | ok b =>
@@ -63,25 +67,28 @@ theorem lhRowStepFull_eq [CurrentPreset] (ctx : LhStepContext) (downward upward 
         simp only [Bool.false_eq_true, if_false]
         cases newEffectiveBalance P downward upward r'.validator b <;> rfl
 
-/-- One pass of `lhRowStepFull` equals a pass of `lhRowStep`, then a pass of `lhRowStep2`. -/
-theorem lhRowStepFull_split [CurrentPreset] (ctx : LhStepContext) (downward upward : Uint64)
+/-- One pass of `lighthouseValidatorStep` equals a pass of `lighthouseRowStep`, then a pass of
+`lighthouseRowStep2`. -/
+theorem lighthouseValidatorStep_split [CurrentPreset] (ctx : LighthouseStepContext)
+    (downward upward : Uint64)
     (bf : Row → Gwei) (td : Nat → Gwei) (nm : Nat → Bool) (c0 : Epoch × Gwei) (rows : List Row) :
-    SameResultOrBothFail (passM (fun c r => lhRowStepFull P ctx downward upward
+    SameResultOrBothFail (passM (fun c r => lighthouseValidatorStep P ctx downward upward
         ⟨bf r, td r.index, nm r.index⟩ c r) c0 rows)
       (do
-        let x ← passM (fun c r => lhRowStep P ctx (bf r) c r) c0 rows
+        let x ← passM (fun c r => lighthouseRowStep P ctx (bf r) c r) c0 rows
         let y ← passM (fun _ r => (fun r' => ((), r')) <$>
-          lhRowStep2 downward upward (td r.index) (nm r.index) r) () x.2
+          lighthouseRowStep2 downward upward (td r.index) (nm r.index) r) () x.2
         pure (x.1, y.2)) := by
-  let f := fun c r => lhRowStep P ctx (bf r) c r
+  let f := fun c r => lighthouseRowStep P ctx (bf r) c r
   let g := fun (_ : Unit) r => (fun r' => ((), r')) <$>
-    lhRowStep2 downward upward (td r.index) (nm r.index) r
-  have h1 : passM (fun c r => lhRowStepFull P ctx downward upward
+    lighthouseRowStep2 downward upward (td r.index) (nm r.index) r
+  have h1 : passM (fun c r => lighthouseValidatorStep P ctx downward upward
       ⟨bf r, td r.index, nm r.index⟩ c r) c0 rows =
       (fun y => (y.1.1, y.2)) <$> passM (bothSteps f g) (c0, ()) rows := by
     rw [← passM_proj (bothSteps f g) (fun c => (c, ())) (fun b => b.1) (fun _ => rfl)
       (fun _ => rfl)]
-    exact passM_congr _ _ rows (fun c r _ => lhRowStepFull_eq ctx downward upward bf td nm c r) c0
+    exact passM_congr _ _ rows (fun c r _ =>
+      lighthouseValidatorStep_eq ctx downward upward bf td nm c r) c0
   rw [h1]
   refine SameResultOrBothFail.trans (SameResultOrBothFail.map (two_passes_eq_one_pass f g c0 () rows).flip _) ?_
   apply SameResultOrBothFail.of_eq
@@ -99,7 +106,7 @@ theorem lhRowStepFull_split [CurrentPreset] (ctx : LhStepContext) (downward upwa
 def rowsStep [CurrentPreset] (td : Nat → Gwei) (nm : Nat → Bool) (t : BeaconState) (i : Nat) :
     SpecM BeaconState := do
   let t ← increaseAt i (td i) t
-  if nm i then pure t else ebUpdateAt t i
+  if nm i then pure t else updateEffectiveBalanceAt t i
 
 /-- `withRows` of the rows of a state is the state, if the row lists have the right lengths. -/
 theorem withRows_rowsOf (S : BeaconState) (hrows : ListLengthsMatch S) : S.withRows (rowsOf S) = S := by
@@ -131,19 +138,21 @@ theorem map_set_self {α β : Type} (f : α → β) (L : List α) (k : Nat) (r :
     simp [hkl, (List.getElem?_eq_some_iff.mp hk).2]
   · simp [h]
 
-/-- One fold step on the state of a list of rows is `lhRowStep2` on the row at that index. -/
+/-- One fold step on the state of a list of rows is `lighthouseRowStep2` on the row at that index.
+-/
 theorem rowsStep_withRows [CurrentPreset] (S : BeaconState) (downward upward : Uint64)
     (hthr : hysteresisThresholds P = .ok (downward, upward))
     (td : Nat → Gwei) (nm : Nat → Bool) (L : List Row) (k : Nat) (r : Row)
     (hk : L[k]? = some r) :
     rowsStep td nm (S.withRows L) k =
-      (fun r' => S.withRows (L.set k r')) <$> lhRowStep2 downward upward (td k) (nm k) r := by
+      (fun r' => S.withRows (L.set k r')) <$> lighthouseRowStep2 downward upward (td k) (nm k)
+        r := by
   have hkl : k < L.length := (List.getElem?_eq_some_iff.mp hk).1
   have hbal : (S.withRows L).balances[k]? = some r.balance := by
     simp [BeaconState.withRows, hk]
   have hval : (S.withRows L).validators[k]? = some r.validator := by
     simp [BeaconState.withRows, hk]
-  unfold rowsStep lhRowStep2
+  unfold rowsStep lighthouseRowStep2
   rw [increaseAt_char, hbal]
   have hadd : uint64Add r.balance (td k) =
       if r.balance + td k < UINT64_SIZE then .ok (r.balance + td k) else .error .overflow := by
@@ -158,7 +167,7 @@ theorem rowsStep_withRows [CurrentPreset] (S : BeaconState) (downward upward : U
       rw [map_set_self (·.validator) L k r hk, map_set_self (·.inactivity_score) L k r hk]
     rw [hset]
     show (Except.ok (S.withRows (L.set k { r with balance := r.balance + td k })) >>=
-      fun t => if nm k = true then pure t else ebUpdateAt t k) = _
+      fun t => if nm k = true then pure t else updateEffectiveBalanceAt t k) = _
     cases nm k with
     | true => rfl
     | false =>
@@ -169,8 +178,8 @@ theorem rowsStep_withRows [CurrentPreset] (S : BeaconState) (downward upward : U
       have hb' : (S.withRows (L.set k { r with balance := r.balance + td k })).balances[k]? =
           some (r.balance + td k) := by
         simp [BeaconState.withRows, hkl]
-      show ebUpdateAt _ k = _
-      rw [ebUpdateAt_some hv' hb']
+      show updateEffectiveBalanceAt _ k = _
+      rw [updateEffectiveBalanceAt_some hv' hb']
       unfold ebNew
       rw [hthr]
       simp only [Functor.map, Except.map, bind, Except.bind, pure, Except.pure]
@@ -183,14 +192,15 @@ theorem rowsStep_withRows [CurrentPreset] (S : BeaconState) (downward upward : U
   · simp only [hfit, if_false]
     rfl
 
-/-- The fold over the indices of a list of rows equals a pass of `lhRowStep2` over the rows. -/
+/-- The fold over the indices of a list of rows equals a pass of `lighthouseRowStep2` over the
+rows. -/
 theorem rowsStep_fold [CurrentPreset] (S : BeaconState) (downward upward : Uint64)
     (hthr : hysteresisThresholds P = .ok (downward, upward))
     (td : Nat → Gwei) (nm : Nat → Bool) :
     ∀ (rs pre : List Row), (∀ j (h : j < rs.length), rs[j].index = pre.length + j) →
       (List.range' pre.length rs.length).foldlM (rowsStep td nm) (S.withRows (pre ++ rs)) =
         (fun y => S.withRows (pre ++ y.2)) <$> passM (fun _ r => (fun r' => ((), r')) <$>
-          lhRowStep2 downward upward (td r.index) (nm r.index) r) () rs
+          lighthouseRowStep2 downward upward (td r.index) (nm r.index) r) () rs
   | [], pre, _ => by
     simp [passM, pure, Except.pure, Functor.map, Except.map]
   | r :: rs, pre, hidx => by
@@ -204,7 +214,7 @@ theorem rowsStep_fold [CurrentPreset] (S : BeaconState) (downward upward : Uint6
     have hset : ∀ r', (pre ++ r :: rs).set pre.length r' = (pre ++ [r']) ++ rs := by
       intro r'
       simp [List.set_append_right]
-    cases lhRowStep2 downward upward (td pre.length) (nm pre.length) r with
+    cases lighthouseRowStep2 downward upward (td pre.length) (nm pre.length) r with
     | error e => rfl
     | ok r' =>
       have ih := rowsStep_fold S downward upward hthr td nm rs (pre ++ [r']) (by
@@ -223,10 +233,10 @@ theorem rows_pass2_fold [CurrentPreset] (S : BeaconState) (hrows : ListLengthsMa
     (hthr : hysteresisThresholds P = .ok (downward, upward))
     (td : Nat → Gwei) (nm : Nat → Bool) :
     SameResultOrBothFail ((fun y => S.withRows y.2) <$> passM (fun _ r => (fun r' => ((), r')) <$>
-        lhRowStep2 downward upward (td r.index) (nm r.index) r) () (rowsOf S))
+        lighthouseRowStep2 downward upward (td r.index) (nm r.index) r) () (rowsOf S))
       ((List.range S.validators.length).foldlM (fun t i => do
         let t ← increaseAt i (td i) t
-        if nm i then pure t else ebUpdateAt t i) S) := by
+        if nm i then pure t else updateEffectiveBalanceAt t i) S) := by
   apply SameResultOrBothFail.of_eq
   have h := rowsStep_fold S downward upward hthr td nm (rowsOf S) [] (by
     intro j hj
@@ -270,7 +280,7 @@ theorem fold_interleave_gen [CurrentPreset] (td : Nat → Gwei) (nm : Nat → Bo
       SameResultOrBothFail (l.foldlM (rowsStep td nm) S)
         (do
           let t ← l.foldlM (fun t i => increaseAt i (td i) t) S
-          (l.filter (fun i => !nm i)).foldlM ebUpdateAt t)
+          (l.filter (fun i => !nm i)).foldlM updateEffectiveBalanceAt t)
   | [], _, S => by
     apply SameResultOrBothFail.of_eq
     rfl
@@ -292,12 +302,12 @@ theorem fold_interleave_gen [CurrentPreset] (td : Nat → Gwei) (nm : Nat → Bo
         simp [hn]
       rw [hf]
       simp only [Bool.false_eq_true, if_false, List.foldlM_cons]
-      refine SameResultOrBothFail.trans (y := ebUpdateAt t1 i >>= fun t2 =>
+      refine SameResultOrBothFail.trans (y := updateEffectiveBalanceAt t1 i >>= fun t2 =>
         l.foldlM (fun t i => increaseAt i (td i) t) t2 >>= fun t3 =>
-          (l.filter (fun i => !nm i)).foldlM ebUpdateAt t3)
+          (l.filter (fun i => !nm i)).foldlM updateEffectiveBalanceAt t3)
         (SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t2 _ => ih t2)) ?_
       refine SameResultOrBothFail.trans (SameResultOrBothFail.of_eq (by rw [← bind_assoc])) ?_
-      refine SameResultOrBothFail.trans (SameResultOrBothFail.bind (ebUpdateAt_commute
+      refine SameResultOrBothFail.trans (SameResultOrBothFail.bind (updateEffectiveBalanceAt_commute
         (fun t => l.foldlM (fun t i => increaseAt i (td i) t) t) i (fun _ => True)
         (fun t e _ => increaseFold_hF1 td i e l t)
         (fun t t' _ h => increaseFold_hF2 td i l hil t t' h) t1 trivial)
@@ -310,10 +320,10 @@ validators that are not named. -/
 theorem fold_interleave [CurrentPreset] (td : Nat → Gwei) (nm : Nat → Bool) (n : Nat) (S : BeaconState) :
     SameResultOrBothFail ((List.range n).foldlM (fun t i => do
         let t ← increaseAt i (td i) t
-        if nm i then pure t else ebUpdateAt t i) S)
+        if nm i then pure t else updateEffectiveBalanceAt t i) S)
       (do
         let t ← (List.range n).foldlM (fun t i => increaseAt i (td i) t) S
-        ((List.range n).filter (fun i => !nm i)).foldlM ebUpdateAt t) :=
+        ((List.range n).filter (fun i => !nm i)).foldlM updateEffectiveBalanceAt t) :=
   fold_interleave_gen td nm (List.range n) List.nodup_range S
 
 end EpochProofs.Spec

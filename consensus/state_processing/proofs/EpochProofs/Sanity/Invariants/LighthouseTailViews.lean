@@ -83,34 +83,37 @@ theorem depositDecisions_take_max [CurrentPreset] (fs dbtc churn : Nat) (views :
 
 /-! ## The registry part of one Lighthouse row step -/
 
-/-- The validator of a row after `lhRowStep` is the input validator with the registry fields of
-`registryStepIndependent`. The inactivity and rewards steps do not change the validator. -/
-theorem lhRowStep_registry [CurrentPreset] (ctx : LhStepContext) (base : Gwei) (churn : Epoch × Gwei) (r : Row)
-    (x : (Epoch × Gwei) × Row) (h : lhRowStep P ctx base churn r = .ok x) :
+/-- The validator of a row after `lighthouseRowStep` is the input validator with the registry
+fields of `registryStepIndependent`. The inactivity and rewards steps do not change the validator.
+-/
+theorem lighthouseRowStep_registry [CurrentPreset] (ctx : LighthouseStepContext) (base : Gwei)
+    (churn : Epoch × Gwei) (r : Row)
+    (x : (Epoch × Gwei) × Row) (h : lighthouseRowStep P ctx base churn r = .ok x) :
     ∃ g, registryStepIndependent P ctx.total_active_balance ctx.current_epoch
         ctx.finalized_epoch r.validator.effective_balance (registryFieldsOf r.validator churn) =
           .ok g ∧ x.2.validator = r.validator.withRegistryFields g := by
-  unfold lhRowStep at h
+  unfold lighthouseRowStep at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first
     | contradiction
     | (cases h; exact ⟨_, ‹registryStepIndependent _ _ _ _ _ _ = _›, rfl⟩)
 
-/-- `lhRowStep_registry` with the spec's exclusive registry step. -/
-theorem lhRowStep_registry_exclusive [CurrentPreset] (ctx : LhStepContext) (base : Gwei) (churn : Epoch × Gwei)
+/-- `lighthouseRowStep_registry` with the spec's exclusive registry step. -/
+theorem lighthouseRowStep_registry_exclusive [CurrentPreset] (ctx : LighthouseStepContext)
+    (base : Gwei) (churn : Epoch × Gwei)
     (r : Row) (x : (Epoch × Gwei) × Row) (activation_epoch : Epoch)
     (hfinalized : ctx.finalized_epoch ≤ ctx.current_epoch)
     (hexit : r.validator.exit_epoch ≤ FAR_FUTURE_EPOCH)
     (hcurrent : ctx.current_epoch + 1 < UINT64_SIZE)
     (hactivation : compute_activation_exit_epoch P ctx.current_epoch =
       .ok activation_epoch)
-    (h : lhRowStep P ctx base churn r = .ok x) :
+    (h : lighthouseRowStep P ctx base churn r = .ok x) :
     ∃ g, registryStepExclusive P ctx.total_active_balance ctx.current_epoch
         ctx.finalized_epoch activation_epoch r.validator.effective_balance
           (registryFieldsOf r.validator churn) = .ok g ∧
       x.2.validator = r.validator.withRegistryFields g := by
-  obtain ⟨g, hg, hx⟩ := lhRowStep_registry ctx base churn r x h
+  obtain ⟨g, hg, hx⟩ := lighthouseRowStep_registry ctx base churn r x h
   refine ⟨g, ?_, hx⟩
   rw [← registryStepIndependent_eq_exclusive P _ _ _ _ _ _ (by pdecide) hfinalized
     hexit hcurrent hactivation]
@@ -144,14 +147,15 @@ theorem passM_rows {A R : Type} (f : A → R → SpecM (A × R)) :
 
 /-- After a successful Lighthouse pass over the rows of `s`, each validator is the validator of
 `s` with the registry fields of a successful `registryStepExclusive`. -/
-theorem passM_rows_registry [CurrentPreset] (ctx : LhStepContext) (bf : Row → Gwei) (s : BeaconState)
+theorem passM_rows_registry [CurrentPreset] (ctx : LighthouseStepContext) (bf : Row → Gwei)
+    (s : BeaconState)
     (churn0 churn : Epoch × Gwei) (rows : List Row) (activation_epoch : Epoch)
     (hfinalized : ctx.finalized_epoch ≤ ctx.current_epoch)
     (hexit : ∀ i (h : i < s.validators.length), s.validators[i].exit_epoch ≤ FAR_FUTURE_EPOCH)
     (hcurrent : ctx.current_epoch + 1 < UINT64_SIZE)
     (hactivation : compute_activation_exit_epoch P ctx.current_epoch =
       .ok activation_epoch)
-    (h : passM (fun c r => lhRowStep P ctx (bf r) c r) churn0 (rowsOf s) =
+    (h : passM (fun c r => lighthouseRowStep P ctx (bf r) c r) churn0 (rowsOf s) =
       .ok (churn, rows)) :
     rows.length = s.validators.length ∧
       ∀ i (h1 : i < s.validators.length) (h2 : i < rows.length), ∃ c g,
@@ -166,7 +170,7 @@ theorem passM_rows_registry [CurrentPreset] (ctx : LhStepContext) (bf : Row → 
   obtain ⟨c, x, hx, hxr⟩ := hget i h1' h2
   have hrow := rowsOf_getElem s i h1'
   rw [hrow] at hx
-  obtain ⟨g, hg, hv⟩ := lhRowStep_registry_exclusive ctx _ c _ x activation_epoch hfinalized
+  obtain ⟨g, hg, hv⟩ := lighthouseRowStep_registry_exclusive ctx _ c _ x activation_epoch hfinalized
     (hexit i h1) hcurrent hactivation hx
   exact ⟨c, g, hg, by rw [← hxr, hv]⟩
 
@@ -231,7 +235,7 @@ theorem predictedStatus_churn [CurrentPreset] (v : Validator) (c c' : Epoch × G
 
 /-- After a successful Lighthouse pass, the flags that the spec reads in a state with the new
 validators equal the flags that Lighthouse predicts from the state before the pass. -/
-theorem views_eq [CurrentPreset] (ctx : LhStepContext) (bf : Row → Gwei) (s : BeaconState)
+theorem views_eq [CurrentPreset] (ctx : LighthouseStepContext) (bf : Row → Gwei) (s : BeaconState)
     (churn0 churn : Epoch × Gwei) (rows : List Row) (activation_epoch : Epoch)
     (hfinalized : ctx.finalized_epoch ≤ ctx.current_epoch)
     (hexit : ∀ i (h : i < s.validators.length), s.validators[i].exit_epoch ≤ FAR_FUTURE_EPOCH)
@@ -240,11 +244,11 @@ theorem views_eq [CurrentPreset] (ctx : LhStepContext) (bf : Row → Gwei) (s : 
     (hnext : ctx.current_epoch + 1 < FAR_FUTURE_EPOCH)
     (hactivation : compute_activation_exit_epoch P ctx.current_epoch =
       .ok activation_epoch)
-    (h : passM (fun c r => lhRowStep P ctx (bf r) c r) churn0 (rowsOf s) =
+    (h : passM (fun c r => lighthouseRowStep P ctx (bf r) c r) churn0 (rowsOf s) =
       .ok (churn, rows))
     (T : BeaconState) (hT : T.validators = rows.map (·.validator)) (l : List PendingDeposit) :
     l.map (specDepositView T (ctx.current_epoch + 1)) =
-      l.map (lhDepositView s ctx.current_epoch) := by
+      l.map (lighthouseDepositView s ctx.current_epoch) := by
   have hcurrent : ctx.current_epoch + 1 < UINT64_SIZE := by
     have h' : @LT.lt Nat _ (ctx.current_epoch + 1) (2 ^ 64 - 1) := hnext
     show @LT.lt Nat _ (ctx.current_epoch + 1) (2 ^ 64)
@@ -274,7 +278,7 @@ theorem views_eq [CurrentPreset] (ctx : LhStepContext) (bf : Row → Gwei) (s : 
       rfl
   apply List.map_congr_left
   intro d _
-  unfold specDepositView lhDepositView
+  unfold specDepositView lighthouseDepositView
   rw [hpk]
   cases hs : s.validators[(s.validators.map (·.pubkey)).idxOf d.pubkey]? with
   | none =>

@@ -3,8 +3,8 @@ import EpochProofs.Trusted.CacheUpkeep
 /-!
 # The progressive balances cache stays correct inside an epoch
 
-`ProgressiveBalancesUpdate.coherent` proves each hook of `Trusted/CacheUpkeep.lean` correct from
-the Aeneas-checked update functions (#64). `ProgressiveBalancesUpdates.coherent` chains them. A
+`ProgressiveBalancesUpdate.correct` proves each hook of `Trusted/CacheUpkeep.lean` correct from
+the Aeneas-checked update functions (#64). `ProgressiveBalancesUpdates.correct` chains them. A
 theorem that uses them asks for a correct cache at a state `start` of the epoch, not at the epoch
 input.
 -/
@@ -12,42 +12,46 @@ input.
 namespace EpochProofs.CacheBridge
 
 open Aeneas Aeneas.Std Result
-open CacheProofs.PB
+open CacheProofs.ProgressiveBalances
 
-theorem ProgressiveBalancesUpdate.coherent {incr : Nat}
-    {x y : CacheProofs.Spec.BeaconState × LhCache}
+theorem ProgressiveBalancesUpdate.correct {incr : Nat}
+    {x y : CacheProofs.Spec.BeaconState × LighthouseProgressiveBalancesCache}
     (h : ProgressiveBalancesUpdate incr x y)
-    (hc : Coherent incr x.1 x.2) : Coherent incr y.1 y.2 := by
+    (hc : ProgressiveBalancesCacheCorrect incr x.1 x.2) : ProgressiveBalancesCacheCorrect incr y.1
+    y.2 := by
   cases h with
   | attestation s s' c c' e j f is_slashed eb v p hspec he hepoch hv hp hnew hactive hf hslashed
       heb hfit hlh =>
-    obtain ⟨c'', h1, h2⟩ := attestation_coherent incr s s' c e j f is_slashed eb v p hc hspec he
+    obtain ⟨c'', h1, h2⟩ := attestation_correct incr s s' c e j f is_slashed eb v p hc hspec he
       hepoch hv hp hnew hactive hf hslashed heb hfit
     rw [hlh, ok.injEq, core.result.Result.Ok.injEq] at h1
     subst h1
     exact h2
   | slashing s s' c c' j pflags cflags eb v hspec hv hs hpp hcp hpact hcact heb hlh =>
-    obtain ⟨c'', h1, h2⟩ := slashing_coherent incr s s' c j pflags cflags eb v hc hspec hv hs
+    obtain ⟨c'', h1, h2⟩ := slashing_correct incr s s' c j pflags cflags eb v hc hspec hv hs
       hpp hcp hpact hcact heb
     rw [hlh, ok.injEq, core.result.Result.Ok.injEq] at h1
     subst h1
     exact h2
-  | otherWrite s c vs' hprev hcur => exact registry_change_coherent incr s c vs' hc hprev hcur
-  | newValidator s c v hplen hclen => exact add_validator_coherent incr s c v hc hplen hclen
+  | otherWrite s c vs' hprev hcur => exact registry_change_correct incr s c vs' hc hprev hcur
+  | newValidator s c v hplen hclen => exact add_validator_correct incr s c v hc hplen hclen
 
-theorem ProgressiveBalancesUpdates.coherent {incr : Nat}
-    {x y : CacheProofs.Spec.BeaconState × LhCache}
+theorem ProgressiveBalancesUpdates.correct {incr : Nat}
+    {x y : CacheProofs.Spec.BeaconState × LighthouseProgressiveBalancesCache}
     (h : ProgressiveBalancesUpdates incr x y)
-    (hc : Coherent incr x.1 x.2) : Coherent incr y.1 y.2 := by
+    (hc : ProgressiveBalancesCacheCorrect incr x.1 x.2) : ProgressiveBalancesCacheCorrect incr y.1
+    y.2 := by
   induction h with
   | refl => exact hc
-  | step hs _ ih => exact ih (hs.coherent hc)
+  | step hs _ ih => exact ih (hs.correct hc)
 
 /-- The upkeep fact moves a correct cache from `start` to `finish`. -/
 theorem progressive_balances_correct_after_updates {incr : Nat}
     {start finish : CacheProofs.Spec.BeaconState}
-    {c0 c : LhCache} (hc0 : Coherent incr start c0) (hup : CacheUpkeep incr start finish c0 c) :
-    Coherent incr finish c :=
-  ProgressiveBalancesUpdates.coherent hup hc0
+    {c0 c : LighthouseProgressiveBalancesCache}
+    (hc0 : ProgressiveBalancesCacheCorrect incr start c0)
+    (hup : CacheUpkeep incr start finish c0 c) :
+    ProgressiveBalancesCacheCorrect incr finish c :=
+  ProgressiveBalancesUpdates.correct hup hc0
 
 end EpochProofs.CacheBridge

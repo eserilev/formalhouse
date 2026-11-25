@@ -126,20 +126,24 @@ theorem apply_slotKeep [CurrentPreset] (o : Oracle) (d : PendingDeposit) :
       subst h
       exact ⟨rfl, rfl⟩
 
-theorem ebUpdateAt_votesBlind [CurrentPreset] (i : Nat) : VotesBlind (fun t => ebUpdateAt t i) := by
+theorem updateEffectiveBalanceAt_votesBlind [CurrentPreset]
+    (i : Nat) : VotesBlind (fun t => updateEffectiveBalanceAt t i) := by
   intro t
   simp only
   cases hv : t.validators[i]? with
   | none =>
-    rw [ebUpdateAt_of_none_v (s := clearVotes t) hv, ebUpdateAt_of_none_v hv]
+    rw [updateEffectiveBalanceAt_of_none_v (s := clearVotes t) hv,
+      updateEffectiveBalanceAt_of_none_v hv]
     rfl
   | some v =>
     cases hb : t.balances[i]? with
     | none =>
-      rw [ebUpdateAt_of_none_b (s := clearVotes t) hv hb, ebUpdateAt_of_none_b hv hb]
+      rw [updateEffectiveBalanceAt_of_none_b (s := clearVotes t) hv hb,
+        updateEffectiveBalanceAt_of_none_b hv hb]
       rfl
     | some b =>
-      rw [ebUpdateAt_some (s := clearVotes t) hv hb, ebUpdateAt_some hv hb]
+      rw [updateEffectiveBalanceAt_some (s := clearVotes t) hv hb,
+        updateEffectiveBalanceAt_some hv hb]
       cases ebNew v b with
       | error err => rfl
       | ok e =>
@@ -147,9 +151,10 @@ theorem ebUpdateAt_votesBlind [CurrentPreset] (i : Nat) : VotesBlind (fun t => e
         rw [setEB_some (s := clearVotes t) e hv, setEB_some e hv]
         rfl
 
-theorem ebUpdateAt_slotKeep [CurrentPreset] (i : Nat) : KeepsSlot (fun t => ebUpdateAt t i) := by
+theorem updateEffectiveBalanceAt_slotKeep [CurrentPreset]
+    (i : Nat) : KeepsSlot (fun t => updateEffectiveBalanceAt t i) := by
   intro t t' h
-  obtain ⟨_, _, _, _, _, _, rfl⟩ := (ebUpdateAt_ok t t' i).mp h
+  obtain ⟨_, _, _, _, _, _, rfl⟩ := (updateEffectiveBalanceAt_ok t t' i).mp h
   unfold setEB
   split <;> exact ⟨rfl, rfl⟩
 

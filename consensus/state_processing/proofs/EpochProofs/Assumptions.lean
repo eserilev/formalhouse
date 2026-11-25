@@ -124,16 +124,20 @@ variable [Spec.CurrentPreset]
 
 /-- What the proofs assume about the caches that the Gloas epoch reads. Lean does not check it. -/
 structure GloasCacheAssumptions {PubkeyMap : Type}
-    (progressiveCache : CacheProofs.PB.LhCache) (cachedTotal : U64)
+    (progressiveCache : CacheProofs.ProgressiveBalances.LighthouseProgressiveBalancesCache)
+    (cachedTotal : U64)
     (pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey)
     (pubkeyMap : PubkeyMap) (state : Spec.BeaconState) : Prop where
   /-- The progressive balances cache was correct at a state `start` of this epoch, and each write
   since then ran its cache update (`CacheUpkeep`). -/
   progressiveBalances :
-    ∃ (start : CacheProofs.Spec.BeaconState) (startCache : CacheProofs.PB.LhCache),
-      CacheProofs.PB.Coherent Spec.P.EFFECTIVE_BALANCE_INCREMENT start startCache ∧
+    ∃ (start : CacheProofs.Spec.BeaconState)
+      (startCache : CacheProofs.ProgressiveBalances.LighthouseProgressiveBalancesCache),
+      CacheProofs.ProgressiveBalances.ProgressiveBalancesCacheCorrect
+        Spec.P.EFFECTIVE_BALANCE_INCREMENT start startCache ∧
       CacheUpkeep Spec.P.EFFECTIVE_BALANCE_INCREMENT start
-        (pbState state (state.slot / Spec.P.SLOTS_PER_EPOCH)) startCache progressiveCache
+        (progressiveBalancesStateOf state (state.slot / Spec.P.SLOTS_PER_EPOCH)) startCache
+          progressiveCache
   /-- The epoch cache holds the total active balance of an earlier state `built`. That state has
   the same effective balances and the same active validators. -/
   epochCache : ∃ built : Spec.BeaconState,
@@ -142,13 +146,13 @@ structure GloasCacheAssumptions {PubkeyMap : Type}
       (Spec.is_active_validator · (state.slot / Spec.P.SLOTS_PER_EPOCH))).map
         (·.effective_balance)).sum
   /-- The pubkey cache was correct at an earlier state `built`. Then `update_pubkey_cache` added
-  the pubkeys that came after it. The map behaves as a finite map (`IndexMapLaws`). -/
+  the pubkeys that came after it. The map behaves as a finite map (`BehavesAsFiniteMap`). -/
   pubkeyCache : ∃ lookup : PubkeyMap → Spec.BLSPubkey → Option Usize,
-    CacheProofs.IndexMapLaws pubkeyMapOps lookup ∧
+    CacheProofs.BehavesAsFiniteMap pubkeyMapOps lookup ∧
     ∃ (built : Spec.BeaconState) (builtMap : PubkeyMap) (builtLength length : Usize),
       built.validators.map (·.pubkey) <+: state.validators.map (·.pubkey) ∧
-      CacheProofs.Coherent lookup builtMap builtLength (built.validators.map (·.pubkey)) ∧
-      CacheProofs.insertAll pubkeyMapOps builtMap builtLength
+      CacheProofs.PubkeyCacheCorrect lookup builtMap builtLength (built.validators.map (·.pubkey)) ∧
+      CacheProofs.insertPubkeys pubkeyMapOps builtMap builtLength
         ((state.validators.map (·.pubkey)).drop builtLength.val) = ok (some (pubkeyMap, length))
 
 end Caches

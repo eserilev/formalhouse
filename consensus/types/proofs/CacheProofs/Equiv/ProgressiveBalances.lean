@@ -6,35 +6,37 @@ import CacheProofs.Spec.ProgressiveBalances
 # `ProgressiveBalancesCache` matches the spec
 
 For each epoch and flag, the cache holds the raw sum of `effective_balance` over the unslashed
-validators that are active in that epoch and have the flag (`flagSum`). `Balance::get` applies
-the `EFFECTIVE_BALANCE_INCREMENT` floor. `Coherent` states this for both epochs.
+validators that are active in that epoch and have the flag (`unslashedFlagBalance`). `Balance::get`
+applies the `EFFECTIVE_BALANCE_INCREMENT` floor. `ProgressiveBalancesCacheCorrect` states this for
+both epochs.
 
 - Pure function lemmas (`*_ok`): each function in `../src/state/{balance,participation_totals}.rs`
   returns `Ok` and changes the raw totals as stated.
 - `spec_total_eq`: `get_total_balance(get_unslashed_participating_indices(...))` is
-  `max EFFECTIVE_BALANCE_INCREMENT flagSum`.
-- Build: `build_coherent`. Events: `attestation_coherent`, `slashing_coherent`,
-  `effective_balance_change_coherent`, `epoch_transition_coherent`, `registry_change_coherent`,
-  `add_validator_coherent`. Reads: `read_current_eq_spec`, `read_previous_eq_spec`.
+  `max EFFECTIVE_BALANCE_INCREMENT unslashedFlagBalance`.
+- Build: `build_correct`. Events: `attestation_correct`, `slashing_correct`,
+  `effective_balance_change_correct`, `epoch_transition_correct`, `registry_change_correct`,
+  `add_validator_correct`. Reads: `read_current_eq_spec`, `read_previous_eq_spec`.
 
 Each `lh*` definition models Rust code that Aeneas does not translate. It is written by hand.
 -/
 
-namespace CacheProofs.PB
+namespace CacheProofs.ProgressiveBalances
 
 open Aeneas Aeneas.Std Result types
 open state.participation_totals state.balance
 
 /-- The Rust `Balance`. -/
-abbrev Bal := state.balance.Balance
+abbrev LighthouseBalance := state.balance.Balance
 
 /-- The Rust error of the participation totals. -/
-abbrev KErr := state.participation_totals.Error
+abbrev TotalsError := state.participation_totals.Error
 
 /-- The `(raw, minimum)` pair of each `Balance`. -/
-def ab (l : List Bal) : List (Nat × Nat) := l.map fun b => (b.raw.val, b.minimum.val)
+def balanceValues (l : List LighthouseBalance) : List (Nat × Nat) := l.map fun b =>
+    (b.raw.val, b.minimum.val)
 
-theorem safe_add_assign_ok (b : Bal) (x : U64) (h : b.raw.val + x.val ≤ U64.max) :
+theorem safe_add_assign_ok (b : LighthouseBalance) (x : U64) (h : b.raw.val + x.val ≤ U64.max) :
     ∃ b', Balance.safe_add_assign b x = ok (.Ok (), b') ∧
       b'.raw.val = b.raw.val + x.val ∧ b'.minimum = b.minimum := by
   unfold Balance.safe_add_assign
@@ -48,7 +50,7 @@ theorem safe_add_assign_ok (b : Bal) (x : U64) (h : b.raw.val + x.val ≤ U64.ma
       core.option.Option.ok_or, core.result.Result.Insts.CoreOpsTry.branch]
 
 
-theorem safe_sub_assign_ok (b : Bal) (x : U64) (h : x.val ≤ b.raw.val) :
+theorem safe_sub_assign_ok (b : LighthouseBalance) (x : U64) (h : x.val ≤ b.raw.val) :
     ∃ b', Balance.safe_sub_assign b x = ok (.Ok (), b') ∧
       b'.raw.val = b.raw.val - x.val ∧ b'.minimum = b.minimum := by
   unfold Balance.safe_sub_assign
@@ -100,14 +102,15 @@ theorem set_opt_some {α : Type} (l : List α) (i : Nat) (x : α) :
   | nil => simp [List.set_opt]
   | cons h t ih => cases i <;> simp [List.set_opt, ih]
 
-theorem ab_set (l : List Bal) (i : Nat) (b : Bal) :
-    ab (l.set i b) = (ab l).set i (b.raw.val, b.minimum.val) := by
-  simp [ab, List.map_set]
+theorem ab_set (l : List LighthouseBalance) (i : Nat) (b : LighthouseBalance) :
+    balanceValues (l.set i b) = (balanceValues l).set i (b.raw.val, b.minimum.val) := by
+  simp [balanceValues, List.map_set]
 
-theorem add_to_flag_ok (s : Slice Bal) (i : Usize) (x : U64) (b : Bal)
+theorem add_to_flag_ok (s : Slice LighthouseBalance) (i : Usize) (x : U64) (b : LighthouseBalance)
     (hb : s.val[i.val]? = some b) (hfit : b.raw.val + x.val ≤ U64.max) :
     ∃ s', add_to_flag s i x = ok (.Ok (), s') ∧
-      ab s'.val = (ab s.val).set i.val (b.raw.val + x.val, b.minimum.val) := by
+      balanceValues s'.val = (balanceValues s.val).set i.val (b.raw.val + x.val,
+        b.minimum.val) := by
   obtain ⟨b', hb', hraw, hmin⟩ := safe_add_assign_ok b x hfit
   unfold add_to_flag
   refine ⟨s.set_opt i (some b'), ?_, ?_⟩
@@ -115,10 +118,11 @@ theorem add_to_flag_ok (s : Slice Bal) (i : Usize) (x : U64) (b : Bal)
       core.result.Result.Insts.CoreOpsTry.branch]
   · rw [Slice.set_opt_val_eq, set_opt_some, ab_set, hraw, hmin]
 
-theorem sub_from_flag_ok (s : Slice Bal) (i : Usize) (x : U64) (b : Bal)
+theorem sub_from_flag_ok (s : Slice LighthouseBalance) (i : Usize) (x : U64) (b : LighthouseBalance)
     (hb : s.val[i.val]? = some b) (hfit : x.val ≤ b.raw.val) :
     ∃ s', sub_from_flag s i x = ok (.Ok (), s') ∧
-      ab s'.val = (ab s.val).set i.val (b.raw.val - x.val, b.minimum.val) := by
+      balanceValues s'.val = (balanceValues s.val).set i.val (b.raw.val - x.val,
+        b.minimum.val) := by
   obtain ⟨b', hb', hraw, hmin⟩ := safe_sub_assign_ok b x hfit
   unfold sub_from_flag
   refine ⟨s.set_opt i (some b'), ?_, ?_⟩
@@ -127,9 +131,10 @@ theorem sub_from_flag_ok (s : Slice Bal) (i : Usize) (x : U64) (b : Bal)
   · rw [Slice.set_opt_val_eq, set_opt_some, ab_set, hraw, hmin]
 
 
-theorem ab_getElem? (l : List Bal) (i : Nat) (r m : Nat) (h : (ab l)[i]? = some (r, m)) :
+theorem ab_getElem? (l : List LighthouseBalance) (i : Nat) (r m : Nat)
+    (h : (balanceValues l)[i]? = some (r, m)) :
     ∃ b, l[i]? = some b ∧ b.raw.val = r ∧ b.minimum.val = m := by
-  simp only [ab, List.getElem?_map] at h
+  simp only [balanceValues, List.getElem?_map] at h
   cases hb : l[i]? with
   | none => simp [hb] at h
   | some b =>
@@ -143,11 +148,11 @@ theorem set_self {α : Type} (l : List α) (i : Nat) (a : α) (h : l[i]? = some 
   have ha : l[i] = a := by rw [List.getElem?_eq_getElem hi] at h; exact Option.some.inj h
   rw [← ha, List.set_getElem_self]
 
-theorem add_if_flag_ok (s : Slice Bal) (flags : U8) (i : Usize) (x : U64) (r m : Nat)
-    (hi : i.val < 3) (hb : (ab s.val)[i.val]? = some (r, m))
+theorem add_if_flag_ok (s : Slice LighthouseBalance) (flags : U8) (i : Usize) (x : U64) (r m : Nat)
+    (hi : i.val < 3) (hb : (balanceValues s.val)[i.val]? = some (r, m))
     (hfit : Spec.has_flag flags.val i.val → r + x.val ≤ U64.max) :
     ∃ s', add_if_flag s flags i x = ok (.Ok (), s') ∧
-      ab s'.val = (ab s.val).set i.val
+      balanceValues s'.val = (balanceValues s.val).set i.val
         (if Spec.has_flag flags.val i.val then r + x.val else r, m) := by
   obtain ⟨b, hb', hr, hm⟩ := ab_getElem? _ _ _ _ hb
   unfold add_if_flag
@@ -161,11 +166,11 @@ theorem add_if_flag_ok (s : Slice Bal) (flags : U8) (i : Usize) (x : U64) (r m :
     · simp [hf, core.result.Result.Insts.CoreOpsTry.branch]
     · simp only [hf, if_false, Bool.false_eq_true]; rw [set_self _ _ _ hb]
 
-theorem sub_if_flag_ok (s : Slice Bal) (flags : U8) (i : Usize) (x : U64) (r m : Nat)
-    (hi : i.val < 3) (hb : (ab s.val)[i.val]? = some (r, m))
+theorem sub_if_flag_ok (s : Slice LighthouseBalance) (flags : U8) (i : Usize) (x : U64) (r m : Nat)
+    (hi : i.val < 3) (hb : (balanceValues s.val)[i.val]? = some (r, m))
     (hfit : Spec.has_flag flags.val i.val → x.val ≤ r) :
     ∃ s', sub_if_flag s flags i x = ok (.Ok (), s') ∧
-      ab s'.val = (ab s.val).set i.val
+      balanceValues s'.val = (balanceValues s.val).set i.val
         (if Spec.has_flag flags.val i.val then r - x.val else r, m) := by
   obtain ⟨b, hb', hr, hm⟩ := ab_getElem? _ _ _ _ hb
   unfold sub_if_flag
@@ -182,12 +187,13 @@ theorem sub_if_flag_ok (s : Slice Bal) (flags : U8) (i : Usize) (x : U64) (r m :
 /-- The new raw total of one flag after an effective balance change from `o` to `n`. -/
 def moved (r o n : Nat) : Nat := if o < n then r + (n - o) else r - (o - n)
 
-theorem change_if_flag_ok (s : Slice Bal) (flags : U8) (i : Usize) (o n : U64) (r m : Nat)
-    (hi : i.val < 3) (hb : (ab s.val)[i.val]? = some (r, m))
+theorem change_if_flag_ok (s : Slice LighthouseBalance) (flags : U8) (i : Usize) (o n : U64)
+    (r m : Nat)
+    (hi : i.val < 3) (hb : (balanceValues s.val)[i.val]? = some (r, m))
     (hfit : Spec.has_flag flags.val i.val →
       (o.val < n.val → r + (n.val - o.val) ≤ U64.max) ∧ (n.val ≤ o.val → o.val - n.val ≤ r)) :
     ∃ s', change_if_flag s flags i o n = ok (.Ok (), s') ∧
-      ab s'.val = (ab s.val).set i.val
+      balanceValues s'.val = (balanceValues s.val).set i.val
         (if Spec.has_flag flags.val i.val then moved r o.val n.val else r, m) := by
   obtain ⟨b, hb', hr, hm⟩ := ab_getElem? _ _ _ _ hb
   unfold change_if_flag
@@ -214,20 +220,24 @@ theorem change_if_flag_ok (s : Slice Bal) (flags : U8) (i : Usize) (o n : U64) (
 
 
 /-- Three flag totals with the same minimum, as `ab` shows them. -/
-def tri (R : Nat → Nat) (m : Nat) : List (Nat × Nat) := [(R 0, m), (R 1, m), (R 2, m)]
+def threeTotals (R : Nat → Nat) (m : Nat) : List (Nat × Nat) := [(R 0, m), (R 1, m), (R 2, m)]
 
-theorem ab_length (l : List Bal) : (ab l).length = l.length := by simp [ab]
+theorem ab_length (l : List LighthouseBalance) : (balanceValues l).length =
+    l.length := by simp [balanceValues]
 
-theorem slice_of_ab (t : Array Bal 3#usize) (s : Slice Bal) (R : Nat → Nat) (m : Nat)
-    (h : ab s.val = tri R m) :
-    ab (Array.to_slice (Array.from_slice t s)).val = tri R m := by
+theorem slice_of_ab (t : Array LighthouseBalance 3#usize) (s : Slice LighthouseBalance)
+    (R : Nat → Nat) (m : Nat)
+    (h : balanceValues s.val = threeTotals R m) :
+    balanceValues (Array.to_slice (Array.from_slice t s)).val = threeTotals R m := by
   have hl : s.val.length = 3 := by rw [← ab_length, h]; rfl
   simp [Array.to_slice, Array.from_slice, hl, h]
 
 /-- The shape that `add_flags`, `on_slashing` and `on_effective_balance_change` share: one
 `step` for each flag index 0, 1 and 2, stopping at the first error. -/
-def unroll3 (step : Slice Bal → Usize → Result (core.result.Result Unit KErr × Slice Bal))
-    (totals : Array Bal 3#usize) : Result (core.result.Result Unit KErr × Array Bal 3#usize) := do
+def forEachFlag (step : Slice LighthouseBalance → Usize →
+    Result (core.result.Result Unit TotalsError × Slice LighthouseBalance))
+    (totals : Array LighthouseBalance 3#usize) : Result (core.result.Result Unit TotalsError × Array
+    LighthouseBalance 3#usize) := do
   let (s, to_slice_mut_back) ← lift (Array.to_slice_mut totals)
   let (r, s1) ← step s 0#usize
   let cf ← core.result.Result.Insts.CoreOpsTry.branch r
@@ -250,85 +260,95 @@ def unroll3 (step : Slice Bal → Usize → Result (core.result.Result Unit KErr
       | core.ops.control_flow.ControlFlow.Break residual =>
         let r3 ←
           core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
-            Unit (core.convert.FromSame KErr) residual
+            Unit (core.convert.FromSame TotalsError) residual
         let totals3 := to_slice_mut_back2 s5
         ok (r3, totals3)
     | core.ops.control_flow.ControlFlow.Break residual =>
       let r2 ←
         core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
-          Unit (core.convert.FromSame KErr) residual
+          Unit (core.convert.FromSame TotalsError) residual
       let totals2 := to_slice_mut_back1 s3
       ok (r2, totals2)
   | core.ops.control_flow.ControlFlow.Break residual =>
     let r1 ←
       core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
-        Unit (core.convert.FromSame KErr) residual
+        Unit (core.convert.FromSame TotalsError) residual
     let totals1 := to_slice_mut_back s1
     ok (r1, totals1)
 
-theorem unroll3_ok (step : Slice Bal → Usize → Result (core.result.Result Unit KErr × Slice Bal))
+theorem forEachFlag_ok (step : Slice LighthouseBalance → Usize →
+    Result (core.result.Result Unit TotalsError × Slice LighthouseBalance))
     (P : Nat → Nat → Prop) (G : Nat → Nat → Nat)
-    (hstep : ∀ (s : Slice Bal) (i : Usize) (r m : Nat), i.val < 3 →
-      (ab s.val)[i.val]? = some (r, m) → P i.val r →
-      ∃ s', step s i = ok (.Ok (), s') ∧ ab s'.val = (ab s.val).set i.val (G i.val r, m))
-    (t : Array Bal 3#usize) (R : Nat → Nat) (m : Nat) (ht : ab t.val = tri R m)
+    (hstep : ∀ (s : Slice LighthouseBalance) (i : Usize) (r m : Nat), i.val < 3 →
+      (balanceValues s.val)[i.val]? = some (r, m) → P i.val r →
+      ∃ s', step s i = ok (.Ok (), s') ∧ balanceValues s'.val =
+        (balanceValues s.val).set i.val (G i.val r, m))
+    (t : Array LighthouseBalance 3#usize) (R : Nat → Nat) (m : Nat)
+    (ht : balanceValues t.val = threeTotals R m)
     (hP : ∀ f < 3, P f (R f)) :
-    ∃ t', unroll3 step t = ok (.Ok (), t') ∧ ab t'.val = tri (fun f => G f (R f)) m := by
-  unfold unroll3
+    ∃ t', forEachFlag step t = ok (.Ok (), t') ∧ balanceValues t'.val =
+      threeTotals (fun f => G f (R f)) m := by
+  unfold forEachFlag
   simp only [Array.to_slice_mut, lift, bind_tc_ok]
-  have h0 : ab (Array.to_slice t).val = tri R m := by simp [Array.to_slice, ht]
+  have h0 : balanceValues (Array.to_slice t).val = threeTotals R m := by simp [Array.to_slice, ht]
   obtain ⟨s1, e1, a1⟩ := hstep (Array.to_slice t) 0#usize (R 0) m (by simp)
     (by rw [h0]; rfl) (hP 0 (by omega))
   rw [h0] at a1
-  have h1 : ab (Array.to_slice (Array.from_slice t s1)).val =
-      tri (fun f => if f = 0 then G 0 (R 0) else R f) m := by
-    apply slice_of_ab; rw [a1]; simp [tri]
+  have h1 : balanceValues (Array.to_slice (Array.from_slice t s1)).val =
+      threeTotals (fun f => if f = 0 then G 0 (R 0) else R f) m := by
+    apply slice_of_ab; rw [a1]; simp [threeTotals]
   obtain ⟨s2, e2, a2⟩ := hstep _ 1#usize (R 1) m (by simp)
     (by rw [h1]; rfl) (hP 1 (by omega))
   rw [h1] at a2
-  have h2 : ab (Array.to_slice (Array.from_slice (Array.from_slice t s1) s2)).val =
-      tri (fun f => if f = 0 then G 0 (R 0) else if f = 1 then G 1 (R 1) else R f) m := by
-    apply slice_of_ab; rw [a2]; simp [tri]
+  have h2 : balanceValues (Array.to_slice (Array.from_slice (Array.from_slice t s1) s2)).val =
+      threeTotals (fun f => if f = 0 then G 0 (R 0) else if f = 1 then G 1 (R 1) else R f) m := by
+    apply slice_of_ab; rw [a2]; simp [threeTotals]
   obtain ⟨s3, e3, a3⟩ := hstep _ 2#usize (R 2) m (by simp)
     (by rw [h2]; rfl) (hP 2 (by omega))
   rw [h2] at a3
   simp [e1, e2, e3, core.result.Result.Insts.CoreOpsTry.branch]
   have := slice_of_ab (Array.from_slice (Array.from_slice t s1) s2) s3
-    (fun f => G f (R f)) m (by rw [a3]; simp [tri])
+    (fun f => G f (R f)) m (by rw [a3]; simp [threeTotals])
   simpa [Array.to_slice] using this
 
-theorem add_flags_ok (t : Array Bal 3#usize) (flags : U8) (x : U64) (R : Nat → Nat) (m : Nat)
-    (ht : ab t.val = tri R m)
+theorem add_flags_ok (t : Array LighthouseBalance 3#usize) (flags : U8) (x : U64) (R : Nat → Nat)
+    (m : Nat)
+    (ht : balanceValues t.val = threeTotals R m)
     (hfit : ∀ f < 3, Spec.has_flag flags.val f → R f + x.val ≤ U64.max) :
     ∃ t', add_flags t flags x = ok (.Ok (), t') ∧
-      ab t'.val = tri (fun f => if Spec.has_flag flags.val f then R f + x.val else R f) m := by
-  have he : add_flags t flags x = unroll3 (fun s i => add_if_flag s flags i x) t := rfl
+      balanceValues t'.val = threeTotals (fun f =>
+        if Spec.has_flag flags.val f then R f + x.val else R f) m := by
+  have he : add_flags t flags x = forEachFlag (fun s i => add_if_flag s flags i x) t := rfl
   rw [he]
-  exact unroll3_ok _ (fun f r => Spec.has_flag flags.val f → r + x.val ≤ U64.max)
+  exact forEachFlag_ok _ (fun f r => Spec.has_flag flags.val f → r + x.val ≤ U64.max)
     (fun f r => if Spec.has_flag flags.val f then r + x.val else r)
     (fun s i r m hi hb hp => add_if_flag_ok s flags i x r m hi hb hp) t R m ht hfit
 
-theorem on_slashing_ok (t : Array Bal 3#usize) (flags : U8) (x : U64) (R : Nat → Nat) (m : Nat)
-    (ht : ab t.val = tri R m)
+theorem on_slashing_ok (t : Array LighthouseBalance 3#usize) (flags : U8) (x : U64) (R : Nat → Nat)
+    (m : Nat)
+    (ht : balanceValues t.val = threeTotals R m)
     (hfit : ∀ f < 3, Spec.has_flag flags.val f → x.val ≤ R f) :
     ∃ t', on_slashing t flags x = ok (.Ok (), t') ∧
-      ab t'.val = tri (fun f => if Spec.has_flag flags.val f then R f - x.val else R f) m := by
-  have he : on_slashing t flags x = unroll3 (fun s i => sub_if_flag s flags i x) t := rfl
+      balanceValues t'.val = threeTotals (fun f =>
+        if Spec.has_flag flags.val f then R f - x.val else R f) m := by
+  have he : on_slashing t flags x = forEachFlag (fun s i => sub_if_flag s flags i x) t := rfl
   rw [he]
-  exact unroll3_ok _ (fun f r => Spec.has_flag flags.val f → x.val ≤ r)
+  exact forEachFlag_ok _ (fun f r => Spec.has_flag flags.val f → x.val ≤ r)
     (fun f r => if Spec.has_flag flags.val f then r - x.val else r)
     (fun s i r m hi hb hp => sub_if_flag_ok s flags i x r m hi hb hp) t R m ht hfit
 
-theorem on_effective_balance_change_ok (t : Array Bal 3#usize) (is_slashed : Bool) (flags : U8)
-    (o n : U64) (R : Nat → Nat) (m : Nat) (ht : ab t.val = tri R m)
+theorem on_effective_balance_change_ok (t : Array LighthouseBalance 3#usize) (is_slashed : Bool)
+    (flags : U8)
+    (o n : U64) (R : Nat → Nat) (m : Nat) (ht : balanceValues t.val = threeTotals R m)
     (hfit : is_slashed = false → ∀ f < 3, Spec.has_flag flags.val f →
       (o.val < n.val → R f + (n.val - o.val) ≤ U64.max) ∧ (n.val ≤ o.val → o.val - n.val ≤ R f)) :
     ∃ t', on_effective_balance_change t is_slashed flags o n = ok (.Ok (), t') ∧
-      ab t'.val = if is_slashed then tri R m else
-        tri (fun f => if Spec.has_flag flags.val f then moved (R f) o.val n.val else R f) m := by
+      balanceValues t'.val = if is_slashed then threeTotals R m else
+        threeTotals (fun f => if Spec.has_flag flags.val f then moved (R f) o.val n.val else R f)
+          m := by
   unfold on_effective_balance_change
   cases is_slashed
-  · have he := unroll3_ok (fun s i => change_if_flag s flags i o n)
+  · have he := forEachFlag_ok (fun s i => change_if_flag s flags i o n)
       (fun f r => Spec.has_flag flags.val f →
         (o.val < n.val → r + (n.val - o.val) ≤ U64.max) ∧ (n.val ≤ o.val → o.val - n.val ≤ r))
       (fun f r => if Spec.has_flag flags.val f then moved r o.val n.val else r)
@@ -337,36 +357,39 @@ theorem on_effective_balance_change_ok (t : Array Bal 3#usize) (is_slashed : Boo
     exact he
   · exact ⟨t, rfl, by simpa using ht⟩
 
-theorem on_new_attestation_ok (t : Array Bal 3#usize) (is_slashed : Bool) (f : Usize) (x : U64)
-    (R : Nat → Nat) (m : Nat) (ht : ab t.val = tri R m) (hf : f.val < 3)
+theorem on_new_attestation_ok (t : Array LighthouseBalance 3#usize) (is_slashed : Bool) (f : Usize)
+    (x : U64)
+    (R : Nat → Nat) (m : Nat) (ht : balanceValues t.val = threeTotals R m) (hf : f.val < 3)
     (hfit : is_slashed = false → R f.val + x.val ≤ U64.max) :
     ∃ t', on_new_attestation t is_slashed f x = ok (.Ok (), t') ∧
-      ab t'.val = if is_slashed then tri R m else
-        tri (fun g => if g = f.val then R g + x.val else R g) m := by
+      balanceValues t'.val = if is_slashed then threeTotals R m else
+        threeTotals (fun g => if g = f.val then R g + x.val else R g) m := by
   unfold on_new_attestation
   cases is_slashed
-  · have h0 : (ab (Array.to_slice t).val)[f.val]? = some (R f.val, m) := by
-      simp only [Array.to_slice, Slice.from_val, ht, tri]
+  · have h0 : (balanceValues (Array.to_slice t).val)[f.val]? = some (R f.val, m) := by
+      simp only [Array.to_slice, Slice.from_val, ht, threeTotals]
       have : f.val = 0 ∨ f.val = 1 ∨ f.val = 2 := by omega
       rcases this with h | h | h <;> simp [h]
     obtain ⟨b, hb, hr, hm⟩ := ab_getElem? _ _ _ _ h0
     obtain ⟨s', e, a⟩ := add_to_flag_ok (Array.to_slice t) f x b hb (by rw [hr]; exact hfit rfl)
     simp only [lift, Array.to_slice_mut, bind_tc_ok, Bool.false_eq_true, if_false]
     simp [e]
-    have h0' : ab (Array.to_slice t).val = tri R m := by simp [Array.to_slice, ht]
+    have h0' : balanceValues (Array.to_slice t).val =
+      threeTotals R m := by simp [Array.to_slice, ht]
     rw [h0', hr, hm] at a
     have := slice_of_ab t s' (fun g => if g = f.val then R g + x.val else R g) m (by
       rw [a]
       have : f.val = 0 ∨ f.val = 1 ∨ f.val = 2 := by omega
-      rcases this with h | h | h <;> simp [h, tri])
+      rcases this with h | h | h <;> simp [h, threeTotals])
     simpa [Array.to_slice] using this
   · exact ⟨t, rfl, by simpa using ht⟩
 
-theorem total_flag_balance_ok (t : Array Bal 3#usize) (f : Usize) (R : Nat → Nat) (m : Nat)
-    (ht : ab t.val = tri R m) (hf : f.val < 3) :
+theorem total_flag_balance_ok (t : Array LighthouseBalance 3#usize) (f : Usize) (R : Nat → Nat)
+    (m : Nat)
+    (ht : balanceValues t.val = threeTotals R m) (hf : f.val < 3) :
     ∃ v : U64, total_flag_balance (Array.to_slice t) f = ok (.Ok v) ∧ v.val = max (R f.val) m := by
-  have h0 : (ab (Array.to_slice t).val)[f.val]? = some (R f.val, m) := by
-    simp only [Array.to_slice, Slice.from_val, ht, tri]
+  have h0 : (balanceValues (Array.to_slice t).val)[f.val]? = some (R f.val, m) := by
+    simp only [Array.to_slice, Slice.from_val, ht, threeTotals]
     have : f.val = 0 ∨ f.val = 1 ∨ f.val = 2 := by omega
     rcases this with h | h | h <;> simp [h]
   obtain ⟨b, hb, hr, hm⟩ := ab_getElem? _ _ _ _ h0
@@ -384,25 +407,30 @@ theorem total_flag_balance_ok (t : Array Bal 3#usize) (f : Usize) (R : Nat → N
 /-! ## The reference totals -/
 
 /-- `true` if validator `v` with flags `p` counts in the total of flag `f` in epoch `e`. -/
-def contrib (v : Spec.Validator) (p : Nat) (e f : Nat) : Bool :=
+def countsForFlag (v : Spec.Validator) (p : Nat) (e f : Nat) : Bool :=
   Spec.is_active_validator v e && !v.slashed && Spec.has_flag p f
 
 /-- The sum of `effective_balance` over the unslashed validators that are active in `e` and have
 flag `f` in `ps`. -/
-def flagSum : List Spec.Validator → List Nat → Nat → Nat → Nat
-  | v :: vs, p :: ps, e, f => (if contrib v p e f then v.effective_balance else 0) + flagSum vs ps e f
+def unslashedFlagBalance : List Spec.Validator → List Nat → Nat → Nat → Nat
+  | v :: vs, p :: ps, e, f => (if countsForFlag v p e f then v.effective_balance else 0) +
+      unslashedFlagBalance vs ps e f
   | _, _, _, _ => 0
 
 /-- What one validator adds to the total of flag `f` in epoch `e`. -/
 def wOf (v : Spec.Validator) (p : Nat) (e f : Nat) : Nat :=
-  if contrib v p e f then v.effective_balance else 0
+  if countsForFlag v p e f then v.effective_balance else 0
 
-theorem flagSum_cons (v : Spec.Validator) (vs : List Spec.Validator) (p : Nat) (ps : List Nat)
-    (e f : Nat) : flagSum (v :: vs) (p :: ps) e f = wOf v p e f + flagSum vs ps e f := rfl
+theorem unslashedFlagBalance_cons (v : Spec.Validator) (vs : List Spec.Validator) (p : Nat)
+    (ps : List Nat)
+    (e f : Nat) : unslashedFlagBalance (v :: vs) (p :: ps) e f =
+    wOf v p e f + unslashedFlagBalance vs ps e f := rfl
 
-theorem flagSum_set_ps (vs : List Spec.Validator) (ps : List Nat) (e f j : Nat) (v : Spec.Validator)
+theorem unslashedFlagBalance_set_ps (vs : List Spec.Validator) (ps : List Nat) (e f j : Nat)
+    (v : Spec.Validator)
     (p p' : Nat) (hv : vs[j]? = some v) (hp : ps[j]? = some p) :
-    flagSum vs (ps.set j p') e f + wOf v p e f = flagSum vs ps e f + wOf v p' e f := by
+    unslashedFlagBalance vs (ps.set j p') e f + wOf v p e f = unslashedFlagBalance vs ps e f +
+      wOf v p' e f := by
   induction vs generalizing ps j with
   | nil => simp at hv
   | cons v0 vs ih =>
@@ -413,15 +441,16 @@ theorem flagSum_set_ps (vs : List Spec.Validator) (ps : List Nat) (e f j : Nat) 
       | zero =>
         simp only [List.getElem?_cons_zero, Option.some.injEq] at hv hp
         subst hv hp
-        simp only [List.set_cons_zero, flagSum_cons]; omega
+        simp only [List.set_cons_zero, unslashedFlagBalance_cons]; omega
       | succ j =>
         simp only [List.getElem?_cons_succ] at hv hp
-        simp only [List.set_cons_succ, flagSum_cons]
+        simp only [List.set_cons_succ, unslashedFlagBalance_cons]
         have := ih ps j hv hp; omega
 
-theorem flagSum_set_vs (vs : List Spec.Validator) (ps : List Nat) (e f j : Nat)
+theorem unslashedFlagBalance_set_vs (vs : List Spec.Validator) (ps : List Nat) (e f j : Nat)
     (v v' : Spec.Validator) (p : Nat) (hv : vs[j]? = some v) (hp : ps[j]? = some p) :
-    flagSum (vs.set j v') ps e f + wOf v p e f = flagSum vs ps e f + wOf v' p e f := by
+    unslashedFlagBalance (vs.set j v') ps e f + wOf v p e f = unslashedFlagBalance vs ps e f +
+      wOf v' p e f := by
   induction vs generalizing ps j with
   | nil => simp at hv
   | cons v0 vs ih =>
@@ -432,10 +461,10 @@ theorem flagSum_set_vs (vs : List Spec.Validator) (ps : List Nat) (e f j : Nat)
       | zero =>
         simp only [List.getElem?_cons_zero, Option.some.injEq] at hv hp
         subst hv hp
-        simp only [List.set_cons_zero, flagSum_cons]; omega
+        simp only [List.set_cons_zero, unslashedFlagBalance_cons]; omega
       | succ j =>
         simp only [List.getElem?_cons_succ] at hv hp
-        simp only [List.set_cons_succ, flagSum_cons]
+        simp only [List.set_cons_succ, unslashedFlagBalance_cons]
         have := ih ps j hv hp; omega
 
 theorem has_flag_zero (f : Nat) : Spec.has_flag 0 f = false := by
@@ -443,34 +472,37 @@ theorem has_flag_zero (f : Nat) : Spec.has_flag 0 f = false := by
 
 theorem wOf_le_flagSum (vs : List Spec.Validator) (ps : List Nat) (e f j : Nat)
     (v : Spec.Validator) (p : Nat) (hv : vs[j]? = some v) (hp : ps[j]? = some p) :
-    wOf v p e f ≤ flagSum vs ps e f := by
-  have := flagSum_set_ps vs ps e f j v p 0 hv hp
-  have h0 : wOf v 0 e f = 0 := by simp [wOf, contrib, has_flag_zero]
+    wOf v p e f ≤ unslashedFlagBalance vs ps e f := by
+  have := unslashedFlagBalance_set_ps vs ps e f j v p 0 hv hp
+  have h0 : wOf v 0 e f = 0 := by simp [wOf, countsForFlag, has_flag_zero]
   omega
 
 
-theorem flagSum_zeros (vs : List Spec.Validator) (n e f : Nat) :
-    flagSum vs (List.replicate n 0) e f = 0 := by
+theorem unslashedFlagBalance_zeros (vs : List Spec.Validator) (n e f : Nat) :
+    unslashedFlagBalance vs (List.replicate n 0) e f = 0 := by
   induction vs generalizing n with
   | nil => cases n <;> rfl
   | cons v vs ih =>
     cases n with
     | zero => rfl
-    | succ n => simp [List.replicate_succ, flagSum_cons, ih, wOf, contrib, has_flag_zero]
+    | succ n => simp [List.replicate_succ, unslashedFlagBalance_cons, ih, wOf, countsForFlag,
+        has_flag_zero]
 
-theorem flagSum_append (vs : List Spec.Validator) (ps : List Nat) (v : Spec.Validator) (p e f : Nat)
+theorem unslashedFlagBalance_append (vs : List Spec.Validator) (ps : List Nat) (v : Spec.Validator)
+    (p e f : Nat)
     (hlen : ps.length = vs.length) :
-    flagSum (vs ++ [v]) (ps ++ [p]) e f = flagSum vs ps e f + wOf v p e f := by
+    unslashedFlagBalance (vs ++ [v]) (ps ++ [p]) e f = unslashedFlagBalance vs ps e f +
+      wOf v p e f := by
   induction vs generalizing ps with
   | nil =>
     cases ps with
-    | nil => simp [flagSum_cons, flagSum]
+    | nil => simp [unslashedFlagBalance_cons, unslashedFlagBalance]
     | cons => simp at hlen
   | cons v0 vs ih =>
     cases ps with
     | nil => simp at hlen
     | cons p0 ps =>
-      simp only [List.cons_append, flagSum_cons]
+      simp only [List.cons_append, unslashedFlagBalance_cons]
       rw [ih ps (by simpa using hlen)]; omega
 
 theorem has_flag_add_flag (p f g : Nat) :
@@ -485,7 +517,7 @@ theorem has_flag_add_flag (p f g : Nat) :
   · simp [h, Ne.symm h]
 
 
-/-! ## The spec computes `max EFFECTIVE_BALANCE_INCREMENT flagSum` -/
+/-! ## The spec computes `max EFFECTIVE_BALANCE_INCREMENT unslashedFlagBalance` -/
 
 /-- Validator `i` exists and is active in epoch `e`. -/
 def activeAt (vs : List Spec.Validator) (e i : Nat) : Bool :=
@@ -500,7 +532,7 @@ def slashedAt (vs : List Spec.Validator) (i : Nat) : Bool :=
   | none => false
 
 /-- The effective balance of validator `i`, or 0. -/
-def ebAt (vs : List Spec.Validator) (i : Nat) : Nat :=
+def effectiveBalanceAt (vs : List Spec.Validator) (i : Nat) : Nat :=
   match vs[i]? with
   | some v => v.effective_balance
   | none => 0
@@ -556,14 +588,14 @@ theorem filterMapM_unslashed (vs : List Spec.Validator) (L : List Nat)
 theorem mapM_balances (vs : List Spec.Validator) (L : List Nat) (hL : ∀ i ∈ L, i < vs.length) :
     L.mapM (fun index => do
         let v ← Spec.getAt vs index
-        pure v.effective_balance : Nat → Spec.SpecM Nat) = .ok (L.map (ebAt vs)) := by
+        pure v.effective_balance : Nat → Spec.SpecM Nat) = .ok (L.map (effectiveBalanceAt vs)) := by
   induction L with
   | nil => rfl
   | cons i L ih =>
     have hi : i < vs.length := hL i (by simp)
     rw [List.mapM_cons, ih (fun j hj => hL j (by simp [hj]))]
     simp only [Spec.getAt, List.getElem?_eq_getElem hi]
-    simp [ebAt, hi]
+    simp [effectiveBalanceAt, hi]
 
 /-- The spec counts validator `i` in the total of flag `f` in epoch `e`. -/
 def specPred (vs : List Spec.Validator) (ps : List Nat) (e f : Nat) (i : Nat) : Bool :=
@@ -571,29 +603,30 @@ def specPred (vs : List Spec.Validator) (ps : List Nat) (e f : Nat) (i : Nat) : 
 
 theorem sum_filter_eq_flagSum (vs : List Spec.Validator) (ps : List Nat) (e f : Nat)
     (hlen : ps.length = vs.length) :
-    (((List.range vs.length).filter (specPred vs ps e f)).map (ebAt vs)).sum =
-      flagSum vs ps e f := by
+    (((List.range vs.length).filter (specPred vs ps e f)).map (effectiveBalanceAt vs)).sum =
+      unslashedFlagBalance vs ps e f := by
   induction vs generalizing ps with
-  | nil => simp [flagSum]
+  | nil => simp [unslashedFlagBalance]
   | cons v vs ih =>
     cases ps with
     | nil => simp at hlen
     | cons p ps =>
       rw [List.length_cons, List.range_succ_eq_map, List.filter_cons, List.filter_map,
-        flagSum_cons]
+        unslashedFlagBalance_cons]
       have hpred : (specPred (v :: vs) (p :: ps) e f ∘ Nat.succ) = specPred vs ps e f := by
         funext i; simp [specPred, slashedAt, activeAt]
-      have heb : (ebAt (v :: vs) ∘ Nat.succ) = ebAt vs := by funext i; simp [ebAt]
+      have heb : (effectiveBalanceAt (v :: vs) ∘ Nat.succ) =
+        effectiveBalanceAt vs := by funext i; simp [effectiveBalanceAt]
       rw [hpred]
       have hrest := ih ps (by simpa using hlen)
-      by_cases hc : contrib v p e f
+      by_cases hc : countsForFlag v p e f
       · have h0 : specPred (v :: vs) (p :: ps) e f 0 = true := by
-          simp only [contrib, Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true] at hc
+          simp only [countsForFlag, Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true] at hc
           simp [specPred, slashedAt, activeAt, hc]
         simp only [h0, if_true, List.map_cons, List.map_map, heb, List.sum_cons, hrest, wOf, hc]
-        simp [ebAt]
+        simp [effectiveBalanceAt]
       · have h0 : specPred (v :: vs) (p :: ps) e f 0 = false := by
-          simp only [contrib, Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true,
+          simp only [countsForFlag, Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true,
             not_and] at hc
           simp only [specPred, slashedAt, activeAt, List.getElem?_cons_zero, List.getD_cons_zero]
           by_cases h1 : v.slashed <;> by_cases h2 : Spec.is_active_validator v e <;> simp_all
@@ -601,19 +634,20 @@ theorem sum_filter_eq_flagSum (vs : List Spec.Validator) (ps : List Nat) (e f : 
         simp only [Bool.false_eq_true, if_false, List.map_map, heb, hrest]; omega
 
 /-- The participation list that the spec reads for epoch `e`. -/
-def partAt (s : Spec.BeaconState) (e : Nat) : List Nat :=
+def participationAt (s : Spec.BeaconState) (e : Nat) : List Nat :=
   if e = Spec.get_current_epoch s then s.current_epoch_participation
   else s.previous_epoch_participation
 
 /-- `get_total_balance(state, get_unslashed_participating_indices(state, f, e))` is
-`max EFFECTIVE_BALANCE_INCREMENT flagSum` when the lists have the same length and the total
-fits. -/
+`max EFFECTIVE_BALANCE_INCREMENT unslashedFlagBalance` when the lists have the same length and the
+total fits. -/
 theorem spec_total_eq (incr : Nat) (s : Spec.BeaconState) (f e : Nat)
     (he : e = Spec.get_previous_epoch s ∨ e = Spec.get_current_epoch s)
-    (hlen : (partAt s e).length = s.validators.length)
-    (hfit : max incr (flagSum s.validators (partAt s e) e f) < Spec.UINT64_SIZE) :
+    (hlen : (participationAt s e).length = s.validators.length)
+    (hfit : max incr (unslashedFlagBalance s.validators (participationAt s e) e f) <
+    Spec.UINT64_SIZE) :
     (Spec.get_unslashed_participating_indices s f e >>= Spec.get_total_balance incr s) =
-      .ok (max incr (flagSum s.validators (partAt s e) e f)) := by
+      .ok (max incr (unslashedFlagBalance s.validators (participationAt s e) e f)) := by
   have hA := active_indices_eq s.validators e 0
   simp only [Nat.add_zero, List.map_id_fun', id_eq] at hA
   have hmem : ∀ i ∈ (List.range s.validators.length).filter (activeAt s.validators e),
@@ -623,8 +657,8 @@ theorem spec_total_eq (incr : Nat) (s : Spec.BeaconState) (f e : Nat)
   have hcond : (!(decide (e = Spec.get_previous_epoch s) || decide (e = Spec.get_current_epoch s)))
       = false := by
     rcases he with h | h <;> simp [h]
-  have hF := filterMapM_flags (partAt s e) f _ (fun i hi => hlen ▸ hmem i hi)
-  simp only [partAt] at hF hlen hfit ⊢
+  have hF := filterMapM_flags (participationAt s e) f _ (fun i hi => hlen ▸ hmem i hi)
+  simp only [participationAt] at hF hlen hfit ⊢
   simp only [hcond, Bool.false_eq_true, if_false, hA, hF]
   generalize (if e = Spec.get_current_epoch s then s.current_epoch_participation
     else s.previous_epoch_participation) = P at hlen hfit ⊢
@@ -651,14 +685,15 @@ theorem spec_total_eq (incr : Nat) (s : Spec.BeaconState) (f e : Nat)
 
 /-! ## Facts about one validator's share -/
 
-theorem tri_congr (R R' : Nat → Nat) (m : Nat) (h : ∀ g < 3, R g = R' g) : tri R m = tri R' m := by
-  simp only [tri, h 0 (by omega), h 1 (by omega), h 2 (by omega)]
+theorem tri_congr (R R' : Nat → Nat) (m : Nat) (h : ∀ g < 3, R g = R' g) : threeTotals R m =
+    threeTotals R' m := by
+  simp only [threeTotals, h 0 (by omega), h 1 (by omega), h 2 (by omega)]
 
 theorem wOf_add_flag (v : Spec.Validator) (p e f g : Nat) (hnew : Spec.has_flag p f = false)
     (hactive : Spec.is_active_validator v e = true) :
     wOf v (Spec.add_flag p f) e g =
       wOf v p e g + (if g = f ∧ v.slashed = false then v.effective_balance else 0) := by
-  unfold wOf contrib
+  unfold wOf countsForFlag
   rw [has_flag_add_flag]
   by_cases hg : g = f
   · subst hg; cases hs : v.slashed <;> simp [hnew, hactive]
@@ -666,18 +701,18 @@ theorem wOf_add_flag (v : Spec.Validator) (p e f g : Nat) (hnew : Spec.has_flag 
 
 theorem wOf_slashed (v : Spec.Validator) (p e f : Nat) :
     wOf { v with slashed := true } p e f = 0 := by
-  simp [wOf, contrib]
+  simp [wOf, countsForFlag]
 
 theorem wOf_unslashed (v : Spec.Validator) (p e f : Nat) (hs : v.slashed = false)
     (hact : Spec.has_flag p f = true → Spec.is_active_validator v e = true) :
     wOf v p e f = if Spec.has_flag p f then v.effective_balance else 0 := by
   by_cases hf : Spec.has_flag p f
-  · simp [wOf, contrib, hs, hf, hact hf]
-  · simp [wOf, contrib, hf]
+  · simp [wOf, countsForFlag, hs, hf, hact hf]
+  · simp [wOf, countsForFlag, hf]
 
 theorem wOf_eb (v : Spec.Validator) (p e f b : Nat) :
-    wOf { v with effective_balance := b } p e f = if contrib v p e f then b else 0 := by
-  simp [wOf, contrib, Spec.is_active_validator]
+    wOf { v with effective_balance := b } p e f = if countsForFlag v p e f then b else 0 := by
+  simp [wOf, countsForFlag, Spec.is_active_validator]
 
 
 /-! ## The cache and its correctness -/
@@ -686,39 +721,45 @@ noncomputable section
 
 /-- `Inner` of `ProgressiveBalancesCache`. The raw totals of each `EpochTotalBalances` are the
 three `Balance` values. -/
-structure LhCache where
+structure LighthouseProgressiveBalancesCache where
   current_epoch : Nat
-  previous_epoch_cache : Array Bal 3#usize
-  current_epoch_cache : Array Bal 3#usize
+  previous_epoch_cache : Array LighthouseBalance 3#usize
+  current_epoch_cache : Array LighthouseBalance 3#usize
 
 /-- The errors that the untranslated code returns. `totals` wraps the `From` impl into
 `BeaconStateError`. -/
-inductive LhError where
-  | totals (e : KErr)
+inductive LighthouseError where
+  | totals (e : TotalsError)
   | arith
   | inconsistent
 
 /-- The current epoch cache holds, for each flag, the reference total of the current epoch. -/
-def CurrentCoherent (incr : Nat) (s : Spec.BeaconState) (c : LhCache) : Prop :=
+def CurrentEpochTotalsCorrect (incr : Nat) (s : Spec.BeaconState)
+    (c : LighthouseProgressiveBalancesCache) : Prop :=
   c.current_epoch = s.current_epoch ∧
-  ab c.current_epoch_cache.val =
-    tri (flagSum s.validators s.current_epoch_participation s.current_epoch) incr
+  balanceValues c.current_epoch_cache.val =
+    threeTotals (unslashedFlagBalance s.validators s.current_epoch_participation s.current_epoch)
+      incr
 
 /-- The previous epoch cache holds, for each flag, the total over `previous_epoch_participation`
 and the validators active in `get_previous_epoch(state)`. -/
-def PreviousCoherent (incr : Nat) (s : Spec.BeaconState) (c : LhCache) : Prop :=
-  ab c.previous_epoch_cache.val =
-    tri (flagSum s.validators s.previous_epoch_participation (Spec.get_previous_epoch s)) incr
+def PreviousEpochTotalsCorrect (incr : Nat) (s : Spec.BeaconState)
+    (c : LighthouseProgressiveBalancesCache) : Prop :=
+  balanceValues c.previous_epoch_cache.val =
+    threeTotals (unslashedFlagBalance s.validators s.previous_epoch_participation
+      (Spec.get_previous_epoch s)) incr
 
 /-- The cache holds the correct flag totals for the current and the previous epoch. -/
-def Coherent (incr : Nat) (s : Spec.BeaconState) (c : LhCache) : Prop :=
-  CurrentCoherent incr s c ∧ PreviousCoherent incr s c
+def ProgressiveBalancesCacheCorrect (incr : Nat) (s : Spec.BeaconState)
+    (c : LighthouseProgressiveBalancesCache) : Prop :=
+  CurrentEpochTotalsCorrect incr s c ∧ PreviousEpochTotalsCorrect incr s c
 
 /-! ## Attestation -/
 
 /-- `ProgressiveBalancesCache::on_new_attestation`. -/
-def lhOnNewAttestation (c : LhCache) (epoch : Nat) (is_slashed : Bool) (f : Usize) (eb : U64) :
-    Result (core.result.Result LhCache LhError) :=
+def lighthouseOnNewAttestation (c : LighthouseProgressiveBalancesCache) (epoch : Nat)
+    (is_slashed : Bool) (f : Usize) (eb : U64) :
+    Result (core.result.Result LighthouseProgressiveBalancesCache LighthouseError) :=
   if epoch = c.current_epoch then do
     let (r, t) ← on_new_attestation c.current_epoch_cache is_slashed f eb
     match r with
@@ -732,32 +773,36 @@ def lhOnNewAttestation (c : LhCache) (epoch : Nat) (is_slashed : Bool) (f : Usiz
     | .Err e => ok (.Err (.totals e))
   else ok (.Err .inconsistent)
 
-theorem flagSum_add_flag (vs : List Spec.Validator) (ps : List Nat) (e f g j : Nat)
+theorem unslashedFlagBalance_add_flag (vs : List Spec.Validator) (ps : List Nat) (e f g j : Nat)
     (v : Spec.Validator) (p : Nat) (hv : vs[j]? = some v) (hp : ps[j]? = some p)
     (hnew : Spec.has_flag p f = false) (hactive : Spec.is_active_validator v e = true) :
-    flagSum vs (ps.set j (Spec.add_flag p f)) e g =
-      flagSum vs ps e g + (if g = f ∧ v.slashed = false then v.effective_balance else 0) := by
-  have h := flagSum_set_ps vs ps e g j v p (Spec.add_flag p f) hv hp
+    unslashedFlagBalance vs (ps.set j (Spec.add_flag p f)) e g =
+      unslashedFlagBalance vs ps e g + (if g = f ∧ v.slashed =
+        false then v.effective_balance else 0) := by
+  have h := unslashedFlagBalance_set_ps vs ps e g j v p (Spec.add_flag p f) hv hp
   rw [wOf_add_flag v p e f g hnew hactive] at h
   omega
 
 /-- The attestation hook keeps the cache correct. The flag was not set, and the validator is
 active in the target epoch. -/
-theorem attestation_coherent (incr : Nat) (s s' : Spec.BeaconState) (c : LhCache)
+theorem attestation_correct (incr : Nat) (s s' : Spec.BeaconState)
+    (c : LighthouseProgressiveBalancesCache)
     (e j : Nat) (f : Usize) (is_slashed : Bool) (eb : U64) (v : Spec.Validator) (p : Nat)
-    (hc : Coherent incr s c) (hspec : Spec.set_participation_flag s e j f.val = .ok s')
+    (hc : ProgressiveBalancesCacheCorrect incr s c)
+    (hspec : Spec.set_participation_flag s e j f.val = .ok s')
     (he : e = Spec.get_previous_epoch s ∨ e = Spec.get_current_epoch s)
     (hepoch : s.current_epoch ≤ U64.max)
-    (hv : s.validators[j]? = some v) (hp : (partAt s e)[j]? = some p)
+    (hv : s.validators[j]? = some v) (hp : (participationAt s e)[j]? = some p)
     (hnew : Spec.has_flag p f.val = false) (hactive : Spec.is_active_validator v e = true)
     (hf : f.val < 3) (hslashed : is_slashed = v.slashed) (heb : eb.val = v.effective_balance)
-    (hfit : flagSum s'.validators (partAt s' e) e f.val ≤ U64.max) :
-    ∃ c', lhOnNewAttestation c e is_slashed f eb = ok (.Ok c') ∧ Coherent incr s' c' := by
+    (hfit : unslashedFlagBalance s'.validators (participationAt s' e) e f.val ≤ U64.max) :
+    ∃ c', lighthouseOnNewAttestation c e is_slashed f eb = ok (.Ok c') ∧
+      ProgressiveBalancesCacheCorrect incr s' c' := by
   obtain ⟨⟨hce, hcur⟩, hprev⟩ := hc
   by_cases hec : e = s.current_epoch
   · -- The current epoch.
-    have hpart : partAt s e = s.current_epoch_participation := by
-      simp [partAt, Spec.get_current_epoch, hec]
+    have hpart : participationAt s e = s.current_epoch_participation := by
+      simp [participationAt, Spec.get_current_epoch, hec]
     rw [hpart] at hp
     have hs' : s' = { s with current_epoch_participation :=
         s.current_epoch_participation.set j (Spec.add_flag p f.val) } := by
@@ -765,12 +810,13 @@ theorem attestation_coherent (incr : Nat) (s s' : Spec.BeaconState) (c : LhCache
         hnew, pure, Except.pure, Bind.bind, Except.bind] at hspec
       exact hspec.symm
     subst hs'
-    have hsum := fun g => flagSum_add_flag s.validators s.current_epoch_participation e f.val g j v p
+    have hsum := fun g => unslashedFlagBalance_add_flag s.validators s.current_epoch_participation e
+      f.val g j v p
       hv hp hnew hactive
-    simp only [partAt, Spec.get_current_epoch, hec, if_true] at hfit
+    simp only [participationAt, Spec.get_current_epoch, hec, if_true] at hfit
     rw [hec] at hsum
     obtain ⟨t', ht', habs⟩ := on_new_attestation_ok c.current_epoch_cache is_slashed f eb
-      (flagSum s.validators s.current_epoch_participation s.current_epoch) incr hcur hf
+      (unslashedFlagBalance s.validators s.current_epoch_participation s.current_epoch) incr hcur hf
       (by
         intro hns
         have := hsum f.val
@@ -778,7 +824,7 @@ theorem attestation_coherent (incr : Nat) (s s' : Spec.BeaconState) (c : LhCache
         simp only [hns, and_self, if_true] at this
         rw [heb]; omega)
     refine ⟨{ c with current_epoch_cache := t' }, ?_, ⟨⟨hce, ?_⟩, hprev⟩⟩
-    · simp [lhOnNewAttestation, hce, hec, ht']
+    · simp [lighthouseOnNewAttestation, hce, hec, ht']
     · simp only [habs]
       cases hs : v.slashed
       · simp only [hslashed, hs, Bool.false_eq_true, if_false]
@@ -798,8 +844,8 @@ theorem attestation_coherent (incr : Nat) (s s' : Spec.BeaconState) (c : LhCache
     have hpe : Spec.get_previous_epoch s = s.current_epoch - 1 := by
       simp [Spec.get_previous_epoch, Spec.get_current_epoch, Spec.GENESIS_EPOCH, hpos]
     have he1 : e + 1 = s.current_epoch := by have h1 := hep.trans hpe; omega
-    have hpart : partAt s e = s.previous_epoch_participation := by
-      simp [partAt, Spec.get_current_epoch, hec]
+    have hpart : participationAt s e = s.previous_epoch_participation := by
+      simp [participationAt, Spec.get_current_epoch, hec]
     rw [hpart] at hp
     have hs' : s' = { s with previous_epoch_participation :=
         s.previous_epoch_participation.set j (Spec.add_flag p f.val) } := by
@@ -807,12 +853,14 @@ theorem attestation_coherent (incr : Nat) (s s' : Spec.BeaconState) (c : LhCache
         hnew, pure, Except.pure, Bind.bind, Except.bind] at hspec
       exact hspec.symm
     subst hs'
-    have hsum := fun g => flagSum_add_flag s.validators s.previous_epoch_participation e f.val g j v
+    have hsum := fun g => unslashedFlagBalance_add_flag s.validators s.previous_epoch_participation
+      e f.val g j v
       p hv hp hnew hactive
-    simp only [partAt, Spec.get_current_epoch, hec, if_false] at hfit
+    simp only [participationAt, Spec.get_current_epoch, hec, if_false] at hfit
     rw [hep] at hsum hfit
     obtain ⟨t', ht', habs⟩ := on_new_attestation_ok c.previous_epoch_cache is_slashed f eb
-      (flagSum s.validators s.previous_epoch_participation (Spec.get_previous_epoch s)) incr hprev hf
+      (unslashedFlagBalance s.validators s.previous_epoch_participation (Spec.get_previous_epoch s))
+        incr hprev hf
       (by
         intro hns
         have := hsum f.val
@@ -824,8 +872,8 @@ theorem attestation_coherent (incr : Nat) (s s' : Spec.BeaconState) (c : LhCache
       have hle : ¬ U64.max < e + 1 := by rw [he1]; exact Nat.not_lt.mpr hepoch
       have heq : e + 1 = c.current_epoch := by rw [hce]; exact he1
       have hlt : ¬ U64.max < s.current_epoch := Nat.not_lt.mpr hepoch
-      simp [lhOnNewAttestation, heq, ht', hce, hec, hlt]
-    · simp only [PreviousCoherent, habs]
+      simp [lighthouseOnNewAttestation, heq, ht', hce, hec, hlt]
+    · simp only [PreviousEpochTotalsCorrect, habs]
       have hpe : Spec.get_previous_epoch
           { s with previous_epoch_participation :=
             s.previous_epoch_participation.set j (Spec.add_flag p f.val) } =
@@ -842,8 +890,8 @@ theorem attestation_coherent (incr : Nat) (s s' : Spec.BeaconState) (c : LhCache
 /-! ## Slashing -/
 
 /-- `ProgressiveBalancesCache::on_slashing`. -/
-def lhOnSlashing (c : LhCache) (pflags cflags : U8) (eb : U64) :
-    Result (core.result.Result LhCache LhError) := do
+def lighthouseOnSlashing (c : LighthouseProgressiveBalancesCache) (pflags cflags : U8) (eb : U64) :
+    Result (core.result.Result LighthouseProgressiveBalancesCache LighthouseError) := do
   let (r, t) ← on_slashing c.previous_epoch_cache pflags eb
   match r with
   | .Err e => ok (.Err (.totals e))
@@ -853,14 +901,14 @@ def lhOnSlashing (c : LhCache) (pflags cflags : U8) (eb : U64) :
     | .Err e => ok (.Err (.totals e))
     | .Ok _ => ok (.Ok { c with previous_epoch_cache := t, current_epoch_cache := t2 })
 
-theorem flagSum_slash (vs : List Spec.Validator) (ps : List Nat) (e g j : Nat)
+theorem unslashedFlagBalance_slash (vs : List Spec.Validator) (ps : List Nat) (e g j : Nat)
     (v : Spec.Validator) (p : Nat) (hv : vs[j]? = some v) (hp : ps[j]? = some p)
     (hs : v.slashed = false) (hact : ∀ f < 3, Spec.has_flag p f = true →
       Spec.is_active_validator v e = true) (hg : g < 3) :
-    flagSum (vs.set j { v with slashed := true }) ps e g =
-      flagSum vs ps e g - (if Spec.has_flag p g then v.effective_balance else 0) ∧
-    (Spec.has_flag p g = true → v.effective_balance ≤ flagSum vs ps e g) := by
-  have h := flagSum_set_vs vs ps e g j v { v with slashed := true } p hv hp
+    unslashedFlagBalance (vs.set j { v with slashed := true }) ps e g =
+      unslashedFlagBalance vs ps e g - (if Spec.has_flag p g then v.effective_balance else 0) ∧
+    (Spec.has_flag p g = true → v.effective_balance ≤ unslashedFlagBalance vs ps e g) := by
+  have h := unslashedFlagBalance_set_vs vs ps e g j v { v with slashed := true } p hv hp
   have hle := wOf_le_flagSum vs ps e g j v p hv hp
   rw [wOf_slashed, wOf_unslashed v p e g hs (hact g hg)] at h
   rw [wOf_unslashed v p e g hs (hact g hg)] at hle
@@ -870,9 +918,10 @@ theorem flagSum_slash (vs : List Spec.Validator) (ps : List Nat) (e g j : Nat)
 
 /-- The slashing hook keeps the cache correct. It never fails. The validator was not slashed,
 and each flag that it holds in an epoch implies that it is active in that epoch. -/
-theorem slashing_coherent (incr : Nat) (s s' : Spec.BeaconState) (c : LhCache) (j : Nat)
+theorem slashing_correct (incr : Nat) (s s' : Spec.BeaconState)
+    (c : LighthouseProgressiveBalancesCache) (j : Nat)
     (pflags cflags : U8) (eb : U64) (v : Spec.Validator)
-    (hc : Coherent incr s c) (hspec : Spec.set_slashed s j = .ok s')
+    (hc : ProgressiveBalancesCacheCorrect incr s c) (hspec : Spec.set_slashed s j = .ok s')
     (hv : s.validators[j]? = some v) (hs : v.slashed = false)
     (hpp : s.previous_epoch_participation[j]? = some pflags.val)
     (hcp : s.current_epoch_participation[j]? = some cflags.val)
@@ -881,26 +930,27 @@ theorem slashing_coherent (incr : Nat) (s s' : Spec.BeaconState) (c : LhCache) (
     (hcact : ∀ f < 3, Spec.has_flag cflags.val f = true →
       Spec.is_active_validator v s.current_epoch = true)
     (heb : eb.val = v.effective_balance) :
-    ∃ c', lhOnSlashing c pflags cflags eb = ok (.Ok c') ∧ Coherent incr s' c' := by
+    ∃ c', lighthouseOnSlashing c pflags cflags eb = ok (.Ok c') ∧
+      ProgressiveBalancesCacheCorrect incr s' c' := by
   obtain ⟨⟨hce, hcur⟩, hprev⟩ := hc
   have hs' : s' = { s with validators := s.validators.set j { v with slashed := true } } := by
     simp [Spec.set_slashed, Spec.getAt, hv, pure, Except.pure, Bind.bind, Except.bind] at hspec
     exact hspec.symm
   subst hs'
-  have hP := fun g hg => flagSum_slash s.validators s.previous_epoch_participation
+  have hP := fun g hg => unslashedFlagBalance_slash s.validators s.previous_epoch_participation
     (Spec.get_previous_epoch s) g j v pflags.val hv hpp hs hpact hg
-  have hC := fun g hg => flagSum_slash s.validators s.current_epoch_participation
+  have hC := fun g hg => unslashedFlagBalance_slash s.validators s.current_epoch_participation
     s.current_epoch g j v cflags.val hv hcp hs hcact hg
   obtain ⟨t, et, hat⟩ := on_slashing_ok c.previous_epoch_cache pflags eb _ incr hprev
     (fun g hg hf => by rw [heb]; exact (hP g hg).2 hf)
   obtain ⟨t2, et2, hat2⟩ := on_slashing_ok c.current_epoch_cache cflags eb _ incr hcur
     (fun g hg hf => by rw [heb]; exact (hC g hg).2 hf)
   refine ⟨{ c with previous_epoch_cache := t, current_epoch_cache := t2 }, ?_, ⟨⟨hce, ?_⟩, ?_⟩⟩
-  · simp [lhOnSlashing, et, et2]
+  · simp [lighthouseOnSlashing, et, et2]
   · simp only [hat2]
     apply tri_congr; intro g hg
     rw [(hC g hg).1, heb]; by_cases hf : Spec.has_flag cflags.val g <;> simp [hf]
-  · simp only [PreviousCoherent, hat]
+  · simp only [PreviousEpochTotalsCorrect, hat]
     apply tri_congr; intro g hg
     refine Eq.trans ?_ (hP g hg).1.symm
     rw [heb]
@@ -910,27 +960,31 @@ theorem slashing_coherent (incr : Nat) (s s' : Spec.BeaconState) (c : LhCache) (
 
 /-- `ProgressiveBalancesCache::on_effective_balance_change`. It changes the current epoch cache
 only. -/
-def lhOnEffectiveBalanceChange (c : LhCache) (is_slashed : Bool) (cflags : U8) (o n : U64) :
-    Result (core.result.Result LhCache LhError) := do
+def lighthouseOnEffectiveBalanceChange (c : LighthouseProgressiveBalancesCache) (is_slashed : Bool)
+    (cflags : U8) (o n : U64) :
+    Result (core.result.Result LighthouseProgressiveBalancesCache LighthouseError) := do
   let (r, t) ← on_effective_balance_change c.current_epoch_cache is_slashed cflags o n
   match r with
   | .Err e => ok (.Err (.totals e))
   | .Ok _ => ok (.Ok { c with current_epoch_cache := t })
 
 /-- The effective balance hook keeps the current epoch cache correct. It does not change the
-previous epoch cache, which the epoch transition then drops (see `epoch_transition_coherent`). -/
-theorem effective_balance_change_coherent (incr : Nat) (s s' : Spec.BeaconState) (c : LhCache)
+previous epoch cache, which the epoch transition then drops (see `epoch_transition_correct`). -/
+theorem effective_balance_change_correct (incr : Nat) (s s' : Spec.BeaconState)
+    (c : LighthouseProgressiveBalancesCache)
     (j : Nat) (is_slashed : Bool) (cflags : U8) (o n : U64) (v : Spec.Validator)
-    (hc : CurrentCoherent incr s c) (hspec : Spec.set_effective_balance s j n.val = .ok s')
+    (hc : CurrentEpochTotalsCorrect incr s c)
+    (hspec : Spec.set_effective_balance s j n.val = .ok s')
     (hv : s.validators[j]? = some v) (hslashed : is_slashed = v.slashed)
     (ho : o.val = v.effective_balance)
     (hcp : s.current_epoch_participation[j]? = some cflags.val)
     (hcact : ∀ f < 3, Spec.has_flag cflags.val f = true →
       Spec.is_active_validator v s.current_epoch = true)
-    (hfit : ∀ f < 3, flagSum s'.validators s'.current_epoch_participation s'.current_epoch f ≤
+    (hfit : ∀ f < 3, unslashedFlagBalance s'.validators s'.current_epoch_participation
+    s'.current_epoch f ≤
       U64.max) :
-    ∃ c', lhOnEffectiveBalanceChange c is_slashed cflags o n = ok (.Ok c') ∧
-      CurrentCoherent incr s' c' ∧ c'.previous_epoch_cache = c.previous_epoch_cache := by
+    ∃ c', lighthouseOnEffectiveBalanceChange c is_slashed cflags o n = ok (.Ok c') ∧
+      CurrentEpochTotalsCorrect incr s' c' ∧ c'.previous_epoch_cache = c.previous_epoch_cache := by
   obtain ⟨hce, hcur⟩ := hc
   let v' : Spec.Validator := { v with effective_balance := n.val }
   have hs' : s' = { s with validators := s.validators.set j v' } := by
@@ -938,23 +992,25 @@ theorem effective_balance_change_coherent (incr : Nat) (s s' : Spec.BeaconState)
       Except.bind] at hspec
     exact hspec.symm
   subst hs'
-  have hC : ∀ g, flagSum (s.validators.set j v') s.current_epoch_participation s.current_epoch g
+  have hC : ∀ g, unslashedFlagBalance (s.validators.set j v') s.current_epoch_participation
+    s.current_epoch g
       + wOf v cflags.val s.current_epoch g =
-      flagSum s.validators s.current_epoch_participation s.current_epoch g +
-        (if contrib v cflags.val s.current_epoch g then n.val else 0) := by
+      unslashedFlagBalance s.validators s.current_epoch_participation s.current_epoch g +
+        (if countsForFlag v cflags.val s.current_epoch g then n.val else 0) := by
     intro g
-    have h := flagSum_set_vs s.validators s.current_epoch_participation s.current_epoch g j v
+    have h := unslashedFlagBalance_set_vs s.validators s.current_epoch_participation s.current_epoch
+      g j v
       v' cflags.val hv hcp
     rw [wOf_eb] at h; exact h
   have hle := fun g => wOf_le_flagSum s.validators s.current_epoch_participation
     s.current_epoch g j v cflags.val hv hcp
   -- For an unslashed validator, `contrib` is `has_flag`.
   have hcontrib : ∀ g < 3, v.slashed = false →
-      contrib v cflags.val s.current_epoch g = Spec.has_flag cflags.val g := by
+      countsForFlag v cflags.val s.current_epoch g = Spec.has_flag cflags.val g := by
     intro g hg hs
     by_cases hf : Spec.has_flag cflags.val g
-    · simp [contrib, hs, hf, hcact g hg hf]
-    · simp [contrib, hf]
+    · simp [countsForFlag, hs, hf, hcact g hg hf]
+    · simp [countsForFlag, hf]
   obtain ⟨t, et, hat⟩ := on_effective_balance_change_ok c.current_epoch_cache is_slashed cflags
     o n _ incr hcur (fun hns g hg hf => by
       rw [hslashed] at hns
@@ -967,7 +1023,7 @@ theorem effective_balance_change_coherent (incr : Nat) (s s' : Spec.BeaconState)
       simp only at hfg
       constructor <;> intro <;> omega)
   refine ⟨{ c with current_epoch_cache := t }, ?_, ⟨hce, ?_⟩, rfl⟩
-  · simp [lhOnEffectiveBalanceChange, et]
+  · simp [lighthouseOnEffectiveBalanceChange, et]
   · simp only [hat]
     cases hs : v.slashed
     · simp only [hslashed, hs, Bool.false_eq_true, if_false]
@@ -988,23 +1044,23 @@ theorem effective_balance_change_coherent (incr : Nat) (s s' : Spec.BeaconState)
     · simp only [hslashed, hs, if_true]
       apply tri_congr; intro g hg
       have hcg := hC g
-      simp only [wOf, contrib, hs, Bool.not_true, Bool.and_false, Bool.false_and,
+      simp only [wOf, countsForFlag, hs, Bool.not_true, Bool.and_false, Bool.false_and,
         Bool.false_eq_true, if_false] at hcg
       omega
 
 /-! ## Epoch transition -/
 
 /-- `EpochTotalBalances::new`: three `Balance::zero(effective_balance_increment)`. -/
-def lhNewTotals (incr : U64) : Result (Array Bal 3#usize) := do
+def lighthouseNewTotals (incr : U64) : Result (Array LighthouseBalance 3#usize) := do
   let z ← Balance.zero incr
   ok (Array.make 3#usize [z, z, z])
 
 /-- `ProgressiveBalancesCache::on_epoch_transition`. -/
-def lhOnEpochTransition (c : LhCache) (incr : U64) :
-    Result (core.result.Result LhCache LhError) :=
+def lighthouseOnEpochTransition (c : LighthouseProgressiveBalancesCache) (incr : U64) :
+    Result (core.result.Result LighthouseProgressiveBalancesCache LighthouseError) :=
   if U64.max < c.current_epoch + 1 then ok (.Err .arith)
   else do
-    let fresh ← lhNewTotals incr
+    let fresh ← lighthouseNewTotals incr
     ok (.Ok { current_epoch := c.current_epoch + 1
               previous_epoch_cache := c.current_epoch_cache
               current_epoch_cache := fresh })
@@ -1012,17 +1068,18 @@ def lhOnEpochTransition (c : LhCache) (incr : U64) :
 /-- The epoch transition gives a correct cache for the next epoch. It needs only the current
 epoch cache. So the previous epoch cache, which the effective balance hook does not update, does
 not matter here. -/
-theorem epoch_transition_coherent (incr : U64) (s : Spec.BeaconState) (c : LhCache)
-    (hc : CurrentCoherent incr.val s c) (hepoch : s.current_epoch + 1 ≤ U64.max) :
-    ∃ c', lhOnEpochTransition c incr = ok (.Ok c') ∧
-      Coherent incr.val (Spec.next_epoch_participation s) c' := by
+theorem epoch_transition_correct (incr : U64) (s : Spec.BeaconState)
+    (c : LighthouseProgressiveBalancesCache)
+    (hc : CurrentEpochTotalsCorrect incr.val s c) (hepoch : s.current_epoch + 1 ≤ U64.max) :
+    ∃ c', lighthouseOnEpochTransition c incr = ok (.Ok c') ∧
+      ProgressiveBalancesCacheCorrect incr.val (Spec.next_epoch_participation s) c' := by
   obtain ⟨hce, hcur⟩ := hc
   have hlt : ¬ U64.max < c.current_epoch + 1 := by rw [hce]; exact Nat.not_lt.mpr hepoch
-  refine ⟨_, by simp [lhOnEpochTransition, hlt, lhNewTotals, Balance.zero]; rfl, ⟨⟨?_, ?_⟩, ?_⟩⟩
+  refine ⟨_, by simp [lighthouseOnEpochTransition, hlt, lighthouseNewTotals, Balance.zero]; rfl, ⟨⟨?_, ?_⟩, ?_⟩⟩
   · simp [Spec.next_epoch_participation, hce]
   · simp only [Spec.next_epoch_participation, Spec.process_participation_flag_updates]
-    simp [ab, tri, flagSum_zeros]
-  · simp only [PreviousCoherent, Spec.next_epoch_participation,
+    simp [balanceValues, threeTotals, unslashedFlagBalance_zeros]
+  · simp only [PreviousEpochTotalsCorrect, Spec.next_epoch_participation,
       Spec.process_participation_flag_updates, Spec.get_previous_epoch, Spec.get_current_epoch,
       Spec.GENESIS_EPOCH]
     simpa using hcur
@@ -1030,93 +1087,99 @@ theorem epoch_transition_coherent (incr : U64) (s : Spec.BeaconState) (c : LhCac
 /-! ## State changes with no hook -/
 
 /-- Two validator lists that agree, index by index, on what the totals of epoch `e` read. -/
-def SameView (vs vs' : List Spec.Validator) (e : Nat) : Prop :=
+def SameFlagBalanceInputs (vs vs' : List Spec.Validator) (e : Nat) : Prop :=
   vs'.length = vs.length ∧ ∀ (i : Nat) (v v' : Spec.Validator), vs[i]? = some v → vs'[i]? = some v' →
     v'.effective_balance = v.effective_balance ∧ v'.slashed = v.slashed ∧
     Spec.is_active_validator v' e = Spec.is_active_validator v e
 
-theorem flagSum_sameView (vs vs' : List Spec.Validator) (ps : List Nat) (e f : Nat)
-    (h : SameView vs vs' e) : flagSum vs' ps e f = flagSum vs ps e f := by
+theorem unslashedFlagBalance_sameView (vs vs' : List Spec.Validator) (ps : List Nat) (e f : Nat)
+    (h : SameFlagBalanceInputs vs vs' e) : unslashedFlagBalance vs' ps e f =
+    unslashedFlagBalance vs ps e f := by
   induction vs generalizing vs' ps with
   | nil => cases vs' with
     | nil => rfl
-    | cons => simp [SameView] at h
+    | cons => simp [SameFlagBalanceInputs] at h
   | cons v vs ih =>
     cases vs' with
-    | nil => simp [SameView] at h
+    | nil => simp [SameFlagBalanceInputs] at h
     | cons v' vs' =>
       cases ps with
       | nil => rfl
       | cons p ps =>
         obtain ⟨hl, hi⟩ := h
         have h0 := hi 0 v v' rfl rfl
-        have hrest : SameView vs vs' e :=
+        have hrest : SameFlagBalanceInputs vs vs' e :=
           ⟨by simpa using hl, fun i a b ha hb => hi (i + 1) a b (by simpa using ha) (by simpa using hb)⟩
-        rw [flagSum_cons, flagSum_cons, ih vs' ps hrest]
-        simp [wOf, contrib, h0.1, h0.2.1, h0.2.2]
+        rw [unslashedFlagBalance_cons, unslashedFlagBalance_cons, ih vs' ps hrest]
+        simp [wOf, countsForFlag, h0.1, h0.2.1, h0.2.2]
 
 /-- A change to the validators that keeps each `effective_balance`, `slashed` flag, and activity
 in the previous and current epochs keeps the cache correct. `initiate_validator_exit` and the
 activation in `process_registry_updates` set epochs after the current epoch, so they are such
 changes. -/
-theorem registry_change_coherent (incr : Nat) (s : Spec.BeaconState) (c : LhCache)
-    (vs' : List Spec.Validator) (hc : Coherent incr s c)
-    (hprev : SameView s.validators vs' (Spec.get_previous_epoch s))
-    (hcur : SameView s.validators vs' s.current_epoch) :
-    Coherent incr { s with validators := vs' } c := by
+theorem registry_change_correct (incr : Nat) (s : Spec.BeaconState)
+    (c : LighthouseProgressiveBalancesCache)
+    (vs' : List Spec.Validator) (hc : ProgressiveBalancesCacheCorrect incr s c)
+    (hprev : SameFlagBalanceInputs s.validators vs' (Spec.get_previous_epoch s))
+    (hcur : SameFlagBalanceInputs s.validators vs' s.current_epoch) :
+    ProgressiveBalancesCacheCorrect incr { s with validators := vs' } c := by
   obtain ⟨⟨hce, hc1⟩, hc2⟩ := hc
   refine ⟨⟨hce, ?_⟩, ?_⟩
   · simp only
     rw [hc1]; apply tri_congr; intro g _
-    exact (flagSum_sameView _ _ _ _ _ hcur).symm
-  · simp only [PreviousCoherent] at hc2 ⊢
+    exact (unslashedFlagBalance_sameView _ _ _ _ _ hcur).symm
+  · simp only [PreviousEpochTotalsCorrect] at hc2 ⊢
     rw [hc2]; apply tri_congr; intro g _
-    exact (flagSum_sameView _ _ _ _ _ hprev).symm
+    exact (unslashedFlagBalance_sameView _ _ _ _ _ hprev).symm
 
 /-- A new validator with empty participation in both epochs keeps the cache correct. This is
 `add_validator_to_registry`. -/
-theorem add_validator_coherent (incr : Nat) (s : Spec.BeaconState) (c : LhCache)
-    (v : Spec.Validator) (hc : Coherent incr s c)
+theorem add_validator_correct (incr : Nat) (s : Spec.BeaconState)
+    (c : LighthouseProgressiveBalancesCache)
+    (v : Spec.Validator) (hc : ProgressiveBalancesCacheCorrect incr s c)
     (hplen : s.previous_epoch_participation.length = s.validators.length)
     (hclen : s.current_epoch_participation.length = s.validators.length) :
-    Coherent incr { s with
+    ProgressiveBalancesCacheCorrect incr { s with
       validators := s.validators ++ [v]
       previous_epoch_participation := s.previous_epoch_participation ++ [0]
       current_epoch_participation := s.current_epoch_participation ++ [0] } c := by
   obtain ⟨⟨hce, hc1⟩, hc2⟩ := hc
-  have hw : ∀ e f, wOf v 0 e f = 0 := fun e f => by simp [wOf, contrib, has_flag_zero]
+  have hw : ∀ e f, wOf v 0 e f = 0 := fun e f => by simp [wOf, countsForFlag, has_flag_zero]
   refine ⟨⟨hce, ?_⟩, ?_⟩
   · dsimp only
     rw [hc1]; apply tri_congr; intro g _
-    rw [flagSum_append _ _ _ _ _ _ hclen, hw, Nat.add_zero]
-  · simp only [PreviousCoherent] at hc2 ⊢
+    rw [unslashedFlagBalance_append _ _ _ _ _ _ hclen, hw, Nat.add_zero]
+  · simp only [PreviousEpochTotalsCorrect] at hc2 ⊢
     rw [hc2]; apply tri_congr; intro g _
-    exact ((flagSum_append _ _ _ _ _ _ hplen).trans (by rw [hw, Nat.add_zero]; rfl)).symm
+    exact ((unslashedFlagBalance_append _ _ _ _ _ _ hplen).trans
+      (by rw [hw, Nat.add_zero]; rfl)).symm
 
 /-! ## Reads -/
 
 /-- `ProgressiveBalancesCache::current_epoch_flag_attesting_balance`. -/
-def lhCurrentEpochFlagAttestingBalance (c : LhCache) (f : Usize) :=
+def lighthouseCurrentEpochFlagBalance (c : LighthouseProgressiveBalancesCache) (f : Usize) :=
   total_flag_balance (Array.to_slice c.current_epoch_cache) f
 
 /-- `ProgressiveBalancesCache::previous_epoch_flag_attesting_balance`. -/
-def lhPreviousEpochFlagAttestingBalance (c : LhCache) (f : Usize) :=
+def lighthousePreviousEpochFlagBalance (c : LighthouseProgressiveBalancesCache) (f : Usize) :=
   total_flag_balance (Array.to_slice c.previous_epoch_cache) f
 
 /-- A read of the current epoch total equals the spec, with the `EFFECTIVE_BALANCE_INCREMENT`
 floor. It does not fail. -/
-theorem read_current_eq_spec (incr : Nat) (s : Spec.BeaconState) (c : LhCache) (f : Usize)
-    (hc : CurrentCoherent incr s c) (hf : f.val < 3)
+theorem read_current_eq_spec (incr : Nat) (s : Spec.BeaconState)
+    (c : LighthouseProgressiveBalancesCache) (f : Usize)
+    (hc : CurrentEpochTotalsCorrect incr s c) (hf : f.val < 3)
     (hlen : s.current_epoch_participation.length = s.validators.length)
-    (hfit : max incr (flagSum s.validators s.current_epoch_participation s.current_epoch f.val)
+    (hfit : max incr (unslashedFlagBalance s.validators s.current_epoch_participation
+    s.current_epoch f.val)
       < Spec.UINT64_SIZE) :
-    ∃ x : U64, lhCurrentEpochFlagAttestingBalance c f = ok (.Ok x) ∧
+    ∃ x : U64, lighthouseCurrentEpochFlagBalance c f = ok (.Ok x) ∧
       (Spec.get_unslashed_participating_indices s f.val (Spec.get_current_epoch s) >>=
         Spec.get_total_balance incr s) = .ok x.val := by
   obtain ⟨x, hx, hv⟩ := total_flag_balance_ok c.current_epoch_cache f _ incr hc.2 hf
   refine ⟨x, hx, ?_⟩
-  have hp : partAt s (Spec.get_current_epoch s) = s.current_epoch_participation := by
-    simp [partAt]
+  have hp : participationAt s (Spec.get_current_epoch s) = s.current_epoch_participation := by
+    simp [participationAt]
   have := spec_total_eq incr s f.val (Spec.get_current_epoch s) (Or.inr rfl)
     (by rw [hp]; exact hlen) (by rw [hp]; exact hfit)
   rw [this, hp, hv, max_comm]; rfl
@@ -1125,12 +1188,14 @@ theorem read_current_eq_spec (incr : Nat) (s : Spec.BeaconState) (c : LhCache) (
 epoch, `get_previous_epoch` is the current epoch and the spec reads
 `current_epoch_participation`, but the cache holds the total over
 `previous_epoch_participation`. -/
-theorem read_previous_eq_spec (incr : Nat) (s : Spec.BeaconState) (c : LhCache) (f : Usize)
-    (hc : PreviousCoherent incr s c) (hf : f.val < 3) (hgen : Spec.GENESIS_EPOCH < s.current_epoch)
+theorem read_previous_eq_spec (incr : Nat) (s : Spec.BeaconState)
+    (c : LighthouseProgressiveBalancesCache) (f : Usize)
+    (hc : PreviousEpochTotalsCorrect incr s c) (hf : f.val < 3)
+    (hgen : Spec.GENESIS_EPOCH < s.current_epoch)
     (hlen : s.previous_epoch_participation.length = s.validators.length)
-    (hfit : max incr (flagSum s.validators s.previous_epoch_participation
+    (hfit : max incr (unslashedFlagBalance s.validators s.previous_epoch_participation
       (Spec.get_previous_epoch s) f.val) < Spec.UINT64_SIZE) :
-    ∃ x : U64, lhPreviousEpochFlagAttestingBalance c f = ok (.Ok x) ∧
+    ∃ x : U64, lighthousePreviousEpochFlagBalance c f = ok (.Ok x) ∧
       (Spec.get_unslashed_participating_indices s f.val (Spec.get_previous_epoch s) >>=
         Spec.get_total_balance incr s) = .ok x.val := by
   obtain ⟨x, hx, hv⟩ := total_flag_balance_ok c.previous_epoch_cache f _ incr hc hf
@@ -1140,8 +1205,8 @@ theorem read_previous_eq_spec (incr : Nat) (s : Spec.BeaconState) (c : LhCache) 
       intro h; rw [h] at hgen; exact absurd hgen (by decide)
     simp only [Spec.get_previous_epoch, Spec.get_current_epoch, Spec.GENESIS_EPOCH, h0, if_false]
     exact (Nat.sub_one_lt h0).ne
-  have hp : partAt s (Spec.get_previous_epoch s) = s.previous_epoch_participation := by
-    simp [partAt, hne]
+  have hp : participationAt s (Spec.get_previous_epoch s) = s.previous_epoch_participation := by
+    simp [participationAt, hne]
   have := spec_total_eq incr s f.val (Spec.get_previous_epoch s) (Or.inl rfl)
     (by rw [hp]; exact hlen) (by rw [hp]; exact hfit)
   rw [this, hp, hv, max_comm]
@@ -1149,81 +1214,87 @@ theorem read_previous_eq_spec (incr : Nat) (s : Spec.BeaconState) (c : LhCache) 
 /-! ## Build -/
 
 /-- The fields of a Lighthouse `Validator` that the build reads. -/
-structure LhValidator where
+structure LighthouseValidator where
   effective_balance : U64
   slashed : Bool
   activation_epoch : U64
   exit_epoch : U64
 
 /-- A Lighthouse validator, read as a spec validator. -/
-def LhValidator.toSpec (v : LhValidator) : Spec.Validator :=
+def LighthouseValidator.toSpec (v : LighthouseValidator) : Spec.Validator :=
   ⟨v.effective_balance.val, v.slashed, v.activation_epoch.val, v.exit_epoch.val⟩
 
 /-- `Validator::is_active_at`. -/
-def lhIsActiveAt (v : LhValidator) (e : Nat) : Bool :=
+def lighthouseIsActiveAt (v : LighthouseValidator) (e : Nat) : Bool :=
   v.activation_epoch.val ≤ e && e < v.exit_epoch.val
 
 /-- The fields of a Lighthouse `BeaconState` that the build reads. -/
-structure LhState where
+structure LighthouseState where
   current_epoch : Nat
-  validators : List LhValidator
+  validators : List LighthouseValidator
   previous_epoch_participation : List U8
   current_epoch_participation : List U8
 
 /-- A Lighthouse state, read as a spec state. -/
-def LhState.toSpec (s : LhState) : Spec.BeaconState :=
-  ⟨s.current_epoch, s.validators.map LhValidator.toSpec,
+def LighthouseState.toSpec (s : LighthouseState) : Spec.BeaconState :=
+  ⟨s.current_epoch, s.validators.map LighthouseValidator.toSpec,
    s.previous_epoch_participation.map (·.val), s.current_epoch_participation.map (·.val)⟩
 
 /-- `BeaconState::previous_epoch`. -/
-def lhPreviousEpoch (e : Nat) : Nat := if e = 0 then 0 else e - 1
+def lighthousePreviousEpoch (e : Nat) : Nat := if e = 0 then 0 else e - 1
 
 /-- The loop of `initialize_progressive_balances_cache` over
 `validators.zip(current_epoch_participation).zip(previous_epoch_participation)`.
 `update_flag_total_balances` calls `add_flags`. -/
-def lhInitLoop (pe ce : Nat) :
-    List ((LhValidator × U8) × U8) → Array Bal 3#usize → Array Bal 3#usize →
-      Result (core.result.Result (Array Bal 3#usize × Array Bal 3#usize) KErr)
+def lighthouseInitLoop (pe ce : Nat) :
+    List ((LighthouseValidator × U8) × U8) → Array LighthouseBalance 3#usize →
+      Array LighthouseBalance 3#usize →
+      Result (core.result.Result (Array LighthouseBalance 3#usize × Array LighthouseBalance 3#usize)
+        TotalsError)
   | [], pt, ct => ok (.Ok (pt, ct))
   | ((v, cf), pf) :: rest, pt, ct =>
-    if v.slashed then lhInitLoop pe ce rest pt ct
+    if v.slashed then lighthouseInitLoop pe ce rest pt ct
     else do
       let (r1, ct1) ←
-        if lhIsActiveAt v ce then add_flags ct cf v.effective_balance
+        if lighthouseIsActiveAt v ce then add_flags ct cf v.effective_balance
         else ok (core.result.Result.Ok (), ct)
       match r1 with
       | .Err e => ok (.Err e)
       | .Ok _ =>
         let (r2, pt1) ←
-          if lhIsActiveAt v pe then add_flags pt pf v.effective_balance
+          if lighthouseIsActiveAt v pe then add_flags pt pf v.effective_balance
           else ok (core.result.Result.Ok (), pt)
         match r2 with
         | .Err e => ok (.Err e)
-        | .Ok _ => lhInitLoop pe ce rest pt1 ct1
+        | .Ok _ => lighthouseInitLoop pe ce rest pt1 ct1
 
 /-- `initialize_progressive_balances_cache`, after the "already initialized" check. -/
-def lhInitialize (incr : U64) (s : LhState) : Result (core.result.Result LhCache KErr) := do
-  let pt ← lhNewTotals incr
-  let ct ← lhNewTotals incr
-  let r ← lhInitLoop (lhPreviousEpoch s.current_epoch) s.current_epoch
+def lighthouseInitialize (incr : U64)
+    (s : LighthouseState) : Result (core.result.Result LighthouseProgressiveBalancesCache
+    TotalsError) := do
+  let pt ← lighthouseNewTotals incr
+  let ct ← lighthouseNewTotals incr
+  let r ← lighthouseInitLoop (lighthousePreviousEpoch s.current_epoch) s.current_epoch
     ((s.validators.zip s.current_epoch_participation).zip s.previous_epoch_participation) pt ct
   match r with
   | .Ok (p, c) => ok (.Ok ⟨s.current_epoch, p, c⟩)
   | .Err e => ok (.Err e)
 
-theorem init_step_ok (t : Array Bal 3#usize) (v : LhValidator) (fl : U8) (e : Nat)
-    (R : Nat → Nat) (m : Nat) (hs : v.slashed = false) (ht : ab t.val = tri R m)
+theorem init_step_ok (t : Array LighthouseBalance 3#usize) (v : LighthouseValidator) (fl : U8)
+    (e : Nat)
+    (R : Nat → Nat) (m : Nat) (hs : v.slashed = false) (ht : balanceValues t.val = threeTotals R m)
     (hfit : ∀ g < 3, R g + wOf v.toSpec fl.val e g ≤ U64.max) :
-    ∃ t', (if lhIsActiveAt v e then add_flags t fl v.effective_balance
-        else ok (core.result.Result.Ok (), t)) = ok (core.result.Result.Ok (), t') ∧ ab t'.val = tri (fun g => R g + wOf v.toSpec fl.val e g) m := by
-  have hact : lhIsActiveAt v e = Spec.is_active_validator v.toSpec e := rfl
-  by_cases ha : lhIsActiveAt v e
+    ∃ t', (if lighthouseIsActiveAt v e then add_flags t fl v.effective_balance
+        else ok (core.result.Result.Ok (), t)) = ok (core.result.Result.Ok (), t') ∧
+          balanceValues t'.val = threeTotals (fun g => R g + wOf v.toSpec fl.val e g) m := by
+  have hact : lighthouseIsActiveAt v e = Spec.is_active_validator v.toSpec e := rfl
+  by_cases ha : lighthouseIsActiveAt v e
   · have hw : ∀ g, wOf v.toSpec fl.val e g =
         if Spec.has_flag fl.val g then v.effective_balance.val else 0 := by
       intro g
       have ha' : Spec.is_active_validator v.toSpec e = true := hact ▸ ha
       have hs2 : v.toSpec.slashed = false := hs
-      simp [wOf, contrib, ha', hs2]
+      simp [wOf, countsForFlag, ha', hs2]
       rfl
     obtain ⟨t', et, hat⟩ := add_flags_ok t fl v.effective_balance R m ht (fun g hg hf => by
       have := hfit g hg; rw [hw, hf] at this; simpa using this)
@@ -1231,23 +1302,28 @@ theorem init_step_ok (t : Array Bal 3#usize) (v : LhValidator) (fl : U8) (e : Na
     rw [hat]; apply tri_congr; intro g _
     rw [hw]; by_cases hf : Spec.has_flag fl.val g <;> simp [hf]
   · have hw : ∀ g, wOf v.toSpec fl.val e g = 0 := by
-      intro g; rw [hact] at ha; simp [wOf, contrib, ha]
+      intro g; rw [hact] at ha; simp [wOf, countsForFlag, ha]
     refine ⟨t, by simp [ha], ?_⟩
     rw [ht]; apply tri_congr; intro g _; simp [hw]
 
-theorem lhInitLoop_ok (pe ce m : Nat) (vs : List LhValidator) (cs ps : List U8)
+theorem lighthouseInitLoop_ok (pe ce m : Nat) (vs : List LighthouseValidator) (cs ps : List U8)
     (hcl : cs.length = vs.length) (hpl : ps.length = vs.length)
-    (pt ct : Array Bal 3#usize) (Rp Rc : Nat → Nat)
-    (hpt : ab pt.val = tri Rp m) (hct : ab ct.val = tri Rc m)
-    (hfp : ∀ g < 3, Rp g + flagSum (vs.map LhValidator.toSpec) (ps.map (·.val)) pe g ≤ U64.max)
-    (hfc : ∀ g < 3, Rc g + flagSum (vs.map LhValidator.toSpec) (cs.map (·.val)) ce g ≤ U64.max) :
-    ∃ pt' ct', lhInitLoop pe ce ((vs.zip cs).zip ps) pt ct = ok (.Ok (pt', ct')) ∧
-      ab pt'.val = tri (fun g => Rp g + flagSum (vs.map LhValidator.toSpec) (ps.map (·.val)) pe g) m ∧
-      ab ct'.val = tri (fun g => Rc g + flagSum (vs.map LhValidator.toSpec) (cs.map (·.val)) ce g) m := by
+    (pt ct : Array LighthouseBalance 3#usize) (Rp Rc : Nat → Nat)
+    (hpt : balanceValues pt.val = threeTotals Rp m) (hct : balanceValues ct.val = threeTotals Rc m)
+    (hfp : ∀ g < 3, Rp g + unslashedFlagBalance (vs.map LighthouseValidator.toSpec) (ps.map (·.val))
+    pe g ≤ U64.max)
+    (hfc : ∀ g < 3, Rc g + unslashedFlagBalance (vs.map LighthouseValidator.toSpec) (cs.map (·.val))
+    ce g ≤ U64.max) :
+    ∃ pt' ct', lighthouseInitLoop pe ce ((vs.zip cs).zip ps) pt ct = ok (.Ok (pt', ct')) ∧
+      balanceValues pt'.val = threeTotals (fun g =>
+        Rp g + unslashedFlagBalance (vs.map LighthouseValidator.toSpec) (ps.map (·.val)) pe g) m ∧
+      balanceValues ct'.val = threeTotals (fun g =>
+        Rc g + unslashedFlagBalance (vs.map LighthouseValidator.toSpec) (cs.map (·.val)) ce g)
+        m := by
   induction vs generalizing cs ps pt ct Rp Rc with
   | nil =>
     cases cs <;> cases ps <;> simp at hcl hpl
-    exact ⟨pt, ct, rfl, by simpa [flagSum] using hpt, by simpa [flagSum] using hct⟩
+    exact ⟨pt, ct, rfl, by simpa [unslashedFlagBalance] using hpt, by simpa [unslashedFlagBalance] using hct⟩
   | cons v vs ih =>
     cases cs with
     | nil => simp at hcl
@@ -1256,13 +1332,13 @@ theorem lhInitLoop_ok (pe ce m : Nat) (vs : List LhValidator) (cs ps : List U8)
     | nil => simp at hpl
     | cons pf ps =>
     simp only [List.length_cons, Nat.add_right_cancel_iff] at hcl hpl
-    simp only [List.map_cons, flagSum_cons] at hfp hfc ⊢
+    simp only [List.map_cons, unslashedFlagBalance_cons] at hfp hfc ⊢
     simp only [List.zip_cons_cons]
     by_cases hs : v.slashed
     · have hw : ∀ p e g, wOf v.toSpec p e g = 0 := by
-        intro p e g; simp [wOf, contrib, LhValidator.toSpec, hs]
+        intro p e g; simp [wOf, countsForFlag, LighthouseValidator.toSpec, hs]
       simp only [hw, Nat.zero_add] at hfp hfc ⊢
-      simp only [lhInitLoop, hs, if_true]
+      simp only [lighthouseInitLoop, hs, if_true]
       exact ih cs ps hcl hpl pt ct Rp Rc hpt hct hfp hfc
     · have hs' : v.slashed = false := by simpa using hs
       obtain ⟨ct1, e1, a1⟩ := init_step_ok ct v cf ce Rc m hs' hct
@@ -1273,8 +1349,9 @@ theorem lhInitLoop_ok (pe ce m : Nat) (vs : List LhValidator) (cs ps : List U8)
         (fun g hg => by have := hfp g hg; omega)
         (fun g hg => by have := hfc g hg; omega)
       refine ⟨pt', ct', ?_, ?_, ?_⟩
-      · simp only [lhInitLoop, hs', Bool.false_eq_true, if_false]
-        by_cases h1 : lhIsActiveAt v ce = true <;> by_cases h2 : lhIsActiveAt v pe = true <;>
+      · simp only [lighthouseInitLoop, hs', Bool.false_eq_true, if_false]
+        by_cases h1 : lighthouseIsActiveAt v ce =
+          true <;> by_cases h2 : lighthouseIsActiveAt v pe = true <;>
           (simp only [h1, h2, Bool.false_eq_true, if_true, if_false] at e1 e2
            simp only [h1, h2, Bool.false_eq_true, if_true, if_false, e1, e2, bind_tc_ok]
            first
@@ -1285,36 +1362,40 @@ theorem lhInitLoop_ok (pe ce m : Nat) (vs : List LhValidator) (cs ps : List U8)
       · rw [a3]; apply tri_congr; intro g _; omega
       · rw [a4]; apply tri_congr; intro g _; omega
 
-theorem lhNewTotals_ok (incr : U64) :
-    ∃ t, lhNewTotals incr = ok t ∧ ab t.val = tri (fun _ => 0) incr.val :=
-  ⟨_, by simp [lhNewTotals, Balance.zero]; rfl, by simp [ab, tri]⟩
+theorem lighthouseNewTotals_ok (incr : U64) :
+    ∃ t, lighthouseNewTotals incr = ok t ∧ balanceValues t.val =
+      threeTotals (fun _ => 0) incr.val :=
+  ⟨_, by simp [lighthouseNewTotals, Balance.zero]; rfl, by simp [balanceValues, threeTotals]⟩
 
 /-- The build gives a correct cache, and it does not fail when each total fits in a `u64`. -/
-theorem build_coherent (incr : U64) (s : LhState)
+theorem build_correct (incr : U64) (s : LighthouseState)
     (hcl : s.current_epoch_participation.length = s.validators.length)
     (hpl : s.previous_epoch_participation.length = s.validators.length)
     (hfit : ∀ g < 3,
-      flagSum s.toSpec.validators s.toSpec.previous_epoch_participation
+      unslashedFlagBalance s.toSpec.validators s.toSpec.previous_epoch_participation
         (Spec.get_previous_epoch s.toSpec) g ≤ U64.max ∧
-      flagSum s.toSpec.validators s.toSpec.current_epoch_participation
+      unslashedFlagBalance s.toSpec.validators s.toSpec.current_epoch_participation
         s.toSpec.current_epoch g ≤ U64.max) :
-    ∃ c, lhInitialize incr s = ok (.Ok c) ∧ Coherent incr.val s.toSpec c := by
-  obtain ⟨z, ez, az⟩ := lhNewTotals_ok incr
-  have hpe : lhPreviousEpoch s.current_epoch = Spec.get_previous_epoch s.toSpec := by
-    simp [lhPreviousEpoch, Spec.get_previous_epoch, Spec.get_current_epoch, LhState.toSpec,
+    ∃ c, lighthouseInitialize incr s = ok (.Ok c) ∧
+      ProgressiveBalancesCacheCorrect incr.val s.toSpec c := by
+  obtain ⟨z, ez, az⟩ := lighthouseNewTotals_ok incr
+  have hpe : lighthousePreviousEpoch s.current_epoch = Spec.get_previous_epoch s.toSpec := by
+    simp [lighthousePreviousEpoch, Spec.get_previous_epoch, Spec.get_current_epoch,
+      LighthouseState.toSpec,
       Spec.GENESIS_EPOCH]
     rfl
-  obtain ⟨pt, ct, e, a1, a2⟩ := lhInitLoop_ok (lhPreviousEpoch s.current_epoch) s.current_epoch
+  obtain ⟨pt, ct, e, a1, a2⟩ :=
+    lighthouseInitLoop_ok (lighthousePreviousEpoch s.current_epoch) s.current_epoch
     incr.val s.validators s.current_epoch_participation s.previous_epoch_participation hcl hpl
     z z _ _ az az
-    (fun g hg => by have := (hfit g hg).1; rw [hpe]; simpa [LhState.toSpec] using this)
-    (fun g hg => by have := (hfit g hg).2; simpa [LhState.toSpec] using this)
+    (fun g hg => by have := (hfit g hg).1; rw [hpe]; simpa [LighthouseState.toSpec] using this)
+    (fun g hg => by have := (hfit g hg).2; simpa [LighthouseState.toSpec] using this)
   refine ⟨⟨s.current_epoch, pt, ct⟩, ?_, ⟨⟨rfl, ?_⟩, ?_⟩⟩
-  · simp [lhInitialize, ez, e]
-  · rw [a2]; apply tri_congr; intro g _; simp [LhState.toSpec]
-  · simp only [PreviousCoherent]
-    rw [a1, ← hpe]; apply tri_congr; intro g _; simp [LhState.toSpec]
+  · simp [lighthouseInitialize, ez, e]
+  · rw [a2]; apply tri_congr; intro g _; simp [LighthouseState.toSpec]
+  · simp only [PreviousEpochTotalsCorrect]
+    rw [a1, ← hpe]; apply tri_congr; intro g _; simp [LighthouseState.toSpec]
 
 end
 
-end CacheProofs.PB
+end CacheProofs.ProgressiveBalances

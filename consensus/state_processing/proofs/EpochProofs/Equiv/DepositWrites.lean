@@ -12,7 +12,7 @@ deposits and runs the effective balance update of each new validator. `apply_dep
 shows that, under the trusted `DepositWritesMatchSpec`, it returns `Ok` exactly when
 `depositWritesSpec` returns `ok`, with the same state. `depositWritesSpec` is the part of the
 Lighthouse model from the deposit queue write to the effective balance updates of the new
-validators (`lhNewValidators` after `lhQueueWrite`, `LighthouseOrder.lean`).
+validators (`lighthouseNewValidators` after `lighthouseDepositQueueWrite`, `LighthouseOrder.lean`).
 
 The proof covers each error site of the Rust: a failed read or write of the state, a balance
 overflow and an index overflow. Each one returns `Err` only when the spec fails too.
@@ -32,15 +32,17 @@ def depositWritesSpec [CurrentPreset] (o : Oracle) (t : BeaconState) (next : Nat
   let t3 ← news.foldlM (apply_pending_deposit P o) t2
   if eb then
     (List.range' t2.validators.length (t3.validators.length - t2.validators.length)).foldlM
-      ebUpdateAt t3
+      updateEffectiveBalanceAt t3
   else pure t3
 
-theorem depositWritesSpec_eq [EpochProofs.Spec.CurrentPreset] (o : Oracle) (s t : BeaconState) (plan : LhDepositPlan)
+theorem depositWritesSpec_eq [EpochProofs.Spec.CurrentPreset] (o : Oracle) (s t : BeaconState)
+    (plan : LighthouseDepositPlan)
     (h : t.pending_deposits = s.pending_deposits) :
     depositWritesSpec o t plan.next_deposit_index plan.deposit_balance_to_consume plan.postponed
         plan.new_validator_deposits true =
-      lhNewValidators o plan (lhQueueWrite s plan t) := by
-  simp only [depositWritesSpec, lhNewValidators, lhApplyPendingDeposit_mainnet, lhQueueWrite, h,
+      lighthouseNewValidators o plan (lighthouseDepositQueueWrite s plan t) := by
+  simp only [depositWritesSpec, lighthouseNewValidators, lighthouseApplyPendingDeposit_mainnet,
+    lighthouseDepositQueueWrite, h,
     if_true]
 
 theorem add_validator_to_registry_len (p : Preset) (t t' : BeaconState) (pubkey : BLSPubkey)
@@ -109,10 +111,11 @@ theorem depositLoop_next_le [CurrentPreset] (fs avail : Nat) :
 
 /-- The deposit plan never skips past the end of the queue, so the queue write after the single
 pass succeeds. -/
-theorem lhDepositPlan_next_le [EpochProofs.Spec.CurrentPreset] (s : BeaconState) (tab : Gwei) (current_epoch : Epoch)
-    (plan : LhDepositPlan) (h : lhDepositPlan s tab current_epoch = .ok plan) :
+theorem lighthouseDepositPlan_next_le [EpochProofs.Spec.CurrentPreset] (s : BeaconState)
+    (tab : Gwei) (current_epoch : Epoch)
+    (plan : LighthouseDepositPlan) (h : lighthouseDepositPlan s tab current_epoch = .ok plan) :
     plan.next_deposit_index ≤ s.pending_deposits.length := by
-  unfold lhDepositPlan at h
+  unfold lighthouseDepositPlan at h
   obtain ⟨fslot, -, h⟩ := specM_bind_ok h
   obtain ⟨churn, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨next, dbtc, postponed⟩, hd, h⟩ := specM_bind_ok h
@@ -141,7 +144,7 @@ end Spec
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 /-- The Rust `DepositWritesError`. -/
-abbrev LhDWError (E : Type) := per_epoch_processing.deposit_writes.DepositWritesError E
+abbrev LighthouseDWError (E : Type) := per_epoch_processing.deposit_writes.DepositWritesError E
 
 
 theorem slice_get_some {α : Type} (s : Slice α) (i : Usize) (h : i.val < s.val.length) :
@@ -152,7 +155,7 @@ theorem slice_get_some {α : Type} (s : Slice α) (i : Usize) (h : i.val < s.val
 /-- What a deposit write returns, in spec terms. -/
 def DepositWritesResultMatchesModel {S E A : Type} (view : S → Spec.BeaconState)
     (spec : Spec.SpecM Spec.BeaconState) :
-    core.result.Result A (LhDWError E) × S → Prop
+    core.result.Result A (LighthouseDWError E) × S → Prop
   | (.Ok _, s') => spec = .ok (view s')
   | (.Err _, _) => ∃ e, spec = .error e
 
@@ -177,20 +180,22 @@ theorem foldlM_error_of_take {α β : Type} (f : β → α → Spec.SpecM β) (b
   rw [List.foldlM_cons, he]
   rfl
 
-theorem update_effective_balances_loop_spec [EpochProofs.Spec.CurrentPreset] {S D E : Type} (inst : LhDepositWrites S D E)
+theorem update_effective_balances_loop_spec [EpochProofs.Spec.CurrentPreset] {S D E : Type}
+    (inst : LighthouseDepositWrites S D E)
     (o : Spec.Oracle) (view : S → Spec.BeaconState) (depositToSpec : D → Spec.PendingDeposit)
     (postOf : S → List Spec.PendingDeposit)
     (hc : DepositWritesMatchSpec inst o view depositToSpec postOf)
     (idx : Slice Usize) (t0 : Spec.BeaconState) (s : S) (j : Usize) (hj : j.val ≤ idx.length)
-    (hp : ((idx.val.map (·.val)).take j.val).foldlM Spec.ebUpdateAt t0 = .ok (view s)) :
+    (hp : ((idx.val.map (·.val)).take j.val).foldlM Spec.updateEffectiveBalanceAt t0 =
+    .ok (view s)) :
     per_epoch_processing.deposit_writes.update_effective_balances_loop inst s idx j
       ⦃ res => DepositWritesResultMatchesModel view
-        ((idx.val.map (·.val)).foldlM Spec.ebUpdateAt t0) res ⦄ := by
+        ((idx.val.map (·.val)).foldlM Spec.updateEffectiveBalanceAt t0) res ⦄ := by
   unfold per_epoch_processing.deposit_writes.update_effective_balances_loop
   apply loop.spec_decr_nat
     (measure := fun (x : S × Usize) => idx.length - x.2.val)
     (inv := fun (x : S × Usize) => x.2.val ≤ idx.length ∧
-      ((idx.val.map (·.val)).take x.2.val).foldlM Spec.ebUpdateAt t0 = .ok (view x.1))
+      ((idx.val.map (·.val)).take x.2.val).foldlM Spec.updateEffectiveBalanceAt t0 = .ok (view x.1))
   · rintro ⟨s1, j1⟩ ⟨hj1, hp1⟩
     dsimp only at hj1 hp1 ⊢
     unfold per_epoch_processing.deposit_writes.update_effective_balances_loop.body
@@ -204,7 +209,7 @@ theorem update_effective_balances_loop_spec [EpochProofs.Spec.CurrentPreset] {S 
       set x := idx.val[j1.val] with hxv
       have hml : j1.val < (idx.val.map (·.val)).length := by simpa using hjv
       have hget : (idx.val.map (·.val))[j1.val] = x.val := by simp [hxv]
-      cases heb : Spec.ebUpdateAt (view s1) x.val with
+      cases heb : Spec.updateEffectiveBalanceAt (view s1) x.val with
       | ok t' =>
         obtain ⟨s', hu, hv⟩ := (hc.update_effective_balance s1 x).1 t' heb
         rw [hu]
@@ -215,7 +220,7 @@ theorem update_effective_balances_loop_spec [EpochProofs.Spec.CurrentPreset] {S 
         simp only [bind_tc_ok, spec_ok]
         refine ⟨⟨by omega, ?_⟩, by omega⟩
         rw [hj', foldlM_take_succ _ _ _ _ hml, hp1, hget]
-        show Spec.ebUpdateAt (view s1) x.val = _
+        show Spec.updateEffectiveBalanceAt (view s1) x.val = _
         rw [heb, hv]
       | error e =>
         obtain ⟨e', s', hu⟩ := (hc.update_effective_balance s1 x).2 e heb
@@ -239,7 +244,7 @@ theorem update_effective_balances_loop_spec [EpochProofs.Spec.CurrentPreset] {S 
 on. -/
 def NewPost {S E : Type} (view : S → Spec.BeaconState) (L0 : Nat)
     (spec : Spec.SpecM Spec.BeaconState) :
-    core.result.Result (alloc.vec.Vec Usize) (LhDWError E) × S → Prop
+    core.result.Result (alloc.vec.Vec Usize) (LighthouseDWError E) × S → Prop
   | (.Ok added, s') => spec = .ok (view s') ∧ L0 ≤ (view s').validators.length ∧
       added.val.map (·.val) = List.range' L0 ((view s').validators.length - L0)
   | (.Err _, _) => ∃ e, spec = .error e
@@ -250,7 +255,8 @@ theorem range'_snoc (L0 n : Nat) (h : L0 ≤ n) :
   congr 2
   omega
 
-theorem apply_new_validator_deposits_loop_spec [EpochProofs.Spec.CurrentPreset] {S D E : Type} (inst : LhDepositWrites S D E)
+theorem apply_new_validator_deposits_loop_spec [EpochProofs.Spec.CurrentPreset] {S D E : Type}
+    (inst : LighthouseDepositWrites S D E)
     (o : Spec.Oracle) (view : S → Spec.BeaconState) (depositToSpec : D → Spec.PendingDeposit)
     (postOf : S → List Spec.PendingDeposit)
     (hc : DepositWritesMatchSpec inst o view depositToSpec postOf)
@@ -432,8 +438,9 @@ theorem apply_new_validator_deposits_loop_spec [EpochProofs.Spec.CurrentPreset] 
 /-- The deposit writes after the single pass equal the model under the trusted
 `DepositWritesMatchSpec`: `Ok` exactly when `depositWritesSpec` is `ok`, with the same state. The
 queue write needs the next deposit index to be at most the queue length, which
-`lhDepositPlan_next_le` gives for the plan. -/
-theorem apply_deposit_writes_spec [EpochProofs.Spec.CurrentPreset] {S D E : Type} (inst : LhDepositWrites S D E) (o : Spec.Oracle)
+`lighthouseDepositPlan_next_le` gives for the plan. -/
+theorem apply_deposit_writes_spec [EpochProofs.Spec.CurrentPreset] {S D E : Type}
+    (inst : LighthouseDepositWrites S D E) (o : Spec.Oracle)
     (view : S → Spec.BeaconState) (depositToSpec : D → Spec.PendingDeposit)
     (postOf : S → List Spec.PendingDeposit)
     (hc : DepositWritesMatchSpec inst o view depositToSpec postOf)
@@ -461,7 +468,7 @@ theorem apply_deposit_writes_spec [EpochProofs.Spec.CurrentPreset] {S D E : Type
         (deps.val.map depositToSpec) eb = (if eb then
           (List.range' (view s1).validators.length
             ((view s2).validators.length - (view s1).validators.length)).foldlM
-            Spec.ebUpdateAt (view s2) else pure (view s2)) := by
+            Spec.updateEffectiveBalanceAt (view s2) else pure (view s2)) := by
       unfold Spec.depositWritesSpec
       rw [← hv1]
       dsimp only
@@ -509,14 +516,16 @@ theorem apply_deposit_writes_spec [EpochProofs.Spec.CurrentPreset] {S D E : Type
     rfl
 
 /-- `apply_deposit_writes` is the model step from the queue write to the effective balance updates
-of the new validators (`lhNewValidators` after `lhQueueWrite`), for the plan of the epoch input
-`s`, on any state `view st` that still holds the queue of `s`. -/
-theorem apply_deposit_writes_model [EpochProofs.Spec.CurrentPreset] {S D E : Type} (inst : LhDepositWrites S D E)
+of the new validators (`lighthouseNewValidators` after `lighthouseDepositQueueWrite`), for the plan
+of the epoch input `s`, on any state `view st` that still holds the queue of `s`. -/
+theorem apply_deposit_writes_model [EpochProofs.Spec.CurrentPreset] {S D E : Type}
+    (inst : LighthouseDepositWrites S D E)
     (o : Spec.Oracle) (view : S → Spec.BeaconState) (depositToSpec : D → Spec.PendingDeposit)
     (postOf : S → List Spec.PendingDeposit)
     (hc : DepositWritesMatchSpec inst o view depositToSpec postOf)
-    (s : Spec.BeaconState) (tab : Spec.Gwei) (current_epoch : Spec.Epoch) (plan : Spec.LhDepositPlan)
-    (hplan : Spec.lhDepositPlan s tab current_epoch = .ok plan) (st : S)
+    (s : Spec.BeaconState) (tab : Spec.Gwei) (current_epoch : Spec.Epoch)
+    (plan : Spec.LighthouseDepositPlan)
+    (hplan : Spec.lighthouseDepositPlan s tab current_epoch = .ok plan) (st : S)
     (hq : (view st).pending_deposits = s.pending_deposits) (next : Usize) (dbtc : U64)
     (deps : Slice D) (hnext : next.val = plan.next_deposit_index)
     (hdbtc : dbtc.val = plan.deposit_balance_to_consume) (hpost : postOf st = plan.postponed)
@@ -524,10 +533,10 @@ theorem apply_deposit_writes_model [EpochProofs.Spec.CurrentPreset] {S D E : Typ
     (hroom : (view st).validators.length + plan.new_validator_deposits.length ≤ 2 ^ 40) :
     per_epoch_processing.deposit_writes.apply_deposit_writes inst st next dbtc deps true
       ⦃ res => DepositWritesResultMatchesModel view
-        (Spec.lhNewValidators o plan (Spec.lhQueueWrite s plan (view st)))
+        (Spec.lighthouseNewValidators o plan (Spec.lighthouseDepositQueueWrite s plan (view st)))
         res ⦄ := by
   have hle : next.val ≤ (view st).pending_deposits.length := by
-    rw [hq, hnext]; exact Spec.lhDepositPlan_next_le s tab current_epoch plan hplan
+    rw [hq, hnext]; exact Spec.lighthouseDepositPlan_next_le s tab current_epoch plan hplan
   have hdl : deps.length = plan.new_validator_deposits.length := by
     rw [← hdeps, List.length_map]
   have h := apply_deposit_writes_spec inst o view depositToSpec postOf hc st next dbtc deps true hle

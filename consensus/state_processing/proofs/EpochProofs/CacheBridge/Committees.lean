@@ -16,12 +16,13 @@ slot from the cache, joined in order. `ptc_for_epoch_spec` (`Equiv/EpochCommitte
 `CacheProofs` proves the committee cache equal to its own spec model
 (`get_beacon_committee_equiv`, `shuffling_spec`). The two projects state the shuffle hash
 differently: the epoch reference has `Oracle.hash` on bytes, the cache reference has a function
-on byte values. `natHash o` is `o.hash` on byte values, and `shuffledIndexAfterRounds_eq` proves the two closed
-forms of the shuffle equal for it.
+on byte values. `hashOfByteNumbers o` is `o.hash` on byte values, and `shuffledIndexAfterRounds_eq`
+proves the two closed forms of the shuffle equal for it.
 
 `ptcIndices_of_cache` gives `hcomm` from the committee cache build facts: the shuffling is the
 spec shuffling of the active indices with the spec seed, and the committee count is the spec
-count. `lh_ptc_window_from_cache` is `ptc_for_epoch_spec` with `hcomm` replaced by these facts.
+count. `lighthouse_ptc_window_from_cache` is `ptc_for_epoch_spec` with `hcomm` replaced by these
+facts.
 -/
 
 namespace EpochProofs.CacheBridge
@@ -29,48 +30,53 @@ namespace EpochProofs.CacheBridge
 open Aeneas Aeneas.Std Result
 
 /-- `o.hash` on byte values, the hash form of the cache reference. -/
-def natHash (o : Spec.Oracle) (l : List Nat) : List Nat :=
+def hashOfByteNumbers (o : Spec.Oracle) (l : List Nat) : List Nat :=
   (o.hash (l.map UInt8.ofNat)).toList.map UInt8.toNat
 
 /-- Bytes as byte values. -/
-def natBytes (l : List UInt8) : List Nat := l.map UInt8.toNat
+def byteNumbers (l : List UInt8) : List Nat := l.map UInt8.toNat
 
-theorem natHash_length (o : Spec.Oracle) (l : List Nat) : (natHash o l).length = 32 := by
-  simp [natHash]
+theorem hashOfByteNumbers_length (o : Spec.Oracle) (l : List Nat) : (hashOfByteNumbers o l).length =
+    32 := by
+  simp [hashOfByteNumbers]
 
-theorem ofNat_natBytes (l : List UInt8) : (natBytes l).map UInt8.ofNat = l := by
-  simp [natBytes, Function.comp_def]
+theorem ofNat_natBytes (l : List UInt8) : (byteNumbers l).map UInt8.ofNat = l := by
+  simp [byteNumbers, Function.comp_def]
 
 theorem le4_ofNat (x : Nat) :
     (CacheProofs.Shuffle.le4 x).map UInt8.ofNat = Spec.uint_to_bytes 4 x := by
   simp [CacheProofs.Shuffle.le4, Spec.uint_to_bytes, List.range_succ]
 
 theorem pivotOf_eq (o : Spec.Oracle) (seed : List UInt8) (n r : Nat) :
-    CacheProofs.Shuffle.pivotOf (natHash o) (natBytes seed) n r = Spec.pivotOf o seed n r := by
-  simp only [CacheProofs.Shuffle.pivotOf, Spec.pivotOf, natHash, List.map_append,
+    CacheProofs.Shuffle.pivotOf (hashOfByteNumbers o) (byteNumbers seed) n r =
+      Spec.pivotOf o seed n r := by
+  simp only [CacheProofs.Shuffle.pivotOf, Spec.pivotOf, hashOfByteNumbers, List.map_append,
     ofNat_natBytes, List.map_cons, List.map_nil, CacheProofs.Spec.CommitteeCache.bytes_to_uint64,
     Spec.littleEndianValue, ← List.map_take, List.foldr_map]
 
 theorem bitOf_eq (o : Spec.Oracle) (seed : List UInt8) (r position : Nat) :
-    CacheProofs.Shuffle.bitOf (natHash o) (natBytes seed) r position =
+    CacheProofs.Shuffle.bitOf (hashOfByteNumbers o) (byteNumbers seed) r position =
       Spec.bitOf o seed r position := by
-  simp only [CacheProofs.Shuffle.bitOf, Spec.bitOf, natHash, List.map_append, ofNat_natBytes,
+  simp only [CacheProofs.Shuffle.bitOf, Spec.bitOf, hashOfByteNumbers, List.map_append,
+    ofNat_natBytes,
     List.map_cons, List.map_nil, le4_ofNat]
   congr 2
   rw [show (0 : Nat) = UInt8.toNat 0 from rfl, List.getD_map]
 
 theorem sigma_eq (o : Spec.Oracle) (seed : List UInt8) (n r x : Nat) :
-    CacheProofs.Shuffle.sigma (natHash o) (natBytes seed) n r x = Spec.sigma o seed n r x := by
+    CacheProofs.Shuffle.sigma (hashOfByteNumbers o) (byteNumbers seed) n r x =
+      Spec.sigma o seed n r x := by
   simp only [CacheProofs.Shuffle.sigma, Spec.sigma, pivotOf_eq, bitOf_eq]
 
 /-- The closed form of the shuffle is the same in both references. -/
 theorem shuffledIndexAfterRounds_eq (o : Spec.Oracle) (seed : List UInt8) (n R x : Nat) :
-    CacheProofs.Shuffle.shuffledIndexAfterRounds (natHash o) (natBytes seed) n R x = Spec.shuffledIndexAfterRounds o seed n R x := by
+    CacheProofs.Shuffle.shuffledIndexAfterRounds (hashOfByteNumbers o) (byteNumbers seed) n R x =
+      Spec.shuffledIndexAfterRounds o seed n R x := by
   simp only [CacheProofs.Shuffle.shuffledIndexAfterRounds, Spec.shuffledIndexAfterRounds, sigma_eq]
 
 /-! ## The committees of the epoch reference, from a shuffling -/
 
-open CacheProofs.CommitteeCache (IsShuffling shuffledAt)
+open CacheProofs.CommitteeCache (MatchesSpecShuffling shuffledAt)
 
 theorem ok_bind' {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
 
@@ -79,14 +85,16 @@ seed)]` of the epoch reference. -/
 theorem epoch_shuffled_at (p : Spec.Preset) (cp : CacheProofs.Spec.CommitteeCache.Preset)
     (hR : cp.SHUFFLE_ROUND_COUNT = p.SHUFFLE_ROUND_COUNT) (hR256 : p.SHUFFLE_ROUND_COUNT ≤ 256)
     (o : Spec.Oracle) (indices : List Nat) (seed : Spec.Bytes32) (shuffling : List Nat)
-    (hshuf : IsShuffling cp (natHash o) indices (natBytes seed.toList) shuffling)
+    (hshuf : MatchesSpecShuffling cp (hashOfByteNumbers o) indices (byteNumbers seed.toList)
+    shuffling)
     (hn24 : indices.length ≤ 2 ^ 24) (i : Nat) (hi : i < indices.length) :
     (do let k ← Spec.compute_shuffled_index p o i indices.length seed; Spec.listGet indices k) =
       .ok (shuffling.getD i 0) := by
   have h := hshuf.2 i hi
   unfold shuffledAt at h
-  rw [CacheProofs.Shuffle.compute_shuffled_index_eq cp (natHash o) (natHash_length o)
-    (natBytes seed.toList) indices.length (Nat.lt_of_le_of_lt (Nat.zero_le i) hi)
+  rw [CacheProofs.Shuffle.compute_shuffled_index_eq cp (hashOfByteNumbers o)
+    (hashOfByteNumbers_length o)
+    (byteNumbers seed.toList) indices.length (Nat.lt_of_le_of_lt (Nat.zero_le i) hi)
     (by simpa using hn24) (hR ▸ hR256) i hi, shuffledIndexAfterRounds_eq, hR] at h
   rw [Spec.compute_shuffled_index_eq p o seed i indices.length hi
     (Nat.le_trans hn24 (by norm_num)) hR256]
@@ -194,7 +202,7 @@ theorem epoch_get_beacon_committee_slice (p : Spec.Preset) (o : Spec.Oracle)
 /-! ## The Lighthouse committee cache gives the beacon committees of the epoch reference -/
 
 /-- The preset values that the two references share. -/
-structure CommitteePresetLink (p : Spec.Preset) (cp : CacheProofs.Spec.CommitteeCache.Preset) :
+structure CommitteePresetsMatch (p : Spec.Preset) (cp : CacheProofs.Spec.CommitteeCache.Preset) :
     Prop where
   slots_per_epoch : cp.SLOTS_PER_EPOCH = p.SLOTS_PER_EPOCH
   max_committees_per_slot : cp.MAX_COMMITTEES_PER_SLOT = p.MAX_COMMITTEES_PER_SLOT
@@ -206,19 +214,24 @@ structure CommitteePresetLink (p : Spec.Preset) (cp : CacheProofs.Spec.Committee
   rounds_pos : 0 < p.SHUFFLE_ROUND_COUNT
 
 /-- The committee preset of the cache reference with the values of the epoch preset. -/
-def cachePresetOf [EpochProofs.Spec.CurrentPreset] : CacheProofs.Spec.CommitteeCache.Preset :=
+def committeeCachePresetOf [EpochProofs.Spec.CurrentPreset] :
+    CacheProofs.Spec.CommitteeCache.Preset :=
   { SLOTS_PER_EPOCH := Spec.P.SLOTS_PER_EPOCH
     MAX_COMMITTEES_PER_SLOT := Spec.P.MAX_COMMITTEES_PER_SLOT
     TARGET_COMMITTEE_SIZE := Spec.P.TARGET_COMMITTEE_SIZE
     SHUFFLE_ROUND_COUNT := Spec.P.SHUFFLE_ROUND_COUNT }
 
-theorem cachePresetOf_mainnet :
-    @cachePresetOf Spec.currentPresetMainnet = CacheProofs.Spec.CommitteeCache.Preset.mainnet := rfl
-theorem cachePresetOf_minimal :
-    @cachePresetOf Spec.currentPresetMinimal = CacheProofs.Spec.CommitteeCache.Preset.minimal := rfl
+theorem committeeCachePresetOf_mainnet :
+    @committeeCachePresetOf Spec.currentPresetMainnet =
+      CacheProofs.Spec.CommitteeCache.Preset.mainnet := rfl
+theorem committeeCachePresetOf_minimal :
+    @committeeCachePresetOf Spec.currentPresetMinimal =
+      CacheProofs.Spec.CommitteeCache.Preset.minimal := rfl
 
-theorem committeePresetLink_P [EpochProofs.Spec.CurrentPreset] [EpochProofs.Spec.CurrentPreset.Valid]
-    [EpochProofs.Spec.CurrentPreset.Bounds] : CommitteePresetLink Spec.P cachePresetOf where
+theorem committeePresetsMatch_P [EpochProofs.Spec.CurrentPreset]
+    [EpochProofs.Spec.CurrentPreset.Valid]
+    [EpochProofs.Spec.CurrentPreset.Bounds] : CommitteePresetsMatch Spec.P committeeCachePresetOf
+    where
   slots_per_epoch := rfl
   max_committees_per_slot := rfl
   target_committee_size := rfl
@@ -233,13 +246,14 @@ theorem usize_max_lt' : Usize.max < 2 ^ 64 := CacheProofs.CommitteeCache.usize_m
 /-- A committee that Lighthouse reads from its committee cache is the beacon committee of the
 epoch reference. The cache holds the spec shuffling of the active indices with the spec seed,
 and the spec committee count. -/
-theorem lh_committee_eq (p : Spec.Preset) (cp : CacheProofs.Spec.CommitteeCache.Preset)
-    (hp : CommitteePresetLink p cp) (o : Spec.Oracle) (state : Spec.BeaconState) (epoch : Nat)
+theorem lighthouse_committee_eq (p : Spec.Preset) (cp : CacheProofs.Spec.CommitteeCache.Preset)
+    (hp : CommitteePresetsMatch p cp) (o : Spec.Oracle) (state : Spec.BeaconState) (epoch : Nat)
     (seed : Spec.Bytes32)
     (hseed : Spec.get_seed p o state epoch Spec.DOMAIN_BEACON_ATTESTER = .ok seed)
     (shuffling : Slice Usize)
-    (hshuf : IsShuffling cp (natHash o) (Spec.get_active_validator_indices state epoch)
-      (natBytes seed.toList) (shuffling.val.map (·.val)))
+    (hshuf : MatchesSpecShuffling cp (hashOfByteNumbers o)
+    (Spec.get_active_validator_indices state epoch)
+      (byteNumbers seed.toList) (shuffling.val.map (·.val)))
     (cps spe : Usize)
     (hcps : CacheProofs.Spec.CommitteeCache.get_committee_count_per_slot cp
       (Spec.get_active_validator_indices state epoch).length = .ok cps.val)
@@ -250,16 +264,17 @@ theorem lh_committee_eq (p : Spec.Preset) (cp : CacheProofs.Spec.CommitteeCache.
       Usize.max)
     (slot index : Usize) (hslot : Spec.compute_epoch_at_slot p slot.val = .ok epoch)
     (hindex : index.val < cps.val) :
-    ∃ committee, CacheProofs.CommitteeCache.lhGetBeaconCommittee (some (slot.val / spe.val))
+    ∃ committee, CacheProofs.CommitteeCache.lighthouseGetBeaconCommittee (some (slot.val / spe.val))
         shuffling cps spe slot index = ok (some committee) ∧
       Spec.get_beacon_committee p o state slot.val index.val = .ok (committee.map (·.val)) := by
   have hspe0 : 0 < spe.val := hspe ▸ hp.slots_pos
   have hspeC : spe.val = cp.SLOTS_PER_EPOCH := hspe.trans hp.slots_per_epoch.symm
   obtain ⟨committee, hlh, hgbc⟩ := CacheProofs.CommitteeCache.get_beacon_committee_equiv cp
-    (natHash o) _ _ shuffling hshuf cps spe slot index hcps hspeC hspe0 hindex hn hfit
+    (hashOfByteNumbers o) _ _ shuffling hshuf cps spe slot index hcps hspeC hspe0 hindex hn hfit
   refine ⟨committee, hlh, ?_⟩
   have h64 := usize_max_lt'
-  rw [CacheProofs.CommitteeCache.get_beacon_committee_slice cp (natHash o) _ _ _ hshuf cps.val
+  rw [CacheProofs.CommitteeCache.get_beacon_committee_slice cp (hashOfByteNumbers o) _ _ _ hshuf
+    cps.val
     slot.val index.val hcps (hspeC ▸ hspe0) hindex hn (by rw [← hspeC]; omega)] at hgbc
   have hcpsE := epoch_cps_eq p cp hp.slots_per_epoch hp.max_committees_per_slot
     hp.target_committee_size hp.slots_pos hp.target_pos state epoch cps.val hcps
@@ -295,12 +310,13 @@ theorem exists_usize (n : Nat) (h : n ≤ Usize.max) : ∃ u : Usize, u.val = n 
 /-- The beacon committees of one slot that Lighthouse reads from its committee cache, joined in
 order, are `ptcIndices` of the epoch reference. `cs[i]` is the cache committee `i` of the slot. -/
 theorem ptcIndices_of_cache (p : Spec.Preset) (cp : CacheProofs.Spec.CommitteeCache.Preset)
-    (hp : CommitteePresetLink p cp) (o : Spec.Oracle) (state : Spec.BeaconState) (epoch : Nat)
+    (hp : CommitteePresetsMatch p cp) (o : Spec.Oracle) (state : Spec.BeaconState) (epoch : Nat)
     (seed : Spec.Bytes32)
     (hseed : Spec.get_seed p o state epoch Spec.DOMAIN_BEACON_ATTESTER = .ok seed)
     (shuffling : Slice Usize)
-    (hshuf : IsShuffling cp (natHash o) (Spec.get_active_validator_indices state epoch)
-      (natBytes seed.toList) (shuffling.val.map (·.val)))
+    (hshuf : MatchesSpecShuffling cp (hashOfByteNumbers o)
+    (Spec.get_active_validator_indices state epoch)
+      (byteNumbers seed.toList) (shuffling.val.map (·.val)))
     (cps spe : Usize)
     (hcps : CacheProofs.Spec.CommitteeCache.get_committee_count_per_slot cp
       (Spec.get_active_validator_indices state epoch).length = .ok cps.val)
@@ -313,7 +329,8 @@ theorem ptcIndices_of_cache (p : Spec.Preset) (cp : CacheProofs.Spec.CommitteeCa
     (hk : k < p.SLOTS_PER_EPOCH) (slot : Usize) (hslotv : slot.val = start + k)
     (cs : List (List Usize)) (hcslen : cs.length = cps.val)
     (hcs : ∀ index : Usize, index.val < cps.val →
-      CacheProofs.CommitteeCache.lhGetBeaconCommittee (some epoch) shuffling cps spe slot index =
+      CacheProofs.CommitteeCache.lighthouseGetBeaconCommittee (some epoch) shuffling cps spe slot
+        index =
         ok cs[index.val]?) :
     Spec.ptcIndices p o state epoch (start + k) = .ok (cs.map (·.map (·.val))).flatten := by
   have hep := EpochProofs.epoch_of_slot p epoch start k hp.slots_pos hstart hk
@@ -334,7 +351,8 @@ theorem ptcIndices_of_cache (p : Spec.Preset) (cp : CacheProofs.Spec.CommitteeCa
         Nat.le_mul_of_pos_left _ hn
       omega
     obtain ⟨u, hu⟩ := exists_usize i (by omega)
-    obtain ⟨committee, hlh, hgbc⟩ := lh_committee_eq p cp hp o state epoch seed hseed shuffling
+    obtain ⟨committee, hlh, hgbc⟩ :=
+      lighthouse_committee_eq p cp hp o state epoch seed hseed shuffling
       hshuf cps spe hcps hspe hn hn24 hfit slot u hslot (hu ▸ hi)
     have hc := hcs u (hu ▸ hi)
     rw [hdiv, hc] at hlh
@@ -358,11 +376,12 @@ theorem ptcIndices_of_cache (p : Spec.Preset) (cp : CacheProofs.Spec.CommitteeCa
 
 /-- The committee cache of `epoch` holds the spec shuffling of the active indices with the spec
 seed, and the spec committee count. This is what `CommitteeCache::initialized` builds. -/
-structure CommitteeCacheBuilt (cp : CacheProofs.Spec.CommitteeCache.Preset) (o : Spec.Oracle)
+structure CommitteeCacheMatchesSpec (cp : CacheProofs.Spec.CommitteeCache.Preset) (o : Spec.Oracle)
     (state : Spec.BeaconState) (epoch : Nat) (seed : Spec.Bytes32) (shuffling : Slice Usize)
     (cps : Usize) : Prop where
-  shuffling_spec : IsShuffling cp (natHash o) (Spec.get_active_validator_indices state epoch)
-    (natBytes seed.toList) (shuffling.val.map (·.val))
+  shuffling_spec : MatchesSpecShuffling cp (hashOfByteNumbers o)
+    (Spec.get_active_validator_indices state epoch)
+    (byteNumbers seed.toList) (shuffling.val.map (·.val))
   count_spec : CacheProofs.Spec.CommitteeCache.get_committee_count_per_slot cp
     (Spec.get_active_validator_indices state epoch).length = .ok cps.val
 
@@ -370,15 +389,15 @@ structure CommitteeCacheBuilt (cp : CacheProofs.Spec.CommitteeCache.Preset) (o :
 Aeneas-checked `committee_assignment::shuffling` on the active indices and the seed, and the
 committee count is the output of `committee_count_per_slot`. -/
 theorem committeeCacheBuilt_of_rust {H : Type} (cp : CacheProofs.Spec.CommitteeCache.Preset)
-    (p : Spec.Preset) (hp : CommitteePresetLink p cp) (o : Spec.Oracle)
+    (p : Spec.Preset) (hp : CommitteePresetsMatch p cp) (o : Spec.Oracle)
     (instC : CacheProofs.Shuffle.HashInst H)
-    (hH : CacheProofs.Shuffle.HashMatches instC (natHash o))
+    (hH : CacheProofs.Shuffle.HashMatches instC (hashOfByteNumbers o))
     (state : Spec.BeaconState) (epoch : Nat) (seed : Spec.Bytes32)
     (indices : alloc.vec.Vec Usize)
     (hindices : indices.val.map (·.val) = Spec.get_active_validator_indices state epoch)
     (hn : 0 < indices.val.length) (hn24 : indices.val.length ≤ 2 ^ 24)
     (rounds : U8) (hrounds : rounds.val = p.SHUFFLE_ROUND_COUNT)
-    (seedS : Slice U8) (hseedS : seedS.val.map (·.val) = natBytes seed.toList)
+    (seedS : Slice U8) (hseedS : seedS.val.map (·.val) = byteNumbers seed.toList)
     (v : alloc.vec.Vec Usize)
     (hrun : types.state.committee_assignment.shuffling instC indices rounds seedS = ok (some v))
     (shuffling : Slice Usize) (hsv : shuffling.val = v.val)
@@ -388,11 +407,12 @@ theorem committeeCacheBuilt_of_rust {H : Type} (cp : CacheProofs.Spec.CommitteeC
     (htarget : target.val = p.TARGET_COMMITTEE_SIZE)
     (hcps : types.state.committee_assignment.committee_count_per_slot active_count spe max_cps
       target = ok (.Ok cps)) :
-    CommitteeCacheBuilt cp o state epoch seed shuffling cps := by
+    CommitteeCacheMatchesSpec cp o state epoch seed shuffling cps := by
   have hseedlen : seedS.val.length = 32 := by
     have := congrArg List.length hseedS
-    simpa [natBytes] using this
-  have hs := CacheProofs.Shuffle.shuffling_spec instC (natHash o) hH (natHash_length o) cp seedS
+    simpa [byteNumbers] using this
+  have hs := CacheProofs.Shuffle.shuffling_spec instC (hashOfByteNumbers o) hH
+    (hashOfByteNumbers_length o) cp seedS
     hseedlen indices rounds (hp.shuffle_round_count.trans hrounds.symm) hn hn24
     (hrounds ▸ hp.rounds_pos)
   rw [hrun, Aeneas.Std.WP.spec_ok] at hs
@@ -414,21 +434,22 @@ theorem committeeCacheBuilt_of_rust {H : Type} (cp : CacheProofs.Spec.CommitteeC
 /-- How Lighthouse builds the committees of the PTC window (`process_ptc_window`): entry `k`
 joins, in order, the committees of slot `start + k` that `CommitteeCache::get_beacon_committee`
 returns. -/
-def CommitteesFromCache (shuffling : Slice Usize) (cps spe : Usize) (epoch start : Nat)
+def CommitteesReadFromCache (shuffling : Slice Usize) (cps spe : Usize) (epoch start : Nat)
     (committees : Slice (alloc.vec.Vec Usize)) : Prop :=
   ∀ k (_ : k < committees.val.length), ∃ (slot : Usize) (cs : List (List Usize)),
     slot.val = start + k ∧ cs.length = cps.val ∧ (committees.val[k]).val = cs.flatten ∧
     ∀ index : Usize, index.val < cps.val →
-      CacheProofs.CommitteeCache.lhGetBeaconCommittee (some epoch) shuffling cps spe slot index =
+      CacheProofs.CommitteeCache.lighthouseGetBeaconCommittee (some epoch) shuffling cps spe slot
+        index =
         ok cs[index.val]?
 
 /-- The hypothesis `hcomm` of `ptc_for_epoch_spec`, from the committee cache build facts. -/
-theorem hcomm_of_cache (p : Spec.Preset) (cp : CacheProofs.Spec.CommitteeCache.Preset)
-    (hp : CommitteePresetLink p cp) (o : Spec.Oracle) (state : Spec.BeaconState) (epoch : Nat)
+theorem ptc_committees_match_spec (p : Spec.Preset) (cp : CacheProofs.Spec.CommitteeCache.Preset)
+    (hp : CommitteePresetsMatch p cp) (o : Spec.Oracle) (state : Spec.BeaconState) (epoch : Nat)
     (seed : Spec.Bytes32)
     (hseed : Spec.get_seed p o state epoch Spec.DOMAIN_BEACON_ATTESTER = .ok seed)
     (shuffling : Slice Usize) (cps spe : Usize)
-    (hbuilt : CommitteeCacheBuilt cp o state epoch seed shuffling cps)
+    (hbuilt : CommitteeCacheMatchesSpec cp o state epoch seed shuffling cps)
     (hspe : spe.val = p.SLOTS_PER_EPOCH)
     (hn : 0 < (Spec.get_active_validator_indices state epoch).length)
     (hn24 : (Spec.get_active_validator_indices state epoch).length ≤ 2 ^ 24)
@@ -437,7 +458,7 @@ theorem hcomm_of_cache (p : Spec.Preset) (cp : CacheProofs.Spec.CommitteeCache.P
     (start : Nat) (hstart : Spec.compute_start_slot_at_epoch p epoch = .ok start)
     (committees : Slice (alloc.vec.Vec Usize))
     (hclen : committees.val.length = p.SLOTS_PER_EPOCH)
-    (hglue : CommitteesFromCache shuffling cps spe epoch start committees) :
+    (hglue : CommitteesReadFromCache shuffling cps spe epoch start committees) :
     ∀ k (hk : k < committees.val.length) l,
       Spec.ptcIndices p o state epoch (start + k) = .ok l →
         (committees.val[k]).val.map (·.val) = l := by
@@ -453,12 +474,12 @@ open Aeneas.Std.WP in
 /-- Lighthouse's `ptc_for_epoch` on the committees that `process_ptc_window` reads from the
 committee cache returns the PTCs that the spec `process_ptc_window` appends. This is
 `ptc_for_epoch_spec` with its committee hypothesis replaced by the committee cache build facts
-(`CommitteeCacheBuilt`) and the way Lighthouse joins the cache committees
-(`CommitteesFromCache`). -/
-theorem lh_ptc_window_from_cache {H B : Type} (inst : ShuffleHashInst H)
+(`CommitteeCacheMatchesSpec`) and the way Lighthouse joins the cache committees
+(`CommitteesReadFromCache`). -/
+theorem lighthouse_ptc_window_from_cache {H B : Type} (inst : ShuffleHashInst H)
     (ebi : EffectiveBalanceSource B)
     (balances : B) (p : Spec.Preset) (cp : CacheProofs.Spec.CommitteeCache.Preset)
-    (hp : CommitteePresetLink p cp) (o : Spec.Oracle) (hH : HashMatches inst o)
+    (hp : CommitteePresetsMatch p cp) (o : Spec.Oracle) (hH : HashMatches inst o)
     (state : Spec.BeaconState)
     (hEB : EffectiveBalancesMatch ebi balances (state.validators.map (·.effective_balance)))
     (committees : Slice (alloc.vec.Vec Usize))
@@ -471,15 +492,15 @@ theorem lh_ptc_window_from_cache {H B : Type} (inst : ShuffleHashInst H)
     (seed : Spec.Bytes32)
     (hseed : Spec.get_seed p o state epoch.val Spec.DOMAIN_BEACON_ATTESTER = .ok seed)
     (shuffling : Slice Usize) (cps spe : Usize)
-    (hbuilt : CommitteeCacheBuilt cp o state epoch.val seed shuffling cps)
+    (hbuilt : CommitteeCacheMatchesSpec cp o state epoch.val seed shuffling cps)
     (hspe : spe.val = p.SLOTS_PER_EPOCH)
     (hn : 0 < (Spec.get_active_validator_indices state epoch.val).length)
     (hn24 : (Spec.get_active_validator_indices state epoch.val).length ≤ 2 ^ 24)
     (hfit : (Spec.get_active_validator_indices state epoch.val).length * (cps.val * spe.val) ≤
       Usize.max)
-    (hglue : CommitteesFromCache shuffling cps spe epoch.val start_slot.val committees)
+    (hglue : CommitteesReadFromCache shuffling cps spe epoch.val start_slot.val committees)
     (hn24c : ∀ k (hk : k < committees.val.length), (committees.val[k]).val.length ≤ 2 ^ 24)
-    (ptc_size : Usize) (hptc : ptc_size.val = p.PTC_SIZE) (c : LhSelectionConstants)
+    (ptc_size : Usize) (hptc : ptc_size.val = p.PTC_SIZE) (c : LighthouseSelectionConstants)
     (hc : SelectionConstantsMatch p c) (hus : Usize.max = U64.max)
     (state' : Spec.BeaconState) (hspec : Spec.process_ptc_window p o state = .ok state') :
     state_processing.per_epoch_processing.epoch_committees.ptc_for_epoch inst ebi balances
@@ -488,7 +509,8 @@ theorem lh_ptc_window_from_cache {H B : Type} (inst : ShuffleHashInst H)
           state'.ptc_window = state.ptc_window.drop p.SLOTS_PER_EPOCH ++ ptcIndexValues v ⦄ :=
   ptc_for_epoch_spec inst ebi balances p o hH state hEB committees hclen domain hdomain epoch
     hepoch mix hmix start_slot hstart
-    (hcomm_of_cache p cp hp o state epoch.val seed hseed shuffling cps spe hbuilt hspe hn hn24
+    (ptc_committees_match_spec p cp hp o state epoch.val seed hseed shuffling cps spe hbuilt hspe hn
+      hn24
       hfit start_slot.val hstart committees hclen hglue)
     hn24c ptc_size hptc c hc hp.slots_pos hus state' hspec
 

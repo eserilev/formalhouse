@@ -26,7 +26,7 @@ open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 /-- `exit_churn_limit` returns `get_activation_churn_limit` of the preset whose quotient and
 cap are the Lighthouse constants. -/
 theorem exit_churn_limit_capped (p : Spec.Preset) (total_active_balance : U64)
-    (c : LhRegistryConstants)
+    (c : LighthouseRegistryConstants)
     (hmin : c.min_per_epoch_churn_limit.val = p.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA)
     (hq : c.churn_limit_quotient.val = p.CHURN_LIMIT_QUOTIENT_GLOAS)
     (hinc : c.effective_balance_increment.val = p.EFFECTIVE_BALANCE_INCREMENT)
@@ -94,7 +94,7 @@ theorem exit_churn_limit_capped (p : Spec.Preset) (total_active_balance : U64)
 /-- The Lighthouse registry constants are the Fulu values: the exit churn is
 `get_activation_exit_churn_limit`. -/
 structure ChurnConstantsMatchFulu (p : Spec.Preset) (f : Spec.FuluConfig)
-    (c : LhRegistryConstants) :
+    (c : LighthouseRegistryConstants) :
     Prop where
   min_per_epoch_churn_limit : c.min_per_epoch_churn_limit.val = p.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA
   churn_limit_quotient : c.churn_limit_quotient.val = f.CHURN_LIMIT_QUOTIENT
@@ -105,7 +105,7 @@ structure ChurnConstantsMatchFulu (p : Spec.Preset) (f : Spec.FuluConfig)
 Gloas Lighthouse passes the same constants for exits (`registry_constants`) and for pending
 deposits (`activation_churn_constants`). -/
 theorem exit_churn_limit_fulu (p : Spec.Preset) (f : Spec.FuluConfig) (total_active_balance : U64)
-    (c : LhRegistryConstants) (hc : ChurnConstantsMatchFulu p f c) :
+    (c : LighthouseRegistryConstants) (hc : ChurnConstantsMatchFulu p f c) :
     per_epoch_processing.registry_update.exit_churn_limit total_active_balance c ⦃ r =>
       resultToSpec (·.val) r =
         Spec.get_activation_exit_churn_limit p f total_active_balance.val ⦄ := by
@@ -116,7 +116,7 @@ theorem exit_churn_limit_fulu (p : Spec.Preset) (f : Spec.FuluConfig) (total_act
 /-- With the Gloas constants of `activation_churn_constants`, `exit_churn_limit` returns
 `get_activation_churn_limit`. -/
 theorem activation_churn_limit_gloas (p : Spec.Preset) (total_active_balance : U64)
-    (c : LhRegistryConstants)
+    (c : LighthouseRegistryConstants)
     (hmin : c.min_per_epoch_churn_limit.val = p.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA)
     (hq : c.churn_limit_quotient.val = p.CHURN_LIMIT_QUOTIENT_GLOAS)
     (hinc : c.effective_balance_increment.val = p.EFFECTIVE_BALANCE_INCREMENT)
@@ -137,7 +137,7 @@ theorem next_sync_committee_indices_spec_fulu {H B : Type} (inst : ShuffleHashIn
     (hindices : indices.val.map (·.val) = Spec.get_active_validator_indices state epoch.val)
     (mix : Array U8 32#usize) (hmix : SeedMixMatches p state epoch.val mix) (size : Usize)
     (hsize : size.val = p.SYNC_COMMITTEE_SIZE) (hsize0 : 0 < p.SYNC_COMMITTEE_SIZE)
-    (c : LhSelectionConstants) (hc : SelectionConstantsMatch p c)
+    (c : LighthouseSelectionConstants) (hc : SelectionConstantsMatch p c)
     (hn24 : indices.val.length ≤ 2 ^ 24) (hus : Usize.max = U64.max) (res : List Nat)
     (hspec : Spec.get_next_sync_committee_indices_fulu p o state = .ok res) :
     per_epoch_processing.epoch_committees.next_sync_committee_indices inst ebi balances indices
@@ -168,7 +168,7 @@ theorem next_proposer_lookahead_spec_fulu {H B : Type} (inst : ShuffleHashInst H
     (hfin : ∀ s, Spec.ProposerSelectionEnds p o state (Spec.get_active_validator_indices state epoch.val) s)
     (mix : Array U8 32#usize) (hmix : SeedMixMatches p state epoch.val mix) (start_slot : U64)
     (hstart : Spec.compute_start_slot_at_epoch p epoch.val = .ok start_slot.val)
-    (c : LhSelectionConstants) (hc : SelectionConstantsMatch p c)
+    (c : LighthouseSelectionConstants) (hc : SelectionConstantsMatch p c)
     (hspe32 : p.SLOTS_PER_EPOCH < 2 ^ 32)
     (hn24 : indices.val.length ≤ 2 ^ 24) (hus : Usize.max = U64.max)
     (state' : Spec.BeaconState) (hspec : Spec.process_proposer_lookahead_fulu p o state = .ok state') :

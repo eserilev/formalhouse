@@ -32,27 +32,27 @@ def addSums (s : BeaconState) (sums : List Gwei) : SpecM BeaconState :=
 
 /-- The plan fold from any accumulator: the sums come from the top-up fold, and the postponed
 and new deposits are appended. -/
-theorem lhPlan_fold_gen (P : List BLSPubkey) :
+theorem lighthousePlan_fold_gen (P : List BLSPubkey) :
     ∀ (handled : List (PendingDeposit × Bool)) (sums : List Gwei)
       (post news : List PendingDeposit),
-      handled.foldlM (lhPlanStep P) (sums, post, news) =
+      handled.foldlM (lighthousePlanStep P) (sums, post, news) =
         (fun sums' => (sums', post ++ (handled.filter (·.2)).map (·.1),
           news ++ newDeposits P handled)) <$>
           (knownTopups P handled).foldlM (fun acc x => increase_balance acc x.1 x.2) sums
   | [], sums, post, news => by
     simp [knownTopups, newDeposits, pure, Except.pure, Functor.map, Except.map]
   | (d, pp) :: handled, sums, post, news => by
-    have ih := lhPlan_fold_gen P handled
+    have ih := lighthousePlan_fold_gen P handled
     rw [List.foldlM_cons]
     by_cases hpp : pp = true
     · subst hpp
-      simp only [lhPlanStep, if_true, pure, Except.pure, bind, Except.bind]
+      simp only [lighthousePlanStep, if_true, pure, Except.pure, bind, Except.bind]
       rw [ih]
       simp [knownTopups, newDeposits]
     · have hpp' : pp = false := by simpa using hpp
       subst hpp'
       by_cases hm : d.pubkey ∈ P
-      · simp only [lhPlanStep, Bool.false_eq_true, if_false, hm, if_true, bind, Except.bind]
+      · simp only [lighthousePlanStep, Bool.false_eq_true, if_false, hm, if_true, bind, Except.bind]
         simp only [knownTopups, newDeposits, List.filter_cons, hm, Bool.not_false,
           decide_true, Bool.and_self, if_true, Bool.not_true, Bool.and_false,
           Bool.false_eq_true, if_false, List.map_cons, List.foldlM_cons]
@@ -62,20 +62,20 @@ theorem lhPlan_fold_gen (P : List BLSPubkey) :
           simp only [pure, Except.pure]
           rw [ih]
           rfl
-      · simp only [lhPlanStep, Bool.false_eq_true, if_false, hm, pure, Except.pure, bind,
+      · simp only [lighthousePlanStep, Bool.false_eq_true, if_false, hm, pure, Except.pure, bind,
           Except.bind]
         rw [ih]
         simp [knownTopups, newDeposits, hm]
 
-/-- The plan fold of `lhDepositPlan`: the sums are the top-up fold from zero, the postponed
+/-- The plan fold of `lighthouseDepositPlan`: the sums are the top-up fold from zero, the postponed
 deposits and the new validator deposits are filters of the handled deposits. -/
-theorem lhPlan_fold_eq (P : List BLSPubkey) (n : Nat)
+theorem lighthousePlan_fold_eq (P : List BLSPubkey) (n : Nat)
     (handled : List (PendingDeposit × Bool)) :
-    handled.foldlM (lhPlanStep P) (List.replicate n 0, [], []) =
+    handled.foldlM (lighthousePlanStep P) (List.replicate n 0, [], []) =
       (fun sums => (sums, (handled.filter (·.2)).map (·.1), newDeposits P handled)) <$>
         (knownTopups P handled).foldlM (fun acc x => increase_balance acc x.1 x.2)
           (List.replicate n 0) := by
-  rw [lhPlan_fold_gen]
+  rw [lighthousePlan_fold_gen]
   simp
 
 /-! ## Top-up sums -/

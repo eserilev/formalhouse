@@ -16,68 +16,78 @@ import EpochProofs.Sanity.Invariants.FuluOrder
 4. the participation rotation and the sync committee update.
 
 `process_epoch_lighthouse_fulu_sameResultOrBothFail` shows that it gives the same `ok` results as
-`process_epoch_lh_full_fulu`, at the last slot of an epoch, when the next slot fits in a `u64`
-and `historical_summaries` is below the Lighthouse limit (`AtLastSlotOfEpoch`). It is the Gloas proof
-without the builder payments and the PTC window, with the Fulu swaps of `FuluOrder.lean`.
+`processEpochWithSinglePassAndDeposits_fulu`, at the last slot of an epoch, when the next slot fits
+in a `u64` and `historical_summaries` is below the Lighthouse limit (`AtLastSlotOfEpoch`). It is
+the Gloas proof without the builder payments and the PTC window, with the Fulu swaps of
+`FuluOrder.lean`.
 -/
 
 namespace EpochProofs.Spec
 
 /-! ## The steps between the single pass and the committee steps -/
 
-/-- The steps of `lhFullTailFulu` from the deposit queue write to the effective balance updates
-of the validators that consolidations name. -/
-def lhMidFulu [CurrentPreset] (o : Oracle) (s : BeaconState) (plan : LhDepositPlan) (s1 : BeaconState) :
+/-- The steps of `lighthouseFullTailFulu` from the deposit queue write to the effective balance
+updates of the validators that consolidations name. -/
+def lighthouseDepositsConsolidationsFulu [CurrentPreset] (o : Oracle) (s : BeaconState)
+    (plan : LighthouseDepositPlan) (s1 : BeaconState) :
     SpecM BeaconState := do
-  let s4 ← lhNewValidators o plan (lhQueueWrite s plan s1)
+  let s4 ← lighthouseNewValidators o plan (lighthouseDepositQueueWrite s plan s1)
   let s5 ← process_pending_consolidations P s4
-  (validatorsInConsolidations s).foldlM ebUpdateAt s5
+  (validatorsInConsolidations s).foldlM updateEffectiveBalanceAt s5
 
-theorem lhAfterPassFulu_eq [CurrentPreset] (o : Oracle) (s : BeaconState) (plan : LhDepositPlan)
+theorem lighthouseAfterPassFulu_eq [CurrentPreset] (o : Oracle) (s : BeaconState)
+    (plan : LighthouseDepositPlan)
     (x : (Epoch × Gwei) × List Row) :
-    lhAfterPassG o (epochRest2Fulu o) s plan x =
+    lighthouseAfterPassG o (epochRest2Fulu o) s plan x =
       (process_eth1_data_reset P (s.withRowsChurn x.1 x.2) >>= fun s1 =>
-        lhMidFulu o s plan s1 >>= epochRest2Fulu o) := by
-  simp only [lhAfterPassG, lhMidFulu, lhNewValidators, lhQueueWrite, bind_assoc,
-    lhApplyPendingDeposit_mainnet]
+        lighthouseDepositsConsolidationsFulu o s plan s1 >>= epochRest2Fulu o) := by
+  simp only [lighthouseAfterPassG, lighthouseDepositsConsolidationsFulu, lighthouseNewValidators,
+    lighthouseDepositQueueWrite, bind_assoc,
+    lighthouseApplyPendingDeposit_mainnet]
 
-theorem lhMidFulu_votesBlind [CurrentPreset] (o : Oracle) (s : BeaconState) (plan : LhDepositPlan) :
-    VotesBlind (lhMidFulu o s plan) := by
+theorem lighthouseDepositsConsolidationsFulu_votesBlind [CurrentPreset] (o : Oracle)
+    (s : BeaconState) (plan : LighthouseDepositPlan) :
+    VotesBlind (lighthouseDepositsConsolidationsFulu o s plan) := by
   intro t
-  have hq : lhQueueWrite s plan (clearVotes t) = clearVotes (lhQueueWrite s plan t) := rfl
-  have h := votesBlind_bind (lhNewValidators_votesBlind o plan)
+  have hq : lighthouseDepositQueueWrite s plan (clearVotes t) =
+    clearVotes (lighthouseDepositQueueWrite s plan t) := rfl
+  have h := votesBlind_bind (lighthouseNewValidators_votesBlind o plan)
     (votesBlind_bind consolidations_votesBlind
-      (votesBlind_foldlM (fun t i => ebUpdateAt t i) ebUpdateAt_votesBlind
-        (validatorsInConsolidations s))) (lhQueueWrite s plan t)
+      (votesBlind_foldlM (fun t i => updateEffectiveBalanceAt t i)
+        updateEffectiveBalanceAt_votesBlind
+        (validatorsInConsolidations s))) (lighthouseDepositQueueWrite s plan t)
   simp only [bind_assoc] at h
-  simp only [lhMidFulu, hq, bind_assoc]
+  simp only [lighthouseDepositsConsolidationsFulu, hq, bind_assoc]
   exact h
 
-theorem lhMidFulu_slotKeep [CurrentPreset] (o : Oracle) (s : BeaconState) (plan : LhDepositPlan) :
-    KeepsSlot (lhMidFulu o s plan) := by
+theorem lighthouseDepositsConsolidationsFulu_slotKeep [CurrentPreset] (o : Oracle) (s : BeaconState)
+    (plan : LighthouseDepositPlan) :
+    KeepsSlot (lighthouseDepositsConsolidationsFulu o s plan) := by
   intro t t' h
-  have k := slotKeep_bind (lhNewValidators_slotKeep o plan)
+  have k := slotKeep_bind (lighthouseNewValidators_slotKeep o plan)
     (slotKeep_bind consolidations_slotKeep
-      (slotKeep_foldlM (fun t i => ebUpdateAt t i) ebUpdateAt_slotKeep
-        (validatorsInConsolidations s))) (lhQueueWrite s plan t) t'
+      (slotKeep_foldlM (fun t i => updateEffectiveBalanceAt t i) updateEffectiveBalanceAt_slotKeep
+        (validatorsInConsolidations s))) (lighthouseDepositQueueWrite s plan t) t'
   simp only [bind_assoc] at k
-  simp only [lhMidFulu, bind_assoc] at h
+  simp only [lighthouseDepositsConsolidationsFulu, bind_assoc] at h
   exact k h
 
 /-! ## The steps after the consolidations in the Lighthouse order -/
 
 /-- The Fulu steps after the consolidations, as Lighthouse runs them. -/
-def lhRestOrderFulu [CurrentPreset] (o : Oracle) (t : BeaconState) : SpecM BeaconState := do
+def lighthouseStepsAfterPaymentsFulu [CurrentPreset] (o : Oracle)
+    (t : BeaconState) : SpecM BeaconState := do
   let t ← process_proposer_lookahead_fulu P o t
-  let t ← lhEth1DataReset t
-  let t ← lhSlashingsReset t
-  let t ← lhRandaoMixesReset t
-  let t ← lhHistoricalSummariesUpdate o t
+  let t ← lighthouseEth1DataReset t
+  let t ← lighthouseSlashingsReset t
+  let t ← lighthouseRandaoMixesReset t
+  let t ← lighthouseHistoricalSummariesUpdate o t
   let t := process_participation_flag_updates t
   process_sync_committee_updates P o t
 
-theorem runSteps_lhOrderFulu_eq [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (T : BeaconState) (hT : AtLastSlotOfEpoch T) :
-    runSteps (lhOrderFulu o) T = lhRestOrderFulu o T := by
+theorem runSteps_lighthouseOrderFulu_eq [CurrentPreset] [CurrentPreset.Valid] (o : Oracle)
+    (T : BeaconState) (hT : AtLastSlotOfEpoch T) :
+    runSteps (lighthouseOrderFulu o) T = lighthouseStepsAfterPaymentsFulu o T := by
   obtain ⟨halign, hslot, hroom⟩ := hT
   have kpl : StepKeeps (SameSH T) (process_proposer_lookahead_fulu P o) :=
     keeps_of_shape _ _ _ _ (process_proposer_lookahead_fulu_eq o) (fun _ _ h => h)
@@ -97,15 +107,15 @@ theorem runSteps_lhOrderFulu_eq [CurrentPreset] [CurrentPreset.Valid] (o : Oracl
     intro t ht
     rw [ht.1]
     exact P_slot_slash_fit hslot
-  simp only [runSteps, lhOrderFulu, lhRestOrderFulu, pfStep, bind_pure]
+  simp only [runSteps, lighthouseOrderFulu, lighthouseStepsAfterPaymentsFulu, pfStep, bind_pure]
   refine bind_congr_of (SameSH T) (fun v h => kpl T v ⟨rfl, rfl⟩ h) (fun t2 h2 => ?_)
-  rw [lhEth1DataReset_eq t2 (by rw [h2.1]; exact hslot) (by rw [h2.1]; exact halign)]
+  rw [lighthouseEth1DataReset_eq t2 (by rw [h2.1]; exact hslot) (by rw [h2.1]; exact halign)]
   refine bind_congr_of (SameSH T) (fun v h => ke1 t2 v h2 h) (fun t3 h3 => ?_)
-  rw [lhSlashingsReset_eq t3 (hfit' t3 h3)]
+  rw [lighthouseSlashingsReset_eq t3 (hfit' t3 h3)]
   refine bind_congr_of (SameSH T) (fun v h => ksr t3 v h3 h) (fun t4 h4 => ?_)
-  rw [lhRandaoMixesReset_eq t4 (hfit t4 h4)]
+  rw [lighthouseRandaoMixesReset_eq t4 (hfit t4 h4)]
   refine bind_congr_of (SameSH T) (fun v h => krr t4 v h4 h) (fun t5 h5 => ?_)
-  rw [lhHistoricalSummariesUpdate_eq o t5 (by rw [h5.2]; exact hroom)]
+  rw [lighthouseHistoricalSummariesUpdate_eq o t5 (by rw [h5.2]; exact hroom)]
   rfl
 
 theorem runSteps_specOrderFulu_eq [CurrentPreset] (o : Oracle) (T : BeaconState) :
@@ -116,71 +126,84 @@ theorem runSteps_specOrderFulu_eq [CurrentPreset] (o : Oracle) (T : BeaconState)
 
 /-- The Fulu steps after the consolidations: the Lighthouse order with the Lighthouse resets
 gives the same `ok` results as the eth1 reset followed by the spec order. -/
-theorem lhRestOrderFulu_sameResultOrBothFail [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (T : BeaconState) (hT : AtLastSlotOfEpoch T) :
-    SameResultOrBothFail (lhRestOrderFulu o T) (process_eth1_data_reset P T >>= epochRest2Fulu o) := by
+theorem lighthouseStepsAfterPaymentsFulu_sameResultOrBothFail [CurrentPreset] [CurrentPreset.Valid]
+    (o : Oracle) (T : BeaconState) (hT : AtLastSlotOfEpoch T) :
+    SameResultOrBothFail (lighthouseStepsAfterPaymentsFulu o T) (process_eth1_data_reset P T >>=
+      epochRest2Fulu o) := by
   have hroom : SlotRoom T := P_slot_room hT.2.1
-  rw [← runSteps_lhOrderFulu_eq o T hT, ← runSteps_specOrderFulu_eq o T]
-  exact SameResultOrBothFail.flip (specOrderFulu_lhOrderFulu o T hroom)
+  rw [← runSteps_lighthouseOrderFulu_eq o T hT, ← runSteps_specOrderFulu_eq o T]
+  exact SameResultOrBothFail.flip (specOrderFulu_lighthouseOrderFulu o T hroom)
 
 /-- The steps after the single pass in the Lighthouse Fulu order. -/
-def lhAfterPassOrderFulu [CurrentPreset] (o : Oracle) (s : BeaconState) (_total_active_balance : Gwei)
-    (plan : LhDepositPlan) (x : (Epoch × Gwei) × List Row) : SpecM BeaconState :=
-  lhMidFulu o s plan (s.withRowsChurn x.1 x.2) >>= lhRestOrderFulu o
+def lighthouseStepsAfterSinglePassFulu [CurrentPreset] (o : Oracle) (s : BeaconState)
+    (_total_active_balance : Gwei)
+    (plan : LighthouseDepositPlan) (x : (Epoch × Gwei) × List Row) : SpecM BeaconState :=
+  lighthouseDepositsConsolidationsFulu o s plan (s.withRowsChurn x.1 x.2) >>=
+    lighthouseStepsAfterPaymentsFulu o
 
-theorem lhAfterPassOrderFulu_sameResultOrBothFail [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) (tab : Gwei)
-    (plan : LhDepositPlan) (x : (Epoch × Gwei) × List Row) (hs : AtLastSlotOfEpoch s) :
-    SameResultOrBothFail (lhAfterPassOrderFulu o s tab plan x) (lhAfterPassG o (epochRest2Fulu o) s plan x) := by
-  rw [lhAfterPassFulu_eq]
+theorem lighthouseStepsAfterSinglePassFulu_sameResultOrBothFail [CurrentPreset]
+    [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) (tab : Gwei)
+    (plan : LighthouseDepositPlan) (x : (Epoch × Gwei) × List Row) (hs : AtLastSlotOfEpoch s) :
+    SameResultOrBothFail (lighthouseStepsAfterSinglePassFulu o s tab plan x)
+      (lighthouseAfterPassG o (epochRest2Fulu o) s plan x) := by
+  rw [lighthouseAfterPassFulu_eq]
   let W := s.withRowsChurn x.1 x.2
   have hW : AtLastSlotOfEpoch W := hs
-  have hcomm := eth1_comm (lhMidFulu o s plan) W
-    (fun t h => (lhMidFulu_slotKeep o s plan W t h).1) (lhMidFulu_votesBlind o s plan W)
+  have hcomm := eth1_comm (lighthouseDepositsConsolidationsFulu o s plan) W
+    (fun t h => (lighthouseDepositsConsolidationsFulu_slotKeep o s plan W t h).1)
+      (lighthouseDepositsConsolidationsFulu_votesBlind o s plan W)
   have hspec : SameResultOrBothFail
       (process_eth1_data_reset P W >>= fun s1 =>
-        lhMidFulu o s plan s1 >>= epochRest2Fulu o)
-      (lhMidFulu o s plan W >>= fun t => process_eth1_data_reset P t >>=
+        lighthouseDepositsConsolidationsFulu o s plan s1 >>= epochRest2Fulu o)
+      (lighthouseDepositsConsolidationsFulu o s plan W >>= fun t => process_eth1_data_reset P t >>=
         epochRest2Fulu o) := by
     rw [← bind_assoc, ← bind_assoc]
     exact sameResultOrBothFail_cont hcomm (epochRest2Fulu o)
   refine SameResultOrBothFail.trans ?_ (SameResultOrBothFail.flip hspec)
   refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t ht => ?_)
-  obtain ⟨h1, h2⟩ := lhMidFulu_slotKeep o s plan W t ht
-  exact lhRestOrderFulu_sameResultOrBothFail o t ⟨by rw [h1]; exact hW.1, by rw [h1]; exact hW.2.1,
+  obtain ⟨h1, h2⟩ := lighthouseDepositsConsolidationsFulu_slotKeep o s plan W t ht
+  exact lighthouseStepsAfterPaymentsFulu_sameResultOrBothFail o t
+    ⟨by rw [h1]; exact hW.1, by rw [h1]; exact hW.2.1,
     by rw [h2]; exact hW.2.2⟩
 
 /-! ## The whole Lighthouse Fulu epoch in the Lighthouse order -/
 
-/-- `lhFullTailFulu` with the steps after the single pass given as `after`. -/
-def lhFullTailWithFulu [CurrentPreset] [CurrentFuluConfig]
-    (after : BeaconState → Gwei → LhDepositPlan → (Epoch × Gwei) × List Row →
+/-- `lighthouseFullTailFulu` with the steps after the single pass given as `after`. -/
+def lighthouseSinglePassThenFulu [CurrentPreset] [CurrentFuluConfig]
+    (after : BeaconState → Gwei → LighthouseDepositPlan → (Epoch × Gwei) × List Row →
       SpecM BeaconState)
     (s : BeaconState) : SpecM BeaconState := do
   let current_epoch ← get_current_epoch P s
   let total_active_balance ← get_total_active_balance P s
   let rctx ← rewardsContextOf P total_active_balance s
   let (_, per) ← slashingsPreamble P total_active_balance s.slashings
-  let plan ← lhDepositPlan s (fuluChurnTotal total_active_balance) current_epoch
+  let plan ← lighthouseDepositPlan s (fuluChurnTotal total_active_balance) current_epoch
   let (downward, upward) ← hysteresisThresholds P
   let named := validatorsInConsolidations s
-  let ctx := lhContextOf s (fuluChurnTotal total_active_balance) current_epoch rctx per
-  let x ← passM (fun churn r => lhRowStepFull P ctx downward upward
-      ⟨lhBaseReward total_active_balance r, plan.topups.getD r.index 0, decide (r.index ∈ named)⟩
+  let ctx := lighthouseContextOf s (fuluChurnTotal total_active_balance) current_epoch rctx per
+  let x ← passM (fun churn r => lighthouseValidatorStep P ctx downward upward
+      ⟨lighthouseBaseReward total_active_balance r, plan.topups.getD r.index 0,
+        decide (r.index ∈ named)⟩
       churn r)
     (s.earliest_exit_epoch, s.exit_balance_to_consume) (rowsOf s)
   after s total_active_balance plan x
 
-theorem lhFullTailFulu_eq_with [CurrentPreset] [CurrentFuluConfig] (o : Oracle) (s : BeaconState) :
-    lhFullTailFulu o s =
-      lhFullTailWithFulu (fun s _ plan x => lhAfterPassG o (epochRest2Fulu o) s plan x) s := by
-  unfold lhFullTailFulu lhFullTailG lhFullTailWithFulu lhAfterPassG
+theorem lighthouseFullTailFulu_eq_with [CurrentPreset] [CurrentFuluConfig] (o : Oracle)
+    (s : BeaconState) :
+    lighthouseFullTailFulu o s =
+      lighthouseSinglePassThenFulu (fun s _ plan x =>
+        lighthouseAfterPassG o (epochRest2Fulu o) s plan x) s := by
+  unfold lighthouseFullTailFulu lighthouseFullTailG lighthouseSinglePassThenFulu
+    lighthouseAfterPassG
   rfl
 
-theorem lhFullTailWithFulu_sameResultOrBothFail [CurrentPreset] [CurrentFuluConfig]
-    (a1 a2 : BeaconState → Gwei → LhDepositPlan → (Epoch × Gwei) × List Row →
+theorem lighthouseSinglePassThenFulu_sameResultOrBothFail [CurrentPreset] [CurrentFuluConfig]
+    (a1 a2 : BeaconState → Gwei → LighthouseDepositPlan → (Epoch × Gwei) × List Row →
       SpecM BeaconState) (s : BeaconState)
     (h : ∀ tab plan x, SameResultOrBothFail (a1 s tab plan x) (a2 s tab plan x)) :
-    SameResultOrBothFail (lhFullTailWithFulu a1 s) (lhFullTailWithFulu a2 s) := by
-  unfold lhFullTailWithFulu
+    SameResultOrBothFail (lighthouseSinglePassThenFulu a1 s)
+      (lighthouseSinglePassThenFulu a2 s) := by
+  unfold lighthouseSinglePassThenFulu
   refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun _ _ => ?_
   refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun _ _ => ?_
   refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun _ _ => ?_
@@ -195,20 +218,21 @@ theorem lhFullTailWithFulu_sameResultOrBothFail [CurrentPreset] [CurrentFuluConf
 /-- The Fulu `process_epoch` as Lighthouse runs it, in the Lighthouse order and with the
 Lighthouse resets, for any preset (`CurrentPreset`). The genesis epoch takes the same path. -/
 def process_epoch_lighthouse_fulu [CurrentPreset] [CurrentFuluConfig] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
-  let s1 ← lhJustificationAndFinalization P s
-  lhFullTailWithFulu (lhAfterPassOrderFulu o) s1
+  let s1 ← lighthouseJustificationAndFinalization P s
+  lighthouseSinglePassThenFulu (lighthouseStepsAfterSinglePassFulu o) s1
 
 /-- Under `AtLastSlotOfEpoch`, the Lighthouse Fulu order gives the same `ok` results as
-`process_epoch_lh_full_fulu`. -/
+`processEpochWithSinglePassAndDeposits_fulu`. -/
 theorem process_epoch_lighthouse_fulu_sameResultOrBothFail [CurrentPreset] [CurrentPreset.Valid] [CurrentFuluConfig] (o : Oracle) (s : BeaconState) (hs : AtLastSlotOfEpoch s) :
-    SameResultOrBothFail (process_epoch_lighthouse_fulu o s) (process_epoch_lh_full_fulu o s) := by
-  unfold process_epoch_lighthouse_fulu process_epoch_lh_full_fulu
+    SameResultOrBothFail (process_epoch_lighthouse_fulu o s)
+      (processEpochWithSinglePassAndDeposits_fulu o s) := by
+  unfold process_epoch_lighthouse_fulu processEpochWithSinglePassAndDeposits_fulu
   refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) fun s1 h1 => ?_
   obtain ⟨_, _, _, _, rfl⟩ := process_justification_and_finalization_shape _ _ _
-    ((lhJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1)
-  rw [lhFullTailFulu_eq_with]
-  exact lhFullTailWithFulu_sameResultOrBothFail _ _ _ fun tab plan x =>
-    lhAfterPassOrderFulu_sameResultOrBothFail o _ tab plan x hs
+    ((lighthouseJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1)
+  rw [lighthouseFullTailFulu_eq_with]
+  exact lighthouseSinglePassThenFulu_sameResultOrBothFail _ _ _ fun tab plan x =>
+    lighthouseStepsAfterSinglePassFulu_sameResultOrBothFail o _ tab plan x hs
 
 /-- The Lighthouse Fulu epoch in the Lighthouse order gives the same `ok` results as the Fulu
 `process_epoch` on mainnet, at an epoch boundary state with the invariants that reachable Gloas
@@ -219,6 +243,7 @@ theorem lighthouse_fulu_epoch_sameResultOrBothFail [CurrentPreset] [CurrentPrese
       (process_epoch_fulu P FC o t) := by
   obtain ⟨⟨⟨hb, hslot, heb, hexit, hsupply⟩, _, hcons⟩, _, hvalid⟩ := hin
   exact SameResultOrBothFail.trans (process_epoch_lighthouse_fulu_sameResultOrBothFail o t hpre)
-    (process_epoch_lh_full_fulu_sameResultOrBothFail' o t hb hslot heb hexit hsupply hvalid hcons)
+    (processEpochWithSinglePassAndDeposits_fulu_sameResultOrBothFail' o t hb hslot heb hexit hsupply
+      hvalid hcons)
 
 end EpochProofs.Spec

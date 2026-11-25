@@ -3,11 +3,11 @@ import EpochProofs.Sanity.LighthouseRow
 /-!
 # The Lighthouse row step equals the spec row step
 
-`lhRowStep_eq_singlePassStep` shows that `lhRowStep` and `singlePassStep` give the same result
-for one row. The theorem needs the base reward, no saturation in the rewards of this row, and
-the conditions of `registryStepIndependent_eq_exclusive`.
+`lighthouseRowStep_eq_singlePassStep` shows that `lighthouseRowStep` and `singlePassStep` give the
+same result for one row. The theorem needs the base reward, no saturation in the rewards of this
+row, and the conditions of `registryStepIndependent_eq_exclusive`.
 
-`lhRowStep_eq_singlePassStep_of_combined` takes the rewards step as a hypothesis.
+`lighthouseRowStep_eq_singlePassStep_of_combined` takes the rewards step as a hypothesis.
 `RewardsBound.lean` uses it with a weaker rewards condition.
 -/
 
@@ -49,7 +49,7 @@ Hypotheses:
 - `hbalances`, `hfinalized`, `hcurrent`, `hactivation`, `hexit`: the conditions of
   `registryStepIndependent_eq_exclusive`. `hexit` is on the validator of this row.
 - `hgen`: the epoch is not the genesis epoch. -/
-theorem lhRowStep_eq_singlePassStep_of_combined (p : Preset) (ctx : LhStepContext)
+theorem lighthouseRowStep_eq_singlePassStep_of_combined (p : Preset) (ctx : LighthouseStepContext)
     (hgen : ctx.after_genesis = true) (rctx : RewardsContext) (r : Row) (churn : Epoch × Gwei) (base_reward : Gwei)
     (activation_epoch : Epoch)
     (hprev : rctx.previous_epoch = ctx.previous_epoch)
@@ -71,7 +71,7 @@ theorem lhRowStep_eq_singlePassStep_of_combined (p : Preset) (ctx : LhStepContex
     (hcurrent : ctx.current_epoch + 1 < UINT64_SIZE)
     (hactivation : compute_activation_exit_epoch p ctx.current_epoch = .ok activation_epoch)
     (hexit : r.validator.exit_epoch ≤ FAR_FUTURE_EPOCH) :
-    lhRowStep p ctx base_reward churn r =
+    lighthouseRowStep p ctx base_reward churn r =
       (fun x => (x.1.1.2, x.2)) <$> singlePassStep p ctx.total_active_balance ctx.previous_epoch
         ctx.in_leak rctx ctx.current_epoch ctx.finalized_epoch activation_epoch
         ctx.slashings_target ctx.penalty_per_increment ((((), ()), churn), ()) r := by
@@ -85,7 +85,7 @@ theorem lhRowStep_eq_singlePassStep_of_combined (p : Preset) (ctx : LhStepContex
         activation_epoch v.effective_balance (registryFieldsOf v c) := fun v c hv =>
     registryStepIndependent_eq_exclusive p _ _ _ _ _ _ hbalances hfinalized hv hcurrent
       hactivation
-  unfold lhRowStep singlePassStep
+  unfold lighthouseRowStep singlePassStep
   simp only [hgen, Bool.true_and, bothSteps, inactivityRowStep, rewardsRowStep, registryRowStep, slashingsRowStep,
     rewardsRowDeltas, ← validatorEligible_eq_rewardsEligible]
   cases helig : validatorEligible ctx.previous_epoch r.validator with
@@ -148,7 +148,7 @@ Hypotheses:
   `u64`.
 - `hbalances`, `hfinalized`, `hcurrent`, `hactivation`, `hexit`: the conditions of
   `registryStepIndependent_eq_exclusive`. `hexit` is on the validator of this row. -/
-theorem lhRowStep_eq_singlePassStep (p : Preset) (ctx : LhStepContext)
+theorem lighthouseRowStep_eq_singlePassStep (p : Preset) (ctx : LighthouseStepContext)
     (hgen : ctx.after_genesis = true) (rctx : RewardsContext)
     (r : Row) (churn : Epoch × Gwei) (base_reward : Gwei) (activation_epoch : Epoch)
     (hprev : rctx.previous_epoch = ctx.previous_epoch)
@@ -168,11 +168,12 @@ theorem lhRowStep_eq_singlePassStep (p : Preset) (ctx : LhStepContext)
     (hcurrent : ctx.current_epoch + 1 < UINT64_SIZE)
     (hactivation : compute_activation_exit_epoch p ctx.current_epoch = .ok activation_epoch)
     (hexit : r.validator.exit_epoch ≤ FAR_FUTURE_EPOCH) :
-    lhRowStep p ctx base_reward churn r =
+    lighthouseRowStep p ctx base_reward churn r =
       (fun x => (x.1.1.2, x.2)) <$> singlePassStep p ctx.total_active_balance ctx.previous_epoch
         ctx.in_leak rctx ctx.current_epoch ctx.finalized_epoch activation_epoch
         ctx.slashings_target ctx.penalty_per_increment ((((), ()), churn), ()) r := by
-  refine lhRowStep_eq_singlePassStep_of_combined p ctx hgen rctx r churn base_reward activation_epoch
+  refine lighthouseRowStep_eq_singlePassStep_of_combined p ctx hgen rctx r churn base_reward
+    activation_epoch
     hprev hleak hsource htarget hhead hactive hbase ?_ ?_ hbalances hfinalized hcurrent
     hactivation hexit
   · intro helig

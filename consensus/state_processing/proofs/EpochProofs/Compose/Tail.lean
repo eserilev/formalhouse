@@ -12,37 +12,39 @@ committee update. The checks and indices are the translated functions of `tail_u
 the next sync committee indices are the translated `next_sync_committee_indices`. The reads and
 the writes are untranslated code (`UntranslatedEndOfEpoch`), each with the fact that links it to
 the spec (`UntranslatedEndOfEpochFacts`). `translatedEndOfEpoch_matches_model` shows that `tail`
-returns the state of the model `lhTailOrder`.
+returns the state of the model `lighthouseStepsAfterPtcWindow`.
 -/
 
 namespace EpochProofs.Spec
 
-/-- The steps of `lhRestOrder` after the PTC window. -/
-def lhTailOrder [CurrentPreset] (oracle : Oracle) (t : BeaconState) : SpecM BeaconState := do
-  let t ← lhEth1DataReset t
-  let t ← lhSlashingsReset t
-  let t ← lhRandaoMixesReset t
-  let t ← lhHistoricalSummariesUpdate oracle t
+/-- The steps of `lighthouseStepsAfterPayments` after the PTC window. -/
+def lighthouseStepsAfterPtcWindow [CurrentPreset] (oracle : Oracle)
+    (t : BeaconState) : SpecM BeaconState := do
+  let t ← lighthouseEth1DataReset t
+  let t ← lighthouseSlashingsReset t
+  let t ← lighthouseRandaoMixesReset t
+  let t ← lighthouseHistoricalSummariesUpdate oracle t
   let t := process_participation_flag_updates t
   process_sync_committee_updates P oracle t
 
-/-- The steps of `lhTailOrder` before the sync committee update. -/
-def lhResets [CurrentPreset] (oracle : Oracle) (t : BeaconState) : SpecM BeaconState := do
-  let t ← lhEth1DataReset t
-  let t ← lhSlashingsReset t
-  let t ← lhRandaoMixesReset t
-  let t ← lhHistoricalSummariesUpdate oracle t
+/-- The steps of `lighthouseStepsAfterPtcWindow` before the sync committee update. -/
+def lighthouseResets [CurrentPreset] (oracle : Oracle) (t : BeaconState) : SpecM BeaconState := do
+  let t ← lighthouseEth1DataReset t
+  let t ← lighthouseSlashingsReset t
+  let t ← lighthouseRandaoMixesReset t
+  let t ← lighthouseHistoricalSummariesUpdate oracle t
   pure (process_participation_flag_updates t)
 
-theorem lhTailOrder_eq [CurrentPreset] (oracle : Oracle) (t : BeaconState) :
-    lhTailOrder oracle t = lhResets oracle t >>= process_sync_committee_updates P oracle := by
-  simp only [lhTailOrder, lhResets, bind_assoc, pure_bind]
+theorem lighthouseStepsAfterPtcWindow_eq [CurrentPreset] (oracle : Oracle) (t : BeaconState) :
+    lighthouseStepsAfterPtcWindow oracle t = lighthouseResets oracle t >>=
+      process_sync_committee_updates P oracle := by
+  simp only [lighthouseStepsAfterPtcWindow, lighthouseResets, bind_assoc, pure_bind]
 
-theorem lhRestOrder_eq [CurrentPreset] (oracle : Oracle) (t : BeaconState) :
-    lhRestOrder oracle t = (do
+theorem lighthouseStepsAfterPayments_eq [CurrentPreset] (oracle : Oracle) (t : BeaconState) :
+    lighthouseStepsAfterPayments oracle t = (do
       let t ← process_proposer_lookahead P oracle t
       let t ← process_ptc_window P oracle t
-      lhTailOrder oracle t) := rfl
+      lighthouseStepsAfterPtcWindow oracle t) := rfl
 
 /-- The sync committee of `indices`, as `sync_committee_from_indices` builds it. -/
 def syncCommitteeOf (oracle : Oracle) (s : BeaconState) (indices : List ValidatorIndex) :
@@ -111,7 +113,7 @@ structure UntranslatedEndOfEpoch (RustState : Type) where
   syncEpoch : RustState → U64
   syncMix : RustState → Array U8 32#usize
   syncSize : Usize
-  syncConstants : RustState → LhSelectionConstants
+  syncConstants : RustState → LighthouseSelectionConstants
   writeNextSync : RustState → alloc.vec.Vec Usize → Option RustState
 
 variable {RustState : Type}
@@ -197,7 +199,7 @@ structure UntranslatedEndOfEpochFacts (code : UntranslatedEndOfEpoch RustState)
     (oracle : Spec.Oracle) (rustStateToSpec : RustState → Spec.BeaconState) : Prop where
   /-- The slot, the epoch and the vector lengths are the spec values. -/
   slot : ∀ t, (code.slot t).val = (rustStateToSpec t).slot
-  eth1VotingPeriod : code.eth1VotingPeriod.val = Spec.LH_SLOTS_PER_ETH1_VOTING_PERIOD
+  eth1VotingPeriod : code.eth1VotingPeriod.val = Spec.LIGHTHOUSE_SLOTS_PER_ETH1_VOTING_PERIOD
   /-- The eth1 votes reset. -/
   clearVotes : ∀ t, rustStateToSpec (code.clearVotes t) =
     { rustStateToSpec t with eth1_data_votes := [] }
@@ -256,23 +258,23 @@ structure UntranslatedEndOfEpochFacts (code : UntranslatedEndOfEpoch RustState)
       { rustStateToSpec t with next_sync_committee := c }
   usize64 : Usize.max = U64.max
 
-/-- The composed resets return the state of the model `lhResets`. -/
+/-- The composed resets return the state of the model `lighthouseResets`. -/
 theorem translatedResets_matches_model [Spec.CurrentPreset.Valid]
     (code : UntranslatedEndOfEpoch RustState) (oracle : Spec.Oracle)
     (rustStateToSpec : RustState → Spec.BeaconState)
     (hL : UntranslatedEndOfEpochFacts code oracle rustStateToSpec) (rustState : RustState)
     (t5 : Spec.BeaconState)
-    (h : Spec.lhResets oracle (rustStateToSpec rustState) = .ok t5) :
+    (h : Spec.lighthouseResets oracle (rustStateToSpec rustState) = .ok t5) :
     ∃ rustState5, translatedResets code rustState = ok (some rustState5) ∧
       rustStateToSpec rustState5 = t5 := by
-  unfold Spec.lhResets at h
+  unfold Spec.lighthouseResets at h
   obtain ⟨t1, h1, h⟩ := Spec.specM_bind_ok h
   obtain ⟨t2, h2, h⟩ := Spec.specM_bind_ok h
   obtain ⟨t3, h3, h⟩ := Spec.specM_bind_ok h
   obtain ⟨t4, h4, h⟩ := Spec.specM_bind_ok h
   unfold translatedResets
   -- The eth1 reset.
-  unfold Spec.lhEth1DataReset at h1
+  unfold Spec.lighthouseEth1DataReset at h1
   obtain ⟨due, hdue, h1⟩ := Spec.specM_bind_ok h1
   obtain ⟨r, hr, he⟩ := spec_imp_exists
     (eth1_data_votes_reset_due_equiv (code.slot rustState) code.eth1VotingPeriod)
@@ -291,7 +293,7 @@ theorem translatedResets_matches_model [Spec.CurrentPreset.Valid]
     | false => simp only [Bool.false_eq_true, if_false] at h1 ⊢; cases h1; rfl
   rw [hst1]
   -- The slashings reset.
-  unfold Spec.lhSlashingsReset at h2
+  unfold Spec.lighthouseSlashingsReset at h2
   obtain ⟨oi, hoi, h2⟩ := Spec.specM_bind_ok h2
   obtain ⟨r, hr, he⟩ := spec_imp_exists
     (slashings_reset_index_equiv (code.currentEpoch rustState1) code.slashingsLength)
@@ -314,7 +316,7 @@ theorem translatedResets_matches_model [Spec.CurrentPreset.Valid]
   simp only [hw2]
   have hv2' : rustStateToSpec rustState2 = t2 := by rw [hv2, hv1]; cases h2; rfl
   -- The randao reset.
-  unfold Spec.lhRandaoMixesReset at h3
+  unfold Spec.lighthouseRandaoMixesReset at h3
   obtain ⟨op, hop, h3⟩ := Spec.specM_bind_ok h3
   obtain ⟨r, hr, he⟩ := spec_imp_exists
     (randao_mixes_reset_indices_equiv (code.currentEpoch rustState2) code.mixesLength)
@@ -339,7 +341,7 @@ theorem translatedResets_matches_model [Spec.CurrentPreset.Valid]
   simp only [hw3]
   have hv3' : rustStateToSpec rustState3 = t3 := by rw [hv3, hv2']; cases h3; rfl
   -- The historical summaries update.
-  unfold Spec.lhHistoricalSummariesUpdate at h4
+  unfold Spec.lighthouseHistoricalSummariesUpdate at h4
   obtain ⟨ne, hne, h4⟩ := Spec.specM_bind_ok h4
   rw [← hv3'] at hne
   obtain ⟨ne', hne', hnev⟩ := hL.nextEpoch rustState3 ne hne
@@ -424,18 +426,18 @@ theorem translatedSyncCommitteeUpdate_matches_model (code : UntranslatedEndOfEpo
   cases h
   rfl
 
-/-- The composed tail returns the state of the model: when `lhTailOrder` returns `ok`, the Rust
-returns `Ok` with that state. -/
+/-- The composed tail returns the state of the model: when `lighthouseStepsAfterPtcWindow` returns
+`ok`, the Rust returns `Ok` with that state. -/
 theorem translatedEndOfEpoch_matches_model [Spec.CurrentPreset.Valid]
     (code : UntranslatedEndOfEpoch RustState) (oracle : Spec.Oracle)
     (rustStateToSpec : RustState → Spec.BeaconState)
     (hL : UntranslatedEndOfEpochFacts code oracle rustStateToSpec) (rustState : RustState)
     (hn1 : ∀ rustState5, translatedResets code rustState = ok (some rustState5) →
     SyncN1 code rustState5) (T : Spec.BeaconState)
-    (h : Spec.lhTailOrder oracle (rustStateToSpec rustState) = .ok T) :
+    (h : Spec.lighthouseStepsAfterPtcWindow oracle (rustStateToSpec rustState) = .ok T) :
     ∃ rustState', translatedEndOfEpoch code rustState = ok (some rustState') ∧
       rustStateToSpec rustState' = T := by
-  rw [Spec.lhTailOrder_eq] at h
+  rw [Spec.lighthouseStepsAfterPtcWindow_eq] at h
   obtain ⟨t5, h5, h⟩ := Spec.specM_bind_ok h
   obtain ⟨rustState5, hr, hv5⟩ :=
     translatedResets_matches_model code oracle rustStateToSpec hL rustState t5 h5

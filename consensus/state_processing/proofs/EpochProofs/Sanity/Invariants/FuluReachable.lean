@@ -312,7 +312,7 @@ theorem ReachableBySlotsBeforeFulu.tail [CurrentPreset] [CurrentFuluConfig] [Cur
       PubkeysUnique t1.state ∧ ConsolidationsInRange t1.state ∧ WithdrawableEpochsFitUint64 t1.state := by
     intro t t1 ht ih
     have hv := (process_slot_fulu_frame _ o fo _ _ ht).1.1
-    exact ⟨(PkSame.of_eq hv).pubkeysUnique ih.1,
+    exact ⟨(SamePubkeys.of_eq hv).pubkeysUnique ih.1,
       (process_slot_fulu_cstep _ o fo _ _ ht).inRange ih.2.1,
       WithdrawableEpochsFitUint64.of_validators_eq hv ih.2.2⟩
   induction hr with
@@ -358,7 +358,7 @@ theorem fulu_epoch_input_invariants [CurrentPreset] [CurrentPreset.Valid] [Curre
   have hok := hst.2.2.1 _ hlt1 hz hinv
   have htail := hreach.tail (reachable_fulu_tail o fo c init hi fs hr)
   have hv := (process_slot_fulu_frame _ o fo _ _ ht).1.1
-  have hp1 := (PkSame.of_eq hv).pubkeysUnique htail.1
+  have hp1 := (SamePubkeys.of_eq hv).pubkeysUnique htail.1
   have hc1 := (process_slot_fulu_cstep _ o fo _ _ ht).inRange htail.2.1
   have hw1 := WithdrawableEpochsFitUint64.of_validators_eq hv htail.2.2
   obtain ⟨-, -, hd, hx, -, s0, n, hA, hb, -⟩ := hinv

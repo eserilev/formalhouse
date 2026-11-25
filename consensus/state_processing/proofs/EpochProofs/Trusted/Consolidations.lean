@@ -30,11 +30,11 @@ namespace EpochProofs
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 /-- The Rust trait `ConsolidationState`. -/
-abbrev LhConsolidationState (S E : Type) :=
+abbrev LighthouseConsolidationState (S E : Type) :=
   per_epoch_processing.pending_consolidations.ConsolidationState S E
 
 /-- The Rust `PendingPair`: the source and the target of a pending consolidation. -/
-abbrev LhPendingPair := per_epoch_processing.pending_consolidations.PendingPair
+abbrev LighthousePendingPair := per_epoch_processing.pending_consolidations.PendingPair
 
 /-- The spec next epoch of a state. -/
 def specNextEpoch (p : Spec.Preset) (state : Spec.BeaconState) : Spec.SpecM Nat := do
@@ -46,13 +46,15 @@ def pendingPairs (state : Spec.BeaconState) : List (Nat × Nat) :=
 
 /-- Trusted: what the `ConsolidationState` implementation in `single_pass.rs` does. `toSpec` gives
 the spec state that an implementation value holds. -/
-structure ConsolidationAccessMatchesSpec {S E : Type} (implementation : LhConsolidationState S E)
+structure ConsolidationAccessMatchesSpec {S E : Type}
+    (implementation : LighthouseConsolidationState S E)
     (p : Spec.Preset) (toSpec : S → Spec.BeaconState) : Prop where
   next_epoch : ∀ (s : S),
     (∀ n, specNextEpoch p (toSpec s) = .ok n →
       ∃ v : U64, implementation.next_epoch s = ok (.Ok v) ∧ v.val = n) ∧
     (∀ e, specNextEpoch p (toSpec s) = .error e → ∃ e', implementation.next_epoch s = ok (.Err e'))
-  pending : ∀ (s : S), ∃ v : alloc.vec.Vec LhPendingPair, implementation.pending s = ok (.Ok v) ∧
+  pending : ∀ (s : S), ∃ v : alloc.vec.Vec LighthousePendingPair, implementation.pending s =
+    ok (.Ok v) ∧
     v.val.map (fun q => (q.source.val, q.target.val)) = pendingPairs (toSpec s)
   local_validator : ∀ (s : S) (i : Usize), ∃ lv, implementation.local_validator s i = ok lv ∧
     consolidationValidatorToSpec lv = Spec.localRow (toSpec s).validators i.val

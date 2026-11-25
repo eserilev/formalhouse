@@ -142,9 +142,10 @@ theorem position_spec (sorted : Slice Usize) (x : Usize)
 
 /-! ## The table -/
 
-theorem build_table_loop_spec {S E : Type} (inst : LhConsolidationState S E) (p : Spec.Preset)
+theorem build_table_loop_spec {S E : Type} (inst : LighthouseConsolidationState S E)
+    (p : Spec.Preset)
     (view : S → Spec.BeaconState) (hc : ConsolidationAccessMatchesSpec inst p view) (s : S)
-    (idx : Slice Usize) (vals : alloc.vec.Vec LhLocalValidator) (bals : alloc.vec.Vec U64)
+    (idx : Slice Usize) (vals : alloc.vec.Vec LighthouseLocalValidator) (bals : alloc.vec.Vec U64)
     (k : Usize) (hk : k.val ≤ idx.val.length)
     (hv : vals.val.map consolidationValidatorToSpec =
       Spec.tableRows (view s).validators ((idx.val.take k.val).map (·.val)))
@@ -156,9 +157,9 @@ theorem build_table_loop_spec {S E : Type} (inst : LhConsolidationState S E) (p 
       r.2.val.map (·.val) = Spec.tableBalances (view s).balances (idx.val.map (·.val)) ⦄ := by
   unfold per_epoch_processing.pending_consolidations.build_table_loop
   apply loop.spec_decr_nat
-    (measure := fun (y : alloc.vec.Vec LhLocalValidator × alloc.vec.Vec U64 × Usize) =>
+    (measure := fun (y : alloc.vec.Vec LighthouseLocalValidator × alloc.vec.Vec U64 × Usize) =>
       idx.val.length - y.2.2.val)
-    (inv := fun (y : alloc.vec.Vec LhLocalValidator × alloc.vec.Vec U64 × Usize) =>
+    (inv := fun (y : alloc.vec.Vec LighthouseLocalValidator × alloc.vec.Vec U64 × Usize) =>
       y.2.2.val ≤ idx.val.length ∧
       y.1.val.map consolidationValidatorToSpec =
         Spec.tableRows (view s).validators ((idx.val.take y.2.2.val).map (·.val)) ∧
@@ -208,7 +209,7 @@ theorem build_table_loop_spec {S E : Type} (inst : LhConsolidationState S E) (p 
       exact ⟨hv1, hb1⟩
   · exact ⟨hk, hv, hb⟩
 
-theorem build_table_spec {S E : Type} (inst : LhConsolidationState S E) (p : Spec.Preset)
+theorem build_table_spec {S E : Type} (inst : LighthouseConsolidationState S E) (p : Spec.Preset)
     (view : S → Spec.BeaconState) (hc : ConsolidationAccessMatchesSpec inst p view) (s : S)
     (idx : Slice Usize) :
     per_epoch_processing.pending_consolidations.build_table inst s idx ⦃ r =>
@@ -258,11 +259,11 @@ theorem position_found (idx : Slice Usize) (hs : (idx.val.map (·.val)).Pairwise
     simp only [List.getElem_map, hkx] at this
     exact this.symm
 
-theorem build_views_loop_spec (hus : Usize.max = U64.max) (pairs : Slice LhPendingPair)
+theorem build_views_loop_spec (hus : Usize.max = U64.max) (pairs : Slice LighthousePendingPair)
     (idx : Slice Usize) (hs : (idx.val.map (·.val)).Pairwise (· < ·))
     (hin : ∀ q ∈ pairs.val, q.source.val ∈ idx.val.map (·.val) ∧
       q.target.val ∈ idx.val.map (·.val))
-    (views : alloc.vec.Vec LhConsolidationView) (i : Usize) (hi : i.val ≤ pairs.val.length)
+    (views : alloc.vec.Vec LighthouseConsolidationView) (i : Usize) (hi : i.val ≤ pairs.val.length)
     (hv : views.val.map consolidationViewToSpec = tablePairs (idx.val.map (·.val))
       ((pairs.val.take i.val).map fun q => (q.source.val, q.target.val))) :
     per_epoch_processing.pending_consolidations.build_views_loop pairs idx views i ⦃ r =>
@@ -270,9 +271,9 @@ theorem build_views_loop_spec (hus : Usize.max = U64.max) (pairs : Slice LhPendi
         (pairs.val.map fun q => (q.source.val, q.target.val)) ⦄ := by
   unfold per_epoch_processing.pending_consolidations.build_views_loop
   apply loop.spec_decr_nat
-    (measure := fun (y : alloc.vec.Vec LhConsolidationView × Usize) =>
+    (measure := fun (y : alloc.vec.Vec LighthouseConsolidationView × Usize) =>
       pairs.val.length - y.2.val)
-    (inv := fun (y : alloc.vec.Vec LhConsolidationView × Usize) =>
+    (inv := fun (y : alloc.vec.Vec LighthouseConsolidationView × Usize) =>
       y.2.val ≤ pairs.val.length ∧
       y.1.val.map consolidationViewToSpec = tablePairs (idx.val.map (·.val))
         ((pairs.val.take y.2.val).map fun q => (q.source.val, q.target.val)))
@@ -304,7 +305,7 @@ theorem build_views_loop_spec (hus : Usize.max = U64.max) (pairs : Slice LhPendi
         simpa [tablePairs, Nat.min_eq_left hi1] using this
       have hmax : i1.val < Usize.max := by have := pairs.property; scalar_tac
       obtain ⟨vw2, hpv, hvw2⟩ := spec_imp_exists
-        (alloc.vec.Vec.push_spec vw1 ({ source := k1, target := k2 } : LhConsolidationView)
+        (alloc.vec.Vec.push_spec vw1 ({ source := k1, target := k2 } : LighthouseConsolidationView)
           (by omega))
       rw [hpv, bind_tc_ok]
       have hsat := usize_saturating_add_one i1 hmax
@@ -323,7 +324,7 @@ theorem build_views_loop_spec (hus : Usize.max = U64.max) (pairs : Slice LhPendi
       exact ⟨by simp, hv1⟩
   · exact ⟨hi, hv⟩
 
-theorem build_views_spec (hus : Usize.max = U64.max) (pairs : Slice LhPendingPair)
+theorem build_views_spec (hus : Usize.max = U64.max) (pairs : Slice LighthousePendingPair)
     (idx : Slice Usize) (hs : (idx.val.map (·.val)).Pairwise (· < ·))
     (hin : ∀ q ∈ pairs.val, q.source.val ∈ idx.val.map (·.val) ∧
       q.target.val ∈ idx.val.map (·.val)) :
@@ -335,7 +336,7 @@ theorem build_views_spec (hus : Usize.max = U64.max) (pairs : Slice LhPendingPai
   dsimp only
   apply exists_imp_spec
   obtain ⟨r, hr, hnone, hviews⟩ := spec_imp_exists (build_views_loop_spec hus pairs idx hs hin
-    (alloc.vec.Vec.with_capacity LhConsolidationView (Slice.len pairs)) 0#usize (by simp)
+    (alloc.vec.Vec.with_capacity LighthouseConsolidationView (Slice.len pairs)) 0#usize (by simp)
     (by simp [tablePairs, alloc.vec.Vec.with_capacity, alloc.vec.Vec.new]))
   rw [hr]
   obtain ⟨vw, o⟩ := r
@@ -354,7 +355,8 @@ theorem writeBack_snoc (bs : List Spec.Gwei) (l m : List Nat) (hl : l.length = m
   rw [List.zip_append hl, List.foldl_append]
   rfl
 
-theorem write_back_loop_spec {S E : Type} (inst : LhConsolidationState S E) (p : Spec.Preset)
+theorem write_back_loop_spec {S E : Type} (inst : LighthouseConsolidationState S E)
+    (p : Spec.Preset)
     (view : S → Spec.BeaconState) (hc : ConsolidationAccessMatchesSpec inst p view)
     (idx : Slice Usize) (bals : Slice U64) (hlen : bals.val.length = idx.val.length)
     (s0 st : S) (k : Usize) (hk : k.val ≤ idx.val.length)
@@ -400,7 +402,7 @@ theorem write_back_loop_spec {S E : Type} (inst : LhConsolidationState S E) (p :
       rw [hv1, hkl, List.take_length, List.take_of_length_le (by omega)]
   · exact ⟨hk, hv⟩
 
-theorem write_back_spec {S E : Type} (inst : LhConsolidationState S E) (p : Spec.Preset)
+theorem write_back_spec {S E : Type} (inst : LighthouseConsolidationState S E) (p : Spec.Preset)
     (view : S → Spec.BeaconState) (hc : ConsolidationAccessMatchesSpec inst p view)
     (idx : Slice Usize) (bals : Slice U64) (hlen : bals.val.length = idx.val.length) (s : S) :
     per_epoch_processing.pending_consolidations.write_back inst s idx bals ⦃ r =>
@@ -430,7 +432,8 @@ theorem btreeSetIter_consolidationIndices (state : Spec.BeaconState) (it : List 
 /-- Lighthouse's pending consolidations step equals the spec `process_pending_consolidations`:
 if the spec succeeds, Lighthouse succeeds with the same state, and if the spec fails, Lighthouse
 fails. -/
-theorem process_on_table_spec {S E : Type} (inst : LhConsolidationState S E) (p : Spec.Preset)
+theorem process_on_table_spec {S E : Type} (inst : LighthouseConsolidationState S E)
+    (p : Spec.Preset)
     (view : S → Spec.BeaconState) (hc : ConsolidationAccessMatchesSpec inst p view)
     (hus : Usize.max = U64.max) (s : S) (idx : Slice Usize)
     (hidx : IteratesLikeBTreeSet ((view s).pending_consolidations.flatMap

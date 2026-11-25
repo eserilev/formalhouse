@@ -21,13 +21,13 @@ namespace EpochProofs
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 /-- The Rust `RegistryFields`. -/
-abbrev LhRegistryFields := per_epoch_processing.registry_update.RegistryFields
+abbrev LighthouseRegistryFields := per_epoch_processing.registry_update.RegistryFields
 
 /-- The Rust `RegistryConstants`. -/
-abbrev LhRegistryConstants := per_epoch_processing.registry_update.RegistryConstants
+abbrev LighthouseRegistryConstants := per_epoch_processing.registry_update.RegistryConstants
 
 /-- The Rust registry fields, read as model fields. -/
-def registryFieldsToSpec (f : LhRegistryFields) : Spec.RegistryFields :=
+def registryFieldsToSpec (f : LighthouseRegistryFields) : Spec.RegistryFields :=
   { activation_eligibility_epoch := f.activation_eligibility_epoch.val
     activation_epoch := f.activation_epoch.val
     exit_epoch := f.exit_epoch.val
@@ -36,7 +36,7 @@ def registryFieldsToSpec (f : LhRegistryFields) : Spec.RegistryFields :=
     exit_balance_to_consume := f.exit_balance_to_consume.val }
 
 /-- The Lighthouse constants that are not about the churn are the spec values for preset `p`. -/
-structure RegistryConstantsMatch (p : Spec.Preset) (c : LhRegistryConstants) : Prop where
+structure RegistryConstantsMatch (p : Spec.Preset) (c : LighthouseRegistryConstants) : Prop where
   far_future_epoch : c.far_future_epoch.val = Spec.FAR_FUTURE_EPOCH
   min_activation_balance : c.min_activation_balance.val = p.MIN_ACTIVATION_BALANCE
   ejection_balance : c.ejection_balance.val = p.EJECTION_BALANCE
@@ -45,7 +45,7 @@ structure RegistryConstantsMatch (p : Spec.Preset) (c : LhRegistryConstants) : P
     c.min_validator_withdrawability_delay.val = p.MIN_VALIDATOR_WITHDRAWABILITY_DELAY
 
 /-- The Lighthouse constants are the Gloas spec values for preset `p`. -/
-structure RegistryConstantsMatchGloas (p : Spec.Preset) (c : LhRegistryConstants) : Prop
+structure RegistryConstantsMatchGloas (p : Spec.Preset) (c : LighthouseRegistryConstants) : Prop
     extends RegistryConstantsMatch p c where
   min_per_epoch_churn_limit : c.min_per_epoch_churn_limit.val = p.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA
   churn_limit_quotient : c.churn_limit_quotient.val = p.CHURN_LIMIT_QUOTIENT_GLOAS
@@ -134,7 +134,7 @@ theorem compute_activation_exit_epoch_equiv (p : Spec.Preset) (epoch lookahead :
 
 /-- The translated churn limit is the spec `get_exit_churn_limit`, with the same errors. -/
 theorem exit_churn_limit_equiv (p : Spec.Preset) (total_active_balance : U64)
-    (c : LhRegistryConstants) (hc : RegistryConstantsMatchGloas p c) :
+    (c : LighthouseRegistryConstants) (hc : RegistryConstantsMatchGloas p c) :
     per_epoch_processing.registry_update.exit_churn_limit total_active_balance c ⦃ r =>
       resultToSpec (·.val) r = Spec.get_exit_churn_limit p total_active_balance.val ⦄ := by
   unfold per_epoch_processing.registry_update.exit_churn_limit
@@ -203,12 +203,12 @@ theorem exit_churn_limit_equiv (p : Spec.Preset) (total_active_balance : U64)
 
 /-- `exit_churn_limit` with constants `c` returns the Gloas exit churn of
 `T total_active_balance`. -/
-def ChurnSpec (p : Spec.Preset) (c : LhRegistryConstants) (T : Nat → Nat) : Prop :=
+def ChurnSpec (p : Spec.Preset) (c : LighthouseRegistryConstants) (T : Nat → Nat) : Prop :=
   ∀ total_active_balance : U64,
     per_epoch_processing.registry_update.exit_churn_limit total_active_balance c ⦃ r =>
       resultToSpec (·.val) r = Spec.get_exit_churn_limit p (T total_active_balance.val) ⦄
 
-theorem RegistryConstantsMatchGloas.churnSpec {p : Spec.Preset} {c : LhRegistryConstants}
+theorem RegistryConstantsMatchGloas.churnSpec {p : Spec.Preset} {c : LighthouseRegistryConstants}
     (hc : RegistryConstantsMatchGloas p c) : ChurnSpec p c id :=
   fun total_active_balance => exit_churn_limit_equiv p total_active_balance c hc
 
@@ -221,7 +221,7 @@ theorem ceil_div_mul_ge (x c : Nat) (hc : 0 < c) : x ≤ ((x - 1) / c + 1) * c :
 
 theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
     (exit_balance current_epoch earliest_exit_epoch exit_balance_to_consume total_active_balance : U64)
-    (c : LhRegistryConstants) (hc : RegistryConstantsMatch p c) (T : Nat → Nat)
+    (c : LighthouseRegistryConstants) (hc : RegistryConstantsMatch p c) (T : Nat → Nat)
     (hch : ChurnSpec p c T) :
     per_epoch_processing.registry_update.compute_exit_epoch_and_update_churn exit_balance
       current_epoch earliest_exit_epoch exit_balance_to_consume total_active_balance c ⦃ r =>
@@ -420,8 +420,8 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
           hmax, hgt, hv3, hle3]
 
 /-- The translated eligibility step is the model step, with the same errors. -/
-theorem eligibility_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
-    (effective_balance current_epoch : U64) (c : LhRegistryConstants)
+theorem eligibility_step_equiv (p : Spec.Preset) (fields : LighthouseRegistryFields)
+    (effective_balance current_epoch : U64) (c : LighthouseRegistryConstants)
     (hc : RegistryConstantsMatch p c) :
     per_epoch_processing.registry_update.eligibility_step fields effective_balance current_epoch c
       ⦃ r => resultToSpec registryFieldsToSpec r =
@@ -473,8 +473,8 @@ theorem eligibility_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
       ]
 
 /-- The translated activation step is the model step, with the same errors. -/
-theorem activation_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
-    (current_epoch finalized_epoch : U64) (c : LhRegistryConstants)
+theorem activation_step_equiv (p : Spec.Preset) (fields : LighthouseRegistryFields)
+    (current_epoch finalized_epoch : U64) (c : LighthouseRegistryConstants)
     (hc : RegistryConstantsMatch p c) :
     per_epoch_processing.registry_update.activation_step fields current_epoch finalized_epoch c
       ⦃ r => resultToSpec registryFieldsToSpec r =
@@ -522,8 +522,8 @@ theorem activation_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
       
       ]
 
-theorem ejection_step_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields)
-    (effective_balance current_epoch total_active_balance : U64) (c : LhRegistryConstants)
+theorem ejection_step_equiv_churn (p : Spec.Preset) (fields : LighthouseRegistryFields)
+    (effective_balance current_epoch total_active_balance : U64) (c : LighthouseRegistryConstants)
     (hc : RegistryConstantsMatch p c) (T : Nat → Nat) (hch : ChurnSpec p c T) :
     per_epoch_processing.registry_update.ejection_step fields effective_balance current_epoch
       total_active_balance c ⦃ r => resultToSpec registryFieldsToSpec r =
@@ -623,9 +623,9 @@ theorem ejection_step_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields)
       
       hfit, hw, h1, h3, hcur]
 
-theorem registry_update_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields)
+theorem registry_update_equiv_churn (p : Spec.Preset) (fields : LighthouseRegistryFields)
     (effective_balance current_epoch finalized_epoch total_active_balance : U64)
-    (c : LhRegistryConstants) (hc : RegistryConstantsMatch p c) (T : Nat → Nat)
+    (c : LighthouseRegistryConstants) (hc : RegistryConstantsMatch p c) (T : Nat → Nat)
     (hch : ChurnSpec p c T) :
     per_epoch_processing.registry_update.registry_update fields effective_balance current_epoch
       finalized_epoch total_active_balance c ⦃ r => resultToSpec registryFieldsToSpec r =
@@ -669,7 +669,7 @@ theorem registry_update_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields
 
 theorem compute_exit_epoch_and_update_churn_equiv (p : Spec.Preset)
     (exit_balance current_epoch earliest_exit_epoch exit_balance_to_consume total_active_balance : U64)
-    (c : LhRegistryConstants) (hc : RegistryConstantsMatchGloas p c) :
+    (c : LighthouseRegistryConstants) (hc : RegistryConstantsMatchGloas p c) :
     per_epoch_processing.registry_update.compute_exit_epoch_and_update_churn exit_balance
       current_epoch earliest_exit_epoch exit_balance_to_consume total_active_balance c ⦃ r =>
         resultToSpec (fun x => (x.1.val, x.2.1.val, x.2.2.val)) r =
@@ -678,8 +678,8 @@ theorem compute_exit_epoch_and_update_churn_equiv (p : Spec.Preset)
   compute_exit_epoch_and_update_churn_equiv_churn p exit_balance current_epoch earliest_exit_epoch
     exit_balance_to_consume total_active_balance c hc.toRegistryConstantsMatch id hc.churnSpec
 
-theorem ejection_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
-    (effective_balance current_epoch total_active_balance : U64) (c : LhRegistryConstants)
+theorem ejection_step_equiv (p : Spec.Preset) (fields : LighthouseRegistryFields)
+    (effective_balance current_epoch total_active_balance : U64) (c : LighthouseRegistryConstants)
     (hc : RegistryConstantsMatchGloas p c) :
     per_epoch_processing.registry_update.ejection_step fields effective_balance current_epoch
       total_active_balance c ⦃ r => resultToSpec registryFieldsToSpec r =
@@ -688,9 +688,9 @@ theorem ejection_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
   ejection_step_equiv_churn p fields effective_balance current_epoch total_active_balance c
     hc.toRegistryConstantsMatch id hc.churnSpec
 
-theorem registry_update_equiv (p : Spec.Preset) (fields : LhRegistryFields)
+theorem registry_update_equiv (p : Spec.Preset) (fields : LighthouseRegistryFields)
     (effective_balance current_epoch finalized_epoch total_active_balance : U64)
-    (c : LhRegistryConstants) (hc : RegistryConstantsMatchGloas p c) :
+    (c : LighthouseRegistryConstants) (hc : RegistryConstantsMatchGloas p c) :
     per_epoch_processing.registry_update.registry_update fields effective_balance current_epoch
       finalized_epoch total_active_balance c ⦃ r => resultToSpec registryFieldsToSpec r =
         Spec.registryStepIndependent p total_active_balance.val current_epoch.val
@@ -700,9 +700,10 @@ theorem registry_update_equiv (p : Spec.Preset) (fields : LhRegistryFields)
 
 /-- On valid states, Lighthouse's registry update equals the spec's loop body for one
 validator. -/
-theorem registry_update_eq_spec (p : Spec.Preset) (fields : LhRegistryFields)
+theorem registry_update_eq_spec (p : Spec.Preset) (fields : LighthouseRegistryFields)
     (effective_balance current_epoch finalized_epoch total_active_balance : U64)
-    (c : LhRegistryConstants) (hc : RegistryConstantsMatchGloas p c) (activation_epoch : Nat)
+    (c : LighthouseRegistryConstants) (hc : RegistryConstantsMatchGloas p c)
+    (activation_epoch : Nat)
     (hbalances : p.EJECTION_BALANCE < p.MIN_ACTIVATION_BALANCE)
     (hfinalized : finalized_epoch.val ≤ current_epoch.val)
     (hcurrent : current_epoch.val + 1 < Spec.UINT64_SIZE)

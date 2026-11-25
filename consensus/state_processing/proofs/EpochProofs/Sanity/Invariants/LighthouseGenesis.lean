@@ -7,7 +7,7 @@ import EpochProofs.Spec.PresetCfg
 At the genesis epoch the spec skips `process_inactivity_updates` and
 `process_rewards_and_penalties`. Lighthouse runs `single_pass_step` with `after_genesis = false`,
 which skips the same two steps. `lighthouse_single_pass_eq_spec_genesis` shows that the pass of
-`lhRowStep` with that context gives the same `ok` results as the spec's four steps.
+`lighthouseRowStep` with that context gives the same `ok` results as the spec's four steps.
 -/
 
 namespace EpochProofs.Spec
@@ -19,9 +19,10 @@ theorem process_rewards_and_penalties_genesis (p : Preset) (total_active_balance
   unfold process_rewards_and_penalties
   simp [bind, Except.bind, hcurrent, pure, Except.pure]
 
-/-- With `after_genesis = false`, `lhRowStep` is the registry row step, then the slashings row
-step. The registry conditions are those of `registryStepIndependent_eq_exclusive`. -/
-theorem lhRowStep_genesis (p : Preset) (ctx : LhStepContext) (hgen : ctx.after_genesis = false)
+/-- With `after_genesis = false`, `lighthouseRowStep` is the registry row step, then the slashings
+row step. The registry conditions are those of `registryStepIndependent_eq_exclusive`. -/
+theorem lighthouseRowStep_genesis (p : Preset) (ctx : LighthouseStepContext)
+    (hgen : ctx.after_genesis = false)
     (base_reward : Gwei) (churn : Epoch × Gwei) (r : Row) (activation_epoch : Epoch)
     (hprev : ctx.previous_epoch + 1 < UINT64_SIZE)
     (hbalances : p.EJECTION_BALANCE < p.MIN_ACTIVATION_BALANCE)
@@ -29,7 +30,7 @@ theorem lhRowStep_genesis (p : Preset) (ctx : LhStepContext) (hgen : ctx.after_g
     (hcurrent : ctx.current_epoch + 1 < UINT64_SIZE)
     (hactivation : compute_activation_exit_epoch p ctx.current_epoch = .ok activation_epoch)
     (hexit : r.validator.exit_epoch ≤ FAR_FUTURE_EPOCH) :
-    lhRowStep p ctx base_reward churn r =
+    lighthouseRowStep p ctx base_reward churn r =
       (fun x => (x.1.1, x.2)) <$> bothSteps (registryRowStep p ctx.total_active_balance
         ctx.current_epoch ctx.finalized_epoch activation_epoch)
         (slashingsRowStep p ctx.slashings_target ctx.penalty_per_increment) (churn, ()) r := by
@@ -45,7 +46,7 @@ theorem lhRowStep_genesis (p : Preset) (ctx : LhStepContext) (hgen : ctx.after_g
   have hreg := registryStepIndependent_eq_exclusive p ctx.total_active_balance ctx.current_epoch
     ctx.finalized_epoch activation_epoch r.validator.effective_balance
     (registryFieldsOf r.validator churn) hbalances hfinalized hexit hcurrent hactivation
-  unfold lhRowStep
+  unfold lighthouseRowStep
   simp only [hgen, Bool.false_and, hb, bind, Except.bind, pure, Except.pure, Bool.false_eq_true,
     if_false, bothSteps, registryRowStep, slashingsRowStep, hreg]
   cases registryStepExclusive p ctx.total_active_balance ctx.current_epoch ctx.finalized_epoch
@@ -99,7 +100,7 @@ theorem genesis_passes_eq_single_pass (p : Preset) (total_active_balance : Gwei)
   cases passM (slashingsRowStep p (GENESIS_EPOCH + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) ()
     y3.2 <;> rfl
 
-/-- On mainnet, at the genesis epoch, one pass of `lhRowStep` with `after_genesis = false`
+/-- On mainnet, at the genesis epoch, one pass of `lighthouseRowStep` with `after_genesis = false`
 gives the same `ok` results as the spec's inactivity, rewards, registry and slashings steps. -/
 theorem lighthouse_single_pass_eq_spec_genesis [CurrentPreset] [CurrentPreset.Valid] (total_active_balance : Gwei)
     (state : BeaconState) (hrows : ListLengthsMatch state)
@@ -121,13 +122,14 @@ theorem lighthouse_single_pass_eq_spec_genesis [CurrentPreset] [CurrentPreset.Va
       let s3 ← process_registry_updates P total_active_balance s2
       process_slashings P total_active_balance s3)
     ((fun y => state.withRowsChurn y.1 y.2) <$>
-      passM (fun churn r => lhRowStep P
-          (lhContextOf state total_active_balance GENESIS_EPOCH rctx per) (base_reward r) churn r)
+      passM (fun churn r => lighthouseRowStep P
+          (lighthouseContextOf state total_active_balance GENESIS_EPOCH rctx per) (base_reward r)
+            churn r)
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
   refine SameResultOrBothFail.trans (genesis_passes_eq_single_pass P total_active_balance state
     hrows hcurrent activation_epoch hactivation (P_slashings_target_lt (by decide)) adjusted per hpre) (SameResultOrBothFail.of_eq ?_)
   have hstep : ∀ churn r, r ∈ rowsOf state →
-      lhRowStep P (lhContextOf state total_active_balance GENESIS_EPOCH rctx per)
+      lighthouseRowStep P (lighthouseContextOf state total_active_balance GENESIS_EPOCH rctx per)
         (base_reward r) churn r =
       (fun x => (x.1.1, x.2)) <$> bothSteps (registryRowStep P total_active_balance
         GENESIS_EPOCH state.finalized_checkpoint.epoch activation_epoch)
@@ -139,10 +141,11 @@ theorem lighthouse_single_pass_eq_spec_genesis [CurrentPreset] [CurrentPreset.Va
     have hrow := rowsOf_getElem state i hi
     rw [hri] at hrow
     subst hrow
-    exact lhRowStep_genesis P _ rfl _ churn _ activation_epoch
-      (by simp only [lhContextOf, hprev, GENESIS_EPOCH, UINT64_SIZE]; decide) (by pdecide)
-      (by simpa only [lhContextOf] using hfinalized)
-      (by simp only [lhContextOf, GENESIS_EPOCH, UINT64_SIZE]; decide) hactivation (hexit i hiv)
+    exact lighthouseRowStep_genesis P _ rfl _ churn _ activation_epoch
+      (by simp only [lighthouseContextOf, hprev, GENESIS_EPOCH, UINT64_SIZE]; decide) (by pdecide)
+      (by simpa only [lighthouseContextOf] using hfinalized)
+      (by simp only [lighthouseContextOf, GENESIS_EPOCH, UINT64_SIZE]; decide) hactivation
+        (hexit i hiv)
   rw [passM_congr _ _ (rowsOf state) (fun churn r hr => hstep churn r hr)]
   rw [passM_proj (bothSteps (registryRowStep P total_active_balance GENESIS_EPOCH
       state.finalized_checkpoint.epoch activation_epoch)

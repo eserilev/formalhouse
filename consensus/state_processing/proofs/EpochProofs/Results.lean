@@ -33,8 +33,8 @@ namespace EpochProofs.Formalhouse
 
 open EpochProofs.CacheBridge
 open Aeneas Aeneas.Std Result
-open CacheProofs.PB (LhCache lhPreviousEpochFlagAttestingBalance
-  lhCurrentEpochFlagAttestingBalance)
+open CacheProofs.ProgressiveBalances (LighthouseProgressiveBalancesCache
+  lighthousePreviousEpochFlagBalance lighthouseCurrentEpochFlagBalance)
 
 variable [Spec.CurrentPreset] [Spec.CurrentPreset.Valid] [Spec.CurrentFuluConfig] [Spec.CurrentFuluConfig.Valid]
 variable {oracle : Spec.Oracle} {fuluOracle : Spec.FuluOracle}
@@ -87,20 +87,21 @@ variable [Spec.CurrentPreset.Bounds]
 
 /-- The cache reads of the Gloas epoch give the spec values. The committee cache read of the PTC
 window step is a separate theorem, `ptc_committees_correct`. -/
-structure GloasCachesCorrect {PubkeyMap : Type} (progressiveCache : LhCache)
+structure GloasCachesCorrect {PubkeyMap : Type}
+    (progressiveCache : LighthouseProgressiveBalancesCache)
     (cachedTotal : U64)
     (pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey)
     (pubkeyMap : PubkeyMap) (state : Spec.BeaconState) : Prop where
   /-- For each flag, the current epoch total is the spec total. -/
   currentEpochFlagBalances : ∀ flag : Usize, flag.val < 3 → ∃ total : U64,
-    lhCurrentEpochFlagAttestingBalance progressiveCache flag = ok (.Ok total) ∧
+    lighthouseCurrentEpochFlagBalance progressiveCache flag = ok (.Ok total) ∧
     (Spec.get_unslashed_participating_indices Spec.P state flag.val
         (state.slot / Spec.P.SLOTS_PER_EPOCH) >>=
       Spec.get_total_balance Spec.P state) = .ok total.val
   /-- For each flag, after the first epoch, the previous epoch total is the spec total. -/
   previousEpochFlagBalances : ∀ flag : Usize, flag.val < 3 →
     0 < state.slot / Spec.P.SLOTS_PER_EPOCH → ∃ total : U64,
-      lhPreviousEpochFlagAttestingBalance progressiveCache flag = ok (.Ok total) ∧
+      lighthousePreviousEpochFlagBalance progressiveCache flag = ok (.Ok total) ∧
       (Spec.get_unslashed_participating_indices Spec.P state flag.val
           (state.slot / Spec.P.SLOTS_PER_EPOCH - 1) >>=
         Spec.get_total_balance Spec.P state) = .ok total.val
@@ -116,17 +117,20 @@ structure GloasCachesCorrect {PubkeyMap : Type} (progressiveCache : LhCache)
 
 omit [Spec.CurrentPreset.Valid] [Spec.CurrentFuluConfig] [Spec.CurrentFuluConfig.Valid] [Spec.CurrentPreset.Bounds] in
 /-- Caches that are correct at the epoch input itself satisfy the cache assumptions. -/
-theorem GloasCacheAssumptions.ofCorrectAtInput {PubkeyMap : Type} {progressiveCache : LhCache}
+theorem GloasCacheAssumptions.ofCorrectAtInput {PubkeyMap : Type}
+    {progressiveCache : LighthouseProgressiveBalancesCache}
     {cachedTotal : U64} {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
-    (progressive : CacheProofs.PB.Coherent Spec.P.EFFECTIVE_BALANCE_INCREMENT
-      (pbState s (s.slot / Spec.P.SLOTS_PER_EPOCH)) progressiveCache)
+    (progressive : CacheProofs.ProgressiveBalances.ProgressiveBalancesCacheCorrect
+    Spec.P.EFFECTIVE_BALANCE_INCREMENT
+      (progressiveBalancesStateOf s (s.slot / Spec.P.SLOTS_PER_EPOCH)) progressiveCache)
     (total : cachedTotal.val = ((s.validators.filter
       (Spec.is_active_validator · (s.slot / Spec.P.SLOTS_PER_EPOCH))).map
         (·.effective_balance)).sum)
     {lookup : PubkeyMap → Spec.BLSPubkey → Option Usize}
-    (laws : CacheProofs.IndexMapLaws pubkeyMapOps lookup) {length : Usize}
-    (pubkeys : CacheProofs.Coherent lookup pubkeyMap length (s.validators.map (·.pubkey))) :
+    (laws : CacheProofs.BehavesAsFiniteMap pubkeyMapOps lookup) {length : Usize}
+    (pubkeys : CacheProofs.PubkeyCacheCorrect lookup pubkeyMap length
+    (s.validators.map (·.pubkey))) :
     GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap s where
   progressiveBalances := ⟨_, _, progressive, .refl _⟩
   epochCache := ⟨s, .refl _ _, total⟩
@@ -137,7 +141,8 @@ theorem GloasCacheAssumptions.ofCorrectAtInput {PubkeyMap : Type} {progressiveCa
 omit [Spec.CurrentPreset.Bounds] in
 /-- At every Gloas epoch input of a run, the cache reads give the spec values, when the cache
 assumptions hold. -/
-theorem gloas_cache_reads_correct {PubkeyMap : Type} {progressiveCache : LhCache}
+theorem gloas_cache_reads_correct {PubkeyMap : Type}
+    {progressiveCache : LighthouseProgressiveBalancesCache}
     {cachedTotal : U64} {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
     (run : FuluThenGloasRun oracle fuluOracle blockConfig upgradeConfig fuluStart s)
@@ -149,12 +154,13 @@ theorem gloas_cache_reads_correct {PubkeyMap : Type} {progressiveCache : LhCache
   obtain ⟨lookup, laws, earlier, builtMap, builtLength, length, hprefix, hbuilt, hinsert⟩ :=
     caches.pubkeyCache
   rw [← activeSum_eq_active_balances] at htotal
-  obtain ⟨h1, h2, h3⟩ := lh_cache_reads_mainnet s hin.1.1.1.2.1 hin.1.1.2.2.2.2 progressiveCache
+  obtain ⟨h1, h2, h3⟩ := lighthouse_cache_reads_correct s hin.1.1.1.2.1 hin.1.1.2.2.2.2
+    progressiveCache
     (progressive_balances_correct_after_updates hstart hupdates) cachedTotal
-    (epoch_cache_total_carry cachedTotal.val htotal hagree)
+    (epoch_cache_total_stays_correct cachedTotal.val htotal hagree)
   refine ⟨h1, h2, h3, fun pubkey => ?_⟩
-  obtain ⟨result, hget, hresult⟩ := CacheProofs.get_coherent_of_nodup laws
-    (pubkey_cache_carry laws hprefix hbuilt hinsert) hin.1.2.1 pubkey
+  obtain ⟨result, hget, hresult⟩ := CacheProofs.get_correct_of_nodup laws
+    (pubkey_cache_stays_correct laws hprefix hbuilt hinsert) hin.1.2.1 pubkey
   rw [Spec.idxOf_pubkey_eq] at hresult
   exact ⟨result, hget, by convert hresult⟩
 
@@ -187,12 +193,13 @@ structure PtcCommitteeCache (oracle : Spec.Oracle) (state : Spec.BeaconState) (e
   committeeProductFits : (Spec.get_active_validator_indices state epoch).length *
     (committeesPerSlot.val * slotsPerEpoch.val) ≤ Usize.max
   /-- The cache holds the spec shuffling and the spec committee count. -/
-  built : CommitteeCacheBuilt cachePresetOf oracle state epoch seed shuffling committeesPerSlot
+  built : CommitteeCacheMatchesSpec committeeCachePresetOf oracle state epoch seed shuffling
+    committeesPerSlot
   /-- One entry for each slot of the epoch. -/
   oneEntryPerSlot : committees.val.length = Spec.P.SLOTS_PER_EPOCH
   /-- Each entry joins the committees that `get_beacon_committee` returns for its slot. -/
   readFromCache :
-    CommitteesFromCache shuffling committeesPerSlot slotsPerEpoch epoch startSlot committees
+    CommitteesReadFromCache shuffling committeesPerSlot slotsPerEpoch epoch startSlot committees
 
 omit [Spec.CurrentFuluConfig] [Spec.CurrentFuluConfig.Valid] in
 /-- The committees that the PTC window step reads from its committee cache are the spec
@@ -203,7 +210,8 @@ theorem ptc_committees_correct {oracle : Spec.Oracle} {state : Spec.BeaconState}
     (specCommittees :
       Spec.ptcIndices Spec.P oracle state epoch (cache.startSlot + k) = .ok expected) :
     (cache.committees.val[k]).val.map (·.val) = expected :=
-  hcomm_of_cache Spec.P _ committeePresetLink_P oracle state epoch cache.seed cache.seedCorrect
+  ptc_committees_match_spec Spec.P _ committeePresetsMatch_P oracle state epoch cache.seed
+    cache.seedCorrect
     cache.shuffling _ _ cache.built cache.slotsPerEpochCorrect cache.someValidatorActive
     cache.shuffleAcceptsActive cache.committeeProductFits _ cache.startSlotCorrect _
     cache.oneEntryPerSlot cache.readFromCache k inEpoch expected specCommittees
@@ -223,7 +231,8 @@ theorem lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants (o : Spec.Oracl
   obtain ⟨⟨⟨hb, hslot, heb, hexit, hsup⟩, -, hcons⟩, -, hvalid⟩ := hin
   exact Spec.SameResultOrBothFail.trans
     (Spec.process_epoch_lighthouse_sameResultOrBothFail o s hpre)
-    (Spec.process_epoch_lh_full_sameResultOrBothFail' o s hb hslot heb hexit hsup hvalid hcons)
+    (Spec.processEpochWithSinglePassAndDeposits_sameResultOrBothFail' o s hb hslot heb hexit hsup
+      hvalid hcons)
 
 /-- Gloas, against the hand-written pyspec transcription: at every epoch boundary of a run, the
 Lean model of Lighthouse's epoch and the transcription's give the same state, or both fail. No
@@ -363,7 +372,8 @@ theorem lighthouse_model_gloas_epoch_eq_ethlib_of_invariants
 /-- Gloas: at every epoch input of a run that starts in Fulu and crosses the fork, the Lean model of
 Lighthouse's epoch succeeds. EthLib's `processEpoch` succeeds with the same state. Each cache read
 of the epoch gives the spec value. -/
-theorem lighthouse_model_gloas_epoch_eq_ethlib {PubkeyMap : Type} {progressiveCache : LhCache}
+theorem lighthouse_model_gloas_epoch_eq_ethlib {PubkeyMap : Type}
+    {progressiveCache : LighthouseProgressiveBalancesCache}
     {cachedTotal : U64} {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap} (presetMatches : PresetMatchesEthLib preset config)
     (run : FuluThenGloasRun oracle fuluOracle blockConfig upgradeConfig fuluStart (toSpecState state))
@@ -410,7 +420,8 @@ theorem lighthouse_rust_gloas_epoch_of_ethlib_ok
 
 /-- Gloas, for the composed Rust: at every epoch input of a run, the Rust returns `Ok`, and EthLib's
 `processEpoch` succeeds with the same state. Each cache read of the epoch gives the spec value. -/
-theorem lighthouse_rust_gloas_epoch_eq_ethlib {PubkeyMap : Type} {progressiveCache : LhCache}
+theorem lighthouse_rust_gloas_epoch_eq_ethlib {PubkeyMap : Type}
+    {progressiveCache : LighthouseProgressiveBalancesCache}
     {cachedTotal : U64} {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap} (presetMatches : PresetMatchesEthLib preset config)
     (run : FuluThenGloasRun oracle fuluOracle blockConfig upgradeConfig fuluStart (toSpecState state))

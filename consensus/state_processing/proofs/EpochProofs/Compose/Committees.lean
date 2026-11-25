@@ -82,7 +82,7 @@ structure UntranslatedLookahead (RustState : Type) where
   epoch : RustState → U64
   mix : RustState → Array U8 32#usize
   startSlot : RustState → U64
-  constants : RustState → LhSelectionConstants
+  constants : RustState → LighthouseSelectionConstants
   /-- `*state.proposer_lookahead_mut()? = Vector::new(lookahead)?`. -/
   writeLookahead : RustState → alloc.vec.Vec U64 → Option RustState
 
@@ -97,7 +97,7 @@ structure UntranslatedPtcWindow (RustState RustError : Type) where
   slotsPerEpochUsize : Usize
   /-- `PtcWindowWrites`. -/
   Window : Type
-  windowOperations : LhWindowWrites Window (alloc.vec.Vec Usize) RustError
+  windowOperations : LighthouseWindowWrites Window (alloc.vec.Vec Usize) RustError
   windowEntries : Window → List (List Nat)
   committedWindow : Window → List (List Nat)
   windowBorrow : RustState → Window

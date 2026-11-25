@@ -146,7 +146,8 @@ theorem GenesisInvariants.of_frame [CurrentPreset] {s s' : BeaconState} (hf : Up
   obtain ⟨hv, hb, hi, hpp, hcp, hcs, hpc⟩ := hf
   refine ⟨h.checkpointsInOrder.of_checkpointsStable hcs, ?_, ExitToWithdrawableDelay.of_validators_eq hv h.exitToWithdrawableDelay,
     ExitEpochsAreUint64.of_validators_eq hv h.exitEpochsAreUint64, AfterEffectiveBalanceUpdates.of_eq hv hb h.afterEffectiveBalanceUpdates,
-    (PkSame.of_eq hv).pubkeysUnique h.pubkeysUnique, ?_, WithdrawableEpochsFitUint64.of_validators_eq hv h.withdrawableEpochsFitUint64⟩
+    (SamePubkeys.of_eq hv).pubkeysUnique h.pubkeysUnique, ?_,
+      WithdrawableEpochsFitUint64.of_validators_eq hv h.withdrawableEpochsFitUint64⟩
   · obtain ⟨h1, h2, h3, h4⟩ := h.listLengthsMatch
     exact ⟨by rw [hb, hv]; exact h1, by rw [hi, hv]; exact h2, by rw [hpp, hv]; exact h3,
       by rw [hcp, hv]; exact h4⟩
@@ -345,7 +346,7 @@ theorem fulu_fork_state_genesisInvariants [CurrentPreset] [CurrentPreset.Valid] 
   have hloop := hst.2.2.2.1 _ hz2 hpost
   have htail := hreach.tail (reachable_fulu_tail o fo c init hi fs hr)
   have hv := (process_slot_fulu_frame _ o fo _ _ ht).1.1
-  have hp1 := (PkSame.of_eq hv).pubkeysUnique htail.1
+  have hp1 := (SamePubkeys.of_eq hv).pubkeysUnique htail.1
   have hc1 := (process_slot_fulu_cstep _ o fo _ _ ht).inRange htail.2.1
   have hw1 := WithdrawableEpochsFitUint64.of_validators_eq hv htail.2.2
   have hp2 := process_epoch_fulu_pubkeysUnique _ _ fuluCompat o _ _ he hp1
@@ -473,7 +474,7 @@ theorem gloas_epoch_input_invariants [CurrentPreset] [CurrentPreset.Valid] (o : 
     ⟨(reachable_inv o _ _ init hi.checkpointsInOrder hi.listLengthsMatch hi.exitToWithdrawableDelay hi.exitEpochsAreUint64 hi.afterEffectiveBalanceUpdates hsupply s hr).2.2.1,
       reachable_withdrawableU64 o _ _ init hi.withdrawableEpochsFitUint64 s hr⟩
   have hv := (process_slot_frame _ o _ _ ht).1.1
-  have hp1 := (PkSame.of_eq hv).pubkeysUnique htail.1
+  have hp1 := (SamePubkeys.of_eq hv).pubkeysUnique htail.1
   have hc1 := (process_slot_cstep _ o _ _ ht).inRange htail.2
   have hd1 := ExitToWithdrawableDelay.of_validators_eq hv hwd.1
   have hw1 := WithdrawableEpochsFitUint64.of_validators_eq hv hwd.2

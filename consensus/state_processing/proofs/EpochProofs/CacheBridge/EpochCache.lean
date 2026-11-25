@@ -10,7 +10,7 @@ import EpochProofs.Sanity.Invariants.BalanceFloor
 the floored total active balance (`total_active_balance_equiv`) and the base reward
 (`get_base_reward_equiv`). This file proves those spec values equal to the values that the epoch
 model uses: `get_total_active_balance` of `EpochProofs.Spec`, and `rewardsBaseReward`, which
-`lhBaseReward` of the single pass model calls.
+`lighthouseBaseReward` of the single pass model calls.
 
 The facts left about the cache are its build invariants: the cache holds the effective balances
 of the state and the sum over the active validators (`hebs`, `hinv`). `single_pass_total_active_balance`
@@ -19,10 +19,11 @@ in `CacheProofs.EpochCache` proves that the `single_pass.rs` calls build exactly
 
 namespace EpochProofs.CacheBridge
 
-open CacheProofs.PB (activeAt ebAt)
+open CacheProofs.ProgressiveBalances (activeAt effectiveBalanceAt)
 
 /-- The validator fields that the epoch cache model reads. -/
-def ecValidator (v : EpochProofs.Spec.Validator) : CacheProofs.Spec.EpochCache.Validator :=
+def epochCacheValidatorOf (v : EpochProofs.Spec.Validator) :
+    CacheProofs.Spec.EpochCache.Validator :=
   ⟨v.effective_balance, v.activation_epoch, v.exit_epoch⟩
 
 /-- `integer_squareroot` of the epoch spec is `Nat.sqrt`. -/
@@ -53,18 +54,19 @@ theorem activeSumFrom_range (act : Nat → Bool) (l : List Nat) : ∀ k,
       simp
 
 theorem activeAt_ec_pb (vs : List EpochProofs.Spec.Validator) (e i : Nat) :
-    CacheProofs.EpochCache.activeAt (vs.map ecValidator) e i =
-      activeAt (vs.map pbValidator) e i := by
+    CacheProofs.EpochCache.activeAt (vs.map epochCacheValidatorOf) e i =
+      activeAt (vs.map progressiveBalancesValidatorOf) e i := by
   simp only [CacheProofs.EpochCache.activeAt, activeAt, List.getElem?_map]
   cases vs[i]? <;> rfl
 
 /-- The sum over the active validators of the epoch cache model is the sum of the progressive
 balances model. Both read the same validators. -/
 theorem activeSum_eq (vs : List EpochProofs.Spec.Validator) (e : Nat) :
-    CacheProofs.EpochCache.activeSum (CacheProofs.EpochCache.activeAt (vs.map ecValidator) e)
-        ((vs.map ecValidator).map (·.effective_balance)) =
-      (((List.range vs.length).filter (activeAt (vs.map pbValidator) e)).map
-        (ebAt (vs.map pbValidator))).sum := by
+    CacheProofs.EpochCache.activeSum
+      (CacheProofs.EpochCache.activeAt (vs.map epochCacheValidatorOf) e)
+        ((vs.map epochCacheValidatorOf).map (·.effective_balance)) =
+      (((List.range vs.length).filter (activeAt (vs.map progressiveBalancesValidatorOf) e)).map
+        (effectiveBalanceAt (vs.map progressiveBalancesValidatorOf))).sum := by
   unfold CacheProofs.EpochCache.activeSum
   rw [activeSumFrom_range]
   simp only [Nat.add_zero, List.length_map, activeAt_ec_pb]
@@ -73,60 +75,67 @@ theorem activeSum_eq (vs : List EpochProofs.Spec.Validator) (e : Nat) :
   intro i hi
   have hi' : i < vs.length := by
     simp only [List.mem_filter, List.mem_range] at hi; exact hi.1
-  simp [ebAt, hi', ecValidator, pbValidator]
+  simp [effectiveBalanceAt, hi', epochCacheValidatorOf, progressiveBalancesValidatorOf]
 
 /-- `get_total_active_balance` of the epoch spec in closed form. -/
 theorem get_total_active_balance_closed (p : EpochProofs.Spec.Preset)
     (s : EpochProofs.Spec.BeaconState) (cur : Nat)
     (hcur : EpochProofs.Spec.get_current_epoch p s = .ok cur)
-    (hfit : (((List.range s.validators.length).filter (activeAt (s.validators.map pbValidator)
-      cur)).map (ebAt (s.validators.map pbValidator))).sum < 2 ^ 64) :
+    (hfit : (((List.range s.validators.length).filter
+    (activeAt (s.validators.map progressiveBalancesValidatorOf)
+      cur)).map (effectiveBalanceAt (s.validators.map progressiveBalancesValidatorOf))).sum < 2 ^
+        64) :
     EpochProofs.Spec.get_total_active_balance p s =
       .ok (max p.EFFECTIVE_BALANCE_INCREMENT
-        (((List.range s.validators.length).filter (activeAt (s.validators.map pbValidator)
-          cur)).map (ebAt (s.validators.map pbValidator))).sum) := by
+        (((List.range s.validators.length).filter
+          (activeAt (s.validators.map progressiveBalancesValidatorOf)
+          cur)).map (effectiveBalanceAt
+            (s.validators.map progressiveBalancesValidatorOf))).sum) := by
   unfold EpochProofs.Spec.get_total_active_balance EpochProofs.Spec.get_total_balance
   have hmem : ∀ i ∈ (List.range s.validators.length).filter
-      (activeAt (s.validators.map pbValidator) cur), i < s.validators.length := fun i hi => by
+      (activeAt (s.validators.map progressiveBalancesValidatorOf) cur), i < s.validators.length :=
+        fun i hi => by
     simp only [List.mem_filter, List.mem_range] at hi; exact hi.1
   have hm := mapM_eb s.validators _ hmem
   simp only [bind, Except.bind, pure, Except.pure, hcur, get_active_validator_indices_bridge]
     at hm ⊢
   rw [hm]
-  have h64 : (((List.range s.validators.length).filter (activeAt (s.validators.map pbValidator)
-      cur)).map (ebAt (s.validators.map pbValidator))).sum < EpochProofs.Spec.UINT64_SIZE := hfit
+  have h64 : (((List.range s.validators.length).filter
+    (activeAt (s.validators.map progressiveBalancesValidatorOf)
+      cur)).map (effectiveBalanceAt (s.validators.map progressiveBalancesValidatorOf))).sum <
+        EpochProofs.Spec.UINT64_SIZE := hfit
   simp [EpochProofs.Spec.uint64Sum, h64, pure, Except.pure]
 
 open Aeneas Aeneas.Std Result in
 /-- The floored total active balance that Lighthouse reads from the epoch cache equals the
 epoch spec `get_total_active_balance`, when the cache holds the effective balances of the state
 and their sum over the validators active in the current epoch. -/
-theorem lh_total_active_balance_eq (p : EpochProofs.Spec.Preset)
+theorem lighthouse_total_active_balance_eq (p : EpochProofs.Spec.Preset)
     (s : EpochProofs.Spec.BeaconState) (cur : Nat)
     (hcur : EpochProofs.Spec.get_current_epoch p s = .ok cur)
     (ebs : List Nat) (total inc : U64)
     (hinc : inc.val = p.EFFECTIVE_BALANCE_INCREMENT)
     (hebs : ebs = s.validators.map (·.effective_balance))
     (hinv : total.val = CacheProofs.EpochCache.activeSum
-      (CacheProofs.EpochCache.activeAt (s.validators.map ecValidator) cur) ebs) :
+      (CacheProofs.EpochCache.activeAt (s.validators.map epochCacheValidatorOf) cur) ebs) :
     ∃ r, types.state.total_active_balance.floor_total_active_balance total inc = ok r ∧
       EpochProofs.Spec.get_total_active_balance p s = .ok r.val := by
   let cfg : CacheProofs.Spec.EpochCache.Config := ⟨p.EFFECTIVE_BALANCE_INCREMENT, 0, 0⟩
-  have hebs' : ebs = (s.validators.map ecValidator).map (·.effective_balance) := by
+  have hebs' : ebs = (s.validators.map epochCacheValidatorOf).map (·.effective_balance) := by
     rw [hebs, List.map_map]; rfl
   obtain ⟨r, hr, hspec⟩ := CacheProofs.EpochCache.total_active_balance_equiv cfg
-    (s.validators.map ecValidator) cur ebs total inc hinc hebs' hinv
+    (s.validators.map epochCacheValidatorOf) cur ebs total inc hinc hebs' hinv
   refine ⟨r, hr, ?_⟩
   have hsum := activeSum_eq s.validators cur
   have hlt : CacheProofs.EpochCache.activeSum
-      (CacheProofs.EpochCache.activeAt (s.validators.map ecValidator) cur)
-      ((s.validators.map ecValidator).map (·.effective_balance)) < 2 ^ 64 := by
+      (CacheProofs.EpochCache.activeAt (s.validators.map epochCacheValidatorOf) cur)
+      ((s.validators.map epochCacheValidatorOf).map (·.effective_balance)) < 2 ^ 64 := by
     rw [← hebs', ← hinv]; exact total.hBounds
   rw [CacheProofs.EpochCache.get_total_active_balance_eq cfg _ cur hlt] at hspec
   have hval : r.val = max p.EFFECTIVE_BALANCE_INCREMENT
       (CacheProofs.EpochCache.activeSum
-        (CacheProofs.EpochCache.activeAt (s.validators.map ecValidator) cur)
-        ((s.validators.map ecValidator).map (·.effective_balance))) := by
+        (CacheProofs.EpochCache.activeAt (s.validators.map epochCacheValidatorOf) cur)
+        ((s.validators.map epochCacheValidatorOf).map (·.effective_balance))) := by
     have := Except.ok.inj hspec; exact this.symm
   rw [hsum] at hlt hval
   rw [get_total_active_balance_closed p s cur hcur hlt, hval]
@@ -138,7 +147,7 @@ theorem rewardsBaseReward_of_altair (p : EpochProofs.Spec.Preset)
     (index : Nat) (v : EpochProofs.Spec.Validator) (T b : Nat)
     (hinc : cfg.EFFECTIVE_BALANCE_INCREMENT = p.EFFECTIVE_BALANCE_INCREMENT)
     (hfactor : cfg.BASE_REWARD_FACTOR = p.BASE_REWARD_FACTOR)
-    (hv : st.validators[index]? = some (ecValidator v))
+    (hv : st.validators[index]? = some (epochCacheValidatorOf v))
     (htotal : CacheProofs.Spec.EpochCache.get_total_active_balance cfg st = .ok T)
     (hT64 : T < 2 ^ 64)
     (hb : CacheProofs.Spec.EpochCache.get_base_reward_altair cfg st index = .ok b) :
@@ -149,7 +158,7 @@ theorem rewardsBaseReward_of_altair (p : EpochProofs.Spec.Preset)
   simp only [CacheProofs.Spec.EpochCache.getValidator, hv, CacheProofs.Spec.EpochCache.uint64Mul,
     CacheProofs.Spec.EpochCache.uint64Div,
     CacheProofs.EpochCache.integer_squareroot_eq T hT64, Bind.bind, Except.bind, Pure.pure,
-    Except.pure, ecValidator, hinc, hfactor] at hb
+    Except.pure, epochCacheValidatorOf, hinc, hfactor] at hb
   unfold EpochProofs.Spec.rewardsBaseReward EpochProofs.Spec.get_base_reward_per_increment
   simp only [EpochProofs.Spec.uint64Mul, EpochProofs.Spec.uint64Div,
     integer_squareroot_eq_sqrt, Bind.bind, Except.bind, Pure.pure,
@@ -175,10 +184,10 @@ theorem rewardsBaseReward_of_altair (p : EpochProofs.Spec.Preset)
 
 open Aeneas Aeneas.Std Result in
 /-- The base reward that Lighthouse reads from the epoch cache equals `rewardsBaseReward` of the
-epoch model at the spec total active balance. This is the value that `lhBaseReward` of the
+epoch model at the spec total active balance. This is the value that `lighthouseBaseReward` of the
 single pass model uses. The cache holds the effective balances of the state and their active
 sum, and its table is built from that total. -/
-theorem lh_base_reward_eq (p : EpochProofs.Spec.Preset) (s : EpochProofs.Spec.BeaconState)
+theorem lighthouse_base_reward_eq (p : EpochProofs.Spec.Preset) (s : EpochProofs.Spec.BeaconState)
     (cur : Nat) (hcur : EpochProofs.Spec.get_current_epoch p s = .ok cur)
     (total inc maxEb factor bpe : U64)
     (hinc : inc.val = p.EFFECTIVE_BALANCE_INCREMENT)
@@ -187,7 +196,7 @@ theorem lh_base_reward_eq (p : EpochProofs.Spec.Preset) (s : EpochProofs.Spec.Be
     (hincf : inc.val * factor.val ≤ U64.max) (hfit : maxEb.val * factor.val ≤ U64.max)
     (hcap : maxEb.val / inc.val < 4294967295)
     (hinv : total.val = CacheProofs.EpochCache.activeSum
-      (CacheProofs.EpochCache.activeAt (s.validators.map ecValidator) cur)
+      (CacheProofs.EpochCache.activeAt (s.validators.map epochCacheValidatorOf) cur)
       (s.validators.map (·.effective_balance)))
     (ebs : Slice U64) (hebs : ebs.val.map (·.val) = s.validators.map (·.effective_balance))
     (index : Usize) (v : EpochProofs.Spec.Validator) (hv : s.validators[index.val]? = some v)
@@ -200,9 +209,9 @@ theorem lh_base_reward_eq (p : EpochProofs.Spec.Preset) (s : EpochProofs.Spec.Be
         EpochProofs.Spec.rewardsBaseReward p T v = .ok r.val := by
   let cfg : CacheProofs.Spec.EpochCache.Config :=
     ⟨p.EFFECTIVE_BALANCE_INCREMENT, p.BASE_REWARD_FACTOR, bpe.val⟩
-  let vs := s.validators.map ecValidator
+  let vs := s.validators.map epochCacheValidatorOf
   have hebs' : s.validators.map (·.effective_balance) = vs.map (·.effective_balance) := by
-    simp [vs, List.map_map, Function.comp_def, ecValidator]
+    simp [vs, List.map_map, Function.comp_def, epochCacheValidatorOf]
   obtain ⟨r0, hr0, hspec0⟩ := CacheProofs.EpochCache.total_active_balance_equiv cfg vs cur
     (s.validators.map (·.effective_balance)) total inc hinc hebs' hinv
   obtain ⟨r1, hr1, hr1v⟩ := CacheProofs.EpochCache.floor_total_active_balance_spec total inc
@@ -210,13 +219,13 @@ theorem lh_base_reward_eq (p : EpochProofs.Spec.Preset) (s : EpochProofs.Spec.Be
   subst hr1
   have htotal : CacheProofs.Spec.EpochCache.get_total_active_balance cfg ⟨vs, cur⟩ =
       .ok (max inc.val total.val) := by rw [hspec0, hr1v]
-  have hv' : vs[index.val]? = some (ecValidator v) := by simp [vs, hv]
+  have hv' : vs[index.val]? = some (epochCacheValidatorOf v) := by simp [vs, hv]
   have hebs2 : ebs.val.map (·.val) = vs.map (·.effective_balance) := by rw [hebs, hebs']
   obtain ⟨tbl, htbl, r, hr, hspec⟩ := CacheProofs.EpochCache.get_base_reward_equiv cfg vs cur
     total inc maxEb factor bpe false hinc hfactor rfl hinc1 hbpe1 hincf hfit hcap htotal ebs
-    hebs2 index (ecValidator v) hv' hmult hle
+    hebs2 index (epochCacheValidatorOf v) hv' hmult hle
   refine ⟨tbl, htbl, r, hr, ?_⟩
-  obtain ⟨r2, hr2, hT2⟩ := lh_total_active_balance_eq p s cur hcur
+  obtain ⟨r2, hr2, hT2⟩ := lighthouse_total_active_balance_eq p s cur hcur
     (s.validators.map (·.effective_balance)) total inc hinc rfl hinv
   rw [hr0] at hr2
   rw [ok.injEq] at hr2
@@ -234,7 +243,7 @@ theorem lh_base_reward_eq (p : EpochProofs.Spec.Preset) (s : EpochProofs.Spec.Be
 theorem activeSumFrom_eq_active_balances (vs : List EpochProofs.Spec.Validator) (epoch : Nat) :
     ∀ pre : List EpochProofs.Spec.Validator,
       CacheProofs.EpochCache.activeSumFrom
-        (CacheProofs.EpochCache.activeAt ((pre ++ vs).map ecValidator) epoch) pre.length
+        (CacheProofs.EpochCache.activeAt ((pre ++ vs).map epochCacheValidatorOf) epoch) pre.length
         (vs.map (·.effective_balance)) =
       ((vs.filter (EpochProofs.Spec.is_active_validator · epoch)).map (·.effective_balance)).sum := by
   induction vs with
@@ -246,7 +255,7 @@ theorem activeSumFrom_eq_active_balances (vs : List EpochProofs.Spec.Validator) 
     simp only [List.length_singleton] at h
     simp only [List.map_cons, CacheProofs.EpochCache.activeSumFrom]
     rw [h]
-    have hact : CacheProofs.EpochCache.activeAt ((pre ++ v :: vs).map ecValidator) epoch
+    have hact : CacheProofs.EpochCache.activeAt ((pre ++ v :: vs).map epochCacheValidatorOf) epoch
         pre.length = EpochProofs.Spec.is_active_validator v epoch := by
       unfold CacheProofs.EpochCache.activeAt
       simp
@@ -260,7 +269,7 @@ theorem activeSumFrom_eq_active_balances (vs : List EpochProofs.Spec.Validator) 
 validators. -/
 theorem activeSum_eq_active_balances (vs : List EpochProofs.Spec.Validator) (epoch : Nat) :
     CacheProofs.EpochCache.activeSum
-      (CacheProofs.EpochCache.activeAt (vs.map ecValidator) epoch)
+      (CacheProofs.EpochCache.activeAt (vs.map epochCacheValidatorOf) epoch)
       (vs.map (·.effective_balance)) =
     ((vs.filter (EpochProofs.Spec.is_active_validator · epoch)).map (·.effective_balance)).sum :=
   activeSumFrom_eq_active_balances vs epoch []

@@ -13,15 +13,17 @@ the registry update. Inside the pass each row gets the sum of its top-ups and, u
 consolidation names it, its effective balance update. After the pass it writes the deposit
 queue, adds the new validators, updates their effective balances, runs the consolidations,
 redoes the effective balance update for each validator that a consolidation names, and runs the
-builder payments. `process_epoch_lh_full` models these steps on mainnet. It runs the Lighthouse
-justification and finalization, `lhJustificationAndFinalization`, before the single pass.
+builder payments. `processEpochWithSinglePassAndDeposits` models these steps on mainnet. It runs
+the Lighthouse justification and finalization, `lighthouseJustificationAndFinalization`, before the
+single pass.
 -/
 
 namespace EpochProofs.Spec
 
 /-- The flags that Lighthouse predicts for the validator of a deposit, from the state before the
 single pass. A deposit for an unknown pubkey has neither flag. -/
-def lhDepositView [CurrentPreset] (s : BeaconState) (current_epoch : Epoch) (d : PendingDeposit) :
+def lighthouseDepositView [CurrentPreset] (s : BeaconState) (current_epoch : Epoch)
+    (d : PendingDeposit) :
     DepositSpecView :=
   match s.validators[(s.validators.map (·.pubkey)).idxOf d.pubkey]? with
   | some v =>
@@ -31,7 +33,7 @@ def lhDepositView [CurrentPreset] (s : BeaconState) (current_epoch : Epoch) (d :
   | none => ⟨d.slot, d.amount, false, false, false⟩
 
 /-- What Lighthouse decides about the pending deposits before the single pass. -/
-structure LhDepositPlan where
+structure LighthouseDepositPlan where
   next_deposit_index : Nat
   deposit_balance_to_consume : Gwei
   /-- The sum of the top-ups for each existing validator, by index. -/
@@ -42,7 +44,7 @@ structure LhDepositPlan where
 
 /-- One handled deposit: postponed, a top-up of a known validator, or a new validator deposit.
 The top-up sums use checked additions, as `safe_add_assign` does. -/
-def lhPlanStep (pubkeys : List BLSPubkey) (acc : List Gwei × List PendingDeposit ×
+def lighthousePlanStep (pubkeys : List BLSPubkey) (acc : List Gwei × List PendingDeposit ×
     List PendingDeposit) (x : PendingDeposit × Bool) :
     SpecM (List Gwei × List PendingDeposit × List PendingDeposit) :=
   let (sums, post, news) := acc
@@ -55,21 +57,23 @@ def lhPlanStep (pubkeys : List BLSPubkey) (acc : List Gwei × List PendingDeposi
 
 /-- `PendingDepositsContext::new`: the decisions on the first `MAX_PENDING_DEPOSITS_PER_EPOCH`
 deposits, then the top-up sums, the postponed deposits and the new validator deposits. -/
-def lhDepositPlan [CurrentPreset] (s : BeaconState) (total_active_balance : Gwei) (current_epoch : Epoch) :
-    SpecM LhDepositPlan := do
+def lighthouseDepositPlan [CurrentPreset] (s : BeaconState) (total_active_balance : Gwei)
+    (current_epoch : Epoch) :
+    SpecM LighthouseDepositPlan := do
   let finalized_slot ←
     compute_start_slot_at_epoch P s.finalized_checkpoint.epoch
   let views := (s.pending_deposits.take P.MAX_PENDING_DEPOSITS_PER_EPOCH).map
-    (lhDepositView s current_epoch)
+    (lighthouseDepositView s current_epoch)
   let (next, dbtc, postponed) ← depositDecisions P finalized_slot
     s.deposit_balance_to_consume (← get_activation_churn_limit P total_active_balance)
     views
   let (topups, post, news) ← ((s.pending_deposits.take next).zip postponed).foldlM
-    (lhPlanStep (s.validators.map (·.pubkey))) (List.replicate s.validators.length 0, [], [])
+    (lighthousePlanStep (s.validators.map (·.pubkey))) (List.replicate s.validators.length 0, [],
+      [])
   pure ⟨next, dbtc, topups, post, news⟩
 
 /-- The effective balance update of one validator. -/
-def ebUpdateAt [CurrentPreset] (s : BeaconState) (i : Nat) : SpecM BeaconState := do
+def updateEffectiveBalanceAt [CurrentPreset] (s : BeaconState) (i : Nat) : SpecM BeaconState := do
   let v ← listGet s.validators i
   let b ← listGet s.balances i
   let (downward, upward) ← hysteresisThresholds P
@@ -94,18 +98,20 @@ def epochRest2 [CurrentPreset] (o : Oracle) (state : BeaconState) : SpecM Beacon
 /-- The Lighthouse steps after justification and finalization, for a fork. `rt` gives the total
 that the registry churn and the deposit churn read, from the total active balance. `fin` runs
 after the effective balance updates of the validators that consolidations name. -/
-def lhFullTailG [CurrentPreset] (o : Oracle) (rt : Gwei → Gwei) (fin : Gwei → BeaconState → SpecM BeaconState)
+def lighthouseFullTailG [CurrentPreset] (o : Oracle) (rt : Gwei → Gwei)
+    (fin : Gwei → BeaconState → SpecM BeaconState)
     (s : BeaconState) : SpecM BeaconState := do
   let current_epoch ← get_current_epoch P s
   let total_active_balance ← get_total_active_balance P s
   let rctx ← rewardsContextOf P total_active_balance s
   let (_, per) ← slashingsPreamble P total_active_balance s.slashings
-  let plan ← lhDepositPlan s (rt total_active_balance) current_epoch
+  let plan ← lighthouseDepositPlan s (rt total_active_balance) current_epoch
   let (downward, upward) ← hysteresisThresholds P
   let named := validatorsInConsolidations s
-  let ctx := lhContextOf s (rt total_active_balance) current_epoch rctx per
-  let (churn, rows) ← passM (fun churn r => lhRowStepFull P ctx downward upward
-      ⟨lhBaseReward total_active_balance r, plan.topups.getD r.index 0, decide (r.index ∈ named)⟩
+  let ctx := lighthouseContextOf s (rt total_active_balance) current_epoch rctx per
+  let (churn, rows) ← passM (fun churn r => lighthouseValidatorStep P ctx downward upward
+      ⟨lighthouseBaseReward total_active_balance r, plan.topups.getD r.index 0,
+        decide (r.index ∈ named)⟩
       churn r)
     (s.earliest_exit_epoch, s.exit_balance_to_consume) (rowsOf s)
   let s1 ← process_eth1_data_reset P (s.withRowsChurn churn rows)
@@ -114,9 +120,9 @@ def lhFullTailG [CurrentPreset] (o : Oracle) (rt : Gwei → Gwei) (fin : Gwei �
     deposit_balance_to_consume := plan.deposit_balance_to_consume }
   let s3 ← plan.new_validator_deposits.foldlM (apply_pending_deposit P o) s2
   let s4 ← (List.range' s2.validators.length (s3.validators.length - s2.validators.length)).foldlM
-    ebUpdateAt s3
+    updateEffectiveBalanceAt s3
   let s5 ← process_pending_consolidations P s4
-  let s6 ← named.foldlM ebUpdateAt s5
+  let s6 ← named.foldlM updateEffectiveBalanceAt s5
   fin total_active_balance s6
 
 /-- The Gloas end of the tail: the builder payments, then the steps after them. -/
@@ -125,15 +131,16 @@ def gloasFin [CurrentPreset] (o : Oracle) (total_active_balance : Gwei) (t : Bea
   process_builder_pending_payments P total_active_balance t >>= epochRest2 o
 
 /-- The Lighthouse steps after justification and finalization. -/
-def lhFullTail [CurrentPreset] (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
-  lhFullTailG o id (gloasFin o) s
+def lighthouseFullTail [CurrentPreset] (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
+  lighthouseFullTailG o id (gloasFin o) s
 
 /-- The Gloas `process_epoch` on mainnet as Lighthouse runs it, with the pending deposits and the
 effective balance updates in the single pass. At the genesis epoch the single pass skips the
 inactivity and rewards steps, through `after_genesis` in the context, as Lighthouse does. -/
-def process_epoch_lh_full [CurrentPreset] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
-  let s1 ← lhJustificationAndFinalization P s
-  lhFullTail o s1
+def processEpochWithSinglePassAndDeposits [CurrentPreset] (o : Oracle)
+    (s : BeaconState) : SpecM BeaconState := do
+  let s1 ← lighthouseJustificationAndFinalization P s
+  lighthouseFullTail o s1
 
 /-! ## Helpers for the proofs -/
 

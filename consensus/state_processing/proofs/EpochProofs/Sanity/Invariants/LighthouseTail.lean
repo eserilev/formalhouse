@@ -9,9 +9,10 @@ import EpochProofs.Sanity.Invariants.LighthouseGenesis
 /-!
 # The Lighthouse epoch tail equals the spec
 
-`process_epoch_lh_full` runs the pending deposits and the effective balance updates inside the
-single pass, as Lighthouse does. On mainnet it gives the same `ok` results as `process_epoch`.
-Both tails reach `tailNF`: `lhFullTail_nf` and `epochRest_nf` show this.
+`processEpochWithSinglePassAndDeposits` runs the pending deposits and the effective balance updates
+inside the single pass, as Lighthouse does. On mainnet it gives the same `ok` results as
+`process_epoch`. Both tails reach `stepsAfterSinglePassCommonOrder`: `lighthouseFullTail_nf` and
+`epochRest_nf` show this.
 -/
 
 namespace EpochProofs.Spec
@@ -38,7 +39,8 @@ theorem rewardsCombined_lt (b : Gwei) (ds : List (Gwei × Gwei)) (x : Gwei)
   · cases hy
 
 /-- The slashing penalty does not raise the balance. -/
-theorem lhSlashingBalanceStep_le [CurrentPreset] (target per : Uint64) (v : Validator) (b x : Gwei)
+theorem lighthouseSlashingBalanceStep_le [CurrentPreset] (target per : Uint64) (v : Validator)
+    (b x : Gwei)
     (h : slashingBalanceStep P target per v b = .ok x) : x ≤ b := by
   unfold slashingBalanceStep at h
   split at h
@@ -52,26 +54,28 @@ theorem lhSlashingBalanceStep_le [CurrentPreset] (target per : Uint64) (v : Vali
     exact Nat.le_refl _
 
 /-- One Lighthouse row step keeps the balance below `2^64`. -/
-theorem lhRowStep_balance_lt [CurrentPreset] (ctx : LhStepContext) (base : Gwei) (churn : Epoch × Gwei)
+theorem lighthouseRowStep_balance_lt [CurrentPreset] (ctx : LighthouseStepContext) (base : Gwei)
+    (churn : Epoch × Gwei)
     (r : Row) (x : (Epoch × Gwei) × Row) (hb : r.balance < 2 ^ 64)
-    (h : lhRowStep P ctx base churn r = .ok x) : x.2.balance < 2 ^ 64 := by
-  unfold lhRowStep at h
+    (h : lighthouseRowStep P ctx base churn r = .ok x) : x.2.balance < 2 ^ 64 := by
+  unfold lighthouseRowStep at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first
     | contradiction
     | (cases h
-       exact Nat.lt_of_le_of_lt (lhSlashingBalanceStep_le _ _ _ _ _
+       exact Nat.lt_of_le_of_lt (lighthouseSlashingBalanceStep_le _ _ _ _ _
          ‹slashingBalanceStep _ _ _ _ _ = _›)
          (by first
            | exact rewardsCombined_lt _ _ _ ‹rewardsCombined _ _ = _›
            | exact hb))
 
 /-- After the single pass every balance is below `2^64`, if every balance was. -/
-theorem pass_balances_lt [CurrentPreset] (ctx : LhStepContext) (bf : Row → Gwei) (s : BeaconState)
+theorem pass_balances_lt [CurrentPreset] (ctx : LighthouseStepContext) (bf : Row → Gwei)
+    (s : BeaconState)
     (churn0 : Epoch × Gwei) (y : (Epoch × Gwei) × List Row)
     (hb : ∀ i, i < s.validators.length → s.balances.getD i 0 < 2 ^ 64)
-    (h : passM (fun c r => lhRowStep P ctx (bf r) c r) churn0 (rowsOf s) = .ok y) :
+    (h : passM (fun c r => lighthouseRowStep P ctx (bf r) c r) churn0 (rowsOf s) = .ok y) :
     ∀ r ∈ y.2, r.balance < 2 ^ 64 := by
   obtain ⟨hlen, hget⟩ := passM_rows _ _ _ _ h
   intro r hr
@@ -80,7 +84,7 @@ theorem pass_balances_lt [CurrentPreset] (ctx : LhStepContext) (bf : Row → Gwe
   obtain ⟨_, x, hx, hxe⟩ := hget i hi' hi
   rw [← hxe]
   have hiv : i < s.validators.length := by rw [← rowsOf_length]; exact hi'
-  refine lhRowStep_balance_lt _ _ _ _ _ ?_ hx
+  refine lighthouseRowStep_balance_lt _ _ _ _ _ ?_ hx
   rw [rowsOf_getElem]
   exact hb i hiv
 
@@ -160,24 +164,27 @@ theorem validatorsInConsolidations_lt (s : BeaconState) (hcons : ConsolidationsI
   · rcases List.mem_singleton.mp hic with rfl
     exact (hcons c hc).2
 
-/-- `process_epoch_lh_full_sameResultOrBothFail'` at the genesis epoch. Justification and finalization return
+/-- `processEpochWithSinglePassAndDeposits_sameResultOrBothFail'` at the genesis epoch.
+Justification and finalization return
 the state, the spec skips the inactivity and rewards steps, and the single pass skips them
 through `after_genesis`. -/
-theorem process_epoch_lh_full_genesis [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (t : BeaconState) (hb : EpochEndInvariants t)
+theorem processEpochWithSinglePassAndDeposits_genesis [CurrentPreset] [CurrentPreset.Valid]
+    (o : Oracle) (t : BeaconState) (hb : EpochEndInvariants t)
     (hexitb : ExitEpochsAreUint64 t) (hsupply_t : BalancesFarFromOverflow t) (hvalid : NoWithdrawableEpochWithoutExit t)
     (hcons : ConsolidationsInRange t)
     (hgen : t.slot / P.SLOTS_PER_EPOCH = GENESIS_EPOCH) :
-    SameResultOrBothFail (process_epoch_lh_full o t) (process_epoch P o t) := by
+    SameResultOrBothFail (processEpochWithSinglePassAndDeposits o t) (process_epoch P o t) := by
   obtain ⟨hinv, hrows, -⟩ := hb
   obtain ⟨hbalance, hsupply, hslashings⟩ := hsupply_t
   have hcurrent : get_current_epoch P t = .ok GENESIS_EPOCH := by
     rw [← hgen]
     simp [get_current_epoch, compute_epoch_at_slot, uint64Div, Nat.ne_of_gt P_slots_pos, pure,
       Except.pure]
-  unfold process_epoch_lh_full
+  unfold processEpochWithSinglePassAndDeposits
   rw [process_epoch_parts]
-  refine SameResultOrBothFail.bind (lhJustificationAndFinalization_sameResultOrBothFail _ _) (fun s1 h1 => ?_)
-  replace h1 := (lhJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1
+  refine SameResultOrBothFail.bind (lighthouseJustificationAndFinalization_sameResultOrBothFail _ _)
+    (fun s1 h1 => ?_)
+  replace h1 := (lighthouseJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1
   have hs1 : s1 = t := by
     unfold process_justification_and_finalization at h1
     simp [hcurrent, GENESIS_EPOCH, bind, Except.bind, pure, Except.pure] at h1
@@ -204,11 +211,12 @@ theorem process_epoch_lh_full_genesis [CurrentPreset] [CurrentPreset.Valid] (o :
   have hfour := SameResultOrBothFail.trans (specFourSteps_sameResultOrBothFail P s1 tab htab hrows
     GENESIS_EPOCH _ hcurrent hactivation hcfar)
     (lighthouse_single_pass_eq_spec_genesis tab s1 hrows hcurrent rctx hprevr hexit1 _
-      hactivation adj per hpre (Nat.le_of_eq hfin0) (lhBaseReward tab))
-  -- The Lighthouse tail reaches `tailNF`.
-  refine SameResultOrBothFail.trans (lhFullTail_nf o s1 GENESIS_EPOCH tab rctx adj per _ _ hcurrent htab hctx
+      hactivation adj per hpre (Nat.le_of_eq hfin0) (lighthouseBaseReward tab))
+  -- The Lighthouse tail reaches `stepsAfterSinglePassCommonOrder`.
+  refine SameResultOrBothFail.trans
+    (lighthouseFullTail_nf o s1 GENESIS_EPOCH tab rctx adj per _ _ hcurrent htab hctx
     hpre hysteresisThresholds_mainnet hrows) ?_
-  -- The spec tail reaches `tailNF`.
+  -- The spec tail reaches `stepsAfterSinglePassCommonOrder`.
   refine SameResultOrBothFail.flip ?_
   refine SameResultOrBothFail.trans (SameResultOrBothFail.bind hfour (fun _ _ => SameResultOrBothFail.refl _)) ?_
   rw [map_bind']
@@ -225,20 +233,21 @@ theorem process_epoch_lh_full_genesis [CurrentPreset] [CurrentPreset.Valid] (o :
 
 /-- On mainnet, at a state that `process_epoch` starts from, the Lighthouse epoch with the
 deposits and effective balance updates in the single pass gives the same `ok` results as the
-spec epoch. Beyond the hypotheses of `process_epoch_lh_sameResultOrBothFail'` it needs `NoWithdrawableEpochWithoutExit`,
-for the deposit statuses that Lighthouse predicts, and `ConsolidationsInRange`, so that the
-validators that consolidations name are existing validators. -/
-theorem process_epoch_lh_full_sameResultOrBothFail' [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (t : BeaconState) (hb : EpochEndInvariants t)
+spec epoch. Beyond the hypotheses of `processEpochWithSinglePass_sameResultOrBothFail'` it needs
+`NoWithdrawableEpochWithoutExit`, for the deposit statuses that Lighthouse predicts, and
+`ConsolidationsInRange`, so that the validators that consolidations name are existing validators. -/
+theorem processEpochWithSinglePassAndDeposits_sameResultOrBothFail' [CurrentPreset]
+    [CurrentPreset.Valid] (o : Oracle) (t : BeaconState) (hb : EpochEndInvariants t)
     (hslot : t.slot < 2 ^ 64) (heb : EffectiveBalancesValid P t) (hexitb : ExitEpochsAreUint64 t)
     (hsupply_t : BalancesFarFromOverflow t) (hvalid : NoWithdrawableEpochWithoutExit t)
     (hcons : ConsolidationsInRange t) :
-    SameResultOrBothFail (process_epoch_lh_full o t) (process_epoch P o t) := by
+    SameResultOrBothFail (processEpochWithSinglePassAndDeposits o t) (process_epoch P o t) := by
   obtain ⟨hinv, hrows, heffective⟩ := hb
   obtain ⟨hbalance, hsupply, hslashings⟩ := hsupply_t
   by_cases hgen : t.slot / P.SLOTS_PER_EPOCH = GENESIS_EPOCH
-  · exact process_epoch_lh_full_genesis o t ⟨hinv, hrows, heffective⟩ hexitb
+  · exact processEpochWithSinglePassAndDeposits_genesis o t ⟨hinv, hrows, heffective⟩ hexitb
       ⟨hbalance, hsupply, hslashings⟩ hvalid hcons hgen
-  unfold process_epoch_lh_full
+  unfold processEpochWithSinglePassAndDeposits
   have hcurrent : get_current_epoch P t =
       .ok (t.slot / P.SLOTS_PER_EPOCH) := by
     simp [get_current_epoch, compute_epoch_at_slot, uint64Div, Nat.ne_of_gt P_slots_pos, pure,
@@ -250,8 +259,9 @@ theorem process_epoch_lh_full_sameResultOrBothFail' [CurrentPreset] [CurrentPres
   rw [hce] at hcurrent hepoch hgen heffective
   have h32 : @LT.lt Nat _ (current_epoch + 32) (2 ^ 64) := P_target_bound hepoch
   rw [process_epoch_parts]
-  refine SameResultOrBothFail.bind (lhJustificationAndFinalization_sameResultOrBothFail _ _) (fun s1 h1 => ?_)
-  replace h1 := (lhJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1
+  refine SameResultOrBothFail.bind (lighthouseJustificationAndFinalization_sameResultOrBothFail _ _)
+    (fun s1 h1 => ?_)
+  replace h1 := (lighthouseJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1
   obtain ⟨_, _, _, _, hs1⟩ := process_justification_and_finalization_shape _ _ _ h1
   have hcur1 : get_current_epoch P s1 = .ok current_epoch := by
     rw [hs1]; exact hcurrent
@@ -345,15 +355,16 @@ theorem process_epoch_lh_full_sameResultOrBothFail' [CurrentPreset] [CurrentPres
     hactivation hepoch adj per hpre
     (Nat.le_of_succ_le hfin) (P_target_succ hepoch)
     htab_lo
-    _ hk ⟨hle _ hsrc, hle _ htgt, hle _ hhd⟩ (lhBaseReward tab) (by
+    _ hk ⟨hle _ hsrc, hle _ htgt, hle _ hhd⟩ (lighthouseBaseReward tab) (by
       intro r hr _
       obtain ⟨b, hb⟩ := rewardsBaseReward_ok_mainnet tab r.validator htab_lo
         (hmax1 _ (by rw [← rowsOf_map_validator]; exact List.mem_map_of_mem hr))
-      unfold lhBaseReward; rw [hb]))
-  -- The Lighthouse tail reaches `tailNF`.
-  refine SameResultOrBothFail.trans (lhFullTail_nf o s1 current_epoch tab rctx adj per _ _ hcur1 htab hctx
+      unfold lighthouseBaseReward; rw [hb]))
+  -- The Lighthouse tail reaches `stepsAfterSinglePassCommonOrder`.
+  refine SameResultOrBothFail.trans
+    (lighthouseFullTail_nf o s1 current_epoch tab rctx adj per _ _ hcur1 htab hctx
     hpre hysteresisThresholds_mainnet hrows1) ?_
-  -- The spec tail reaches `tailNF`.
+  -- The spec tail reaches `stepsAfterSinglePassCommonOrder`.
   refine SameResultOrBothFail.flip ?_
   refine SameResultOrBothFail.trans (SameResultOrBothFail.bind hfour (fun _ _ => SameResultOrBothFail.refl _)) ?_
   rw [map_bind']
@@ -368,12 +379,15 @@ theorem process_epoch_lh_full_sameResultOrBothFail' [CurrentPreset] [CurrentPres
       (fun i h => Nat.lt_trans (hbal1 i h) (by decide)) hx) hnamed
 
 
-/-- `process_epoch_lh_full_sameResultOrBothFail'` in the form of the `hf` hypothesis of
-`reachable_state_transition_sameResultOrBothFail'''`, with `BalancesFarFromOverflow` as the epoch condition. -/
-theorem process_epoch_lh_full_hf [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) :
+/-- `processEpochWithSinglePassAndDeposits_sameResultOrBothFail'` in the form of the `hf`
+hypothesis of `reachable_state_transition_sameResultOrBothFail'''`, with `BalancesFarFromOverflow`
+as the epoch condition. -/
+theorem processEpochWithSinglePassAndDeposits_hf [CurrentPreset] [CurrentPreset.Valid]
+    (o : Oracle) :
     ∀ t, EpochInputInvariants t →
-      SameResultOrBothFail (process_epoch_lh_full o t) (process_epoch P o t) :=
+      SameResultOrBothFail (processEpochWithSinglePassAndDeposits o t) (process_epoch P o t) :=
   fun t ⟨⟨⟨hb, hslot, heb, hexit, hsupply⟩, _, hcons⟩, _, hvalid⟩ =>
-    process_epoch_lh_full_sameResultOrBothFail' o t hb hslot heb hexit hsupply hvalid hcons
+    processEpochWithSinglePassAndDeposits_sameResultOrBothFail' o t hb hslot heb hexit hsupply
+      hvalid hcons
 
 end EpochProofs.Spec

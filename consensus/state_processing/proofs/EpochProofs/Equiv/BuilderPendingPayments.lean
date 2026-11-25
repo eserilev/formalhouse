@@ -17,10 +17,10 @@ namespace EpochProofs
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 /-- The Rust `BuilderPendingWithdrawal`. -/
-abbrev LhWithdrawal := types.builder.builder_pending_withdrawal.BuilderPendingWithdrawal
+abbrev LighthouseWithdrawal := types.builder.builder_pending_withdrawal.BuilderPendingWithdrawal
 
 /-- The Rust `BuilderPendingPayment`. -/
-abbrev LhPayment := types.builder.builder_pending_payment.BuilderPendingPayment
+abbrev LighthousePayment := types.builder.builder_pending_payment.BuilderPendingPayment
 
 theorem usize_saturating_add_one (i : Usize) (h : i.val < Usize.max) :
     (core.num.Usize.saturating_add i 1#usize).val = i.val + 1 := by
@@ -32,24 +32,25 @@ theorem usize_saturating_add_one (i : Usize) (h : i.val < Usize.max) :
   rw [Nat.mod_eq_of_lt (by omega)]
   simp at h ⊢; omega
 
-theorem slice_get (s : Slice LhPayment) (i : Usize) :
-    core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice LhPayment) s i = ok s.val[i.val]? :=
+theorem slice_get (s : Slice LighthousePayment) (i : Usize) :
+    core.slice.Slice.get (core.slice.index.SliceIndexUsizeSlice LighthousePayment) s i =
+      ok s.val[i.val]? :=
   rfl
 
-theorem withdrawal_clone (w : LhWithdrawal) :
+theorem withdrawal_clone (w : LighthouseWithdrawal) :
     types.builder.builder_pending_withdrawal.BuilderPendingWithdrawal.Insts.CoreCloneClone.clone w
       = ok w := by
   simp [types.builder.builder_pending_withdrawal.BuilderPendingWithdrawal.Insts.CoreCloneClone.clone,
     alloy_primitives.bits.address.Address.Insts.CoreCloneClone.clone, lift]
 
-theorem payment_clone (p : LhPayment) :
+theorem payment_clone (p : LighthousePayment) :
     types.builder.builder_pending_payment.BuilderPendingPayment.Insts.CoreCloneClone.clone p
       = ok p := by
   simp [types.builder.builder_pending_payment.BuilderPendingPayment.Insts.CoreCloneClone.clone,
     withdrawal_clone, lift]
 
 /-- `BuilderPendingPayment::default()`. -/
-def lhDefaultPayment : LhPayment :=
+def lighthouseDefaultPayment : LighthousePayment :=
   { weight := 0#u64
     withdrawal :=
       { fee_recipient := alloy_primitives.bits.fixed.FixedBytes.ZERO 20#usize
@@ -59,24 +60,27 @@ def lhDefaultPayment : LhPayment :=
 
 theorem payment_default :
     types.builder.builder_pending_payment.BuilderPendingPayment.Insts.CoreDefaultDefault.default
-      = ok lhDefaultPayment := by
+      = ok lighthouseDefaultPayment := by
   simp [types.builder.builder_pending_payment.BuilderPendingPayment.Insts.CoreDefaultDefault.default,
     types.builder.builder_pending_withdrawal.BuilderPendingWithdrawal.Insts.CoreDefaultDefault.default,
     alloy_primitives.bits.address.Address.Insts.CoreDefaultDefault.default,
-    alloy_primitives.bits.fixed.FixedBytes.Insts.CoreDefaultDefault.default, lhDefaultPayment]
+    alloy_primitives.bits.fixed.FixedBytes.Insts.CoreDefaultDefault.default,
+      lighthouseDefaultPayment]
   rfl
 
 /-- The withdrawals that loop 0 collects from the first `n` payments. -/
-def newWithdrawals (payments : List LhPayment) (n : Nat) (quorum : U64) : List LhWithdrawal :=
+def newWithdrawals (payments : List LighthousePayment) (n : Nat)
+    (quorum : U64) : List LighthouseWithdrawal :=
   ((payments.take n).filter (fun p => quorum ≤ p.weight)).map (·.withdrawal)
 
-theorem newWithdrawals_length_le (payments : List LhPayment) (n : Nat) (quorum : U64) :
+theorem newWithdrawals_length_le (payments : List LighthousePayment) (n : Nat) (quorum : U64) :
     (newWithdrawals payments n quorum).length ≤ n := by
   unfold newWithdrawals
-  have := List.length_filter_le (fun p : LhPayment => decide (quorum ≤ p.weight)) (payments.take n)
+  have := List.length_filter_le
+    (fun p : LighthousePayment => decide (quorum ≤ p.weight)) (payments.take n)
   simp at this ⊢; omega
 
-theorem newWithdrawals_succ (payments : List LhPayment) (n : Nat) (quorum : U64) :
+theorem newWithdrawals_succ (payments : List LighthousePayment) (n : Nat) (quorum : U64) :
     newWithdrawals payments (n + 1) quorum =
       match payments[n]? with
       | none => newWithdrawals payments n quorum
@@ -95,15 +99,15 @@ theorem newWithdrawals_succ (payments : List LhPayment) (n : Nat) (quorum : U64)
       simp [h, h']
 
 @[step]
-theorem loop0_spec (payments : Slice LhPayment) (spe : Usize) (quorum : U64)
-    (acc : alloc.vec.Vec LhWithdrawal) (i : Usize) (hi : i.val ≤ spe.val)
+theorem loop0_spec (payments : Slice LighthousePayment) (spe : Usize) (quorum : U64)
+    (acc : alloc.vec.Vec LighthouseWithdrawal) (i : Usize) (hi : i.val ≤ spe.val)
     (hacc : acc.val = newWithdrawals payments.val i.val quorum) :
     per_epoch_processing.builder_pending_payments.process_builder_pending_payments_loop0
       payments spe quorum acc i ⦃ res => res.val = newWithdrawals payments.val spe.val quorum ⦄ := by
   unfold per_epoch_processing.builder_pending_payments.process_builder_pending_payments_loop0
   apply loop.spec_decr_nat
-    (measure := fun (x : alloc.vec.Vec LhWithdrawal × Usize) => spe.val - x.2.val)
-    (inv := fun (x : alloc.vec.Vec LhWithdrawal × Usize) =>
+    (measure := fun (x : alloc.vec.Vec LighthouseWithdrawal × Usize) => spe.val - x.2.val)
+    (inv := fun (x : alloc.vec.Vec LighthouseWithdrawal × Usize) =>
       x.2.val ≤ spe.val ∧ x.1.val = newWithdrawals payments.val x.2.val quorum)
   · rintro ⟨w, j⟩ ⟨hj, hw⟩
     dsimp only at hj hw
@@ -146,16 +150,16 @@ theorem loop0_spec (payments : Slice LhPayment) (spe : Usize) (quorum : U64)
   · exact ⟨hi, hacc⟩
 
 @[step]
-theorem loop1_spec (payments : Slice LhPayment) (spe : Usize)
-    (acc : alloc.vec.Vec LhPayment) (i : Usize)
+theorem loop1_spec (payments : Slice LighthousePayment) (spe : Usize)
+    (acc : alloc.vec.Vec LighthousePayment) (i : Usize)
     (hi : spe.val ≤ i.val) (hi' : i.val ≤ payments.val.length ∨ i.val = spe.val)
     (hacc : acc.val = (payments.val.drop spe.val).take (i.val - spe.val)) :
     per_epoch_processing.builder_pending_payments.process_builder_pending_payments_loop1
       payments acc i ⦃ res => res.val = payments.val.drop spe.val ⦄ := by
   unfold per_epoch_processing.builder_pending_payments.process_builder_pending_payments_loop1
   apply loop.spec_decr_nat
-    (measure := fun (x : alloc.vec.Vec LhPayment × Usize) => payments.val.length - x.2.val)
-    (inv := fun (x : alloc.vec.Vec LhPayment × Usize) =>
+    (measure := fun (x : alloc.vec.Vec LighthousePayment × Usize) => payments.val.length - x.2.val)
+    (inv := fun (x : alloc.vec.Vec LighthousePayment × Usize) =>
       spe.val ≤ x.2.val ∧ (x.2.val ≤ payments.val.length ∨ x.2.val = spe.val)
       ∧ x.1.val = (payments.val.drop spe.val).take (x.2.val - spe.val))
   · rintro ⟨u, j⟩ ⟨hj, hj', hu⟩
@@ -185,17 +189,17 @@ theorem loop1_spec (payments : Slice LhPayment) (spe : Usize)
   · exact ⟨hi, hi', hacc⟩
 
 @[step]
-theorem loop2_spec (spe : Usize) (base : List LhPayment)
-    (acc : alloc.vec.Vec LhPayment) (i : Usize)
+theorem loop2_spec (spe : Usize) (base : List LighthousePayment)
+    (acc : alloc.vec.Vec LighthousePayment) (i : Usize)
     (hbase : base.length + spe.val ≤ Usize.max) (hi : i.val ≤ spe.val)
-    (hacc : acc.val = base ++ List.replicate i.val lhDefaultPayment) :
+    (hacc : acc.val = base ++ List.replicate i.val lighthouseDefaultPayment) :
     per_epoch_processing.builder_pending_payments.process_builder_pending_payments_loop2
-      spe acc i ⦃ res => res.val = base ++ List.replicate spe.val lhDefaultPayment ⦄ := by
+      spe acc i ⦃ res => res.val = base ++ List.replicate spe.val lighthouseDefaultPayment ⦄ := by
   unfold per_epoch_processing.builder_pending_payments.process_builder_pending_payments_loop2
   apply loop.spec_decr_nat
-    (measure := fun (x : alloc.vec.Vec LhPayment × Usize) => spe.val - x.2.val)
-    (inv := fun (x : alloc.vec.Vec LhPayment × Usize) =>
-      x.2.val ≤ spe.val ∧ x.1.val = base ++ List.replicate x.2.val lhDefaultPayment)
+    (measure := fun (x : alloc.vec.Vec LighthousePayment × Usize) => spe.val - x.2.val)
+    (inv := fun (x : alloc.vec.Vec LighthousePayment × Usize) =>
+      x.2.val ≤ spe.val ∧ x.1.val = base ++ List.replicate x.2.val lighthouseDefaultPayment)
   · rintro ⟨u, j⟩ ⟨hj, hu⟩
     dsimp only at hj hu
     unfold per_epoch_processing.builder_pending_payments.process_builder_pending_payments_loop2.body
@@ -219,12 +223,13 @@ theorem loop2_spec (spe : Usize) (base : List LhPayment)
 
 /-- The translated function never fails. It returns the withdrawals of the payments that reach the
 threshold, drops the first epoch of payments, and appends an epoch of default payments. -/
-theorem process_builder_pending_payments_spec (payments : Slice LhPayment) (spe : Usize)
+theorem process_builder_pending_payments_spec (payments : Slice LighthousePayment) (spe : Usize)
     (quorum : U64) :
     per_epoch_processing.builder_pending_payments.process_builder_pending_payments
       payments spe quorum ⦃ res =>
         res.1.val = newWithdrawals payments.val spe.val quorum
-        ∧ res.2.val = payments.val.drop spe.val ++ List.replicate spe.val lhDefaultPayment ⦄ := by
+        ∧ res.2.val = payments.val.drop spe.val ++ List.replicate spe.val lighthouseDefaultPayment
+          ⦄ := by
   unfold per_epoch_processing.builder_pending_payments.process_builder_pending_payments
   have hlen : payments.val.length ≤ Usize.max := by scalar_tac
   have hspe : spe.val ≤ Usize.max := by scalar_tac
@@ -303,25 +308,25 @@ def addressToSpec (a : alloy_primitives.bits.address.Address) : Spec.ExecutionAd
   ⟨(a.val.map fun b => UInt8.ofNat b.val).toArray, by simp⟩
 
 /-- A Rust withdrawal, read as a spec withdrawal. -/
-def withdrawalToSpec (w : LhWithdrawal) : Spec.BuilderPendingWithdrawal :=
+def withdrawalToSpec (w : LighthouseWithdrawal) : Spec.BuilderPendingWithdrawal :=
   { fee_recipient := addressToSpec w.fee_recipient
     amount := w.amount.val
     builder_index := w.builder_index.val }
 
 /-- A Rust payment, read as a spec payment. -/
-def paymentToSpec (p : LhPayment) : Spec.BuilderPendingPayment :=
+def paymentToSpec (p : LighthousePayment) : Spec.BuilderPendingPayment :=
   { weight := p.weight.val
     withdrawal := withdrawalToSpec p.withdrawal
     proposer_index := p.proposer_index.val }
 
-theorem paymentToSpec_default : paymentToSpec lhDefaultPayment =
+theorem paymentToSpec_default : paymentToSpec lighthouseDefaultPayment =
     Spec.BuilderPendingPayment.empty := by
-  simp only [paymentToSpec, withdrawalToSpec, addressToSpec, lhDefaultPayment,
+  simp only [paymentToSpec, withdrawalToSpec, addressToSpec, lighthouseDefaultPayment,
     Spec.BuilderPendingPayment.empty, Spec.BuilderPendingWithdrawal.empty,
     alloy_primitives.bits.fixed.FixedBytes.ZERO]
   congr 2
 
-theorem map_newWithdrawals (payments : List LhPayment) (n : Nat) (quorum : U64) :
+theorem map_newWithdrawals (payments : List LighthousePayment) (n : Nat) (quorum : U64) :
     (newWithdrawals payments n quorum).map withdrawalToSpec =
       (((payments.map paymentToSpec).take n).filter (·.weight ≥ quorum.val)).map
         (·.withdrawal) := by
@@ -332,8 +337,9 @@ theorem map_newWithdrawals (payments : List LhPayment) (n : Nat) (quorum : U64) 
 
 Lighthouse reads the threshold from `ChainSpec`. Both presets set it to 6/10. -/
 def lighthouseBuilderPendingPayments (total_active_balance slots_per_epoch : U64) (spe : Usize)
-    (payments : Slice LhPayment) (withdrawals : List LhWithdrawal) :
-    Result (core.result.Result (List LhWithdrawal × List LhPayment) safe_arith.ArithError) := do
+    (payments : Slice LighthousePayment) (withdrawals : List LighthouseWithdrawal) :
+    Result (core.result.Result (List LighthouseWithdrawal × List LighthousePayment)
+      safe_arith.ArithError) := do
   let r ← per_epoch_processing.builder_pending_payments.get_builder_payment_quorum_threshold
     total_active_balance slots_per_epoch 6#u64 10#u64
   match r with
@@ -345,7 +351,8 @@ def lighthouseBuilderPendingPayments (total_active_balance slots_per_epoch : U64
 
 /-- The spec state that holds the given builder withdrawals and payments. Its other fields have
 their default values. -/
-def builderStateToSpec (x : List LhWithdrawal × List LhPayment) : Spec.BeaconState :=
+def builderStateToSpec (x : List LighthouseWithdrawal × List
+    LighthousePayment) : Spec.BeaconState :=
   { builder_pending_payments := x.2.map paymentToSpec
     builder_pending_withdrawals := x.1.map withdrawalToSpec }
 
@@ -356,7 +363,7 @@ def builderStateToSpec (x : List LhWithdrawal × List LhPayment) : Spec.BeaconSt
 theorem builder_pending_payments_equiv (p : Spec.Preset)
     (total_active_balance slots_per_epoch : U64) (spe : Usize)
     (hslots : slots_per_epoch.val = p.SLOTS_PER_EPOCH) (hspe : spe.val = p.SLOTS_PER_EPOCH)
-    (payments : Slice LhPayment) (withdrawals : List LhWithdrawal)
+    (payments : Slice LighthousePayment) (withdrawals : List LighthouseWithdrawal)
     (hlen : payments.val.length = 2 * p.SLOTS_PER_EPOCH) :
     lighthouseBuilderPendingPayments total_active_balance slots_per_epoch spe payments withdrawals
       ⦃ r => resultToSpec builderStateToSpec r =

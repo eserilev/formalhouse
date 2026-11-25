@@ -16,9 +16,9 @@ the untranslated code (`UntranslatedSinglePass`, `UntranslatedBuilderPayments`):
 implementations over the milhouse lists, the borrows of the state by each wrapper, and the values
 read from the state and the spec. `translatedSinglePass_matches_model` shows that, under the
 trusted facts about the untranslated code (`UntranslatedSinglePassFacts`,
-`UntranslatedBuilderPaymentsFacts`), it returns the state of the model `lhSinglePass`, the single
-pass of `process_epoch_lighthouse`. `translatedSinglePassBeforePayments` stops before the builder
-payments; the Fulu epoch uses it (`Compose/Fulu.lean`).
+`UntranslatedBuilderPaymentsFacts`), it returns the state of the model `lighthouseSinglePass`, the
+single pass of `process_epoch_lighthouse`. `translatedSinglePassBeforePayments` stops before the
+builder payments; the Fulu epoch uses it (`Compose/Fulu.lean`).
 
 The first part of the file proves the frame facts of the model steps that the composition needs:
 which fields each step after the loop keeps.
@@ -27,12 +27,14 @@ which fields each step after the loop keeps.
 namespace EpochProofs.Spec
 
 /-- The Lighthouse model from the start of the single pass to the builder payments. -/
-def lhSinglePass [CurrentPreset] (oracle : Oracle) (s : BeaconState) : SpecM BeaconState :=
-  lhFullTailWith (fun s tab plan x => lhMid oracle s tab plan (s.withRowsChurn x.1 x.2)) s
+def lighthouseSinglePass [CurrentPreset] (oracle : Oracle) (s : BeaconState) : SpecM BeaconState :=
+  lighthouseSinglePassThen (fun s tab plan x =>
+    lighthouseDepositsConsolidationsPayments oracle s tab plan (s.withRowsChurn x.1 x.2)) s
 
-theorem lhFullTailWith_order_eq [CurrentPreset] (oracle : Oracle) (s : BeaconState) :
-    lhFullTailWith (lhAfterPassOrder oracle) s = lhSinglePass oracle s >>= lhRestOrder oracle := by
-  unfold lhSinglePass lhFullTailWith lhAfterPassOrder
+theorem lighthouseSinglePassThen_order_eq [CurrentPreset] (oracle : Oracle) (s : BeaconState) :
+    lighthouseSinglePassThen (lighthouseStepsAfterSinglePass oracle) s =
+      lighthouseSinglePass oracle s >>= lighthouseStepsAfterPayments oracle := by
+  unfold lighthouseSinglePass lighthouseSinglePassThen lighthouseStepsAfterSinglePass
   simp only [bind, Except.bind]
   repeat' split
   all_goals rfl
@@ -111,9 +113,9 @@ theorem apply_balLen [CurrentPreset] (oracle : Oracle) (t t' : BeaconState) (d :
              rw [List.length_set]; exact ht
            · contradiction)
 
-theorem ebUpdateAt_balLen [CurrentPreset] (t t' : BeaconState) (i : Nat)
-    (h : ebUpdateAt t i = .ok t') (ht : BalLen t) : BalLen t' := by
-  obtain ⟨v, b, e, -, -, -, rfl⟩ := (ebUpdateAt_ok t t' i).mp h
+theorem updateEffectiveBalanceAt_balLen [CurrentPreset] (t t' : BeaconState) (i : Nat)
+    (h : updateEffectiveBalanceAt t i = .ok t') (ht : BalLen t) : BalLen t' := by
+  obtain ⟨v, b, e, -, -, -, rfl⟩ := (updateEffectiveBalanceAt_ok t t' i).mp h
   unfold setEB BalLen at *
   split
   · simp only [List.length_set]; exact ht
@@ -159,9 +161,9 @@ theorem apply_midKeep [CurrentPreset] (oracle : Oracle) (t t' : BeaconState) (d 
     · contradiction
     · cases h; exact ⟨rfl, rfl, rfl, rfl⟩
 
-theorem ebUpdateAt_midKeep [CurrentPreset] (t t' : BeaconState) (i : Nat)
-    (h : ebUpdateAt t i = .ok t') : MidKeep t t' := by
-  obtain ⟨v, b, e, -, -, -, rfl⟩ := (ebUpdateAt_ok t t' i).mp h
+theorem updateEffectiveBalanceAt_midKeep [CurrentPreset] (t t' : BeaconState) (i : Nat)
+    (h : updateEffectiveBalanceAt t i = .ok t') : MidKeep t t' := by
+  obtain ⟨v, b, e, -, -, -, rfl⟩ := (updateEffectiveBalanceAt_ok t t' i).mp h
   unfold setEB
   split <;> exact ⟨rfl, rfl, rfl, rfl⟩
 
@@ -182,24 +184,27 @@ theorem consolidations_keepB (p : Preset) (t t' : BeaconState)
       | contradiction
       | (cases hb; exact hst)
 
-theorem lhNewValidators_keep [CurrentPreset] (oracle : Oracle)
-    (plan : LhDepositPlan) (t t' : BeaconState)
-    (h : lhNewValidators oracle plan t = .ok t') (ht : BalLen t) : MidKeep t t' ∧ BalLen t' := by
-  unfold lhNewValidators at h
-  rw [lhApplyPendingDeposit_mainnet] at h
+theorem lighthouseNewValidators_keep [CurrentPreset] (oracle : Oracle)
+    (plan : LighthouseDepositPlan) (t t' : BeaconState)
+    (h : lighthouseNewValidators oracle plan t = .ok t') (ht : BalLen t) : MidKeep t t' ∧
+    BalLen t' := by
+  unfold lighthouseNewValidators at h
+  rw [lighthouseApplyPendingDeposit_mainnet] at h
   obtain ⟨t3, h3, h⟩ := specM_bind_ok h
   have k3 := foldlM_keep (fun u => MidKeep t u ∧ BalLen u) (apply_pending_deposit P oracle)
     (fun u d u' hu hd => ⟨hu.1.trans (apply_midKeep oracle u u' d hd),
       apply_balLen oracle u u' d hd hu.2⟩)
     _ t t3 ⟨⟨rfl, rfl, rfl, rfl⟩, ht⟩ h3
-  exact foldlM_keep (fun u => MidKeep t u ∧ BalLen u) ebUpdateAt
-    (fun u i u' hu hd => ⟨hu.1.trans (ebUpdateAt_midKeep u u' i hd), ebUpdateAt_balLen u u' i hd hu.2⟩)
+  exact foldlM_keep (fun u => MidKeep t u ∧ BalLen u) updateEffectiveBalanceAt
+    (fun u i u' hu hd => ⟨hu.1.trans (updateEffectiveBalanceAt_midKeep u u' i hd),
+      updateEffectiveBalanceAt_balLen u u' i hd hu.2⟩)
     _ t3 t' k3 h
 
 theorem ebFold_keepB [CurrentPreset] (l : List Nat) (t t' : BeaconState)
-    (h : l.foldlM ebUpdateAt t = .ok t') : KeepB t t' :=
-  foldlM_keep (fun u => KeepB t u) ebUpdateAt
-    (fun u i u' hu hd => hu.trans (ebUpdateAt_midKeep u u' i hd).2) l t t' ⟨rfl, rfl, rfl⟩ h
+    (h : l.foldlM updateEffectiveBalanceAt t = .ok t') : KeepB t t' :=
+  foldlM_keep (fun u => KeepB t u) updateEffectiveBalanceAt
+    (fun u i u' hu hd => hu.trans (updateEffectiveBalanceAt_midKeep u u' i hd).2) l t t' ⟨rfl, rfl,
+      rfl⟩ h
 
 /-- `process_builder_pending_payments` reads and writes only the two builder lists. -/
 theorem process_builder_pending_payments_frame (p : Preset) (tab : Gwei) (t t0 t0' : BeaconState)
@@ -217,39 +222,45 @@ theorem process_builder_pending_payments_frame (p : Preset) (tab : Gwei) (t t0 t
     | contradiction
     | (cases h; simp only [*])
 
-/-- The steps of `lhMid` before the builder payments: the deposit writes, the pending
-consolidations and the effective balance updates of the validators that consolidations name. -/
-def lhMidCore [CurrentPreset] (oracle : Oracle) (s : BeaconState) (plan : LhDepositPlan)
+/-- The steps of `lighthouseDepositsConsolidationsPayments` before the builder payments: the
+deposit writes, the pending consolidations and the effective balance updates of the validators that
+consolidations name. -/
+def lighthouseDepositsConsolidations [CurrentPreset] (oracle : Oracle) (s : BeaconState)
+    (plan : LighthouseDepositPlan)
     (s1 : BeaconState) : SpecM BeaconState := do
-  let s4 ← lhNewValidators oracle plan (lhQueueWrite s plan s1)
+  let s4 ← lighthouseNewValidators oracle plan (lighthouseDepositQueueWrite s plan s1)
   let s5 ← process_pending_consolidations P s4
-  (validatorsInConsolidations s).foldlM ebUpdateAt s5
+  (validatorsInConsolidations s).foldlM updateEffectiveBalanceAt s5
 
-theorem lhMid_eq [CurrentPreset] (oracle : Oracle) (s : BeaconState) (tab : Gwei)
-    (plan : LhDepositPlan)
+theorem lighthouseDepositsConsolidationsPayments_eq [CurrentPreset] (oracle : Oracle)
+    (s : BeaconState) (tab : Gwei)
+    (plan : LighthouseDepositPlan)
     (s1 : BeaconState) :
-    lhMid oracle s tab plan s1 = lhMidCore oracle s plan s1 >>=
+    lighthouseDepositsConsolidationsPayments oracle s tab plan s1 =
+      lighthouseDepositsConsolidations oracle s plan s1 >>=
       process_builder_pending_payments P tab := by
-  simp only [lhMid, lhMidCore, bind_assoc]
+  simp only [lighthouseDepositsConsolidationsPayments, lighthouseDepositsConsolidations, bind_assoc]
 
-/-- `lhMidCore` does not write the builder pending payments, the proposer lookahead or the PTC
-window. -/
-theorem lhMidCore_keep [CurrentPreset] (oracle : Oracle) (s : BeaconState) (plan : LhDepositPlan)
+/-- `lighthouseDepositsConsolidations` does not write the builder pending payments, the proposer
+lookahead or the PTC window. -/
+theorem lighthouseDepositsConsolidations_keep [CurrentPreset] (oracle : Oracle) (s : BeaconState)
+    (plan : LighthouseDepositPlan)
     (x : (Epoch × Gwei) × List Row) (s6 : BeaconState)
-    (h : lhMidCore oracle s plan (s.withRowsChurn x.1 x.2) = .ok s6) : KeepB s s6 := by
-  unfold lhMidCore at h
+    (h : lighthouseDepositsConsolidations oracle s plan (s.withRowsChurn x.1 x.2) = .ok s6) : KeepB
+    s s6 := by
+  unfold lighthouseDepositsConsolidations at h
   obtain ⟨s4, h4, h⟩ := specM_bind_ok h
   obtain ⟨s5, h5, h6⟩ := specM_bind_ok h
-  have hW : BalLen (lhQueueWrite s plan (s.withRowsChurn x.1 x.2)) := by
-    simp [BalLen, lhQueueWrite, BeaconState.withRowsChurn, BeaconState.withRows]
-  exact ((lhNewValidators_keep oracle plan _ s4 h4 hW).1.2.trans
+  have hW : BalLen (lighthouseDepositQueueWrite s plan (s.withRowsChurn x.1 x.2)) := by
+    simp [BalLen, lighthouseDepositQueueWrite, BeaconState.withRowsChurn, BeaconState.withRows]
+  exact ((lighthouseNewValidators_keep oracle plan _ s4 h4 hW).1.2.trans
     (consolidations_keepB _ s4 s5 h5)).trans (ebFold_keepB _ s5 s6 h6)
 
 /-- The single pass does not write the proposer lookahead or the PTC window. -/
-theorem lhSinglePass_keep [CurrentPreset] (oracle : Oracle) (s T : BeaconState)
-    (h : lhSinglePass oracle s = .ok T) :
+theorem lighthouseSinglePass_keep [CurrentPreset] (oracle : Oracle) (s T : BeaconState)
+    (h : lighthouseSinglePass oracle s = .ok T) :
     T.proposer_lookahead = s.proposer_lookahead ∧ T.ptc_window = s.ptc_window := by
-  unfold lhSinglePass lhFullTailWith at h
+  unfold lighthouseSinglePass lighthouseSinglePassThen at h
   obtain ⟨cur, -, h⟩ := specM_bind_ok h
   obtain ⟨tab, -, h⟩ := specM_bind_ok h
   obtain ⟨rctx, -, h⟩ := specM_bind_ok h
@@ -257,9 +268,9 @@ theorem lhSinglePass_keep [CurrentPreset] (oracle : Oracle) (s T : BeaconState)
   obtain ⟨plan, -, h⟩ := specM_bind_ok h
   obtain ⟨⟨dn, up⟩, -, h⟩ := specM_bind_ok h
   obtain ⟨x, -, h⟩ := specM_bind_ok h
-  simp only [lhMid_eq] at h
+  simp only [lighthouseDepositsConsolidationsPayments_eq] at h
   obtain ⟨s6, h6, h7⟩ := specM_bind_ok h
-  have k := lhMidCore_keep oracle s plan x s6 h6
+  have k := lighthouseDepositsConsolidations_keep oracle s plan x s6 h6
   have h8 := process_builder_pending_payments_frame P tab s6 s6 T rfl rfl h7
   rw [h7] at h8
   have hT := Except.ok.inj h8
@@ -289,7 +300,7 @@ translated code. -/
 structure UntranslatedSinglePass (RustState RustError : Type) where
   /-- `StateRows`: the per-validator lists, borrowed for the loop. -/
   Rows : Type
-  rowOperations : LhRegistryRows Rows RustError
+  rowOperations : LighthouseRegistryRows Rows RustError
   rowsToSpec : Rows → List Spec.Row
   rowsBorrow : RustState → Rows
   /-- The end of the borrow, and the write of the exit churn that the loop returns. -/
@@ -301,15 +312,15 @@ structure UntranslatedSinglePass (RustState RustError : Type) where
   /-- `StateDeposits` and the plan of `PendingDepositsContext::new`. -/
   DepositState : Type
   Deposit : Type
-  depositOperations : LhDepositWrites DepositState Deposit RustError
+  depositOperations : LighthouseDepositWrites DepositState Deposit RustError
   depositToSpec : Deposit → Spec.PendingDeposit
   postponedDeposits : DepositState → List Spec.PendingDeposit
   depositPlan : RustState → TranslatedDepositPlan Deposit
   depositBorrow : RustState → List Deposit → DepositState
   depositReturn : DepositState → RustState
   /-- `StateConsolidations`, `StateEffectiveBalances` and `get_validators_in_consolidations`. -/
-  consolidationOperations : LhConsolidationState RustState RustError
-  effectiveBalanceOperations : LhEffectiveBalanceWrites RustState RustError
+  consolidationOperations : LighthouseConsolidationState RustState RustError
+  effectiveBalanceOperations : LighthouseEffectiveBalanceWrites RustState RustError
   validatorsInConsolidations : RustState → Slice Usize
 
 variable {RustState RustError : Type}
@@ -360,9 +371,9 @@ def translatedSinglePassBeforePayments (code : UntranslatedSinglePass RustState 
 `StateBuilderPayments` and the arguments of `apply_builder_pending_payments`. -/
 structure UntranslatedBuilderPayments (RustState RustError : Type) where
   PaymentState : Type
-  paymentOperations : LhPaymentWrites PaymentState RustError
-  pendingWithdrawals : PaymentState → List LhWithdrawal
-  pendingPayments : PaymentState → List LhPayment
+  paymentOperations : LighthousePaymentWrites PaymentState RustError
+  pendingWithdrawals : PaymentState → List LighthouseWithdrawal
+  pendingPayments : PaymentState → List LighthousePayment
   paymentsBorrow : RustState → PaymentState
   paymentsReturn : RustState → PaymentState → RustState
   /-- `state_ctxt.total_active_balance`, read at the input of the single pass. -/
@@ -411,7 +422,7 @@ structure UntranslatedSinglePassFacts (code : UntranslatedSinglePass RustState R
   rowsContract : ∀ total current plan,
     Spec.get_total_active_balance Spec.P (rustStateToSpec rustState) = .ok total →
     Spec.get_current_epoch Spec.P (rustStateToSpec rustState) = .ok current →
-    Spec.lhDepositPlan (rustStateToSpec rustState) (planTotal total) current = .ok plan →
+    Spec.lighthouseDepositPlan (rustStateToSpec rustState) (planTotal total) current = .ok plan →
     ValidatorRowsMatchSpec code.rowOperations Spec.P code.rowsToSpec
       (modelRowInputs total plan.topups
         (Spec.validatorsInConsolidations (rustStateToSpec rustState)))
@@ -448,7 +459,7 @@ structure UntranslatedSinglePassFacts (code : UntranslatedSinglePass RustState R
   depositPlan : ∀ total current plan,
     Spec.get_total_active_balance Spec.P (rustStateToSpec rustState) = .ok total →
     Spec.get_current_epoch Spec.P (rustStateToSpec rustState) = .ok current →
-    Spec.lhDepositPlan (rustStateToSpec rustState) (planTotal total) current = .ok plan →
+    Spec.lighthouseDepositPlan (rustStateToSpec rustState) (planTotal total) current = .ok plan →
     (code.depositPlan rustState).nextDepositIndex.val = plan.next_deposit_index ∧
     (code.depositPlan rustState).depositBalanceToConsume.val = plan.deposit_balance_to_consume ∧
     (code.depositPlan rustState).postponed.map code.depositToSpec = plan.postponed ∧
@@ -460,7 +471,7 @@ structure UntranslatedSinglePassFacts (code : UntranslatedSinglePass RustState R
   depositRoom : ∀ total current plan,
     Spec.get_total_active_balance Spec.P (rustStateToSpec rustState) = .ok total →
     Spec.get_current_epoch Spec.P (rustStateToSpec rustState) = .ok current →
-    Spec.lhDepositPlan (rustStateToSpec rustState) (planTotal total) current = .ok plan →
+    Spec.lighthouseDepositPlan (rustStateToSpec rustState) (planTotal total) current = .ok plan →
     (rustStateToSpec rustState).validators.length + plan.new_validator_deposits.length ≤ 2 ^ 40
   /-- `usize` has 64 bits. -/
   usize64 : Usize.max = U64.max
@@ -490,7 +501,7 @@ structure UntranslatedBuilderPaymentsFacts
   /-- The builder payment threshold, 6/10. -/
   threshold : paymentsCode.thresholdNumerator = 6#u64 ∧ paymentsCode.thresholdDenominator = 10#u64
 
-/-- The steps after the loop return the state of the model `lhMidCore`. -/
+/-- The steps after the loop return the state of the model `lighthouseDepositsConsolidations`. -/
 theorem translatedStepsAfterLoop_spec (code : UntranslatedSinglePass RustState RustError)
     (oracle : Spec.Oracle) (rustStateToSpec : RustState → Spec.BeaconState)
     (rustState : RustState) (planTotal : Spec.Gwei → Spec.Gwei)
@@ -498,17 +509,18 @@ theorem translatedStepsAfterLoop_spec (code : UntranslatedSinglePass RustState R
     (total current : Nat) (htab : Spec.get_total_active_balance Spec.P (rustStateToSpec rustState) =
     .ok total)
     (hcur : Spec.get_current_epoch Spec.P (rustStateToSpec rustState) = .ok current)
-    (plan : Spec.LhDepositPlan)
-    (hplan : Spec.lhDepositPlan (rustStateToSpec rustState) (planTotal total) current = .ok plan)
+    (plan : Spec.LighthouseDepositPlan)
+    (hplan : Spec.lighthouseDepositPlan (rustStateToSpec rustState) (planTotal total) current =
+    .ok plan)
     (rustState1 : RustState)
     (x : (Spec.Epoch × Spec.Gwei) × List Spec.Row)
     (hv1 : rustStateToSpec rustState1 = (rustStateToSpec rustState).withRowsChurn x.1 x.2)
     (hxlen : x.2.length = (rustStateToSpec rustState).validators.length) (s6 : Spec.BeaconState)
-    (h : Spec.lhMidCore oracle (rustStateToSpec rustState) plan
+    (h : Spec.lighthouseDepositsConsolidations oracle (rustStateToSpec rustState) plan
     ((rustStateToSpec rustState).withRowsChurn x.1 x.2) = .ok s6) :
     ∃ rustState4, translatedStepsAfterLoop code rustState rustState1 = ok (some rustState4) ∧
       rustStateToSpec rustState4 = s6 := by
-  unfold Spec.lhMidCore at h
+  unfold Spec.lighthouseDepositsConsolidations at h
   obtain ⟨s4, h4, h⟩ := Spec.specM_bind_ok h
   obtain ⟨s5, h5, h6⟩ := Spec.specM_bind_ok h
   unfold translatedStepsAfterLoop
@@ -543,11 +555,11 @@ theorem translatedStepsAfterLoop_spec (code : UntranslatedSinglePass RustState R
     cases this; rfl
   simp only
   -- The pending consolidations.
-  have hW : Spec.BalLen (Spec.lhQueueWrite (rustStateToSpec rustState) plan
+  have hW : Spec.BalLen (Spec.lighthouseDepositQueueWrite (rustStateToSpec rustState) plan
       ((rustStateToSpec rustState).withRowsChurn x.1 x.2)) := by
-    simp [Spec.BalLen, Spec.lhQueueWrite, Spec.BeaconState.withRowsChurn,
+    simp [Spec.BalLen, Spec.lighthouseDepositQueueWrite, Spec.BeaconState.withRowsChurn,
       Spec.BeaconState.withRows]
-  obtain ⟨⟨hpc4, -⟩, hlen4⟩ := Spec.lhNewValidators_keep oracle plan _ s4 h4 hW
+  obtain ⟨⟨hpc4, -⟩, hlen4⟩ := Spec.lighthouseNewValidators_keep oracle plan _ s4 h4 hW
   have hbtree4 : IteratesLikeBTreeSet (s4.pending_consolidations.flatMap
       fun c => [c.source_index, c.target_index])
       ((code.validatorsInConsolidations rustState).val.map (·.val)) := by
@@ -644,8 +656,8 @@ theorem translatedBuilderPayments_matches_model
     rw [hL.paymentsReturn]
     rfl
 
-/-- The composed Gloas single pass returns the state of the model `lhSinglePass`: when the model
-returns `ok`, the Rust returns `Ok` with a state whose spec state is the model's. -/
+/-- The composed Gloas single pass returns the state of the model `lighthouseSinglePass`: when the
+model returns `ok`, the Rust returns `Ok` with a state whose spec state is the model's. -/
 theorem translatedSinglePass_matches_model [Spec.CurrentPreset.Valid]
     (code : UntranslatedSinglePass RustState RustError)
     (paymentsCode : UntranslatedBuilderPayments RustState RustError)
@@ -656,10 +668,11 @@ theorem translatedSinglePass_matches_model [Spec.CurrentPreset.Valid]
     (hslot : (rustStateToSpec rustState).slot < 2 ^ 64)
     (hbpp : (rustStateToSpec rustState).builder_pending_payments.length = 2 *
     Spec.P.SLOTS_PER_EPOCH)
-    (T : Spec.BeaconState) (hT : Spec.lhSinglePass oracle (rustStateToSpec rustState) = .ok T) :
+    (T : Spec.BeaconState) (hT : Spec.lighthouseSinglePass oracle (rustStateToSpec rustState) =
+    .ok T) :
     ∃ rustState', translatedSinglePass code paymentsCode rustState = ok (some rustState') ∧
       rustStateToSpec rustState' = T := by
-  unfold Spec.lhSinglePass Spec.lhFullTailWith at hT
+  unfold Spec.lighthouseSinglePass Spec.lighthouseSinglePassThen at hT
   obtain ⟨current, hcur, hT⟩ := Spec.specM_bind_ok hT
   obtain ⟨total, htab, hT⟩ := Spec.specM_bind_ok hT
   obtain ⟨rctx, hr, hT⟩ := Spec.specM_bind_ok hT
@@ -669,7 +682,7 @@ theorem translatedSinglePass_matches_model [Spec.CurrentPreset.Valid]
   obtain ⟨x, hx, hT⟩ := Spec.specM_bind_ok hT
   have hxlen : x.2.length = (rustStateToSpec rustState).validators.length := by
     rw [(Spec.passM_rows _ _ _ _ hx).1, Spec.rowsOf_length]
-  simp only [Spec.lhMid_eq] at hT
+  simp only [Spec.lighthouseDepositsConsolidationsPayments_eq] at hT
   obtain ⟨s6, h6, h7⟩ := Spec.specM_bind_ok hT
   have htarget : current + Spec.P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < Spec.UINT64_SIZE := by
     rw [Spec.get_current_epoch_ok_eq hcur]; exact Spec.P_slot_target_lt hslot
@@ -704,7 +717,8 @@ theorem translatedSinglePass_matches_model [Spec.CurrentPreset.Valid]
     hcur plan hplan
     (code.rowsReturn rustState rows' ch) _ (hL.rowsReturn rows' ch) (by rw [← hxlen]) s6 h6
   -- The builder payments.
-  have hk6 := Spec.lhMidCore_keep oracle (rustStateToSpec rustState) plan _ s6 h6
+  have hk6 := Spec.lighthouseDepositsConsolidations_keep oracle (rustStateToSpec rustState) plan _
+    s6 h6
   obtain ⟨rustState', hp, hv'⟩ :=
     translatedBuilderPayments_matches_model paymentsCode rustStateToSpec rustState hPL total htab
     rustState4

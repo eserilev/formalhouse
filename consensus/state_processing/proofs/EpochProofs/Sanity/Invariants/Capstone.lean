@@ -6,8 +6,8 @@ import EpochProofs.Sanity.Invariants.LighthouseTail
 /-!
 # Lighthouse epoch processing on every reachable run
 
-On mainnet, `state_transition` with the Lighthouse epoch `process_epoch_lh` has the same `ok`
-results as the spec `state_transition`, from every state that a run of spec state transitions
+On mainnet, `state_transition` with the Lighthouse epoch `processEpochWithSinglePass` has the same
+`ok` results as the spec `state_transition`, from every state that a run of spec state transitions
 reaches. The start state has the invariants of a genesis state. The economic facts are two
 explicit hypotheses on the run: the total active balance before each block, and
 `BalancesFarFromOverflow` at each `process_epoch` input.
@@ -15,14 +15,15 @@ explicit hypotheses on the run: the total active balance before each block, and
 
 namespace EpochProofs.Spec
 
-/-- On mainnet, from every reachable state, `state_transition` with `process_epoch_lh` has the
-same `ok` results as the spec `state_transition`.
+/-- On mainnet, from every reachable state, `state_transition` with `processEpochWithSinglePass`
+has the same `ok` results as the spec `state_transition`.
 
-The start state `init` has `CheckpointsInOrder`, `ListLengthsMatch`, `ExitToWithdrawableDelay`, `ExitEpochsAreUint64` and
-`AfterEffectiveBalanceUpdates`. `ActiveBalanceBounded` says that the total active balance before each block is at most 139
-million ETH. `AtEveryEpochInput … BalancesFarFromOverflow` says that each `process_epoch` input of the run has
-balances below `2^62`, effective balances that sum below `2^60`, and a slashed sum whose triple
-fits in a `u64`. Each block of the run has a `u64` slot and at most 512 sync bits. -/
+The start state `init` has `CheckpointsInOrder`, `ListLengthsMatch`, `ExitToWithdrawableDelay`,
+`ExitEpochsAreUint64` and `AfterEffectiveBalanceUpdates`. `ActiveBalanceBounded` says that the
+total active balance before each block is at most 139 million ETH. `AtEveryEpochInput …
+BalancesFarFromOverflow` says that each `process_epoch` input of the run has balances below `2^62`,
+effective balances that sum below `2^60`, and a slashed sum whose triple fits in a `u64`. Each
+block of the run has a `u64` slot and at most 512 sync bits. -/
 theorem lighthouse_state_transition_sameResultOrBothFail [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
     (hffg : CheckpointsInOrder P init) (hrows : ListLengthsMatch init)
@@ -33,20 +34,22 @@ theorem lighthouse_state_transition_sameResultOrBothFail [CurrentPreset] [Curren
     (s : BeaconState) (hr : ReachableByBlocks o max_blobs_per_block GLOAS_FORK_EPOCH init s)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (hslot64 : signed_block.message.slot < 2 ^ 64) :
-    SameResultOrBothFail (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH (process_epoch_lh o) s
+    SameResultOrBothFail (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH
+      (processEpochWithSinglePass o) s
         signed_block validate_result)
       (state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
         validate_result) :=
   reachable_state_transition_sameResultOrBothFail' o max_blobs_per_block GLOAS_FORK_EPOCH init hffg hrows hd
-    hx h0 hsupply BalancesFarFromOverflow hinputCondition (process_epoch_lh o) (process_epoch_lh_hf o) s hr signed_block
+    hx h0 hsupply BalancesFarFromOverflow hinputCondition (processEpochWithSinglePass o)
+      (processEpochWithSinglePass_hf o) s hr signed_block
     validate_result hslot64
 
 /-- The whole Lighthouse epoch: on mainnet, from every reachable state, `state_transition` with
-`process_epoch_lh_full` has the same `ok` results as the spec `state_transition`.
-`process_epoch_lh_full` runs the single pass with the deposit top-up and the effective balance
-update, then new deposits, consolidations, the effective balance redo and builder payments, as
-`single_pass.rs` does. The start state also has unique pubkeys, in-range consolidation indices
-and `u64` withdrawable epochs. Genesis does. -/
+`processEpochWithSinglePassAndDeposits` has the same `ok` results as the spec `state_transition`.
+`processEpochWithSinglePassAndDeposits` runs the single pass with the deposit top-up and the
+effective balance update, then new deposits, consolidations, the effective balance redo and builder
+payments, as `single_pass.rs` does. The start state also has unique pubkeys, in-range consolidation
+indices and `u64` withdrawable epochs. Genesis does. -/
 theorem lighthouse_full_epoch_state_transition_sameResultOrBothFail [CurrentPreset] [CurrentPreset.Valid] (o : Oracle)
     (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
     (hffg : CheckpointsInOrder P init) (hrows : ListLengthsMatch init)
@@ -59,13 +62,15 @@ theorem lighthouse_full_epoch_state_transition_sameResultOrBothFail [CurrentPres
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (hslot64 : signed_block.message.slot < 2 ^ 64) :
     SameResultOrBothFail (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH
-        (process_epoch_lh_full o) s signed_block validate_result)
+        (processEpochWithSinglePassAndDeposits o) s signed_block validate_result)
       (state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
         validate_result) :=
   reachable_state_transition_sameResultOrBothFail''' o max_blobs_per_block GLOAS_FORK_EPOCH init hffg hrows hd
-    hx h0 hpk hcr hw hsupply BalancesFarFromOverflow hinputCondition (process_epoch_lh_full o)
+    hx h0 hpk hcr hw hsupply BalancesFarFromOverflow hinputCondition
+      (processEpochWithSinglePassAndDeposits o)
     (fun t ⟨⟨⟨hb, hslot, heb, hexit, hsup⟩, _, hcons⟩, _, hvalid⟩ =>
-      process_epoch_lh_full_sameResultOrBothFail' o t hb hslot heb hexit hsup hvalid hcons)
+      processEpochWithSinglePassAndDeposits_sameResultOrBothFail' o t hb hslot heb hexit hsup hvalid
+        hcons)
     s hr signed_block validate_result hslot64
 
 end EpochProofs.Spec

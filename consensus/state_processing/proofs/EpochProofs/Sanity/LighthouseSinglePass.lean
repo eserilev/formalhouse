@@ -6,8 +6,8 @@ import EpochProofs.Sanity.PassCongr
 /-!
 # The Lighthouse single pass equals the spec passes
 
-`lighthouse_single_pass_eq_spec` shows that one pass of `lhRowStep` over the validators gives
-the same `ok` results as the spec's inactivity, rewards, registry and slashings passes. The
+`lighthouse_single_pass_eq_spec` shows that one pass of `lighthouseRowStep` over the validators
+gives the same `ok` results as the spec's inactivity, rewards, registry and slashings passes. The
 hypotheses are facts about the state at the start of epoch processing, not about single rows.
 -/
 
@@ -55,8 +55,8 @@ theorem EpochEntry.effective_balance_of_floor [CurrentPreset] (state : BeaconSta
   fun i hi _ => EffectiveBalanceFloor.le_mul _ _ h i hi
 
 /-- The Lighthouse step context for this state. -/
-def lhContextOf [CurrentPreset] (state : BeaconState) (total_active_balance : Gwei)
-    (current_epoch : Epoch) (rctx : RewardsContext) (per : Gwei) : LhStepContext :=
+def lighthouseContextOf [CurrentPreset] (state : BeaconState) (total_active_balance : Gwei)
+    (current_epoch : Epoch) (rctx : RewardsContext) (per : Gwei) : LighthouseStepContext :=
   { current_epoch
     previous_epoch := rctx.previous_epoch
     finalized_epoch := state.finalized_checkpoint.epoch
@@ -70,12 +70,12 @@ def lhContextOf [CurrentPreset] (state : BeaconState) (total_active_balance : Gw
     penalty_per_increment := per
     after_genesis := current_epoch != GENESIS_EPOCH }
 
-/-- On mainnet, one pass of `lhRowStep` gives the same `ok` results as the spec's inactivity,
-rewards, registry and slashings passes.
+/-- On mainnet, one pass of `lighthouseRowStep` gives the same `ok` results as the spec's
+inactivity, rewards, registry and slashings passes.
 
 The hypotheses are facts about the state at the start of epoch processing:
-- `ListLengthsMatch`, `EpochEntry`: SSZ lengths, the effective balance floor for eligible validators,
-  the supply bound, `u64` exit epochs.
+- `ListLengthsMatch`, `EpochEntry`: SSZ lengths, the effective balance floor for eligible
+  validators, the supply bound, `u64` exit epochs.
 - `hfinalized`, `hcurrent64`: the finalized epoch is not after the current epoch, and the next
   epoch fits in a `u64`.
 - `htotal`: `get_total_active_balance` is at least one increment, by its definition.
@@ -111,8 +111,9 @@ theorem lighthouse_single_pass_eq_spec [CurrentPreset] (total_active_balance : G
       let s3 ← process_registry_updates P total_active_balance s2
       process_slashings P total_active_balance s3)
     ((fun y => state.withRowsChurn y.1 y.2) <$>
-      passM (fun churn r => lhRowStep P
-          (lhContextOf state total_active_balance current_epoch rctx per) (base_reward r) churn r)
+      passM (fun churn r => lighthouseRowStep P
+          (lighthouseContextOf state total_active_balance current_epoch rctx per) (base_reward r)
+            churn r)
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
   obtain ⟨hprevious, -, -, -, -, hleak, htab⟩ :=
     rewardsContextOf_ok P total_active_balance state rctx hctx
@@ -120,7 +121,7 @@ theorem lighthouse_single_pass_eq_spec [CurrentPreset] (total_active_balance : G
     hrows current_epoch rctx.previous_epoch rctx.in_leak hcurrent hgenesis hprevious hleak rctx
     hctx activation_epoch hactivation htarget adjusted per hpre) (SameResultOrBothFail.of_eq ?_)
   have hstep : ∀ churn r, r ∈ rowsOf state →
-      lhRowStep P (lhContextOf state total_active_balance current_epoch rctx per)
+      lighthouseRowStep P (lighthouseContextOf state total_active_balance current_epoch rctx per)
         (base_reward r) churn r =
       (fun x => (x.1.1.2, x.2)) <$> singlePassStep P total_active_balance
         rctx.previous_epoch rctx.in_leak rctx current_epoch state.finalized_checkpoint.epoch
@@ -132,7 +133,8 @@ theorem lighthouse_single_pass_eq_spec [CurrentPreset] (total_active_balance : G
     have hrow := rowsOf_getElem state i hi
     rw [hri] at hrow
     subst hrow
-    exact lhRowStep_eq_singlePassStep_of_bounds _ (by simpa [lhContextOf] using hgenesis) rctx _
+    exact lighthouseRowStep_eq_singlePassStep_of_bounds _
+      (by simpa [lighthouseContextOf] using hgenesis) rctx _
       churn (base_reward _) activation_epoch
       rfl rfl rfl rfl rfl rfl
       (by rw [htab]; exact hbase _ hr) (by rw [htab]; exact htotal) hincrements

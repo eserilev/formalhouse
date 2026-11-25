@@ -57,12 +57,13 @@ theorem listGet_of_none {α : Type} {l : List α} {i : Nat} (h : l[i]? = none) :
     listGet l i = .error .indexOutOfRange := by
   simp only [listGet, h, throw, throwThe, MonadExceptOf.throw]
 
-/-- `ebUpdateAt` when the validator and the balance exist. -/
-theorem ebUpdateAt_some [CurrentPreset] {s : BeaconState} {i : Nat} {v : Validator} {b : Gwei}
+/-- `updateEffectiveBalanceAt` when the validator and the balance exist. -/
+theorem updateEffectiveBalanceAt_some [CurrentPreset] {s : BeaconState} {i : Nat} {v : Validator}
+    {b : Gwei}
     (hv : s.validators[i]? = some v) (hb : s.balances[i]? = some b) :
-    ebUpdateAt s i = (setEB s i ·) <$> ebNew v b := by
+    updateEffectiveBalanceAt s i = (setEB s i ·) <$> ebNew v b := by
   have hlt : i < s.validators.length := (List.getElem?_eq_some_iff.mp hv).1
-  unfold ebUpdateAt ebNew
+  unfold updateEffectiveBalanceAt ebNew
   rw [listGet_of_some hv, listGet_of_some hb]
   generalize hysteresisThresholds P = H
   cases H with
@@ -82,33 +83,36 @@ theorem ebUpdateAt_some [CurrentPreset] {s : BeaconState} {i : Nat} {v : Validat
       rw [setEB_some e hv]
       rfl
 
-/-- `ebUpdateAt` fails without the validator. -/
-theorem ebUpdateAt_of_none_v [CurrentPreset] {s : BeaconState} {i : Nat} (hv : s.validators[i]? = none) :
-    ebUpdateAt s i = .error .indexOutOfRange := by
-  unfold ebUpdateAt
+/-- `updateEffectiveBalanceAt` fails without the validator. -/
+theorem updateEffectiveBalanceAt_of_none_v [CurrentPreset] {s : BeaconState} {i : Nat}
+    (hv : s.validators[i]? = none) :
+    updateEffectiveBalanceAt s i = .error .indexOutOfRange := by
+  unfold updateEffectiveBalanceAt
   rw [listGet_of_none hv]
   rfl
 
-/-- `ebUpdateAt` fails without the balance. -/
-theorem ebUpdateAt_of_none_b [CurrentPreset] {s : BeaconState} {i : Nat} {v : Validator}
+/-- `updateEffectiveBalanceAt` fails without the balance. -/
+theorem updateEffectiveBalanceAt_of_none_b [CurrentPreset] {s : BeaconState} {i : Nat}
+    {v : Validator}
     (hv : s.validators[i]? = some v) (hb : s.balances[i]? = none) :
-    ebUpdateAt s i = .error .indexOutOfRange := by
-  unfold ebUpdateAt
+    updateEffectiveBalanceAt s i = .error .indexOutOfRange := by
+  unfold updateEffectiveBalanceAt
   rw [listGet_of_some hv, listGet_of_none hb]
   rfl
 
-/-- `ebUpdateAt` succeeds exactly when the validator and the balance exist and the new effective
-balance computes. Then it is `setEB`. -/
-theorem ebUpdateAt_ok [CurrentPreset] (s s' : BeaconState) (i : Nat) :
-    ebUpdateAt s i = .ok s' ↔ ∃ v b e, s.validators[i]? = some v ∧ s.balances[i]? = some b ∧
+/-- `updateEffectiveBalanceAt` succeeds exactly when the validator and the balance exist and the
+new effective balance computes. Then it is `setEB`. -/
+theorem updateEffectiveBalanceAt_ok [CurrentPreset] (s s' : BeaconState) (i : Nat) :
+    updateEffectiveBalanceAt s i = .ok s' ↔ ∃ v b e, s.validators[i]? = some v ∧ s.balances[i]? =
+      some b ∧
       ebNew v b = .ok e ∧ s' = setEB s i e := by
   cases hv : s.validators[i]? with
-  | none => simp [ebUpdateAt_of_none_v hv]
+  | none => simp [updateEffectiveBalanceAt_of_none_v hv]
   | some v =>
     cases hb : s.balances[i]? with
-    | none => simp [ebUpdateAt_of_none_b hv hb]
+    | none => simp [updateEffectiveBalanceAt_of_none_b hv hb]
     | some b =>
-      rw [ebUpdateAt_some hv hb]
+      rw [updateEffectiveBalanceAt_some hv hb]
       cases he : ebNew v b with
       | error err =>
         simp only [Functor.map, Except.map, reduceCtorEq, false_iff]
@@ -129,18 +133,20 @@ theorem ebUpdateAt_ok [CurrentPreset] (s s' : BeaconState) (i : Nat) :
 
 /-- An update of validator `i` commutes with a step `F` that commutes with `setEB` at `i` and
 keeps validator `i` and its balance. -/
-theorem ebUpdateAt_commute [CurrentPreset] (F : BeaconState → SpecM BeaconState) (i : Nat)
+theorem updateEffectiveBalanceAt_commute [CurrentPreset] (F : BeaconState → SpecM BeaconState)
+    (i : Nat)
     (P : BeaconState → Prop)
     (hF1 : ∀ t e, P t → F (setEB t i e) = (fun t' => setEB t' i e) <$> F t)
     (hF2 : ∀ t t', P t → F t = .ok t' →
       t'.validators[i]? = t.validators[i]? ∧ t'.balances[i]? = t.balances[i]?)
     (s : BeaconState) (hs : P s) :
-    SameResultOrBothFail (ebUpdateAt s i >>= F) (F s >>= fun t => ebUpdateAt t i) := by
+    SameResultOrBothFail (updateEffectiveBalanceAt s i >>= F) (F s >>= fun t =>
+      updateEffectiveBalanceAt t i) := by
   intro w
   constructor
   · intro h
     obtain ⟨s1, h1, h2⟩ := specM_bind_ok h
-    obtain ⟨v, b, e, hv, hb, he, rfl⟩ := (ebUpdateAt_ok s s1 i).mp h1
+    obtain ⟨v, b, e, hv, hb, he, rfl⟩ := (updateEffectiveBalanceAt_ok s s1 i).mp h1
     rw [hF1 s e hs] at h2
     cases ht : F s with
     | error err => rw [ht] at h2; cases h2
@@ -148,14 +154,15 @@ theorem ebUpdateAt_commute [CurrentPreset] (F : BeaconState → SpecM BeaconStat
       rw [ht] at h2
       cases h2
       obtain ⟨hvt, hbt⟩ := hF2 s t hs ht
-      show (Except.ok t >>= fun t => ebUpdateAt t i) = _
-      exact (ebUpdateAt_ok t _ i).mpr ⟨v, b, e, hvt.trans hv, hbt.trans hb, he, rfl⟩
+      show (Except.ok t >>= fun t => updateEffectiveBalanceAt t i) = _
+      exact (updateEffectiveBalanceAt_ok t _ i).mpr ⟨v, b, e, hvt.trans hv, hbt.trans hb, he, rfl⟩
   · intro h
     obtain ⟨t, ht, h2⟩ := specM_bind_ok h
-    obtain ⟨v, b, e, hv, hb, he, rfl⟩ := (ebUpdateAt_ok t w i).mp h2 |>.imp fun _ x => x
+    obtain ⟨v, b, e, hv, hb, he, rfl⟩ := (updateEffectiveBalanceAt_ok t w i).mp h2 |>.imp fun _ x =>
+      x
     obtain ⟨hvt, hbt⟩ := hF2 s t hs ht
-    have h1 : ebUpdateAt s i = .ok (setEB s i e) :=
-      (ebUpdateAt_ok s _ i).mpr ⟨v, b, e, hvt ▸ hv, hbt ▸ hb, he, rfl⟩
+    have h1 : updateEffectiveBalanceAt s i = .ok (setEB s i e) :=
+      (updateEffectiveBalanceAt_ok s _ i).mpr ⟨v, b, e, hvt ▸ hv, hbt ▸ hb, he, rfl⟩
     rw [h1]
     show F (setEB s i e) = _
     rw [hF1 s e hs, ht]
@@ -168,7 +175,8 @@ theorem ebFold_commute [CurrentPreset] (F : BeaconState → SpecM BeaconState) (
     (hF2 : ∀ i ∈ l, ∀ t t', P t → F t = .ok t' →
       t'.validators[i]? = t.validators[i]? ∧ t'.balances[i]? = t.balances[i]?)
     (s : BeaconState) (hs : P s) :
-    SameResultOrBothFail (l.foldlM ebUpdateAt s >>= F) (F s >>= fun t => l.foldlM ebUpdateAt t) := by
+    SameResultOrBothFail (l.foldlM updateEffectiveBalanceAt s >>= F) (F s >>= fun t =>
+      l.foldlM updateEffectiveBalanceAt t) := by
   induction l generalizing s with
   | nil =>
     apply SameResultOrBothFail.of_eq
@@ -178,13 +186,16 @@ theorem ebFold_commute [CurrentPreset] (F : BeaconState → SpecM BeaconState) (
     have hPi := hP i (by simp)
     refine SameResultOrBothFail.trans (SameResultOrBothFail.of_eq (by rw [List.foldlM_cons, bind_assoc])) ?_
     refine SameResultOrBothFail.trans
-      (y := ebUpdateAt s i >>= fun s1 => F s1 >>= fun t' => l.foldlM ebUpdateAt t')
-      (SameResultOrBothFail.bind (SameResultOrBothFail.refl (ebUpdateAt s i)) (fun s1 h1 => ?_)) ?_
-    · obtain ⟨v, b, e, -, -, -, rfl⟩ := (ebUpdateAt_ok s s1 i).mp h1
+      (y := updateEffectiveBalanceAt s i >>= fun s1 => F s1 >>= fun t' =>
+      l.foldlM updateEffectiveBalanceAt t')
+      (SameResultOrBothFail.bind (SameResultOrBothFail.refl (updateEffectiveBalanceAt s i))
+        (fun s1 h1 => ?_)) ?_
+    · obtain ⟨v, b, e, -, -, -, rfl⟩ := (updateEffectiveBalanceAt_ok s s1 i).mp h1
       exact ih (fun j hj => hP j (by simp [hj])) (fun j hj => hF1 j (by simp [hj]))
         (fun j hj => hF2 j (by simp [hj])) _ (hPi s e hs)
     · refine SameResultOrBothFail.trans (SameResultOrBothFail.of_eq (by rw [← bind_assoc])) ?_
-      refine SameResultOrBothFail.trans (SameResultOrBothFail.bind (ebUpdateAt_commute F i P (hF1 i (by simp))
+      refine SameResultOrBothFail.trans
+        (SameResultOrBothFail.bind (updateEffectiveBalanceAt_commute F i P (hF1 i (by simp))
         (hF2 i (by simp)) s hs) (fun _ _ => SameResultOrBothFail.refl _)) ?_
       apply SameResultOrBothFail.of_eq
       rw [bind_assoc]
@@ -378,22 +389,27 @@ theorem setEB_comm (t : BeaconState) {i j : Nat} (e e' : Gwei) (hij : i ≠ j) :
       simp only [List.set_comm _ _ hij]
 
 /-- Instance g: an update at `j` commutes with `setEB` at `i ≠ j`. -/
-theorem ebUpdateAt_hF1 [CurrentPreset] (j i : Nat) (hij : i ≠ j) (t : BeaconState) (e : Gwei) :
-    ebUpdateAt (setEB t i e) j = (fun t' => setEB t' i e) <$> ebUpdateAt t j := by
+theorem updateEffectiveBalanceAt_hF1 [CurrentPreset] (j i : Nat) (hij : i ≠ j) (t : BeaconState)
+    (e : Gwei) :
+    updateEffectiveBalanceAt (setEB t i e) j = (fun t' => setEB t' i e) <$>
+      updateEffectiveBalanceAt t j := by
   have hv' := setEB_get_ne t e (Ne.symm hij)
   have hb' := setEB_balances t i e
   cases hv : t.validators[j]? with
   | none =>
-    rw [ebUpdateAt_of_none_v hv, ebUpdateAt_of_none_v (by rw [hv']; exact hv)]
+    rw [updateEffectiveBalanceAt_of_none_v hv,
+      updateEffectiveBalanceAt_of_none_v (by rw [hv']; exact hv)]
     rfl
   | some v =>
     cases hb : t.balances[j]? with
     | none =>
-      rw [ebUpdateAt_of_none_b hv hb, ebUpdateAt_of_none_b (by rw [hv']; exact hv)
+      rw [updateEffectiveBalanceAt_of_none_b hv hb,
+        updateEffectiveBalanceAt_of_none_b (by rw [hv']; exact hv)
         (by rw [hb']; exact hb)]
       rfl
     | some b =>
-      rw [ebUpdateAt_some hv hb, ebUpdateAt_some (by rw [hv']; exact hv) (by rw [hb']; exact hb)]
+      rw [updateEffectiveBalanceAt_some hv hb,
+        updateEffectiveBalanceAt_some (by rw [hv']; exact hv) (by rw [hb']; exact hb)]
       cases ebNew v b with
       | error err => rfl
       | ok e' =>
@@ -401,26 +417,28 @@ theorem ebUpdateAt_hF1 [CurrentPreset] (j i : Nat) (hij : i ≠ j) (t : BeaconSt
         rw [setEB_comm t e e' hij]
 
 /-- Instance g: an update at `j` keeps validator `i ≠ j` and its balance. -/
-theorem ebUpdateAt_hF2 [CurrentPreset] (j i : Nat) (hij : i ≠ j) (t t' : BeaconState)
-    (h : ebUpdateAt t j = .ok t') :
+theorem updateEffectiveBalanceAt_hF2 [CurrentPreset] (j i : Nat) (hij : i ≠ j) (t t' : BeaconState)
+    (h : updateEffectiveBalanceAt t j = .ok t') :
     t'.validators[i]? = t.validators[i]? ∧ t'.balances[i]? = t.balances[i]? := by
-  obtain ⟨_, _, e, -, -, -, rfl⟩ := (ebUpdateAt_ok t t' j).mp h
+  obtain ⟨_, _, e, -, -, -, rfl⟩ := (updateEffectiveBalanceAt_ok t t' j).mp h
   exact ⟨setEB_get_ne t e hij, by rw [setEB_balances]⟩
 
 /-- Two updates at different indices commute. -/
-theorem ebUpdateAt_swap [CurrentPreset] (s : BeaconState) (i j : Nat) :
-    SameResultOrBothFail (ebUpdateAt s i >>= fun t => ebUpdateAt t j)
-      (ebUpdateAt s j >>= fun t => ebUpdateAt t i) := by
+theorem updateEffectiveBalanceAt_swap [CurrentPreset] (s : BeaconState) (i j : Nat) :
+    SameResultOrBothFail (updateEffectiveBalanceAt s i >>= fun t => updateEffectiveBalanceAt t j)
+      (updateEffectiveBalanceAt s j >>= fun t => updateEffectiveBalanceAt t i) := by
   by_cases hij : i = j
   · subst hij
     exact SameResultOrBothFail.refl _
-  · exact ebUpdateAt_commute (fun t => ebUpdateAt t j) i (fun _ => True)
-      (fun t e _ => ebUpdateAt_hF1 j i hij t e) (fun t t' _ h => ebUpdateAt_hF2 j i hij t t' h)
+  · exact updateEffectiveBalanceAt_commute (fun t => updateEffectiveBalanceAt t j) i (fun _ => True)
+      (fun t e _ => updateEffectiveBalanceAt_hF1 j i hij t e) (fun t t' _ h =>
+        updateEffectiveBalanceAt_hF2 j i hij t t' h)
       s trivial
 
 /-- Updates over two permuted lists give the same `ok` results. -/
 theorem ebFold_perm [CurrentPreset] {l l' : List Nat} (h : l.Perm l') (s : BeaconState) :
-    SameResultOrBothFail (l.foldlM ebUpdateAt s) (l'.foldlM ebUpdateAt s) := by
+    SameResultOrBothFail (l.foldlM updateEffectiveBalanceAt s)
+      (l'.foldlM updateEffectiveBalanceAt s) := by
   induction h generalizing s with
   | nil => exact SameResultOrBothFail.refl _
   | cons x _ ih =>
@@ -429,7 +447,9 @@ theorem ebFold_perm [CurrentPreset] {l l' : List Nat} (h : l.Perm l') (s : Beaco
   | swap x y l =>
     simp only [List.foldlM_cons]
     refine SameResultOrBothFail.trans (SameResultOrBothFail.of_eq (bind_assoc _ _ _).symm) ?_
-    refine SameResultOrBothFail.trans (SameResultOrBothFail.bind (ebUpdateAt_swap s y x) (fun _ _ => SameResultOrBothFail.refl _)) ?_
+    refine SameResultOrBothFail.trans
+      (SameResultOrBothFail.bind (updateEffectiveBalanceAt_swap s y x) (fun _ _ =>
+      SameResultOrBothFail.refl _)) ?_
     exact SameResultOrBothFail.of_eq (bind_assoc _ _ _)
   | trans _ _ ih1 ih2 => exact (ih1 s).trans (ih2 s)
 
@@ -463,7 +483,7 @@ theorem effectiveBalanceStep_none [CurrentPreset] {bals : List Gwei} {k : Nat} (
 /-- The updates of the indices from `done.length` on equal the spec loop over the rest. -/
 theorem ebFold_range_eq [CurrentPreset] (s : BeaconState) :
     ∀ (vs done : List Validator),
-      (List.range' done.length vs.length).foldlM ebUpdateAt
+      (List.range' done.length vs.length).foldlM updateEffectiveBalanceAt
           { s with validators := done ++ vs } =
         ((vs.zipIdx done.length).mapM (effectiveBalanceStep P s.balances)).map
           fun ys => { s with validators := done ++ ys }
@@ -475,10 +495,10 @@ theorem ebFold_range_eq [CurrentPreset] (s : BeaconState) :
         some v := by simp
     cases hb : s.balances[done.length]? with
     | none =>
-      rw [ebUpdateAt_of_none_b hv hb, effectiveBalanceStep_none v hb]
+      rw [updateEffectiveBalanceAt_of_none_b hv hb, effectiveBalanceStep_none v hb]
       rfl
     | some b =>
-      rw [ebUpdateAt_some hv hb, effectiveBalanceStep_some v hb]
+      rw [updateEffectiveBalanceAt_some hv hb, effectiveBalanceStep_some v hb]
       cases ebNew v b with
       | error err => rfl
       | ok e =>
@@ -486,7 +506,7 @@ theorem ebFold_range_eq [CurrentPreset] (s : BeaconState) :
             { s with validators := (done ++ [{ v with effective_balance := e }]) ++ vs } := by
           rw [setEB_some e hv]
           simp
-        show ((List.range' (done.length + 1) vs.length).foldlM ebUpdateAt
+        show ((List.range' (done.length + 1) vs.length).foldlM updateEffectiveBalanceAt
           (setEB { s with validators := done ++ v :: vs } done.length e)) = _
         rw [hset]
         have ih := ebFold_range_eq s vs (done ++ [{ v with effective_balance := e }])
@@ -499,7 +519,7 @@ theorem ebFold_range_eq [CurrentPreset] (s : BeaconState) :
 /-- The update of all validators equals one update per index, in index order. -/
 theorem process_effective_balance_updates_fold [CurrentPreset] (s : BeaconState) :
     SameResultOrBothFail (process_effective_balance_updates P s)
-      ((List.range s.validators.length).foldlM ebUpdateAt s) := by
+      ((List.range s.validators.length).foldlM updateEffectiveBalanceAt s) := by
   apply SameResultOrBothFail.of_eq
   have h := ebFold_range_eq s s.validators []
   simp only [List.length_nil, List.nil_append] at h

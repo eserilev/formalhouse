@@ -24,16 +24,17 @@ set_option linter.unusedSimpArgs false in
 /-- With four justification bits, the Lighthouse model of
 `weigh_justification_and_finalization` has the same `ok` results as the spec. Lighthouse runs
 the arithmetic before it reads the block roots, so the two can fail at different steps. -/
-theorem lhWeigh_sameResultOrBothFail (p : Preset) (s : BeaconState) (tab x y : Gwei)
+theorem lighthouseWeigh_sameResultOrBothFail (p : Preset) (s : BeaconState) (tab x y : Gwei)
     (hlen : s.justification_bits.length = JUSTIFICATION_BITS_LENGTH) :
-    SameResultOrBothFail (lhWeighJustificationAndFinalization p s tab x y)
+    SameResultOrBothFail (lighthouseWeighJustificationAndFinalization p s tab x y)
       (weigh_justification_and_finalization p s tab x y) := by
   obtain ⟨a, b, c, d, hbits⟩ : ∃ a b c d, s.justification_bits = [a, b, c, d] := by
     match h : s.justification_bits, hlen with
     | [a, b, c, d], _ => exact ⟨a, b, c, d, rfl⟩
   intro v
-  simp only [lhWeighJustificationAndFinalization, weigh_justification_and_finalization,
-    lhWeighJustification, lhFinalizeStep, hbits, listGet, JUSTIFICATION_BITS_LENGTH, listSet,
+  simp only [lighthouseWeighJustificationAndFinalization, weigh_justification_and_finalization,
+    lighthouseWeighJustification, lighthouseFinalizeStep, hbits, listGet, JUSTIFICATION_BITS_LENGTH,
+      listSet,
     get_block_root_eq_rootAt]
   cases get_previous_epoch p s <;> cases get_current_epoch p s <;>
     cases uint64Mul tab 2 <;> cases uint64Mul x 3 <;> cases uint64Mul y 3 <;>
@@ -58,9 +59,10 @@ theorem lhWeigh_sameResultOrBothFail (p : Preset) (s : BeaconState) (tab x y : G
 
 /-- The Lighthouse model of `process_justification_and_finalization` has the same `ok` results
 as the spec. -/
-theorem lhJustificationAndFinalization_sameResultOrBothFail (p : Preset) (s : BeaconState) :
-    SameResultOrBothFail (lhJustificationAndFinalization p s) (process_justification_and_finalization p s) := by
-  unfold lhJustificationAndFinalization
+theorem lighthouseJustificationAndFinalization_sameResultOrBothFail (p : Preset) (s : BeaconState) :
+    SameResultOrBothFail (lighthouseJustificationAndFinalization p s)
+      (process_justification_and_finalization p s) := by
+  unfold lighthouseJustificationAndFinalization
   split
   · exact SameResultOrBothFail.refl _
   rename_i hlen
@@ -76,6 +78,6 @@ theorem lhJustificationAndFinalization_sameResultOrBothFail (p : Preset) (s : Be
   refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
   refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
   refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun _ _ => ?_)
-  exact lhWeigh_sameResultOrBothFail p s _ _ _ hlen
+  exact lighthouseWeigh_sameResultOrBothFail p s _ _ _ hlen
 
 end EpochProofs.Spec

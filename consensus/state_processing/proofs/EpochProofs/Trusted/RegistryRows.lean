@@ -27,7 +27,7 @@ open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 open state_processing.per_epoch_processing.single_pass_step (ValidatorRow ExitChurn StepContext RowInputs)
 
 /-- The Rust trait `RegistryRows`. -/
-abbrev LhRegistryRows (R E : Type) := per_epoch_processing.registry_rows.RegistryRows R E
+abbrev LighthouseRegistryRows (R E : Type) := per_epoch_processing.registry_rows.RegistryRows R E
 
 /-- Row `r` after `single_pass_step` wrote the Lighthouse row `lr'`. -/
 def rowAfter (r : Spec.Row) (lr' : ValidatorRow) : Spec.Row :=
@@ -44,7 +44,7 @@ def rowAfter (r : Spec.Row) (lr' : ValidatorRow) : Spec.Row :=
 /-- The row inputs that `single_pass.rs` reads hold the spec inputs. The base reward is the
 spec base reward, or the validator is not eligible. -/
 structure RowInputsMatchSpec (p : Spec.Preset) (previous_epoch : Spec.Epoch) (i : RowInputs)
-    (inputs : Spec.LhRowInputs) (r : Spec.Row) : Prop where
+    (inputs : Spec.LighthouseRowInputs) (r : Spec.Row) : Prop where
   base_reward : i.base_reward.val = inputs.base_reward
     ∨ Spec.validatorEligible previous_epoch r.validator ≠ .ok true
   deposit : i.deposit.val = inputs.deposit
@@ -60,9 +60,9 @@ def rowsResult {E : Type} :
 
 /-- Trusted: what the `RegistryRows` implementation in `single_pass.rs` does. `toSpec` gives the
 spec rows that an implementation value holds, and `inputsOf` gives the spec inputs of a row. -/
-structure ValidatorRowsMatchSpec {R E : Type} (implementation : LhRegistryRows R E)
+structure ValidatorRowsMatchSpec {R E : Type} (implementation : LighthouseRegistryRows R E)
     (p : Spec.Preset)
-    (toSpec : R → List Spec.Row) (inputsOf : Spec.Row → Spec.LhRowInputs) : Prop where
+    (toSpec : R → List Spec.Row) (inputsOf : Spec.Row → Spec.LighthouseRowInputs) : Prop where
   /-- One row for each validator. -/
   row_count : ∀ s, ∃ n : Usize, implementation.row_count s = ok n ∧ n.val = (toSpec s).length
   /-- Row `i` gets the result of `single_pass_step`. No other row changes. -/

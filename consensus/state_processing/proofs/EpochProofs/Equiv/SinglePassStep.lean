@@ -6,7 +6,8 @@ import EpochProofs.Sanity.LighthouseRow
 # Lighthouse single-pass step equals the row step
 
 `single_pass_step_equiv` relates `single_pass_step` in `single_pass_step.rs` to
-`Spec.lhRowStepFull`. Each of the six steps has its own lemma. The main theorem chains them.
+`Spec.lighthouseValidatorStep`. Each of the six steps has its own lemma. The main theorem chains
+them.
 -/
 
 namespace EpochProofs
@@ -30,7 +31,7 @@ structure RowMatches (lr : ValidatorRow) (r : Spec.Row) : Prop where
 
 /-- The Lighthouse context holds the spec context values and the preset constants. All step
 switches are on, as in production. -/
-structure ContextMatches (p : Spec.Preset) (c : StepContext) (ctx : Spec.LhStepContext) :
+structure ContextMatches (p : Spec.Preset) (c : StepContext) (ctx : Spec.LighthouseStepContext) :
     Prop where
   current_epoch : c.current_epoch.val = ctx.current_epoch
   previous_epoch : c.previous_epoch.val = ctx.previous_epoch
@@ -57,7 +58,7 @@ structure ContextMatches (p : Spec.Preset) (c : StepContext) (ctx : Spec.LhStepC
 
 /-- The row inputs hold the spec inputs. `effective_balance_limit` is
 `get_max_effective_balance` of the validator, which `single_pass.rs` computes. -/
-structure InputsMatches (p : Spec.Preset) (i : RowInputs) (inputs : Spec.LhRowInputs)
+structure InputsMatches (p : Spec.Preset) (i : RowInputs) (inputs : Spec.LighthouseRowInputs)
     (r : Spec.Row) : Prop where
   base_reward : i.base_reward.val = inputs.base_reward
   deposit : i.deposit.val = inputs.deposit
@@ -158,9 +159,10 @@ theorem rowHitsTarget_eq (previous_epoch : Spec.Epoch) (r : Spec.Row) :
     Spec.rowHitsTarget previous_epoch r =
       Spec.rewardsParticipating previous_epoch r Spec.TIMELY_TARGET_FLAG_INDEX := rfl
 
-/-- `inactivity_step` gives the inactivity score of `lhRowStep` and changes no other field. -/
+/-- `inactivity_step` gives the inactivity score of `lighthouseRowStep` and changes no other field.
+-/
 theorem inactivity_step_equiv (p : Spec.Preset) (lr : ValidatorRow) (r : Spec.Row)
-    (hm : RowMatches lr r) (eligible : Bool) (c : StepContext) (ctx : Spec.LhStepContext)
+    (hm : RowMatches lr r) (eligible : Bool) (c : StepContext) (ctx : Spec.LighthouseStepContext)
     (hc : ContextMatches p c ctx) :
     per_epoch_processing.single_pass_step.inactivity_step lr eligible c ⦃ res =>
       resultToSpec (·.inactivity_score.val) res =
@@ -191,10 +193,10 @@ theorem inactivity_step_equiv (p : Spec.Preset) (lr : ValidatorRow) (r : Spec.Ro
     simp only [rowHitsTarget_eq, Spec.TIMELY_TARGET_FLAG_INDEX, Pure.pure, Except.pure, ← h]
     simp [resultToSpec]
 
-/-- `rewards_step` gives the balance of `lhRowStep` and changes no other field. -/
+/-- `rewards_step` gives the balance of `lighthouseRowStep` and changes no other field. -/
 theorem rewards_step_equiv (p : Spec.Preset) (lr : ValidatorRow) (r : Spec.Row)
     (hm : RowMatches lr r) (eligible : Bool) (base_reward : U64) (c : StepContext)
-    (ctx : Spec.LhStepContext) (hc : ContextMatches p c ctx) :
+    (ctx : Spec.LighthouseStepContext) (hc : ContextMatches p c ctx) :
     per_epoch_processing.single_pass_step.rewards_step lr eligible base_reward c ⦃ res =>
       resultToSpec (·.balance.val) res =
         (if ctx.after_genesis && eligible then do
@@ -238,7 +240,7 @@ theorem rewards_step_equiv (p : Spec.Preset) (lr : ValidatorRow) (r : Spec.Row)
     simp [resultToSpec]
 
 /-- The registry fields that `registry_step` builds from a row and the churn. -/
-def lhRegistryFieldsOf (lr : ValidatorRow) (churn : ExitChurn) : LhRegistryFields :=
+def lighthouseRegistryFieldsOf (lr : ValidatorRow) (churn : ExitChurn) : LighthouseRegistryFields :=
   { activation_eligibility_epoch := lr.activation_eligibility_epoch
     activation_epoch := lr.activation_epoch
     exit_epoch := lr.exit_epoch
@@ -247,22 +249,22 @@ def lhRegistryFieldsOf (lr : ValidatorRow) (churn : ExitChurn) : LhRegistryField
     exit_balance_to_consume := churn.exit_balance_to_consume }
 
 /-- The built registry fields are `registryFieldsOf` of the spec validator. -/
-theorem registryFieldsToSpec_lhRegistryFieldsOf (lr : ValidatorRow) (r : Spec.Row)
+theorem registryFieldsToSpec_lighthouseRegistryFieldsOf (lr : ValidatorRow) (r : Spec.Row)
     (hm : RowMatches lr r) (churn : ExitChurn) :
-    registryFieldsToSpec (lhRegistryFieldsOf lr churn) = Spec.registryFieldsOf r.validator
+    registryFieldsToSpec (lighthouseRegistryFieldsOf lr churn) = Spec.registryFieldsOf r.validator
       (churn.earliest_exit_epoch.val, churn.exit_balance_to_consume.val) := by
-  simp [registryFieldsToSpec, lhRegistryFieldsOf, Spec.registryFieldsOf,
+  simp [registryFieldsToSpec, lighthouseRegistryFieldsOf, Spec.registryFieldsOf,
     hm.activation_eligibility_epoch,
     hm.activation_epoch, hm.exit_epoch, hm.withdrawable_epoch]
 
-/-- `registry_step` gives the registry fields of `lhRowStep` and changes only the four
+/-- `registry_step` gives the registry fields of `lighthouseRowStep` and changes only the four
 validator epochs of the row. -/
 theorem registry_step_equiv_churn (p : Spec.Preset) (lr : ValidatorRow) (r : Spec.Row)
-    (hm : RowMatches lr r) (churn : ExitChurn) (c : StepContext) (ctx : Spec.LhStepContext)
-    (hc : ContextMatches p c ctx) (consts : LhRegistryConstants)
+    (hm : RowMatches lr r) (churn : ExitChurn) (c : StepContext) (ctx : Spec.LighthouseStepContext)
+    (hc : ContextMatches p c ctx) (consts : LighthouseRegistryConstants)
     (hconsts : RegistryConstantsMatch p consts) (T : Nat → Nat) (hch : ChurnSpec p consts T) :
     per_epoch_processing.single_pass_step.registry_step lr churn c consts ⦃ res =>
-      resultToSpec (fun x => registryFieldsToSpec (lhRegistryFieldsOf x.1 x.2)) res =
+      resultToSpec (fun x => registryFieldsToSpec (lighthouseRegistryFieldsOf x.1 x.2)) res =
         Spec.registryStepIndependent p (T ctx.total_active_balance) ctx.current_epoch
           ctx.finalized_epoch r.validator.effective_balance
           (Spec.registryFieldsOf r.validator
@@ -276,12 +278,14 @@ theorem registry_step_equiv_churn (p : Spec.Preset) (lr : ValidatorRow) (r : Spe
   unfold per_epoch_processing.single_pass_step.registry_step
   simp only [hc.registry_updates, if_true]
   apply exists_imp_spec
-  obtain ⟨res, hres, h⟩ := spec_imp_exists (registry_update_equiv_churn p (lhRegistryFieldsOf lr churn)
+  obtain ⟨res, hres, h⟩ := spec_imp_exists
+    (registry_update_equiv_churn p (lighthouseRegistryFieldsOf lr churn)
     lr.effective_balance c.current_epoch c.finalized_epoch c.total_active_balance consts hconsts
     T hch)
-  simp only [lhRegistryFieldsOf] at hres
+  simp only [lighthouseRegistryFieldsOf] at hres
   rw [hres]
-  rw [registryFieldsToSpec_lhRegistryFieldsOf lr r hm, hm.effective_balance, hc.current_epoch,
+  rw [registryFieldsToSpec_lighthouseRegistryFieldsOf lr r hm, hm.effective_balance,
+    hc.current_epoch,
     hc.finalized_epoch, hc.total_active_balance] at h
   rw [← h]
   cases res with
@@ -290,14 +294,14 @@ theorem registry_step_equiv_churn (p : Spec.Preset) (lr : ValidatorRow) (r : Spe
     simp [core.convert.FromSame.from, resultToSpec]
   | Ok v =>
     refine ⟨_, by ok_rfl, ?_⟩
-    simp [resultToSpec, registryFieldsToSpec, lhRegistryFieldsOf]
+    simp [resultToSpec, registryFieldsToSpec, lighthouseRegistryFieldsOf]
 
 theorem registry_step_equiv (p : Spec.Preset) (lr : ValidatorRow) (r : Spec.Row)
-    (hm : RowMatches lr r) (churn : ExitChurn) (c : StepContext) (ctx : Spec.LhStepContext)
-    (hc : ContextMatches p c ctx) (consts : LhRegistryConstants)
+    (hm : RowMatches lr r) (churn : ExitChurn) (c : StepContext) (ctx : Spec.LighthouseStepContext)
+    (hc : ContextMatches p c ctx) (consts : LighthouseRegistryConstants)
     (hconsts : RegistryConstantsMatchGloas p consts) :
     per_epoch_processing.single_pass_step.registry_step lr churn c consts ⦃ res =>
-      resultToSpec (fun x => registryFieldsToSpec (lhRegistryFieldsOf x.1 x.2)) res =
+      resultToSpec (fun x => registryFieldsToSpec (lighthouseRegistryFieldsOf x.1 x.2)) res =
         Spec.registryStepIndependent p ctx.total_active_balance ctx.current_epoch
           ctx.finalized_epoch r.validator.effective_balance
           (Spec.registryFieldsOf r.validator
@@ -313,7 +317,7 @@ theorem registry_step_equiv (p : Spec.Preset) (lr : ValidatorRow) (r : Spec.Row)
 
 /-- `slashings_step` gives the balance of `slashingBalanceStep` and changes no other field. -/
 theorem slashings_step_equiv (p : Spec.Preset) (lr : ValidatorRow) (r : Spec.Row)
-    (hm : RowMatches lr r) (c : StepContext) (ctx : Spec.LhStepContext)
+    (hm : RowMatches lr r) (c : StepContext) (ctx : Spec.LighthouseStepContext)
     (hc : ContextMatches p c ctx) :
     per_epoch_processing.single_pass_step.slashings_step lr c ⦃ res =>
       resultToSpec (·.balance.val) res =
@@ -339,11 +343,12 @@ theorem slashings_step_equiv (p : Spec.Preset) (lr : ValidatorRow) (r : Spec.Row
     refine ⟨_, by ok_rfl, ?_⟩
     simp [resultToSpec]
 
-/-- `lhRowStep` as a plain chain of binds, once the eligibility is known. -/
-theorem lhRowStep_eq (p : Spec.Preset) (ctx : Spec.LhStepContext) (base_reward : Spec.Gwei)
+/-- `lighthouseRowStep` as a plain chain of binds, once the eligibility is known. -/
+theorem lighthouseRowStep_eq (p : Spec.Preset) (ctx : Spec.LighthouseStepContext)
+    (base_reward : Spec.Gwei)
     (churn : Spec.Epoch × Spec.Gwei) (r : Spec.Row) (eligible : Bool)
     (h : Spec.validatorEligible ctx.previous_epoch r.validator = .ok eligible) :
-    Spec.lhRowStep p ctx base_reward churn r =
+    Spec.lighthouseRowStep p ctx base_reward churn r =
       ((if ctx.after_genesis && eligible then
           Spec.inactivityScoreStep p (Spec.rowHitsTarget ctx.previous_epoch r) ctx.in_leak
             r.inactivity_score
@@ -369,11 +374,11 @@ theorem lhRowStep_eq (p : Spec.Preset) (ctx : Spec.LhStepContext) (base_reward :
           inactivity_score := s
           balance := balance'
           validator := r.validator.withRegistryFields f })) := by
-  cases eligible <;> cases hg : ctx.after_genesis <;> simp [Spec.lhRowStep, h, hg, except_ok_bind]
+  cases eligible <;> cases hg : ctx.after_genesis <;> simp [Spec.lighthouseRowStep, h, hg, except_ok_bind]
 
 /-- `deposit_step` adds the deposit to the balance and changes no other field. -/
 theorem deposit_step_equiv (p : Spec.Preset) (lr : ValidatorRow) (deposit : U64)
-    (c : StepContext) (ctx : Spec.LhStepContext) (hc : ContextMatches p c ctx) :
+    (c : StepContext) (ctx : Spec.LighthouseStepContext) (hc : ContextMatches p c ctx) :
     per_epoch_processing.single_pass_step.deposit_step lr deposit c ⦃ res =>
       resultToSpec (·.balance.val) res = Spec.uint64Add lr.balance.val deposit.val
       ∧ ∀ lr', res = .Ok lr' → lr' = { lr with balance := lr'.balance } ⦄ := by
@@ -402,11 +407,11 @@ theorem get_max_effective_balance_withRegistryFields (p : Spec.Preset) (v : Spec
     Spec.get_max_effective_balance p (v.withRegistryFields f) =
       Spec.get_max_effective_balance p v := rfl
 
-/-- `effective_balance_step` gives the effective balance of `lhRowStepFull` and changes no
+/-- `effective_balance_step` gives the effective balance of `lighthouseValidatorStep` and changes no
 other field. -/
 theorem effective_balance_step_equiv (p : Spec.Preset) (lr : ValidatorRow) (r : Spec.Row)
-    (hm : RowMatches lr r) (i : RowInputs) (inputs : Spec.LhRowInputs)
-    (hi : InputsMatches p i inputs r) (c : StepContext) (ctx : Spec.LhStepContext)
+    (hm : RowMatches lr r) (i : RowInputs) (inputs : Spec.LighthouseRowInputs)
+    (hi : InputsMatches p i inputs r) (c : StepContext) (ctx : Spec.LighthouseStepContext)
     (hc : ContextMatches p c ctx) (downward upward : Spec.Uint64)
     (hdownward : c.downward_threshold.val = downward) (hupward : c.upward_threshold.val = upward) :
     per_epoch_processing.single_pass_step.effective_balance_step lr i c ⦃ res =>
@@ -435,12 +440,12 @@ theorem effective_balance_step_equiv (p : Spec.Preset) (lr : ValidatorRow) (r : 
     refine ⟨_, by ok_rfl, ?_⟩
     simp [resultToSpec]
 
-/-- `lhRowStepFull` as a plain chain of binds, once the eligibility is known. -/
-theorem lhRowStepFull_eq (p : Spec.Preset) (ctx : Spec.LhStepContext)
-    (downward upward : Spec.Uint64) (inputs : Spec.LhRowInputs)
+/-- `lighthouseValidatorStep` as a plain chain of binds, once the eligibility is known. -/
+theorem lighthouseValidatorStep_eq (p : Spec.Preset) (ctx : Spec.LighthouseStepContext)
+    (downward upward : Spec.Uint64) (inputs : Spec.LighthouseRowInputs)
     (churn : Spec.Epoch × Spec.Gwei) (r : Spec.Row) (eligible : Bool)
     (h : Spec.validatorEligible ctx.previous_epoch r.validator = .ok eligible) :
-    Spec.lhRowStepFull p ctx downward upward inputs churn r =
+    Spec.lighthouseValidatorStep p ctx downward upward inputs churn r =
       ((if ctx.after_genesis && eligible then
           Spec.inactivityScoreStep p (Spec.rowHitsTarget ctx.previous_epoch r) ctx.in_leak
             r.inactivity_score
@@ -470,16 +475,18 @@ theorem lhRowStepFull_eq (p : Spec.Preset) (ctx : Spec.LhStepContext)
           inactivity_score := s
           balance := balance''
           validator := { r.validator.withRegistryFields f with effective_balance } })) := by
-  rw [Spec.lhRowStepFull, lhRowStep_eq p ctx _ _ r eligible h]
+  rw [Spec.lighthouseValidatorStep, lighthouseRowStep_eq p ctx _ _ r eligible h]
   cases eligible <;> cases ctx.after_genesis <;> cases inputs.in_consolidation <;>
     simp [Spec.Validator.withRegistryFields]
 
-/-- `lhRowStepFull_eq` with the registry total replaced by `tab`. -/
-theorem lhRowStepFull_eq_tab (p : Spec.Preset) (ctx : Spec.LhStepContext) (tab : Nat)
-    (downward upward : Spec.Uint64) (inputs : Spec.LhRowInputs)
+/-- `lighthouseValidatorStep_eq` with the registry total replaced by `tab`. -/
+theorem lighthouseValidatorStep_eq_tab (p : Spec.Preset) (ctx : Spec.LighthouseStepContext)
+    (tab : Nat)
+    (downward upward : Spec.Uint64) (inputs : Spec.LighthouseRowInputs)
     (churn : Spec.Epoch × Spec.Gwei) (r : Spec.Row) (eligible : Bool)
     (h : Spec.validatorEligible ctx.previous_epoch r.validator = .ok eligible) :
-    Spec.lhRowStepFull p { ctx with total_active_balance := tab } downward upward inputs churn r =
+    Spec.lighthouseValidatorStep p { ctx with total_active_balance := tab } downward upward inputs
+      churn r =
       ((if ctx.after_genesis && eligible then
           Spec.inactivityScoreStep p (Spec.rowHitsTarget ctx.previous_epoch r) ctx.in_leak
             r.inactivity_score
@@ -509,19 +516,21 @@ theorem lhRowStepFull_eq_tab (p : Spec.Preset) (ctx : Spec.LhStepContext) (tab :
           inactivity_score := s
           balance := balance''
           validator := { r.validator.withRegistryFields f with effective_balance } })) :=
-  lhRowStepFull_eq p { ctx with total_active_balance := tab } downward upward inputs churn r eligible h
+  lighthouseValidatorStep_eq p { ctx with total_active_balance := tab } downward upward inputs churn
+    r eligible h
 
-/-- Lighthouse's `single_pass_step` equals `lhRowStepFull` for one validator, for any registry
-constants whose exit churn is the Gloas churn of `T total_active_balance`. -/
+/-- Lighthouse's `single_pass_step` equals `lighthouseValidatorStep` for one validator, for any
+registry constants whose exit churn is the Gloas churn of `T total_active_balance`. -/
 theorem single_pass_step_equiv_churn (p : Spec.Preset) (lr : ValidatorRow) (r : Spec.Row)
-    (hm : RowMatches lr r) (i : RowInputs) (inputs : Spec.LhRowInputs)
+    (hm : RowMatches lr r) (i : RowInputs) (inputs : Spec.LighthouseRowInputs)
     (hi : InputsMatches p i inputs r) (churn : ExitChurn) (c : StepContext)
-    (ctx : Spec.LhStepContext) (hc : ContextMatches p c ctx) (downward upward : Spec.Uint64)
+    (ctx : Spec.LighthouseStepContext) (hc : ContextMatches p c ctx) (downward upward : Spec.Uint64)
     (hdownward : c.downward_threshold.val = downward) (hupward : c.upward_threshold.val = upward)
-    (consts : LhRegistryConstants) (hconsts : RegistryConstantsMatch p consts) (T : Nat → Nat)
+    (consts : LighthouseRegistryConstants) (hconsts : RegistryConstantsMatch p consts)
+    (T : Nat → Nat)
     (hch : ChurnSpec p consts T) :
     per_epoch_processing.single_pass_step.single_pass_step lr i churn c consts ⦃ res =>
-      stepResultToSpec r res = Spec.lhRowStepFull p
+      stepResultToSpec r res = Spec.lighthouseValidatorStep p
         { ctx with total_active_balance := T ctx.total_active_balance } downward upward inputs
         (churn.earliest_exit_epoch.val, churn.exit_balance_to_consume.val) r ⦄ := by
   unfold per_epoch_processing.single_pass_step.single_pass_step
@@ -532,11 +541,11 @@ theorem single_pass_step_equiv_churn (p : Spec.Preset) (lr : ValidatorRow) (r : 
   cases e0 with
   | Err e =>
     refine ⟨_, by ok_rfl, ?_⟩
-    simp only [Spec.lhRowStepFull, Spec.lhRowStep, ← h0]
+    simp only [Spec.lighthouseValidatorStep, Spec.lighthouseRowStep, ← h0]
     simp [core.convert.FromSame.from, resultToSpec, stepResultToSpec, except_error_bind]
   | Ok b =>
   simp only [resultToSpec, id] at h0
-  rw [lhRowStepFull_eq_tab p ctx _ _ _ _ _ r b h0.symm]
+  rw [lighthouseValidatorStep_eq_tab p ctx _ _ _ _ _ r b h0.symm]
   simp only [core.result.Result.Insts.CoreOpsTry.branch, bind_tc_ok]
   obtain ⟨e1, he1, h1, hf1⟩ := spec_imp_exists (inactivity_step_equiv p lr r hm b c ctx hc)
   rw [he1]
@@ -586,7 +595,7 @@ theorem single_pass_step_equiv_churn (p : Spec.Preset) (lr : ValidatorRow) (r : 
     ⟨_, _, _, _, hf3 lr3 ch3 rfl⟩
   rw [← h3]
   simp only [bind_tc_ok, except_ok_bind]
-  generalize hf : registryFieldsToSpec (lhRegistryFieldsOf _ ch3) = f
+  generalize hf : registryFieldsToSpec (lighthouseRegistryFieldsOf _ ch3) = f
   have hm3 : RowMatches
       { lr with
         inactivity_score := s1, balance := s2, activation_eligibility_epoch := a3,
@@ -656,19 +665,19 @@ theorem single_pass_step_equiv_churn (p : Spec.Preset) (lr : ValidatorRow) (r : 
     ⟨_, hf6 lr6 rfl⟩
   rw [← h6]
   subst hf
-  simp [stepResultToSpec, registryFieldsToSpec, lhRegistryFieldsOf,
+  simp [stepResultToSpec, registryFieldsToSpec, lighthouseRegistryFieldsOf,
     Spec.Validator.withRegistryFields]
 
-/-- Lighthouse's `single_pass_step` equals `lhRowStepFull` for one validator, with the Gloas
-constants. -/
+/-- Lighthouse's `single_pass_step` equals `lighthouseValidatorStep` for one validator, with the
+Gloas constants. -/
 theorem single_pass_step_equiv (p : Spec.Preset) (lr : ValidatorRow) (r : Spec.Row)
-    (hm : RowMatches lr r) (i : RowInputs) (inputs : Spec.LhRowInputs)
+    (hm : RowMatches lr r) (i : RowInputs) (inputs : Spec.LighthouseRowInputs)
     (hi : InputsMatches p i inputs r) (churn : ExitChurn) (c : StepContext)
-    (ctx : Spec.LhStepContext) (hc : ContextMatches p c ctx) (downward upward : Spec.Uint64)
+    (ctx : Spec.LighthouseStepContext) (hc : ContextMatches p c ctx) (downward upward : Spec.Uint64)
     (hdownward : c.downward_threshold.val = downward) (hupward : c.upward_threshold.val = upward)
-    (consts : LhRegistryConstants) (hconsts : RegistryConstantsMatchGloas p consts) :
+    (consts : LighthouseRegistryConstants) (hconsts : RegistryConstantsMatchGloas p consts) :
     per_epoch_processing.single_pass_step.single_pass_step lr i churn c consts ⦃ res =>
-      stepResultToSpec r res = Spec.lhRowStepFull p ctx downward upward inputs
+      stepResultToSpec r res = Spec.lighthouseValidatorStep p ctx downward upward inputs
         (churn.earliest_exit_epoch.val, churn.exit_balance_to_consume.val) r ⦄ :=
   single_pass_step_equiv_churn p lr r hm i inputs hi churn c ctx hc downward upward hdownward
     hupward consts hconsts.toRegistryConstantsMatch id hconsts.churnSpec

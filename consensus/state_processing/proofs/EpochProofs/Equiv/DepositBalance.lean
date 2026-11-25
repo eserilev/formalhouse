@@ -18,16 +18,17 @@ open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 /-- The translated maximum effective balance is the model value. -/
 theorem max_effective_balance_electra_equiv (is_compounding : Bool) (a b : U64) :
     types.validator.deposit_balance.max_effective_balance_electra is_compounding a b ⦃ r =>
-      r.val = Spec.lhMaxEffectiveBalanceElectra is_compounding a.val b.val ⦄ := by
+      r.val = Spec.lighthouseMaxEffectiveBalanceElectra is_compounding a.val b.val ⦄ := by
   unfold types.validator.deposit_balance.max_effective_balance_electra
-    Spec.lhMaxEffectiveBalanceElectra
+    Spec.lighthouseMaxEffectiveBalanceElectra
   by_cases hc : is_compounding <;> simp [hc]
 
 /-- The translated effective balance of a deposit is the model value. -/
 theorem deposit_effective_balance_equiv (amount increment m : U64) :
     types.validator.deposit_balance.deposit_effective_balance amount increment m ⦃ r =>
-      r.val = Spec.lhDepositEffectiveBalance amount.val increment.val m.val ⦄ := by
-  unfold types.validator.deposit_balance.deposit_effective_balance Spec.lhDepositEffectiveBalance
+      r.val = Spec.lighthouseDepositEffectiveBalance amount.val increment.val m.val ⦄ := by
+  unfold types.validator.deposit_balance.deposit_effective_balance
+    Spec.lighthouseDepositEffectiveBalance
   obtain ⟨r, hr, h⟩ := spec_imp_exists (safe_rem_spec amount increment)
   rw [hr]
   simp only [bind_tc_ok]
@@ -58,13 +59,13 @@ theorem deposit_effective_balance_equiv (amount increment m : U64) :
       simp [this]
 
 /-- The proof root `new_validator_effective_balance` is the effective balance of
-`lhValidatorFromDeposit`. -/
+`lighthouseValidatorFromDeposit`. -/
 theorem new_validator_effective_balance_equiv (amount : U64) (is_compounding : Bool)
     (increment a b : U64) :
     per_epoch_processing.pending_deposits.new_validator_effective_balance amount is_compounding
       increment a b ⦃ r =>
-        r.val = Spec.lhDepositEffectiveBalance amount.val increment.val
-          (Spec.lhMaxEffectiveBalanceElectra is_compounding a.val b.val) ⦄ := by
+        r.val = Spec.lighthouseDepositEffectiveBalance amount.val increment.val
+          (Spec.lighthouseMaxEffectiveBalanceElectra is_compounding a.val b.val) ⦄ := by
   unfold per_epoch_processing.pending_deposits.new_validator_effective_balance
   apply spec_bind (max_effective_balance_electra_equiv is_compounding a b)
   intro m hm

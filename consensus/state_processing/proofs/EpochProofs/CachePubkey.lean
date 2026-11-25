@@ -7,11 +7,11 @@ import EpochProofs.Sanity.Invariants.PubkeysUnique
 The pending deposits model reads a deposit's validator as the spec does:
 `s.validators[(s.validators.map (·.pubkey)).idxOf d.pubkey]?`, and `d.pubkey ∈ pubkeys`
 before a top-up. Lighthouse reads `state.pubkey_cache().get(&deposit.pubkey)`.
-`pubkey_cache_deposit_lookup` shows that the two agree on a correct cache when the pubkeys
+`pubkey_cache_lookup_correct` shows that the two agree on a correct cache when the pubkeys
 are unique (`PubkeysUnique`, a reachable-state invariant).
 
-Trusted: `rpds::HashTrieMap` obeys `IndexMapLaws`, and the cache at the start of the epoch
-holds the first `len` validator pubkeys (`update_coherent` then gives all of them).
+Trusted: `rpds::HashTrieMap` obeys `BehavesAsFiniteMap`, and the cache at the start of the epoch
+holds the first `len` validator pubkeys (`update_correct` then gives all of them).
 -/
 
 namespace EpochProofs.Spec
@@ -24,18 +24,18 @@ theorem idxOf_pubkey_eq (l : List BLSPubkey) (k : BLSPubkey) :
   congr
   exact lawful_beq_subsingleton _ _
 
-theorem pubkey_cache_deposit_lookup {M : Type}
+theorem pubkey_cache_lookup_correct {M : Type}
     {inst : types.state.pubkey_index.IndexMap M BLSPubkey}
-    {view : M → BLSPubkey → Option Usize} (laws : IndexMapLaws inst view) {m : M}
+    {lookup : M → BLSPubkey → Option Usize} (laws : BehavesAsFiniteMap inst lookup) {m : M}
     {len : Usize} (s : BeaconState)
-    (hc : Coherent view m len (s.validators.map (·.pubkey))) (hu : PubkeysUnique s)
+    (hc : PubkeyCacheCorrect lookup m len (s.validators.map (·.pubkey))) (hu : PubkeysUnique s)
     (pk : BLSPubkey) :
     ∃ r, inst.get_index m pk = ok r ∧
       (r.map (·.val)).bind (fun i => s.validators[i]?) =
         s.validators[(s.validators.map (·.pubkey)).idxOf pk]? ∧
       (r.isSome ↔ pk ∈ s.validators.map (·.pubkey)) ∧
       ∀ i, r.map (·.val) = some i → i = (s.validators.map (·.pubkey)).idxOf pk := by
-  obtain ⟨r, hget, hr⟩ := get_coherent_of_nodup laws hc hu pk
+  obtain ⟨r, hget, hr⟩ := get_correct_of_nodup laws hc hu pk
   rw [idxOf_pubkey_eq] at hr
   refine ⟨r, hget, ?_, ?_, ?_⟩
   · by_cases hm : pk ∈ s.validators.map (·.pubkey)

@@ -9,9 +9,10 @@ import EpochProofs.Equiv.Slashings
 `single_pass.rs` reads raw values from the state, the caches and the spec into a
 `ContextInputs`, and `step_context` in `single_pass_step.rs` computes the `StepContext` from
 them. `step_context_spec` shows that when the raw values are the spec's raw values
-(`ContextInputsMatch`), the result holds the spec context `lhContextOf` and the spec hysteresis
-thresholds (`ContextMatches`). `single_pass_rows_model_inputs` puts this together with the loop:
-the context of `single_pass_rows_model` is no longer an assumption, only the raw reads are.
+(`ContextInputsMatch`), the result holds the spec context `lighthouseContextOf` and the spec
+hysteresis thresholds (`ContextMatches`). `single_pass_rows_model_inputs` puts this together with
+the loop: the context of `single_pass_rows_model` is no longer an assumption, only the raw reads
+are.
 -/
 
 namespace EpochProofs
@@ -100,8 +101,8 @@ theorem rewardsContext_epochs (p : Spec.Preset) (s : Spec.BeaconState) (cur : Na
 
 /-- `step_context` returns the spec step context and the spec hysteresis thresholds when its
 inputs are the spec's raw values. The hypotheses `hr`, `hpre` and `hh` are the spec
-computations of the model (`lhFullTailG`), and `htarget` rules out the overflow of the slashings
-target epoch. -/
+computations of the model (`lighthouseFullTailG`), and `htarget` rules out the overflow of the
+slashings target epoch. -/
 theorem step_context_spec [Spec.CurrentPreset] (s : Spec.BeaconState) (cur : Nat)
     (hcur : Spec.get_current_epoch Spec.P s = .ok cur) (tab : Nat) (rctx : Spec.RewardsContext)
     (hr : Spec.rewardsContextOf Spec.P tab s = .ok rctx) (adjusted per : Nat)
@@ -110,7 +111,7 @@ theorem step_context_spec [Spec.CurrentPreset] (s : Spec.BeaconState) (cur : Nat
     (htarget : cur + Spec.P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < Spec.UINT64_SIZE)
     (i : ContextInputs) (hi : ContextInputsMatch s cur tab i) :
     per_epoch_processing.single_pass_step.step_context i ⦃ r => ∃ c, r = .Ok c ∧
-      ContextMatches Spec.P c (Spec.lhContextOf s tab cur rctx per) ∧
+      ContextMatches Spec.P c (Spec.lighthouseContextOf s tab cur rctx per) ∧
       c.downward_threshold.val = downward ∧ c.upward_threshold.val = upward ⦄ := by
   obtain ⟨hprev, hsrc, htgt, hhead, hact, hleak, -⟩ := Spec.rewardsContextOf_ok _ _ _ _ hr
   obtain ⟨hpe, hfin, hlk⟩ := rewardsContext_epochs _ _ _ hcur _ _ hprev hleak
@@ -174,7 +175,7 @@ theorem step_context_spec [Spec.CurrentPreset] (s : Spec.BeaconState) (cur : Nat
   apply (spec_ok _).mpr
   refine ⟨_, rfl, ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
     ?_, ?_, ?_⟩, hq3.1, hq3.2⟩
-  all_goals try simp only [Spec.lhContextOf]
+  all_goals try simp only [Spec.lighthouseContextOf]
   · exact hi.current_epoch
   · rw [hprevR, hpe]
   · exact hi.finalized_epoch
@@ -205,7 +206,8 @@ theorem step_context_spec [Spec.CurrentPreset] (s : Spec.BeaconState) (cur : Nat
 
 /-- The loop of `single_pass_rows_model`, with the context computed by `step_context` from raw
 inputs. The context is no longer an assumption: only the raw reads (`ContextInputsMatch`) are. -/
-theorem single_pass_rows_model_inputs [Spec.CurrentPreset] {R E : Type} (inst : LhRegistryRows R E)
+theorem single_pass_rows_model_inputs [Spec.CurrentPreset] {R E : Type}
+    (inst : LighthouseRegistryRows R E)
     (s : Spec.BeaconState) (tab : Spec.Gwei) (topups : List Spec.Gwei)
     (named : List Spec.ValidatorIndex) (view : R → List Spec.Row) (rows : R)
     (hview : view rows = Spec.rowsOf s)
@@ -221,9 +223,10 @@ theorem single_pass_rows_model_inputs [Spec.CurrentPreset] {R E : Type} (inst : 
     (hch : exitChurnToSpec ch = (s.earliest_exit_epoch, s.exit_balance_to_consume)) :
     per_epoch_processing.single_pass_step.step_context i ⦃ r => ∃ c, r = .Ok c ∧
       per_epoch_processing.registry_rows.single_pass_rows inst rows ch c k ⦃ res =>
-        LoopResultMatchesModel view (Spec.passM (fun churn r => Spec.lhRowStepFull Spec.P
-            (Spec.lhContextOf s tab cur rctx per) downward upward
-            ⟨Spec.lhBaseReward tab r, topups.getD r.index 0, decide (r.index ∈ named)⟩ churn r)
+        LoopResultMatchesModel view (Spec.passM (fun churn r => Spec.lighthouseValidatorStep Spec.P
+            (Spec.lighthouseContextOf s tab cur rctx per) downward upward
+            ⟨Spec.lighthouseBaseReward tab r, topups.getD r.index 0, decide (r.index ∈ named)⟩ churn
+              r)
           (s.earliest_exit_epoch, s.exit_balance_to_consume) (Spec.rowsOf s)) res ⦄ ⦄ := by
   obtain ⟨r, hres, c, rfl, hcm, hd, hu⟩ := spec_imp_exists
     (step_context_spec s cur hcur tab rctx hr adjusted per hpre downward upward hh htarget i hi)

@@ -13,22 +13,24 @@ functions where the spec has `get_max_effective_balance` and the `min` of
 namespace EpochProofs.Spec
 
 /-- `max_effective_balance_electra` of `deposit_balance.rs`. -/
-def lhMaxEffectiveBalanceElectra (is_compounding : Bool)
+def lighthouseMaxEffectiveBalanceElectra (is_compounding : Bool)
     (max_effective_balance_electra min_activation_balance : Gwei) : Gwei :=
   if is_compounding then max_effective_balance_electra else min_activation_balance
 
 /-- `deposit_effective_balance` of `deposit_balance.rs`. An increment of 0 does not round. -/
-def lhDepositEffectiveBalance (amount increment max_effective_balance : Gwei) : Gwei :=
+def lighthouseDepositEffectiveBalance (amount increment max_effective_balance : Gwei) : Gwei :=
   let rounded := if increment = 0 then amount else amount - amount % increment
   if rounded < max_effective_balance then rounded else max_effective_balance
 
 /-- `Validator::from_deposit` after Electra. -/
-def lhValidatorFromDeposit (p : Preset) (pubkey : BLSPubkey) (withdrawal_credentials : Bytes32)
+def lighthouseValidatorFromDeposit (p : Preset) (pubkey : BLSPubkey)
+    (withdrawal_credentials : Bytes32)
     (amount : Gwei) : Validator :=
   { pubkey
     withdrawal_credentials
-    effective_balance := lhDepositEffectiveBalance amount p.EFFECTIVE_BALANCE_INCREMENT
-      (lhMaxEffectiveBalanceElectra (is_compounding_withdrawal_credential withdrawal_credentials)
+    effective_balance := lighthouseDepositEffectiveBalance amount p.EFFECTIVE_BALANCE_INCREMENT
+      (lighthouseMaxEffectiveBalanceElectra
+        (is_compounding_withdrawal_credential withdrawal_credentials)
         p.MAX_EFFECTIVE_BALANCE_ELECTRA p.MIN_ACTIVATION_BALANCE)
     slashed := false
     activation_eligibility_epoch := FAR_FUTURE_EPOCH
@@ -36,11 +38,11 @@ def lhValidatorFromDeposit (p : Preset) (pubkey : BLSPubkey) (withdrawal_credent
     exit_epoch := FAR_FUTURE_EPOCH
     withdrawable_epoch := FAR_FUTURE_EPOCH }
 
-/-- `add_validator_to_registry` with `lhValidatorFromDeposit`. -/
-def lhAddValidatorToRegistry (p : Preset) (state : BeaconState) (pubkey : BLSPubkey)
+/-- `add_validator_to_registry` with `lighthouseValidatorFromDeposit`. -/
+def lighthouseAddValidatorToRegistry (p : Preset) (state : BeaconState) (pubkey : BLSPubkey)
     (withdrawal_credentials : Bytes32) (amount : Gwei) : SpecM BeaconState := do
   let index := get_index_for_new_validator state
-  let validator := lhValidatorFromDeposit p pubkey withdrawal_credentials amount
+  let validator := lighthouseValidatorFromDeposit p pubkey withdrawal_credentials amount
   let state := { state with validators := ← set_or_append_list state.validators index validator }
   let state := { state with balances := ← set_or_append_list state.balances index amount }
   let state := { state with
@@ -51,14 +53,14 @@ def lhAddValidatorToRegistry (p : Preset) (state : BeaconState) (pubkey : BLSPub
   pure { state with
     inactivity_scores := ← set_or_append_list state.inactivity_scores index 0 }
 
-/-- `apply_pending_deposit` with `lhAddValidatorToRegistry`. -/
-def lhApplyPendingDeposit (p : Preset) (o : Oracle) (state : BeaconState)
+/-- `apply_pending_deposit` with `lighthouseAddValidatorToRegistry`. -/
+def lighthouseApplyPendingDeposit (p : Preset) (o : Oracle) (state : BeaconState)
     (deposit : PendingDeposit) : SpecM BeaconState := do
   let validator_pubkeys := state.validators.map (·.pubkey)
   if deposit.pubkey ∉ validator_pubkeys then
     if is_valid_deposit_signature p o deposit.pubkey deposit.withdrawal_credentials
         deposit.amount deposit.signature then
-      lhAddValidatorToRegistry p state deposit.pubkey deposit.withdrawal_credentials
+      lighthouseAddValidatorToRegistry p state deposit.pubkey deposit.withdrawal_credentials
         deposit.amount
     else
       pure state
@@ -66,9 +68,9 @@ def lhApplyPendingDeposit (p : Preset) (o : Oracle) (state : BeaconState)
     let validator_index := validator_pubkeys.idxOf deposit.pubkey
     pure { state with balances := ← increase_balance state.balances validator_index deposit.amount }
 
-theorem lhDepositEffectiveBalance_eq_min (amount increment m : Gwei) (h : 0 < increment) :
-    lhDepositEffectiveBalance amount increment m = min (amount - amount % increment) m := by
-  unfold lhDepositEffectiveBalance
+theorem lighthouseDepositEffectiveBalance_eq_min (amount increment m : Gwei) (h : 0 < increment) :
+    lighthouseDepositEffectiveBalance amount increment m = min (amount - amount % increment) m := by
+  unfold lighthouseDepositEffectiveBalance
   simp only [Nat.pos_iff_ne_zero.mp h, if_false, Nat.min_def]
   by_cases h1 : amount - amount % increment < m
   · simp [h1, Nat.le_of_lt h1]
@@ -80,28 +82,29 @@ theorem lhDepositEffectiveBalance_eq_min (amount increment m : Gwei) (h : 0 < in
 theorem get_validator_from_deposit_lh (p : Preset) (h : 0 < p.EFFECTIVE_BALANCE_INCREMENT)
     (pubkey : BLSPubkey) (withdrawal_credentials : Bytes32) (amount : Gwei) :
     get_validator_from_deposit p pubkey withdrawal_credentials amount =
-      .ok (lhValidatorFromDeposit p pubkey withdrawal_credentials amount) := by
+      .ok (lighthouseValidatorFromDeposit p pubkey withdrawal_credentials amount) := by
   have hm : amount % p.EFFECTIVE_BALANCE_INCREMENT ≤ amount := Nat.mod_le _ _
-  simp only [get_validator_from_deposit, lhValidatorFromDeposit, uint64Mod, uint64Sub,
-    Nat.pos_iff_ne_zero.mp h, if_false, hm, if_true, lhDepositEffectiveBalance_eq_min _ _ _ h,
+  simp only [get_validator_from_deposit, lighthouseValidatorFromDeposit, uint64Mod, uint64Sub,
+    Nat.pos_iff_ne_zero.mp h, if_false, hm, if_true,
+      lighthouseDepositEffectiveBalance_eq_min _ _ _ h,
     get_max_effective_balance, has_compounding_withdrawal_credential,
-    lhMaxEffectiveBalanceElectra, pure, Except.pure, Bind.bind, Except.bind]
+    lighthouseMaxEffectiveBalanceElectra, pure, Except.pure, Bind.bind, Except.bind]
   rfl
 
 theorem add_validator_to_registry_lh (p : Preset) (h : 0 < p.EFFECTIVE_BALANCE_INCREMENT)
     (state : BeaconState) (pubkey : BLSPubkey) (withdrawal_credentials : Bytes32) (amount : Gwei) :
-    lhAddValidatorToRegistry p state pubkey withdrawal_credentials amount =
+    lighthouseAddValidatorToRegistry p state pubkey withdrawal_credentials amount =
       add_validator_to_registry p state pubkey withdrawal_credentials amount := by
-  simp only [lhAddValidatorToRegistry, add_validator_to_registry,
+  simp only [lighthouseAddValidatorToRegistry, add_validator_to_registry,
     get_validator_from_deposit_lh p h, Bind.bind, Except.bind]
 
-theorem lhApplyPendingDeposit_eq (p : Preset) (h : 0 < p.EFFECTIVE_BALANCE_INCREMENT)
-    (o : Oracle) : lhApplyPendingDeposit p o = apply_pending_deposit p o := by
+theorem lighthouseApplyPendingDeposit_eq (p : Preset) (h : 0 < p.EFFECTIVE_BALANCE_INCREMENT)
+    (o : Oracle) : lighthouseApplyPendingDeposit p o = apply_pending_deposit p o := by
   funext state deposit
-  simp only [lhApplyPendingDeposit, apply_pending_deposit, add_validator_to_registry_lh p h]
+  simp only [lighthouseApplyPendingDeposit, apply_pending_deposit, add_validator_to_registry_lh p h]
 
-theorem lhApplyPendingDeposit_mainnet [CurrentPreset] (o : Oracle) :
-    lhApplyPendingDeposit P o = apply_pending_deposit P o :=
-  lhApplyPendingDeposit_eq P (by pdecide) o
+theorem lighthouseApplyPendingDeposit_mainnet [CurrentPreset] (o : Oracle) :
+    lighthouseApplyPendingDeposit P o = apply_pending_deposit P o :=
+  lighthouseApplyPendingDeposit_eq P (by pdecide) o
 
 end EpochProofs.Spec

@@ -61,10 +61,10 @@ theorem compute_seed_eq {H : Type} (inst : ShuffleHashInst H) (p : Spec.Preset)
   rw [hd, hdomain, hmix m hm, ← hsm]
 
 /-- The Rust `SelectionConstants`. -/
-abbrev LhSelectionConstants := per_epoch_processing.epoch_committees.SelectionConstants
+abbrev LighthouseSelectionConstants := per_epoch_processing.epoch_committees.SelectionConstants
 
 /-- The selection constants of Lighthouse are the preset values. -/
-structure SelectionConstantsMatch (p : Spec.Preset) (c : LhSelectionConstants) : Prop where
+structure SelectionConstantsMatch (p : Spec.Preset) (c : LighthouseSelectionConstants) : Prop where
   shuffle_round_count : c.shuffle_round_count.val = p.SHUFFLE_ROUND_COUNT
   max_effective_balance : c.max_effective_balance.val = p.MAX_EFFECTIVE_BALANCE_ELECTRA
   slots_per_epoch : c.slots_per_epoch.val = p.SLOTS_PER_EPOCH
@@ -80,7 +80,7 @@ theorem next_sync_committee_indices_spec {H B : Type} (inst : ShuffleHashInst H)
     (hepoch : ∀ ce, Spec.get_current_epoch p state = .ok ce → epoch.val = ce + 1)
     (hindices : indices.val.map (·.val) = Spec.get_active_validator_indices state epoch.val)
     (mix : Array U8 32#usize) (hmix : SeedMixMatches p state epoch.val mix) (size : Usize)
-    (hsize : size.val = p.SYNC_COMMITTEE_SIZE) (c : LhSelectionConstants)
+    (hsize : size.val = p.SYNC_COMMITTEE_SIZE) (c : LighthouseSelectionConstants)
     (hc : SelectionConstantsMatch p c) (hn24 : indices.val.length ≤ 2 ^ 24) (hus : Usize.max = U64.max)
     (res : List Nat) (hspec : Spec.get_next_sync_committee_indices p o state = .ok res) :
     per_epoch_processing.epoch_committees.next_sync_committee_indices inst ebi balances indices
@@ -392,7 +392,7 @@ theorem next_proposer_lookahead_spec {H B : Type} (inst : ShuffleHashInst H)
         indices.val.map (·.val) = l)
     (mix : Array U8 32#usize) (hmix : SeedMixMatches p state epoch.val mix) (start_slot : U64)
     (hstart : Spec.compute_start_slot_at_epoch p epoch.val = .ok start_slot.val)
-    (c : LhSelectionConstants) (hc : SelectionConstantsMatch p c)
+    (c : LighthouseSelectionConstants) (hc : SelectionConstantsMatch p c)
     (hspe32 : p.SLOTS_PER_EPOCH < 2 ^ 32)
     (hn24 : indices.val.length ≤ 2 ^ 24) (hus : Usize.max = U64.max)
     (state' : Spec.BeaconState) (hspec : Spec.process_proposer_lookahead p o state = .ok state') :
@@ -601,7 +601,7 @@ theorem ptc_for_epoch_spec_gen {H B : Type} (inst : ShuffleHashInst H)
       Spec.ptcIndices p o state epoch.val (start_slot.val + k) = .ok l →
         (committees.val[k]).val.map (·.val) = l)
     (hn24 : ∀ k (hk : k < committees.val.length), (committees.val[k]).val.length ≤ 2 ^ 24)
-    (ptc_size : Usize) (hptc : ptc_size.val = p.PTC_SIZE) (c : LhSelectionConstants)
+    (ptc_size : Usize) (hptc : ptc_size.val = p.PTC_SIZE) (c : LighthouseSelectionConstants)
     (hc : SelectionConstantsMatch p c) (hspe : 0 < p.SLOTS_PER_EPOCH)
     (hus : Usize.max = U64.max) :
     per_epoch_processing.epoch_committees.ptc_for_epoch inst ebi balances committees domain epoch
@@ -619,9 +619,11 @@ theorem ptc_for_epoch_spec_gen {H B : Type} (inst : ShuffleHashInst H)
     unfold per_epoch_processing.epoch_committees.ptc_for_epoch_loop
     obtain ⟨L, hL⟩ : ∃ L, committees.val.length = L := ⟨_, rfl⟩
     apply loop.spec_decr_nat
-      (measure := fun (x : LhSelectionConstants × alloc.vec.Vec (alloc.vec.Vec Usize) × Usize) =>
+      (measure := fun (x : LighthouseSelectionConstants × alloc.vec.Vec (alloc.vec.Vec Usize) ×
+      Usize) =>
         L - x.2.2.val)
-      (inv := fun (x : LhSelectionConstants × alloc.vec.Vec (alloc.vec.Vec Usize) × Usize) =>
+      (inv := fun (x : LighthouseSelectionConstants × alloc.vec.Vec (alloc.vec.Vec Usize) × Usize)
+      =>
         x.1 = c ∧ x.2.2.val ≤ L ∧
         ptcIndexValues x.2.1 = ptcs.take x.2.2.val)
     · rintro ⟨cst, ps, i⟩ ⟨hcst, hi, hps⟩
@@ -707,7 +709,7 @@ theorem ptc_for_epoch_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : Effect
       Spec.ptcIndices p o state epoch.val (start_slot.val + k) = .ok l →
         (committees.val[k]).val.map (·.val) = l)
     (hn24 : ∀ k (hk : k < committees.val.length), (committees.val[k]).val.length ≤ 2 ^ 24)
-    (ptc_size : Usize) (hptc : ptc_size.val = p.PTC_SIZE) (c : LhSelectionConstants)
+    (ptc_size : Usize) (hptc : ptc_size.val = p.PTC_SIZE) (c : LighthouseSelectionConstants)
     (hc : SelectionConstantsMatch p c) (hspe : 0 < p.SLOTS_PER_EPOCH)
     (hus : Usize.max = U64.max)
     (state' : Spec.BeaconState) (hspec : Spec.process_ptc_window p o state = .ok state') :

@@ -10,7 +10,7 @@ open EpochProofs.EthLib
 open _root_.EthLib.Consensus (BeaconState Config Preset SignatureChecks processEpoch)
 open Aeneas.Std (U64)
 open Aeneas.Std.Result (ok)
-open CacheProofs.PB (LhCache)
+open CacheProofs.ProgressiveBalances (LighthouseProgressiveBalancesCache)
 
 variable {oracle : Spec.Oracle} {fuluOracle : Spec.FuluOracle} {blockConfig : Spec.FuluBlockConfig}
   {upgradeConfig : Spec.UpgradeConfig} {fuluStart : Spec.FuluState} {checks : SignatureChecks}
@@ -24,7 +24,7 @@ local instance : Spec.CurrentFuluConfig.Valid := ⟨Spec.fuluCompat_mainnet⟩
 
 /-- `lighthouse_model_gloas_epoch_eq_ethlib` on mainnet. -/
 theorem lighthouse_model_gloas_epoch_eq_ethlib_mainnet {PubkeyMap : Type}
-    {progressiveCache : LhCache} {cachedTotal : U64}
+    {progressiveCache : LighthouseProgressiveBalancesCache} {cachedTotal : U64}
     {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
     {state : BeaconState Preset.mainnet .glamsterdam}
@@ -43,7 +43,7 @@ theorem lighthouse_model_gloas_epoch_eq_ethlib_mainnet {PubkeyMap : Type}
 
 /-- `lighthouse_rust_gloas_epoch_eq_ethlib` on mainnet. -/
 theorem lighthouse_rust_gloas_epoch_eq_ethlib_mainnet {PubkeyMap : Type}
-    {progressiveCache : LhCache} {cachedTotal : U64}
+    {progressiveCache : LighthouseProgressiveBalancesCache} {cachedTotal : U64}
     {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
     {state : BeaconState Preset.mainnet .glamsterdam}
@@ -192,7 +192,7 @@ local instance : Spec.CurrentFuluConfig.Valid := ⟨Spec.fuluCompat_minimal⟩
 
 /-- `lighthouse_model_gloas_epoch_eq_ethlib` on minimal. -/
 theorem lighthouse_model_gloas_epoch_eq_ethlib_minimal {PubkeyMap : Type}
-    {progressiveCache : LhCache} {cachedTotal : U64}
+    {progressiveCache : LighthouseProgressiveBalancesCache} {cachedTotal : U64}
     {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
     {state : BeaconState Preset.minimal .glamsterdam}
@@ -211,7 +211,7 @@ theorem lighthouse_model_gloas_epoch_eq_ethlib_minimal {PubkeyMap : Type}
 
 /-- `lighthouse_rust_gloas_epoch_eq_ethlib` on minimal. -/
 theorem lighthouse_rust_gloas_epoch_eq_ethlib_minimal {PubkeyMap : Type}
-    {progressiveCache : LhCache} {cachedTotal : U64}
+    {progressiveCache : LighthouseProgressiveBalancesCache} {cachedTotal : U64}
     {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
     {state : BeaconState Preset.minimal .glamsterdam}

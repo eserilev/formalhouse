@@ -7,7 +7,7 @@ import CacheProofs.Equiv.CommitteeCache
 
 The main theorem is `shuffling_spec`. The pure function `shuffling` (backwards `shuffle_list_with`)
 returns a list whose entry `i` is `indices[compute_shuffled_index(i, len(indices), seed)]`. This is
-`IsShuffling`, the hypothesis of the `CommitteeCache` theorems.
+`MatchesSpecShuffling`, the hypothesis of the `CommitteeCache` theorems.
 
 The hash function is the trait instance `inst`. `HashMatches inst sha256` says that `inst.hash`
 computes `sha256` and does not fail. The theorems hold for every such pair.
@@ -881,7 +881,7 @@ theorem shuffling_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → Lis
     (hn : 0 < indices.val.length) (hn24 : indices.val.length ≤ 16777216)
     (hr : 0 < rounds.val) :
     state.committee_assignment.shuffling inst indices rounds seed ⦃ out =>
-      ∃ v, out = some v ∧ CommitteeCache.IsShuffling p sha256 (indices.val.map (·.val))
+      ∃ v, out = some v ∧ CommitteeCache.MatchesSpecShuffling p sha256 (indices.val.map (·.val))
         (seed.val.map (·.val)) (v.val.map (·.val)) ⦄ := by
   unfold state.committee_assignment.shuffling
   obtain ⟨out, hout, v, rfl, hlen, hv⟩ := spec_exists

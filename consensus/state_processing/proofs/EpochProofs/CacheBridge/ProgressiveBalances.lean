@@ -6,28 +6,31 @@ import EpochProofs.Spec.JustificationLighthouse
 /-!
 # Bridge: the progressive balances cache and the epoch spec
 
-`CacheProofs.PB` proves that a correct `ProgressiveBalancesCache` returns, for each flag, the
-spec total `get_total_balance(state, get_unslashed_participating_indices(state, flag, epoch))`.
-That spec is the model of `consensus/types/proofs`. This file proves that the same total in the
-epoch spec (`EpochProofs.Spec`) is equal, on the state that `pbState` maps.
+`CacheProofs.ProgressiveBalances` proves that a correct `ProgressiveBalancesCache` returns, for
+each flag, the spec total `get_total_balance(state, get_unslashed_participating_indices(state,
+flag, epoch))`. That spec is the model of `consensus/types/proofs`. This file proves that the same
+total in the epoch spec (`EpochProofs.Spec`) is equal, on the state that
+`progressiveBalancesStateOf` maps.
 
 So the value that Lighthouse reads from the cache is the value that the epoch model computes.
-The only fact left about the cache is that it is correct for the state (`Coherent`), which
-`CacheProofs.PB.build_coherent` and the update theorems give.
+The only fact left about the cache is that it is correct for the state
+(`ProgressiveBalancesCacheCorrect`), which `CacheProofs.ProgressiveBalances.build_correct` and the
+update theorems give.
 -/
 
 namespace EpochProofs.CacheBridge
 
-open CacheProofs.PB (flagSum activeAt slashedAt ebAt specPred sum_filter_eq_flagSum)
+open CacheProofs.ProgressiveBalances (unslashedFlagBalance activeAt slashedAt effectiveBalanceAt
+  specPred sum_filter_eq_flagSum)
 
 /-- The validator fields that the progressive balances model reads. -/
-def pbValidator (v : EpochProofs.Spec.Validator) : CacheProofs.Spec.Validator :=
+def progressiveBalancesValidatorOf (v : EpochProofs.Spec.Validator) : CacheProofs.Spec.Validator :=
   ⟨v.effective_balance, v.slashed, v.activation_epoch, v.exit_epoch⟩
 
 /-- The state of the progressive balances model, at the current epoch `current_epoch`. -/
-def pbState (s : EpochProofs.Spec.BeaconState) (current_epoch : Nat) :
+def progressiveBalancesStateOf (s : EpochProofs.Spec.BeaconState) (current_epoch : Nat) :
     CacheProofs.Spec.BeaconState :=
-  ⟨current_epoch, s.validators.map pbValidator,
+  ⟨current_epoch, s.validators.map progressiveBalancesValidatorOf,
     s.previous_epoch_participation.map (·.toNat), s.current_epoch_participation.map (·.toNat)⟩
 
 set_option maxRecDepth 100000 in
@@ -46,7 +49,7 @@ theorem has_flag_bridge (x : UInt8) (f : Nat) (hf : f < 3) :
     CacheProofs.Spec.has_flag]
 
 theorem activeAt_map (vs : List EpochProofs.Spec.Validator) (e i : Nat) :
-    activeAt (vs.map pbValidator) e i =
+    activeAt (vs.map progressiveBalancesValidatorOf) e i =
       match vs[i]? with
       | some v => EpochProofs.Spec.is_active_validator v e
       | none => false := by
@@ -55,22 +58,25 @@ theorem activeAt_map (vs : List EpochProofs.Spec.Validator) (e i : Nat) :
 
 theorem active_zipIdx (vs : List EpochProofs.Spec.Validator) (e k : Nat) :
     ((vs.zipIdx k).filter fun x => EpochProofs.Spec.is_active_validator x.1 e).map (·.2) =
-      ((List.range vs.length).filter (activeAt (vs.map pbValidator) e)).map (· + k) := by
+      ((List.range vs.length).filter (activeAt (vs.map progressiveBalancesValidatorOf) e)).map
+        (· + k) := by
   induction vs generalizing k with
   | nil => simp
   | cons v vs ih =>
     rw [List.zipIdx_cons, List.length_cons, List.range_succ_eq_map, List.filter_cons,
       List.map_cons]
     simp only [List.filter_cons, List.filter_map]
-    have hf : (activeAt (pbValidator v :: vs.map pbValidator) e ∘ Nat.succ) =
-        activeAt (vs.map pbValidator) e := by
+    have hf : (activeAt (progressiveBalancesValidatorOf v :: vs.map progressiveBalancesValidatorOf)
+      e ∘ Nat.succ) =
+        activeAt (vs.map progressiveBalancesValidatorOf) e := by
       funext i; simp [activeAt]
     have hg : ∀ L : List Nat, (L.map Nat.succ).map (· + k) = L.map (· + (k + 1)) := by
       intro L; simp only [List.map_map]; congr 1; funext i; simp; omega
     rw [hf]
-    have h0 : activeAt (pbValidator v :: vs.map pbValidator) e 0 =
+    have h0 : activeAt (progressiveBalancesValidatorOf v :: vs.map progressiveBalancesValidatorOf) e
+      0 =
         EpochProofs.Spec.is_active_validator v e := by
-      simp [activeAt, pbValidator, EpochProofs.Spec.is_active_validator,
+      simp [activeAt, progressiveBalancesValidatorOf, EpochProofs.Spec.is_active_validator,
         CacheProofs.Spec.is_active_validator]
     rw [h0]
     by_cases ha : EpochProofs.Spec.is_active_validator v e
@@ -80,7 +86,8 @@ theorem active_zipIdx (vs : List EpochProofs.Spec.Validator) (e k : Nat) :
 /-- `get_active_validator_indices` in the closed form of the cache model. -/
 theorem get_active_validator_indices_bridge (s : EpochProofs.Spec.BeaconState) (e : Nat) :
     EpochProofs.Spec.get_active_validator_indices s e =
-      (List.range s.validators.length).filter (activeAt (s.validators.map pbValidator) e) := by
+      (List.range s.validators.length).filter
+        (activeAt (s.validators.map progressiveBalancesValidatorOf) e) := by
   have h := active_zipIdx s.validators e 0
   simp only [Nat.add_zero, List.map_id_fun', id_eq] at h
   exact h
@@ -90,18 +97,19 @@ theorem mapM_eb (vs : List EpochProofs.Spec.Validator) (L : List Nat)
     L.mapM (fun index => do
         pure (← EpochProofs.Spec.listGet vs index).effective_balance :
           Nat → EpochProofs.Spec.SpecM Nat) =
-      .ok (L.map (ebAt (vs.map pbValidator))) := by
+      .ok (L.map (effectiveBalanceAt (vs.map progressiveBalancesValidatorOf))) := by
   induction L with
   | nil => rfl
   | cons i L ih =>
     have hi : i < vs.length := hL i (by simp)
     rw [List.mapM_cons, ih (fun j hj => hL j (by simp [hj]))]
     simp only [EpochProofs.Spec.listGet, List.getElem?_eq_getElem hi]
-    simp [ebAt, hi, pbValidator, bind, Except.bind, pure, Except.pure]
+    simp [effectiveBalanceAt, hi, progressiveBalancesValidatorOf, bind, Except.bind, pure,
+      Except.pure]
 
 /-- `get_total_balance(state, get_unslashed_participating_indices(state, f, e))` in the epoch
-spec is the closed form of the cache model, `max EFFECTIVE_BALANCE_INCREMENT flagSum`, on the
-mapped state. -/
+spec is the closed form of the cache model, `max EFFECTIVE_BALANCE_INCREMENT unslashedFlagBalance`,
+on the mapped state. -/
 theorem participating_total_bridge (p : EpochProofs.Spec.Preset)
     (s : EpochProofs.Spec.BeaconState) (f : Nat) (hf : f < 3) (cur prev e : Nat)
     (hcur : EpochProofs.Spec.get_current_epoch p s = .ok cur)
@@ -109,12 +117,14 @@ theorem participating_total_bridge (p : EpochProofs.Spec.Preset)
     (he : e = prev ∨ e = cur)
     (hlen : (if e = cur then s.current_epoch_participation
       else s.previous_epoch_participation).length = s.validators.length)
-    (hfit : max p.EFFECTIVE_BALANCE_INCREMENT (flagSum (s.validators.map pbValidator)
+    (hfit : max p.EFFECTIVE_BALANCE_INCREMENT
+    (unslashedFlagBalance (s.validators.map progressiveBalancesValidatorOf)
       ((if e = cur then s.current_epoch_participation
         else s.previous_epoch_participation).map (·.toNat)) e f) < 2 ^ 64) :
     (EpochProofs.Spec.get_unslashed_participating_indices p s f e >>=
         EpochProofs.Spec.get_total_balance p s) =
-      .ok (max p.EFFECTIVE_BALANCE_INCREMENT (flagSum (s.validators.map pbValidator)
+      .ok (max p.EFFECTIVE_BALANCE_INCREMENT
+        (unslashedFlagBalance (s.validators.map progressiveBalancesValidatorOf)
         ((if e = cur then s.current_epoch_participation
           else s.previous_epoch_participation).map (·.toNat)) e f)) := by
   generalize hP : (if e = cur then s.current_epoch_participation
@@ -127,7 +137,7 @@ theorem participating_total_bridge (p : EpochProofs.Spec.Preset)
   unfold EpochProofs.Spec.get_unslashed_participating_indices
   simp only [bind, Except.bind, hprev, hcur, hcond, Bool.false_eq_true, if_false, hP',
     get_active_validator_indices_bridge]
-  set vs := s.validators.map pbValidator with hvs
+  set vs := s.validators.map progressiveBalancesValidatorOf with hvs
   set L0 := (List.range s.validators.length).filter (activeAt vs e) with hL0
   have hL0mem : ∀ i ∈ L0, i < s.validators.length := fun i hi => by
     simp only [hL0, List.mem_filter, List.mem_range] at hi; exact hi.1
@@ -167,7 +177,7 @@ theorem participating_total_bridge (p : EpochProofs.Spec.Preset)
   · intro i hi
     have hi' := hL1mem i hi
     simp [EpochProofs.Spec.listGet, hi', bind, Except.bind, pure, Except.pure, slashedAt, hvs,
-      pbValidator]
+      progressiveBalancesValidatorOf]
   simp only [List.nil_append, List.map_id]
   have hL2mem : ∀ i ∈ L1.filter (fun i => !slashedAt vs i), i < s.validators.length :=
     fun i hi => hL1mem i (List.mem_filter.mp hi).1
@@ -182,7 +192,7 @@ theorem participating_total_bridge (p : EpochProofs.Spec.Preset)
   have hlen' : (P.map (·.toNat)).length = vs.length := by simp [hvs, hlen]
   unfold EpochProofs.Spec.uint64Sum
   rw [sum_filter_eq_flagSum vs (P.map (·.toNat)) e f hlen']
-  have hsum : flagSum vs (P.map (·.toNat)) e f < EpochProofs.Spec.UINT64_SIZE := by
+  have hsum : unslashedFlagBalance vs (P.map (·.toNat)) e f < EpochProofs.Spec.UINT64_SIZE := by
     simp only [EpochProofs.Spec.UINT64_SIZE]
     exact Nat.lt_of_le_of_lt (Nat.le_max_right _ _) hfit
   simp [hsum, pure, Except.pure]
@@ -190,11 +200,12 @@ theorem participating_total_bridge (p : EpochProofs.Spec.Preset)
 theorem previous_epoch_bridge (p : EpochProofs.Spec.Preset) (s : EpochProofs.Spec.BeaconState)
     (cur prev : Nat) (hcur : EpochProofs.Spec.get_current_epoch p s = .ok cur)
     (hprev : EpochProofs.Spec.get_previous_epoch p s = .ok prev) :
-    CacheProofs.Spec.get_previous_epoch (pbState s cur) = prev := by
+    CacheProofs.Spec.get_previous_epoch (progressiveBalancesStateOf s cur) = prev := by
   simp only [EpochProofs.Spec.get_previous_epoch, bind, Except.bind, hcur, pure,
     Except.pure, Except.ok.injEq] at hprev
   subst hprev
-  simp only [CacheProofs.Spec.get_previous_epoch, CacheProofs.Spec.get_current_epoch, pbState,
+  simp only [CacheProofs.Spec.get_previous_epoch, CacheProofs.Spec.get_current_epoch,
+    progressiveBalancesStateOf,
     CacheProofs.Spec.GENESIS_EPOCH, EpochProofs.Spec.saturating_sub]
   by_cases h : cur = 0
   · simp [h]
@@ -208,23 +219,27 @@ theorem previous_epoch_bridge (p : EpochProofs.Spec.Preset) (s : EpochProofs.Spe
       subst hc1; rfl
 
 open Aeneas Aeneas.Std Result in
-open CacheProofs.PB (LhCache PreviousCoherent CurrentCoherent total_flag_balance_ok
-  lhPreviousEpochFlagAttestingBalance lhCurrentEpochFlagAttestingBalance) in
+open CacheProofs.ProgressiveBalances (LighthouseProgressiveBalancesCache
+  PreviousEpochTotalsCorrect CurrentEpochTotalsCorrect total_flag_balance_ok
+  lighthousePreviousEpochFlagBalance lighthouseCurrentEpochFlagBalance) in
 /-- The previous epoch total that Lighthouse reads from a correct progressive balances cache
 equals the epoch spec total `get_total_balance(state, get_unslashed_participating_indices(state,
 f, get_previous_epoch(state)))`, after the genesis epoch. -/
-theorem lh_previous_flag_balance_eq (p : EpochProofs.Spec.Preset)
+theorem lighthouse_previous_flag_balance_eq (p : EpochProofs.Spec.Preset)
     (s : EpochProofs.Spec.BeaconState) (f : Usize) (hf : f.val < 3) (cur prev : Nat)
     (hcur : EpochProofs.Spec.get_current_epoch p s = .ok cur)
     (hprev : EpochProofs.Spec.get_previous_epoch p s = .ok prev) (hne : prev ≠ cur)
     (hlen : s.previous_epoch_participation.length = s.validators.length)
-    (hfit : max p.EFFECTIVE_BALANCE_INCREMENT (flagSum (s.validators.map pbValidator)
+    (hfit : max p.EFFECTIVE_BALANCE_INCREMENT
+    (unslashedFlagBalance (s.validators.map progressiveBalancesValidatorOf)
       (s.previous_epoch_participation.map (·.toNat)) prev f.val) < 2 ^ 64)
-    (c : LhCache) (hc : PreviousCoherent p.EFFECTIVE_BALANCE_INCREMENT (pbState s cur) c) :
-    ∃ x : U64, lhPreviousEpochFlagAttestingBalance c f = ok (.Ok x) ∧
+    (c : LighthouseProgressiveBalancesCache)
+    (hc : PreviousEpochTotalsCorrect p.EFFECTIVE_BALANCE_INCREMENT
+    (progressiveBalancesStateOf s cur) c) :
+    ∃ x : U64, lighthousePreviousEpochFlagBalance c f = ok (.Ok x) ∧
       (EpochProofs.Spec.get_unslashed_participating_indices p s f.val prev >>=
         EpochProofs.Spec.get_total_balance p s) = .ok x.val := by
-  unfold PreviousCoherent at hc
+  unfold PreviousEpochTotalsCorrect at hc
   rw [previous_epoch_bridge p s cur prev hcur hprev] at hc
   obtain ⟨x, hx, hv⟩ := total_flag_balance_ok _ f _ _ hc hf
   refine ⟨x, hx, ?_⟩
@@ -235,19 +250,23 @@ theorem lh_previous_flag_balance_eq (p : EpochProofs.Spec.Preset)
   rfl
 
 open Aeneas Aeneas.Std Result in
-open CacheProofs.PB (LhCache PreviousCoherent CurrentCoherent total_flag_balance_ok
-  lhPreviousEpochFlagAttestingBalance lhCurrentEpochFlagAttestingBalance) in
+open CacheProofs.ProgressiveBalances (LighthouseProgressiveBalancesCache
+  PreviousEpochTotalsCorrect CurrentEpochTotalsCorrect total_flag_balance_ok
+  lighthousePreviousEpochFlagBalance lighthouseCurrentEpochFlagBalance) in
 /-- The current epoch total that Lighthouse reads from a correct progressive balances cache
 equals the epoch spec total for `get_current_epoch(state)`. -/
-theorem lh_current_flag_balance_eq (p : EpochProofs.Spec.Preset)
+theorem lighthouse_current_flag_balance_eq (p : EpochProofs.Spec.Preset)
     (s : EpochProofs.Spec.BeaconState) (f : Usize) (hf : f.val < 3) (cur prev : Nat)
     (hcur : EpochProofs.Spec.get_current_epoch p s = .ok cur)
     (hprev : EpochProofs.Spec.get_previous_epoch p s = .ok prev)
     (hlen : s.current_epoch_participation.length = s.validators.length)
-    (hfit : max p.EFFECTIVE_BALANCE_INCREMENT (flagSum (s.validators.map pbValidator)
+    (hfit : max p.EFFECTIVE_BALANCE_INCREMENT
+    (unslashedFlagBalance (s.validators.map progressiveBalancesValidatorOf)
       (s.current_epoch_participation.map (·.toNat)) cur f.val) < 2 ^ 64)
-    (c : LhCache) (hc : CurrentCoherent p.EFFECTIVE_BALANCE_INCREMENT (pbState s cur) c) :
-    ∃ x : U64, lhCurrentEpochFlagAttestingBalance c f = ok (.Ok x) ∧
+    (c : LighthouseProgressiveBalancesCache)
+    (hc : CurrentEpochTotalsCorrect p.EFFECTIVE_BALANCE_INCREMENT (progressiveBalancesStateOf s cur)
+    c) :
+    ∃ x : U64, lighthouseCurrentEpochFlagBalance c f = ok (.Ok x) ∧
       (EpochProofs.Spec.get_unslashed_participating_indices p s f.val cur >>=
         EpochProofs.Spec.get_total_balance p s) = .ok x.val := by
   obtain ⟨-, hc⟩ := hc

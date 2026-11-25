@@ -4,16 +4,16 @@ import EpochProofs.Sanity.RowsEffectiveBalance
 /-!
 # The Lighthouse row step
 
-`lhRowStep` runs the four steps for one validator in the Lighthouse order, with the functions
-that the Lighthouse code is proved equal to. Rewards use `rewardsCombined`, and the registry
-update uses `registryStepIndependent`. `single_pass_step` in `single_pass_step.rs` equals this
-step.
+`lighthouseRowStep` runs the four steps for one validator in the Lighthouse order, with the
+functions that the Lighthouse code is proved equal to. Rewards use `rewardsCombined`, and the
+registry update uses `registryStepIndependent`. `single_pass_step` in `single_pass_step.rs` equals
+this step.
 -/
 
 namespace EpochProofs.Spec
 
 /-- The values that are the same for all validators in this epoch. -/
-structure LhStepContext where
+structure LighthouseStepContext where
   current_epoch : Epoch
   previous_epoch : Epoch
   finalized_epoch : Epoch
@@ -31,7 +31,8 @@ structure LhStepContext where
 /-- Inactivity update, rewards and penalties, registry update and slashings penalty for one
 row, in the Lighthouse order. `base_reward` is only read if the row is eligible. In the genesis
 epoch the inactivity and rewards steps do nothing. -/
-def lhRowStep (p : Preset) (ctx : LhStepContext) (base_reward : Gwei) (churn : Epoch × Gwei)
+def lighthouseRowStep (p : Preset) (ctx : LighthouseStepContext) (base_reward : Gwei)
+    (churn : Epoch × Gwei)
     (r : Row) : SpecM ((Epoch × Gwei) × Row) := do
   let eligible ← validatorEligible ctx.previous_epoch r.validator
   let inactivity_score ←
@@ -58,19 +59,21 @@ def lhRowStep (p : Preset) (ctx : LhStepContext) (base_reward : Gwei) (churn : E
   pure ((f.earliest_exit_epoch, f.exit_balance_to_consume), { r with balance })
 
 /-- The values of one row that the deposit and effective balance steps read. -/
-structure LhRowInputs where
+structure LighthouseRowInputs where
   base_reward : Gwei
   /-- The sum of this epoch's pending deposits for the validator. -/
   deposit : Gwei
   /-- A pending consolidation names the validator. -/
   in_consolidation : Bool
 
-/-- `lhRowStep`, then the pending deposit top-up, then the effective balance update, as
+/-- `lighthouseRowStep`, then the pending deposit top-up, then the effective balance update, as
 `single_pass_step` runs them. A validator that a consolidation names keeps its effective
 balance here; Lighthouse updates it after consolidations. -/
-def lhRowStepFull (p : Preset) (ctx : LhStepContext) (downward_threshold upward_threshold : Uint64)
-    (inputs : LhRowInputs) (churn : Epoch × Gwei) (r : Row) : SpecM ((Epoch × Gwei) × Row) := do
-  let (churn, r) ← lhRowStep p ctx inputs.base_reward churn r
+def lighthouseValidatorStep (p : Preset) (ctx : LighthouseStepContext)
+    (downward_threshold upward_threshold : Uint64)
+    (inputs : LighthouseRowInputs) (churn : Epoch × Gwei)
+    (r : Row) : SpecM ((Epoch × Gwei) × Row) := do
+  let (churn, r) ← lighthouseRowStep p ctx inputs.base_reward churn r
   let balance ← uint64Add r.balance inputs.deposit
   let r := { r with balance }
   if inputs.in_consolidation then

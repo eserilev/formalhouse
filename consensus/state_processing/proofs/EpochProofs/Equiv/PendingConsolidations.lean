@@ -18,17 +18,18 @@ namespace EpochProofs
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 /-- The Rust `ConsolidationView`: the positions of the source and the target. -/
-abbrev LhConsolidationView := per_epoch_processing.pending_consolidations.ConsolidationView
+abbrev LighthouseConsolidationView := per_epoch_processing.pending_consolidations.ConsolidationView
 
 /-- The Rust `LocalValidator`: the fields of one validator that the consolidations read. -/
-abbrev LhLocalValidator := per_epoch_processing.pending_consolidations.LocalValidator
+abbrev LighthouseLocalValidator := per_epoch_processing.pending_consolidations.LocalValidator
 
 /-- A Rust `LocalValidator`, read as a model validator. -/
-def consolidationValidatorToSpec (v : LhLocalValidator) : Spec.LocalValidator :=
+def consolidationValidatorToSpec (v : LighthouseLocalValidator) : Spec.LocalValidator :=
   ⟨v.exists, v.slashed, v.withdrawable_epoch.val, v.effective_balance.val⟩
 
 /-- The source and target positions as numbers. -/
-def consolidationViewToSpec (c : LhConsolidationView) : Nat × Nat := (c.source.val, c.target.val)
+def consolidationViewToSpec (c : LighthouseConsolidationView) : Nat × Nat :=
+    (c.source.val, c.target.val)
 
 theorem get_balance_eq (s : Slice U64) (i : Usize) :
     per_epoch_processing.pending_consolidations.get_balance s i = ok s.val[i.val]? := by
@@ -36,7 +37,7 @@ theorem get_balance_eq (s : Slice U64) (i : Usize) :
   simp only [slice_get_any, bind_tc_ok]
   cases s.val[i.val]? <;> rfl
 
-theorem validator_exists_eq (validators : Slice LhLocalValidator) (i : Usize) :
+theorem validator_exists_eq (validators : Slice LighthouseLocalValidator) (i : Usize) :
     per_epoch_processing.pending_consolidations.validator_exists validators i =
       ok (Spec.localExists (validators.val.map consolidationValidatorToSpec) i.val) := by
   unfold per_epoch_processing.pending_consolidations.validator_exists Spec.localExists
@@ -82,8 +83,8 @@ def consolidationErrorToSpec :
   | .UnknownValidator _ => .indexOutOfRange
   | .Overflow => .overflow
 
-theorem consolidations_loop_spec (consolidations : Slice LhConsolidationView)
-    (validators : Slice LhLocalValidator) (next_epoch : U64)
+theorem consolidations_loop_spec (consolidations : Slice LighthouseConsolidationView)
+    (validators : Slice LighthouseLocalValidator) (next_epoch : U64)
     (init : List Spec.Gwei) (balances : alloc.vec.Vec U64) (next i : Usize)
     (hi : i.val ≤ consolidations.val.length) (hnext : next.val ≤ i.val)
     (hlen : balances.val.length = validators.val.length)
@@ -276,8 +277,8 @@ def consolidationResultToSpec :
 
 /-- The translated `process_pending_consolidations` is the loop of the spec step, with the same
 errors. -/
-theorem process_pending_consolidations_equiv (consolidations : Slice LhConsolidationView)
-    (validators : Slice LhLocalValidator) (balances : alloc.vec.Vec U64) (next_epoch : U64)
+theorem process_pending_consolidations_equiv (consolidations : Slice LighthouseConsolidationView)
+    (validators : Slice LighthouseLocalValidator) (balances : alloc.vec.Vec U64) (next_epoch : U64)
     (hlen : balances.val.length = validators.val.length) :
     per_epoch_processing.pending_consolidations.process_pending_consolidations consolidations
       validators balances next_epoch ⦃ r =>

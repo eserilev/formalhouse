@@ -14,7 +14,7 @@ Main theorems:
   stores invert the shuffling.
 - `get_attestation_duties_equiv`: `get_attestation_duties` agrees with `get_committee_assignment`.
 
-`IsShuffling` states that the cached shuffling is the spec shuffling. The `lh*` definitions
+`MatchesSpecShuffling` states that the cached shuffling is the spec shuffling. The `lh*` definitions
 model the untranslated code in `committee_cache.rs`. They are written by hand.
 -/
 
@@ -253,7 +253,7 @@ def shuffledAt (p : Preset) (sha256 : List Nat → List Nat) (indices : List Nat
 
 /-- `shuffling` is the spec shuffling of `indices`: entry `i` is
 `indices[compute_shuffled_index(i, len(indices), seed)]`. -/
-def IsShuffling (p : Spec.Preset) (sha256 : List Nat → List Nat) (indices seed : List Nat)
+def MatchesSpecShuffling (p : Spec.Preset) (sha256 : List Nat → List Nat) (indices seed : List Nat)
     (shuffling : List Nat) : Prop :=
   shuffling.length = indices.length ∧
     ∀ i, i < indices.length → shuffledAt p sha256 indices seed i = .ok (shuffling.getD i 0)
@@ -279,7 +279,8 @@ theorem range'_map_getD (l : List Nat) (s k : Nat) (h : s + k ≤ l.length) :
 open CacheProofs.Spec.CommitteeCache in
 /-- If `shuffling` is the spec shuffling, `compute_committee` is the slice `[start, end)`. -/
 theorem compute_committee_slice (p : Preset) (sha256 : List Nat → List Nat)
-    (indices seed shuffling : List Nat) (hshuf : IsShuffling p sha256 indices seed shuffling)
+    (indices seed shuffling : List Nat)
+    (hshuf : MatchesSpecShuffling p sha256 indices seed shuffling)
     (index count : Nat) (hindex : index < count)
     (hcount : count < CacheProofs.Spec.UINT64_SIZE)
     (hfit : indices.length * count < CacheProofs.Spec.UINT64_SIZE) :
@@ -311,12 +312,12 @@ theorem compute_committee_slice (p : Preset) (sha256 : List Nat → List Nat)
 
 
 /-- Rust `slice.get(start..end)`. -/
-def lhSliceGet {α : Type} (l : List α) (start «end» : Nat) : Option (List α) :=
+def lighthouseSliceGet {α : Type} (l : List α) (start «end» : Nat) : Option (List α) :=
   if start ≤ «end» ∧ «end» ≤ l.length then some ((l.drop start).take («end» - start)) else none
 
 /-- `CommitteeCache::get_beacon_committee`, modeled by hand. `slot` is `slot.as_usize()`.
 `slot.epoch(slots_per_epoch)` is `slot / slots_per_epoch`. -/
-def lhGetBeaconCommittee (initialized_epoch : Option Nat) (shuffling : Slice Usize)
+def lighthouseGetBeaconCommittee (initialized_epoch : Option Nat) (shuffling : Slice Usize)
     (committees_per_slot slots_per_epoch slot index : Usize) : Result (Option (List Usize)) :=
   if initialized_epoch = none ∨ initialized_epoch ≠ some (slot.val / slots_per_epoch.val)
       ∨ committees_per_slot.val ≤ index.val then
@@ -332,14 +333,15 @@ def lhGetBeaconCommittee (initialized_epoch : Option Nat) (shuffling : Slice Usi
       | .Ok count =>
         let r ← committee_range_in_epoch count committee_index (Slice.len shuffling)
         match r with
-        | .Ok (some (start, «end»)) => ok (lhSliceGet shuffling.val start.val «end».val)
+        | .Ok (some (start, «end»)) => ok (lighthouseSliceGet shuffling.val start.val «end».val)
         | _ => ok none
 
 open CacheProofs.Spec.CommitteeCache in
 /-- If `shuffling` is the spec shuffling, `get_beacon_committee` is the slice of committee
 `slot % SLOTS_PER_EPOCH * committees_per_slot + index`. -/
 theorem get_beacon_committee_slice (p : Preset) (sha256 : List Nat → List Nat)
-    (indices seed shuffling : List Nat) (hshuf : IsShuffling p sha256 indices seed shuffling)
+    (indices seed shuffling : List Nat)
+    (hshuf : MatchesSpecShuffling p sha256 indices seed shuffling)
     (committees_per_slot slot index : Nat)
     (hcps : get_committee_count_per_slot p indices.length = .ok committees_per_slot)
     (hspe0 : 0 < p.SLOTS_PER_EPOCH) (hindex : index < committees_per_slot)
@@ -376,14 +378,15 @@ theorem get_beacon_committee_slice (p : Preset) (sha256 : List Nat → List Nat)
 open CacheProofs.Spec.CommitteeCache in
 theorem get_beacon_committee_equiv (p : Preset) (sha256 : List Nat → List Nat)
     (indices seed : List Nat) (shuffling : Slice Usize)
-    (hshuf : IsShuffling p sha256 indices seed (shuffling.val.map (·.val)))
+    (hshuf : MatchesSpecShuffling p sha256 indices seed (shuffling.val.map (·.val)))
     (committees_per_slot slots_per_epoch slot index : Usize)
     (hcps : get_committee_count_per_slot p indices.length = .ok committees_per_slot.val)
     (hspe : slots_per_epoch.val = p.SLOTS_PER_EPOCH) (hspe0 : 0 < slots_per_epoch.val)
     (hindex : index.val < committees_per_slot.val) (hn : 0 < indices.length)
     (hfit : indices.length * (committees_per_slot.val * slots_per_epoch.val) ≤ Usize.max) :
     ∃ committee,
-      lhGetBeaconCommittee (some (slot.val / slots_per_epoch.val)) shuffling committees_per_slot
+      lighthouseGetBeaconCommittee (some (slot.val / slots_per_epoch.val)) shuffling
+        committees_per_slot
         slots_per_epoch slot index = ok (some committee) ∧
       get_beacon_committee p sha256 indices seed slot.val index.val =
         .ok (committee.map (·.val)) := by
@@ -416,7 +419,8 @@ theorem get_beacon_committee_equiv (p : Preset) (sha256 : List Nat → List Nat)
     rw [hs, he]; exact Nat.div_le_div_right (Nat.mul_le_mul_left _ (Nat.le_succ _))
   refine ⟨(shuffling.val.drop s.val).take (e.val - s.val), ?_, ?_⟩
   · have hidx' : ¬ committees_per_slot.val ≤ index.val := by omega
-    simp only [lhGetBeaconCommittee, hidx', hci, hc, hr, bind_tc_ok, lhSliceGet, hse, hlen, hend]
+    simp only [lighthouseGetBeaconCommittee, hidx', hci, hc, hr, bind_tc_ok, lighthouseSliceGet,
+      hse, hlen, hend]
     simp
   · have h64 := usize_max_lt
     rw [get_beacon_committee_slice p sha256 indices seed _ hshuf _ _ _ hcps (hspe ▸ hspe0)
@@ -432,7 +436,7 @@ def posOf (l : List Nat) (v : Nat) : Nat := if v ∈ l then l.idxOf v + 1 else 0
 
 /-- `CommitteeCache::shuffled_position` on the encoded positions. `NonZeroUsize::new(p)` is
 `None` if and only if `p = 0`, and `p.get() - 1` is `p - 1`. -/
-def lhShuffledPosition (positions : List Usize) (v : Nat) : Option Nat :=
+def lighthouseShuffledPosition (positions : List Usize) (v : Nat) : Option Nat :=
   match positions[v]? with
   | none => none
   | some p => if p.val = 0 then none else some (p.val - 1)
@@ -542,12 +546,12 @@ theorem shuffling_positions_loop_spec (shuffling : Slice Usize) (vc : Nat)
   · exact ⟨hi, hpos⟩
 
 
-theorem lhShuffledPosition_of_map (positions : List Usize) (vc : Nat) (L : List Nat)
+theorem lighthouseShuffledPosition_of_map (positions : List Usize) (vc : Nat) (L : List Nat)
     (hrange : ∀ x ∈ L, x < vc)
     (h : positions.map (·.val) = (List.range vc).map (posOf L)) (v : Nat) :
-    lhShuffledPosition positions v = if v ∈ L then some (L.idxOf v) else none := by
+    lighthouseShuffledPosition positions v = if v ∈ L then some (L.idxOf v) else none := by
   have hlen : positions.length = vc := by simpa using congrArg List.length h
-  unfold lhShuffledPosition
+  unfold lighthouseShuffledPosition
   by_cases hv : v < vc
   · rw [List.getElem?_eq_getElem (by omega)]
     have hval : positions[v].val = posOf L v := by
@@ -567,7 +571,7 @@ theorem shuffling_positions_spec (shuffling : Slice Usize) (validator_count : Us
     (hrange : ∀ x ∈ shuffling.val, x.val < validator_count.val) :
     shuffling_positions shuffling validator_count ⦃ r =>
       ∃ positions, r = .Ok positions ∧ positions.val.length = validator_count.val ∧
-        ∀ v, lhShuffledPosition positions.val v =
+        ∀ v, lighthouseShuffledPosition positions.val v =
           if v ∈ shuffling.val.map (·.val) then some ((shuffling.val.map (·.val)).idxOf v)
           else none ⦄ := by
   unfold shuffling_positions
@@ -585,7 +589,7 @@ theorem shuffling_positions_spec (shuffling : Slice Usize) (validator_count : Us
     obtain ⟨y, hy, rfl⟩ := hx
     exact hrange y hy
   exact (spec_ok _).mpr ⟨pos1, rfl, by simpa using congrArg List.length hpos1,
-    lhShuffledPosition_of_map _ _ _ hmap hpos1⟩
+    lighthouseShuffledPosition_of_map _ _ _ hmap hpos1⟩
 
 
 /-! ## Attestation duties -/
@@ -745,7 +749,7 @@ def committeeSlice (p : Preset) (n committees_per_slot : Nat) (L : List Nat) (sl
 
 open CacheProofs.Spec.CommitteeCache in
 theorem get_committee_assignment_search (p : Preset) (sha256 : List Nat → List Nat)
-    (indices seed L : List Nat) (hshuf : IsShuffling p sha256 indices seed L)
+    (indices seed L : List Nat) (hshuf : MatchesSpecShuffling p sha256 indices seed L)
     (committees_per_slot : Nat)
     (hcps : get_committee_count_per_slot p indices.length = .ok committees_per_slot)
     (hspe0 : 0 < p.SLOTS_PER_EPOCH) (hn : 0 < indices.length)
@@ -940,7 +944,7 @@ theorem get_committee_count_per_slot_pos (p : Preset) (n x : Nat)
 `self.shuffled_position(validator_index)`. `convert_to_slot_and_index` gives
 `(epoch * slots_per_epoch + nth / committees_per_slot, nth % committees_per_slot)`. The result is
 `(slot, index, committee_position, committee_len, committees_at_slot)`. -/
-def lhGetAttestationDuties (position : Option Usize) (shuffling_len committees_per_slot
+def lighthouseGetAttestationDuties (position : Option Usize) (shuffling_len committees_per_slot
     slots_per_epoch : Usize) (epoch : Nat) :
     Result (RResult (Option (Nat × Nat × Nat × Nat × Nat)) ArithError) :=
   match position with
@@ -961,7 +965,7 @@ def lhGetAttestationDuties (position : Option Usize) (shuffling_len committees_p
 open CacheProofs.Spec.CommitteeCache in
 theorem get_attestation_duties_equiv (p : Preset) (sha256 : List Nat → List Nat)
     (indices seed : List Nat) (shuffling : Slice Usize)
-    (hshuf : IsShuffling p sha256 indices seed (shuffling.val.map (·.val)))
+    (hshuf : MatchesSpecShuffling p sha256 indices seed (shuffling.val.map (·.val)))
     (hnodup : (shuffling.val.map (·.val)).Nodup)
     (committees_per_slot slots_per_epoch : Usize)
     (hcps : get_committee_count_per_slot p indices.length = .ok committees_per_slot.val)
@@ -975,7 +979,7 @@ theorem get_attestation_duties_equiv (p : Preset) (sha256 : List Nat → List Na
     (hposition : position.map (·.val) =
       if v ∈ shuffling.val.map (·.val) then some ((shuffling.val.map (·.val)).idxOf v)
       else none) :
-    ∃ duty, lhGetAttestationDuties position (Slice.len shuffling) committees_per_slot
+    ∃ duty, lighthouseGetAttestationDuties position (Slice.len shuffling) committees_per_slot
         slots_per_epoch epoch = ok (.Ok duty) ∧
       match duty with
       | none => get_committee_assignment p sha256 indices seed current_epoch epoch v = .ok none
@@ -1019,7 +1023,7 @@ theorem get_attestation_duties_equiv (p : Preset) (sha256 : List Nat → List Na
       committeeSlice p L.length committees_per_slot.val L
         (epoch * p.SLOTS_PER_EPOCH + k.val / committees_per_slot.val)
         (k.val % committees_per_slot.val), ?_, ?_, ?_⟩
-    · simp only [lhGetAttestationDuties, hc, hduty, bind_tc_ok]
+    · simp only [lighthouseGetAttestationDuties, hc, hduty, bind_tc_ok]
     · rw [hsearch]
       show Except.ok (match List.findSome? (assignmentAt p L.length committees_per_slot.val L v)
         _ with | none => none | some a => a) = _
@@ -1054,8 +1058,8 @@ theorem shuffled_position_inverse (shuffling : Slice Usize) (validator_count : U
     ∃ positions, shuffling_positions shuffling validator_count = ok (.Ok positions) ∧
       positions.val.length = validator_count.val ∧
       (∀ i (h : i < shuffling.val.length),
-        lhShuffledPosition positions.val shuffling.val[i].val = some i) ∧
-      (∀ v, v ∉ shuffling.val.map (·.val) → lhShuffledPosition positions.val v = none) := by
+        lighthouseShuffledPosition positions.val shuffling.val[i].val = some i) ∧
+      (∀ v, v ∉ shuffling.val.map (·.val) → lighthouseShuffledPosition positions.val v = none) := by
   obtain ⟨r, hr, positions, rfl, hlen, hpos⟩ :=
     spec_exists (shuffling_positions_spec shuffling validator_count hnodup hrange)
   refine ⟨positions, hr, hlen, ?_, ?_⟩
