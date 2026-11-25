@@ -5,17 +5,11 @@ import EpochProofs.Spec.PresetBounds
 import EpochProofs.CacheBridge.EpochCache
 
 /-!
-# The Lighthouse epoch equals Etheorem, with the cache reads checked
+# The cache reads of the epoch give the spec values
 
-`lighthouse_order_epoch_etheorem_reachable` (`Etheorem/Final.lean`) is about the epoch model.
-The model computes the participation totals and the total active balance with the spec
-functions. Lighthouse reads them from the progressive balances cache and the epoch cache.
-
-This file adds the cache side. When the caches are built from the epoch start state (the cache
-build invariants `Coherent` and the active sum), each value that Lighthouse reads from them
-equals the spec value that the model computes. The build invariants are what the cache proofs
-of `CacheProofs` give for the cache build code (`build_coherent`,
-`single_pass_total_active_balance`).
+The epoch model computes the participation totals and the total active balance with the spec
+functions. Lighthouse reads them from the progressive balances cache and the epoch cache. When the
+caches are correct at the epoch start state, each value that Lighthouse reads is the spec value.
 -/
 
 namespace EpochProofs.CacheBridge

@@ -965,7 +965,7 @@ structure CommitteeStepFacts [PresetCfg] (o : Oracle) (s : BeaconState) : Prop w
 
 /-- The part of `CommitteeStepFacts` that is not yet carried from the epoch input: the registry
 limit `2^40` and valid public keys. The effective balance cap is carried
-(`epochToCommittees_effective_balances`), and the two lengths hold on every Etheorem state. -/
+(`epochToCommittees_effective_balances`), and the two lengths hold on every EthLib state. -/
 structure SelectionStateFacts (o : Oracle) (s : BeaconState) : Prop where
   regLen : s.validators.length ≤ 2 ^ 40
   keys : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true

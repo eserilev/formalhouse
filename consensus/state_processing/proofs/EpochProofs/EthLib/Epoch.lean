@@ -41,13 +41,18 @@ open _root_.EthLib.Consensus _root_.EthLib.Serialization.Ssz
 
 variable {preset : Preset} {config : Config} {fork : _root_.EthLib.Base.Fork}
 
-/-- The lists of the input state have room for the items that one epoch adds. -/
-structure EpochRoom (electra : .pectra ≤ fork) (s : BeaconState preset fork) : Prop where
-  /-- One epoch reads at most `MAX_PENDING_DEPOSITS_PER_EPOCH` deposits of the queue. Each one adds
-  at most one validator. The registry stays within `VALIDATOR_REGISTRY_LIMIT`. -/
-  deposits : s.validators.data.size +
+/-- The registry has room for the deposits of one epoch. One epoch reads at most
+`MAX_PENDING_DEPOSITS_PER_EPOCH` deposits of the queue, and each one adds at most one validator. The
+registry stays within `VALIDATOR_REGISTRY_LIMIT`. -/
+def RoomForDeposits (electra : .pectra ≤ fork) (s : BeaconState preset fork) : Prop :=
+  s.validators.data.size +
     min (s.pendingDeposits electra).data.size preset.MAX_PENDING_DEPOSITS_PER_EPOCH.toNat ≤
       preset.VALIDATOR_REGISTRY_LIMIT.toNat
+
+/-- The lists of the input state have room for the items that one epoch adds. -/
+structure EpochRoom (electra : .pectra ≤ fork) (s : BeaconState preset fork) : Prop where
+  /-- The registry has room for the deposits of one epoch. -/
+  deposits : RoomForDeposits electra s
   /-- The list of historical summaries is below `HISTORICAL_ROOTS_LIMIT`. -/
   historicalSummaries :
     (s.historicalSummaries (Nat.le_trans (by decide) electra)).data.size <

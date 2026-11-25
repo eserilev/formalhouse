@@ -10,6 +10,7 @@ import EpochProofs.CacheBridge.EpochCache
 import EpochProofs.Trusted.CacheUpkeep
 import EpochProofs.Compose.Epoch
 import EpochProofs.Compose.Fulu
+import EpochProofs.EthLib.Shuffle
 
 /-!
 # The assumptions of the main theorems
@@ -18,6 +19,8 @@ import EpochProofs.Compose.Fulu
   `process_epoch` on a chain from a start state with the facts of a genesis state. The total stake
   stays below its bounds.
 - The chain, `GloasChainAssumptions` and `FuluChainAssumptions`: what the epoch needs to succeed.
+- The preset, `PresetMatchesEthLib`: the preset values are those of EthLib. Proved for mainnet and
+  minimal.
 - The caches, `GloasCacheAssumptions`: where each cache that the Gloas epoch reads came from. The
   Fulu model reads the spec values, so the Fulu theorems take no cache facts.
 - The untranslated Rust, `GloasRustGlueFacts` and `FuluRustGlueFacts`: what the code that Aeneas
@@ -67,6 +70,46 @@ structure FuluChainAssumptions (oracle : Spec.Oracle) (state : Spec.BeaconState)
   historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit state
 
 end Chain
+
+/-! ## The preset -/
+
+section Preset
+
+variable [Spec.PresetCfg]
+
+open EpochProofs.EthLib
+open _root_.EthLib.Consensus (Config Preset)
+
+/-- The preset of the theorems and the preset of EthLib have the same values. The other fields are
+facts about these values. They hold on mainnet and minimal. -/
+structure PresetMatchesEthLib (preset : Preset) (config : Config) : Prop where
+  /-- The values are equal. -/
+  values : toSpecPreset preset config = Spec.P
+  /-- No epoch step divides by zero. -/
+  divisorsNonzero : DivisorsNonzero preset config
+  /-- The bounds that the committee computations use. -/
+  committeeBounds : CommitteeBounds preset
+  /-- Lighthouse's limit on the historical summaries is at most the spec limit. -/
+  historicalRootsLimit :
+    Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT ≤ preset.HISTORICAL_ROOTS_LIMIT.toNat
+
+end Preset
+
+/-- Mainnet. -/
+theorem presetMatchesEthLib_mainnet :
+    @PresetMatchesEthLib Spec.mainnetCfg _root_.EthLib.Consensus.Preset.mainnet
+      _root_.EthLib.Consensus.Config.mainnet :=
+  letI := Spec.mainnetCfg
+  ⟨EthLib.toSpecPreset_mainnet, EthLib.divisorsNonzero_mainnet, EthLib.committeeBounds_mainnet,
+    by decide⟩
+
+/-- Minimal. -/
+theorem presetMatchesEthLib_minimal :
+    @PresetMatchesEthLib Spec.minimalCfg _root_.EthLib.Consensus.Preset.minimal
+      _root_.EthLib.Consensus.Config.minimal :=
+  letI := Spec.minimalCfg
+  ⟨EthLib.toSpecPreset_minimal, EthLib.divisorsNonzero_minimal, EthLib.committeeBounds_minimal,
+    by decide⟩
 
 /-! ## The caches
 

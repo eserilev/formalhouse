@@ -13,8 +13,7 @@ runs returns.
 The theorems here take that directly. `SelOk` says that one selection returns at least `size`
 items, all of them candidates. Each theorem asks `SelOk` only for the selections that the step
 runs, with the seeds that it computes. With that and the state facts (`CommFacts`), the step
-succeeds. `AgreesEtheorem/Committees.lean` proves the `SelOk` facts from a successful Etheorem
-step (`selOk_of_etheorem`), so the pyspec preconditions are not needed there.
+succeeds.
 
 The proofs are those of `TotalityCommittees.lean` with `compute_balance_weighted_selection_total`
 replaced by the `SelOk` hypothesis.
@@ -40,13 +39,12 @@ theorem SelOk.congr {p : Preset} {o : Oracle} {s1 s2 : BeaconState}
   rw [hv]
   exact hr
 
-/-- The state facts that the committee steps read and Etheorem does not check. The reference
-raises without them where Etheorem does not: `eth_aggregate_pubkeys` asserts `KeyValidate` on
-each key, and the reference checks the `uint64` products and the shuffle arithmetic that Etheorem
-computes in `Nat`. Each holds on reachable states: the slot is far from `2^64`, the RANDAO vector
+/-- The state facts that the committee steps read, beyond the selections. The reference raises
+without them: `eth_aggregate_pubkeys` asserts `KeyValidate` on each key, and the `uint64` products
+and the shuffle arithmetic are checked. Each holds on reachable states: the slot is far from `2^64`, the RANDAO vector
 has its SSZ length, the registry limit is `2^40`, the effective balance is at most
 `MAX_EFFECTIVE_BALANCE_ELECTRA` (`EBOk`), and a deposit adds a validator only after its signature
-checks. `CommFacts` without the two vector lengths, which hold on every Etheorem state. -/
+checks. `CommFacts` without the two vector lengths, which hold on every EthLib state. -/
 structure SelFacts [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
   slot : s.slot + 8192 < 2 ^ 64
   randao : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR
