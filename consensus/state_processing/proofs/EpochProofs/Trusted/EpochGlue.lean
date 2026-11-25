@@ -45,11 +45,3 @@ No bound is proved for these. Each is one statement that the proofs trust.
 - N4 `SlashingsSumLink` (line 190): `safe_sum` of `state.slashings` is the spec `uint64Sum`.
   The spec sum is proved total (`slashingsPreamble_ok`).
 -/
-
-namespace EpochProofs.Spec
-
-/-- N1: the active validators of an epoch fit in the shuffle. -/
-def ShuffleSize (s : BeaconState) (e : Nat) : Prop :=
-  (get_active_validator_indices s e).length ≤ 2 ^ 24
-
-end EpochProofs.Spec

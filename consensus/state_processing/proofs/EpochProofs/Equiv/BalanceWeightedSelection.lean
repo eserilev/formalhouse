@@ -20,7 +20,6 @@ namespace EpochProofs
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 abbrev EBInst (B : Type) := types.state.balance_weighted_selection.EffectiveBalances B
-abbrev SelErr := types.state.balance_weighted_selection.SelectionError
 
 /-- `inst.effective_balance balances i` reads the effective balance `ebs[i]`. -/
 def EBLink {B : Type} (inst : EBInst B) (balances : B) (ebs : List Nat) : Prop :=

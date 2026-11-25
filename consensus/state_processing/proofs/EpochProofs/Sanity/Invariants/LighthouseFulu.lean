@@ -423,7 +423,7 @@ theorem epochRestFulu_nf [PresetCfg] [PresetCfg.Ok] [FuluCfg] (o : Oracle) (s1 :
 the state, the spec skips the inactivity and rewards steps, and the single pass skips them
 through `after_genesis`. -/
 theorem process_epoch_lh_full_fulu_genesis [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
-    (hexitb : ExitBounds t) (hsupply_t : EpochBalanceBounds t) (hvalid : WithdrawableValid t)
+    (hexitb : ExitEpochsU64 t) (hsupply_t : EpochBalanceBounds t) (hvalid : WithdrawableValid t)
     (hcons : ConsolidationsInRange t)
     (hgen : t.slot / P.SLOTS_PER_EPOCH = GENESIS_EPOCH) :
     SameResultOrBothFail (process_epoch_lh_full_fulu o t)
@@ -489,7 +489,7 @@ as the Fulu spec epoch. Beyond the hypotheses of `process_epoch_lh_sameResultOrB
 for the deposit statuses that Lighthouse predicts, and `ConsolidationsInRange`, so that the
 validators that consolidations name are existing validators. -/
 theorem process_epoch_lh_full_fulu_sameResultOrBothFail' [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
-    (hslot : t.slot < 2 ^ 64) (heb : EBOk P t) (hexitb : ExitBounds t)
+    (hslot : t.slot < 2 ^ 64) (heb : EBOk P t) (hexitb : ExitEpochsU64 t)
     (hsupply_t : EpochBalanceBounds t) (hvalid : WithdrawableValid t)
     (hcons : ConsolidationsInRange t) :
     SameResultOrBothFail (process_epoch_lh_full_fulu o t)

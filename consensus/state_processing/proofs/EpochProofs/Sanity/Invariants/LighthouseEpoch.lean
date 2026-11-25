@@ -1024,10 +1024,6 @@ theorem process_epoch_lh_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] (o : Or
 
 /-! ## On the states at the end of an epoch -/
 
-/-- Exit epochs are `u64` values. -/
-def ExitBounds (s : BeaconState) : Prop :=
-  ∀ v ∈ s.validators, v.exit_epoch ≤ FAR_FUTURE_EPOCH
-
 /-- The supply facts of the epoch: each balance is below `2^62`, the effective balances sum to
 less than `2^60` Gwei, and three times the slashed sum fits in a `u64`. -/
 def EpochBalanceBounds (s : BeaconState) : Prop :=
@@ -1048,7 +1044,7 @@ private theorem SameResultOrBothFail.symm' {α : Type} {x y : SpecM α} (h : Sam
 /-- On mainnet, at a state that `process_epoch` starts from, the Lighthouse epoch gives the
 same `ok` results as the spec epoch. -/
 theorem process_epoch_lh_sameResultOrBothFail' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
-    (hslot : t.slot < 2 ^ 64) (heb : EBOk P t) (hexit : ExitBounds t)
+    (hslot : t.slot < 2 ^ 64) (heb : EBOk P t) (hexit : ExitEpochsU64 t)
     (hsupply : EpochBalanceBounds t) :
     SameResultOrBothFail (process_epoch_lh o t) (process_epoch P o t) := by
   obtain ⟨hinv, hrows, hentry⟩ := hb

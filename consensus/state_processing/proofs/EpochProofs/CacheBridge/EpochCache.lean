@@ -25,11 +25,6 @@ open CacheProofs.PB (activeAt ebAt)
 def ecValidator (v : EpochProofs.Spec.Validator) : CacheProofs.Spec.EpochCache.Validator :=
   ⟨v.effective_balance, v.activation_epoch, v.exit_epoch⟩
 
-/-- The state of the epoch cache model at epoch `epoch`. -/
-def ecState (s : EpochProofs.Spec.BeaconState) (epoch : Nat) :
-    CacheProofs.Spec.EpochCache.BeaconState :=
-  ⟨s.validators.map ecValidator, epoch⟩
-
 /-- `integer_squareroot` of the epoch spec is `Nat.sqrt`. -/
 theorem integer_squareroot_eq_sqrt (n : Nat) :
     EpochProofs.Spec.integer_squareroot n = Nat.sqrt n := by
