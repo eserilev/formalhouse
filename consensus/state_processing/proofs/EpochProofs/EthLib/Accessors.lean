@@ -23,13 +23,16 @@ Two hypotheses occur:
 namespace EpochProofs.EthLib
 
 open _root_.EthLib.Base _root_.EthLib.Base.Uint64
-open _root_.EthLib.Consensus
+open _root_.EthLib.Consensus _root_.EthLib.Serialization.Ssz
 
 variable {preset : Preset} {config : Config} {fork : _root_.EthLib.Base.Fork}
 
 /-- Before Gloas, the type of the registry holds the limit. -/
 theorem registryWithinLimit_of_fulu (s : BeaconState preset .fusaka) : s.RegistryWithinLimit :=
   s.validators.bound (by decide)
+
+/-- The reference state is the EthLib state. -/
+abbrev SameState (a : BeaconState preset fork) (b : Spec.BeaconState) : Prop := b = toSpecState a
 
 /-! ## Epochs -/
 
@@ -54,6 +57,47 @@ theorem get_previous_epoch_eq (hslots : preset.SLOTS_PER_EPOCH ≠ 0)
   · rw [ite_eq_left h]
   · rw [ite_eq_right h, Nat.sub_self]
     exact (Nat.sub_eq_zero_of_le (Nat.not_lt.mp h)).symm
+
+theorem next_epoch_same (s : BeaconState preset fork) :
+    SameOutcome SameNumber (liftAccessor (liftArith (addChecked (getCurrentEpoch s) 1)))
+      (Spec.uint64Add (getCurrentEpoch s).toNat 1) :=
+  (addChecked_same (getCurrentEpoch s) 1).liftArith.liftAccessor
+
+/-! ## Circular buffers -/
+
+theorem toNat_mod_lt_length {α : Type} {n i : UInt64} (buffer : Vector α n.toNat) (hn : n ≠ 0) :
+    (i % n).toNat < buffer.toList.length := by
+  rw [Vector.length_toList]
+  exact toNat_mod_lt hn
+
+theorem readCircular_same {α : Type} {n : UInt64} (buffer : Vector α n.toNat) (i : UInt64) :
+    SameOutcome (fun a b => b = a) (readCircular buffer i)
+      (do Spec.listGet buffer.toList (← Spec.uint64Mod i.toNat n.toNat)) := by
+  unfold readCircular
+  by_cases hn : n = 0
+  · subst hn
+    exact .failed
+  · rw [dite_eq_right hn, uint64Mod_eq hn]
+    have hlt := toNat_mod_lt_length (i := i) buffer hn
+    simp only [bind_ok, Spec.listGet, List.getElem?_eq_getElem hlt]
+    exact .returned (by simp)
+
+theorem writeCircularRooted_same {α β : Type} [SszType α] {n : UInt64}
+    (read : α → β) (buffer : RootedVector α n.toNat) (i : UInt64) (value : α) :
+    SameOutcome (fun a b => b = a.elements.toList.map read)
+      (writeCircularRooted buffer i value)
+      (do
+        let position ← Spec.uint64Mod i.toNat n.toNat
+        Spec.listSet (buffer.elements.toList.map read) position (read value)) := by
+  unfold writeCircularRooted
+  by_cases hn : n = 0
+  · subst hn
+    exact .failed
+  · rw [dite_eq_right hn, uint64Mod_eq hn]
+    have hlt := toNat_mod_lt_length (i := i) buffer.elements hn
+    simp only [bind_ok, Spec.listSet, List.length_map, hlt, ite_true]
+    refine .returned ?_
+    simp [RootedVector.set, Vector.toList_set, List.map_set]
 
 /-! ## Block roots -/
 
@@ -96,8 +140,6 @@ theorem get_block_root_same (s : BeaconState preset fork) (epoch : UInt64) :
   exact get_block_root_at_slot_same s slot
 
 /-! ## Sets of validator indices -/
-
-theorem bind_ok {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
 
 /-- The reference list holds the same validator indices as the EthLib list. The indices are
 distinct, and each one names a validator of the state. -/

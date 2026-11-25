@@ -100,7 +100,7 @@ theorem newBits_eq (bits : Bitvector JUSTIFICATION_BITS_LENGTH.toNat) (previous 
 
 theorem weigh_justification_and_finalization_same (hslots : preset.SLOTS_PER_EPOCH ≠ 0)
     (s : BeaconState preset fork) (total previousTarget currentTarget : UInt64) :
-    SameOutcome (fun a b => b = toSpecState a)
+    SameOutcome SameState
       (weighJustificationAndFinalization s total previousTarget currentTarget)
       (Spec.weigh_justification_and_finalization (toSpecPreset preset config) (toSpecState s)
         total.toNat previousTarget.toNat currentTarget.toNat) := by
@@ -172,13 +172,13 @@ theorem weigh_justification_and_finalization_same (hslots : preset.SLOTS_PER_EPO
   refine .bind_pure (finalizes_same s _ justified' _ s.currentJustifiedCheckpoint _ _
     (extract02 bit0 bit1 oldBits[1] oldBits[2]) 1 _) ?_
   rintro byOldCurrent1 _ rfl
-  simp only [withCheckpoints, toSpecState, hbits]
+  simp only [SameState, withCheckpoints, toSpecState, hbits]
   cases byOldPrevious3 <;> cases byOldPrevious2 <;> cases byOldCurrent2 <;>
     cases byOldCurrent1 <;> rfl
 
 theorem justification_same (altair : .altair ≤ fork) (hslots : preset.SLOTS_PER_EPOCH ≠ 0)
     {s : BeaconState preset fork} (hregistry : s.RegistryWithinLimit) :
-    SameOutcome (fun a b => b = toSpecState a) (processJustificationAndFinalization s)
+    SameOutcome SameState (processJustificationAndFinalization s)
       (Spec.process_justification_and_finalization (toSpecPreset preset config)
         (toSpecState s)) := by
   unfold processJustificationAndFinalization Spec.process_justification_and_finalization

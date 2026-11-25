@@ -1,4 +1,5 @@
 import EthLib.Consensus.Containers.State
+import EpochProofs.EthLib.SimpSets
 import EpochProofs.Spec.Block.FuluTypes
 
 /-!
@@ -231,6 +232,78 @@ def toSpecFuluState {preset : Preset} (s : BeaconState preset .fusaka) : Spec.Fu
   { state := toSpecState s
     latest_execution_payload_header :=
       toSpecExecutionPayloadHeader (s.latestExecutionPayloadHeader (by decide)) }
+
+/-! ## Reads of the fields that every fork has -/
+
+section ReadAll
+
+variable {preset : Preset} {fork : _root_.EthLib.Base.Fork} (s : BeaconState preset fork)
+
+@[spec_state] theorem toSpecState_genesis_time :
+    (toSpecState s).genesis_time =
+      s.genesisTime.toNat := rfl
+
+@[spec_state] theorem toSpecState_genesis_validators_root :
+    (toSpecState s).genesis_validators_root =
+      s.genesisValidatorsRoot := rfl
+
+@[spec_state] theorem toSpecState_slot :
+    (toSpecState s).slot =
+      s.slot.toNat := rfl
+
+@[spec_state] theorem toSpecState_fork :
+    (toSpecState s).«fork» =
+      toSpecFork s.forkVersions := rfl
+
+@[spec_state] theorem toSpecState_latest_block_header :
+    (toSpecState s).latest_block_header =
+      toSpecBeaconBlockHeader s.latestBlockHeader := rfl
+
+@[spec_state] theorem toSpecState_block_roots :
+    (toSpecState s).block_roots =
+      s.blockRoots.elements.toList := rfl
+
+@[spec_state] theorem toSpecState_state_roots :
+    (toSpecState s).state_roots =
+      s.stateRoots.elements.toList := rfl
+
+@[spec_state] theorem toSpecState_historical_roots :
+    (toSpecState s).historical_roots =
+      s.historicalRoots.data.toList := rfl
+
+@[spec_state] theorem toSpecState_validators :
+    (toSpecState s).validators =
+      readList toSpecValidator s.validators.data := rfl
+
+@[spec_state] theorem toSpecState_balances :
+    (toSpecState s).balances =
+      readList UInt64.toNat s.balances.data := rfl
+
+@[spec_state] theorem toSpecState_randao_mixes :
+    (toSpecState s).randao_mixes =
+      s.randaoMixes.elements.toList := rfl
+
+@[spec_state] theorem toSpecState_slashings :
+    (toSpecState s).slashings =
+      s.slashings.elements.toList.map UInt64.toNat := rfl
+
+@[spec_state] theorem toSpecState_justification_bits :
+    (toSpecState s).justification_bits =
+      s.justificationBits.bits.toList := rfl
+
+@[spec_state] theorem toSpecState_previous_justified_checkpoint :
+    (toSpecState s).previous_justified_checkpoint =
+      toSpecCheckpoint s.previousJustifiedCheckpoint := rfl
+
+@[spec_state] theorem toSpecState_current_justified_checkpoint :
+    (toSpecState s).current_justified_checkpoint =
+      toSpecCheckpoint s.currentJustifiedCheckpoint := rfl
+
+@[spec_state] theorem toSpecState_finalized_checkpoint :
+    (toSpecState s).finalized_checkpoint =
+      toSpecCheckpoint s.finalizedCheckpoint := rfl
+
+end ReadAll
 
 /-! ## Reads of the fields that only some forks have -/
 

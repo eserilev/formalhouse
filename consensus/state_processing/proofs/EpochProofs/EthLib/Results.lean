@@ -131,4 +131,22 @@ theorem divChecked_same (a b : UInt64) :
   exact .ite (by rw [← UInt64.toNat_inj]; rfl) (fun _ => .failed)
     (fun _ => .returned (UInt64.toNat_div a b).symm)
 
+theorem uint64Div_eq {a b : UInt64} (hb : b ≠ 0) :
+    Spec.uint64Div a.toNat b.toNat = .ok (a / b).toNat := by
+  have hb' : b.toNat ≠ 0 := fun h => hb (UInt64.toNat_inj.mp h)
+  simp [Spec.uint64Div, hb', UInt64.toNat_div, Pure.pure, Except.pure]
+
+theorem uint64Mod_eq {a b : UInt64} (hb : b ≠ 0) :
+    Spec.uint64Mod a.toNat b.toNat = .ok (a % b).toNat := by
+  have hb' : b.toNat ≠ 0 := fun h => hb (UInt64.toNat_inj.mp h)
+  simp [Spec.uint64Mod, hb', UInt64.toNat_mod, Pure.pure, Except.pure]
+
+theorem toNat_min (a b : UInt64) : (min a b).toNat = min a.toNat b.toNat := by
+  rw [UInt64.min_def]
+  split <;> rename_i h <;> rw [UInt64.le_iff_toNat_le] at h <;> omega
+
+theorem bind_ok {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
+
+theorem pure_eq_ok {ε α : Type} (a : α) : (Pure.pure a : Except ε α) = .ok a := rfl
+
 end EpochProofs.EthLib
