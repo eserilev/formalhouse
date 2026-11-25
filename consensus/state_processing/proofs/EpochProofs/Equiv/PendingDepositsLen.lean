@@ -51,7 +51,7 @@ theorem process_pending_deposits_postponed_len [EpochProofs.Spec.CurrentPreset] 
   refine ⟨r, hr, ?_⟩
   intro o ho
   subst ho
-  simp only [absDeposits] at hq
+  simp only [depositDecisionsToSpec] at hq
   exact Spec.depositDecisions_postponed_len _ _ _ _ _ _ _ hq.symm
 
 end EpochProofs

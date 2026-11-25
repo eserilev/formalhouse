@@ -10,44 +10,45 @@ import EpochProofs.Sanity.Invariants.LighthouseOrder
 (`resets.rs`), the historical summaries update, the participation rotation and the sync
 committee update. The checks and indices are the translated functions of `tail_updates.rs`, and
 the next sync committee indices are the translated `next_sync_committee_indices`. The reads and
-the writes are untranslated code (`TailGlue`), each with the fact that links it to the spec
-(`TailLinks`). `tail_spec` shows that `tail` returns the state of the model `lhTailOrder`.
+the writes are untranslated code (`UntranslatedEndOfEpoch`), each with the fact that links it to
+the spec (`UntranslatedEndOfEpochFacts`). `translatedEndOfEpoch_matches_model` shows that `tail`
+returns the state of the model `lhTailOrder`.
 -/
 
 namespace EpochProofs.Spec
 
 /-- The steps of `lhRestOrder` after the PTC window. -/
-def lhTailOrder [CurrentPreset] (o : Oracle) (t : BeaconState) : SpecM BeaconState := do
+def lhTailOrder [CurrentPreset] (oracle : Oracle) (t : BeaconState) : SpecM BeaconState := do
   let t ← lhEth1DataReset t
   let t ← lhSlashingsReset t
   let t ← lhRandaoMixesReset t
-  let t ← lhHistoricalSummariesUpdate o t
+  let t ← lhHistoricalSummariesUpdate oracle t
   let t := process_participation_flag_updates t
-  process_sync_committee_updates P o t
+  process_sync_committee_updates P oracle t
 
 /-- The steps of `lhTailOrder` before the sync committee update. -/
-def lhResets [CurrentPreset] (o : Oracle) (t : BeaconState) : SpecM BeaconState := do
+def lhResets [CurrentPreset] (oracle : Oracle) (t : BeaconState) : SpecM BeaconState := do
   let t ← lhEth1DataReset t
   let t ← lhSlashingsReset t
   let t ← lhRandaoMixesReset t
-  let t ← lhHistoricalSummariesUpdate o t
+  let t ← lhHistoricalSummariesUpdate oracle t
   pure (process_participation_flag_updates t)
 
-theorem lhTailOrder_eq [CurrentPreset] (o : Oracle) (t : BeaconState) :
-    lhTailOrder o t = lhResets o t >>= process_sync_committee_updates P o := by
+theorem lhTailOrder_eq [CurrentPreset] (oracle : Oracle) (t : BeaconState) :
+    lhTailOrder oracle t = lhResets oracle t >>= process_sync_committee_updates P oracle := by
   simp only [lhTailOrder, lhResets, bind_assoc, pure_bind]
 
-theorem lhRestOrder_eq [CurrentPreset] (o : Oracle) (t : BeaconState) :
-    lhRestOrder o t = (do
-      let t ← process_proposer_lookahead P o t
-      let t ← process_ptc_window P o t
-      lhTailOrder o t) := rfl
+theorem lhRestOrder_eq [CurrentPreset] (oracle : Oracle) (t : BeaconState) :
+    lhRestOrder oracle t = (do
+      let t ← process_proposer_lookahead P oracle t
+      let t ← process_ptc_window P oracle t
+      lhTailOrder oracle t) := rfl
 
 /-- The sync committee of `indices`, as `sync_committee_from_indices` builds it. -/
-def syncCommitteeOf (o : Oracle) (s : BeaconState) (indices : List ValidatorIndex) :
+def syncCommitteeOf (oracle : Oracle) (s : BeaconState) (indices : List ValidatorIndex) :
     SpecM SyncCommittee := do
   let pubkeys ← indices.mapM fun index => do pure (← listGet s.validators index).pubkey
-  let aggregate_pubkey ← eth_aggregate_pubkeys o pubkeys
+  let aggregate_pubkey ← eth_aggregate_pubkeys oracle pubkeys
   pure { pubkeys, aggregate_pubkey }
 
 /-- The check of `process_sync_committee_updates`. -/
@@ -55,12 +56,12 @@ def syncDue (p : Preset) (s : BeaconState) : SpecM Bool := do
   let next_epoch ← uint64Add (← get_current_epoch p s) 1
   pure ((← uint64Mod next_epoch p.EPOCHS_PER_SYNC_COMMITTEE_PERIOD) == 0)
 
-theorem process_sync_committee_updates_split (p : Preset) (o : Oracle) (s : BeaconState) :
-    process_sync_committee_updates p o s = (do
+theorem process_sync_committee_updates_split (p : Preset) (oracle : Oracle) (s : BeaconState) :
+    process_sync_committee_updates p oracle s = (do
       if ← syncDue p s then
         let s := { s with current_sync_committee := s.next_sync_committee }
-        let indices ← get_next_sync_committee_indices p o s
-        pure { s with next_sync_committee := ← syncCommitteeOf o s indices }
+        let indices ← get_next_sync_committee_indices p oracle s
+        pure { s with next_sync_committee := ← syncCommitteeOf oracle s indices }
       else pure s) := by
   unfold process_sync_committee_updates syncDue get_next_sync_committee syncCommitteeOf
   simp only [bind_assoc, pure_bind]
@@ -72,195 +73,218 @@ namespace EpochProofs.Compose
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 /-- A translated call that agrees with an `ok` spec result returns `Ok`. -/
-theorem absResult_ok {α β : Type} {f : α → β} {r : core.result.Result α safe_arith.ArithError}
-    {x : β} (h : absResult f r = .ok x) : ∃ v, r = .Ok v ∧ f v = x := by
+theorem resultToSpec_ok {α β : Type} {f : α → β} {r : core.result.Result α safe_arith.ArithError}
+    {x : β} (h : resultToSpec f r = .ok x) : ∃ v, r = .Ok v ∧ f v = x := by
   cases r with
   | Ok v => exact ⟨v, rfl, Except.ok.inj h⟩
   | Err e => cases h
 
 /-- The untranslated Rust of the end of `altair.rs` `process_epoch`. -/
-structure TailGlue (σ : Type) where
+structure UntranslatedEndOfEpoch (RustState : Type) where
   /-- `process_eth1_data_reset`: the slot, `SlotsPerEth1VotingPeriod`, the votes reset. -/
-  slot : σ → U64
-  eth1Period : U64
-  clearVotes : σ → σ
+  slot : RustState → U64
+  eth1VotingPeriod : U64
+  clearVotes : RustState → RustState
   /-- `process_slashings_reset` and `process_randao_mixes_reset`: the current epoch, the vector
   lengths, the writes. `none`: an index out of bounds. -/
-  currentEpoch : σ → U64
+  currentEpoch : RustState → U64
   slashingsLength : U64
-  resetSlashing : σ → U64 → Option σ
+  resetSlashing : RustState → U64 → Option RustState
   mixesLength : U64
-  copyMix : σ → U64 → U64 → Option σ
+  copyMix : RustState → U64 → U64 → Option RustState
   /-- `process_historical_summaries_update`: `state.next_epoch()?`, the constants, the push. -/
-  nextEpoch : σ → Option U64
+  nextEpoch : RustState → Option U64
   slotsPerHistoricalRoot : U64
   slotsPerEpoch : U64
-  pushSummary : σ → Option σ
+  pushSummary : RustState → Option RustState
   /-- `rotate_participation_flags`. -/
-  rotate : σ → σ
+  rotateParticipation : RustState → RustState
   /-- `process_sync_committee_updates`: the check, the write of the current committee, the reads
   for `next_sync_committee_indices`, and `sync_committee_from_indices` with its write. -/
-  syncDue : σ → Option Bool
-  writeCurrentSync : σ → Option σ
-  H : Type
-  hash : ShuffleHashInst H
-  effectiveBalances : EBInst σ
-  syncIndices : σ → Slice Usize
+  syncDue : RustState → Option Bool
+  writeCurrentSync : RustState → Option RustState
+  Hash : Type
+  hash : ShuffleHashInst Hash
+  effectiveBalances : EffectiveBalanceSource RustState
+  syncIndices : RustState → Slice Usize
   syncDomain : Array U8 4#usize
-  syncEpoch : σ → U64
-  syncMix : σ → Array U8 32#usize
+  syncEpoch : RustState → U64
+  syncMix : RustState → Array U8 32#usize
   syncSize : Usize
-  syncConstants : σ → LhSelectionConstants
-  writeNextSync : σ → alloc.vec.Vec Usize → Option σ
+  syncConstants : RustState → LhSelectionConstants
+  writeNextSync : RustState → alloc.vec.Vec Usize → Option RustState
 
-variable {σ : Type}
+variable {RustState : Type}
 
 /-- The resets, the historical summaries update and the participation rotation, as the calls of
-the translated functions joined by the untranslated code `G`. `none`: the Rust returns an error. -/
-def resets (G : TailGlue σ) (st : σ) : Result (Option σ) := do
-  let r ← per_epoch_processing.tail_updates.eth1_data_votes_reset_due (G.slot st) G.eth1Period
+the translated functions joined by the untranslated code. `none`: the Rust returns an error. -/
+def translatedResets (code : UntranslatedEndOfEpoch RustState)
+    (rustState : RustState) : Result (Option RustState) := do
+  let r ← per_epoch_processing.tail_updates.eth1_data_votes_reset_due (code.slot rustState)
+    code.eth1VotingPeriod
   match r with
   | .Err _ => ok none
   | .Ok due =>
-  let st := if due then G.clearVotes st else st
-  let r ← per_epoch_processing.tail_updates.slashings_reset_index (G.currentEpoch st)
-    G.slashingsLength
+  let rustState := if due then code.clearVotes rustState else rustState
+  let r ← per_epoch_processing.tail_updates.slashings_reset_index (code.currentEpoch rustState)
+    code.slashingsLength
   match r with
   | .Err _ => ok none
   | .Ok none => ok none
   | .Ok (some i) =>
-  match G.resetSlashing st i with
+  match code.resetSlashing rustState i with
   | none => ok none
-  | some st =>
-  let r ← per_epoch_processing.tail_updates.randao_mixes_reset_indices (G.currentEpoch st)
-    G.mixesLength
+  | some rustState =>
+  let r ← per_epoch_processing.tail_updates.randao_mixes_reset_indices (code.currentEpoch rustState)
+    code.mixesLength
   match r with
   | .Err _ => ok none
   | .Ok none => ok none
   | .Ok (some (source, target)) =>
-  match G.copyMix st source target with
+  match code.copyMix rustState source target with
   | none => ok none
-  | some st =>
-  match G.nextEpoch st with
+  | some rustState =>
+  match code.nextEpoch rustState with
   | none => ok none
   | some next =>
-  let r ← per_epoch_processing.tail_updates.historical_summary_due next G.slotsPerHistoricalRoot
-    G.slotsPerEpoch
+  let r ← per_epoch_processing.tail_updates.historical_summary_due next code.slotsPerHistoricalRoot
+    code.slotsPerEpoch
   match r with
   | .Err _ => ok none
   | .Ok due =>
-  match (if due then G.pushSummary st else some st) with
+  match (if due then code.pushSummary rustState else some rustState) with
   | none => ok none
-  | some st => ok (some (G.rotate st))
+  | some rustState => ok (some (code.rotateParticipation rustState))
 
 /-- `process_sync_committee_updates`, as the call of the translated
-`next_sync_committee_indices` joined by the untranslated code `G`. -/
-def syncUpdate (G : TailGlue σ) (st : σ) : Result (Option σ) := do
-  match G.syncDue st with
+`next_sync_committee_indices` joined by the untranslated code. -/
+def translatedSyncCommitteeUpdate (code : UntranslatedEndOfEpoch RustState)
+    (rustState : RustState) : Result (Option RustState) := do
+  match code.syncDue rustState with
   | none => ok none
-  | some false => ok (some st)
+  | some false => ok (some rustState)
   | some true =>
-  match G.writeCurrentSync st with
+  match code.writeCurrentSync rustState with
   | none => ok none
-  | some st =>
-  let r ← per_epoch_processing.epoch_committees.next_sync_committee_indices G.hash
-    G.effectiveBalances st (G.syncIndices st) G.syncDomain (G.syncEpoch st) (G.syncMix st)
-    G.syncSize (G.syncConstants st)
+  | some rustState =>
+  let r ← per_epoch_processing.epoch_committees.next_sync_committee_indices code.hash
+    code.effectiveBalances rustState (code.syncIndices rustState) code.syncDomain
+      (code.syncEpoch rustState) (code.syncMix rustState)
+    code.syncSize (code.syncConstants rustState)
   match r with
   | .Err _ => ok none
-  | .Ok indices => ok (G.writeNextSync st indices)
+  | .Ok indices => ok (code.writeNextSync rustState indices)
 
 /-- The end of `process_epoch`. `none`: the Rust returns an error. -/
-def tail (G : TailGlue σ) (st : σ) : Result (Option σ) := do
-  let r ← resets G st
+def translatedEndOfEpoch (code : UntranslatedEndOfEpoch RustState)
+    (rustState : RustState) : Result (Option RustState) := do
+  let r ← translatedResets code rustState
   match r with
   | none => ok none
-  | some st5 => syncUpdate G st5
+  | some rustState5 => translatedSyncCommitteeUpdate code rustState5
 
 /-- At the sync committee update, at most `2^24` active validators of the next epoch enter the
 shuffle. -/
-def SyncN1 (G : TailGlue σ) (st : σ) : Prop :=
-  ∀ st', G.writeCurrentSync st = some st' → (G.syncIndices st').val.length ≤ 2 ^ 24
+def SyncN1 (code : UntranslatedEndOfEpoch RustState) (rustState : RustState) : Prop :=
+  ∀ rustState', code.writeCurrentSync rustState = some rustState' →
+    (code.syncIndices rustState').val.length ≤ 2 ^ 24
 
 variable [Spec.CurrentPreset]
 
-/-- The trusted facts about the untranslated code `G`. Each read reads the state it is given and
+/-- The trusted facts about the untranslated code. Each read reads the state it is given and
 each write writes the spec value, so each fact holds for every state `t`. -/
-structure TailLinks (G : TailGlue σ) (o : Spec.Oracle) (view : σ → Spec.BeaconState) : Prop where
+structure UntranslatedEndOfEpochFacts (code : UntranslatedEndOfEpoch RustState)
+    (oracle : Spec.Oracle) (rustStateToSpec : RustState → Spec.BeaconState) : Prop where
   /-- The slot, the epoch and the vector lengths are the spec values. -/
-  slot : ∀ t, (G.slot t).val = (view t).slot
-  eth1Period : G.eth1Period.val = Spec.LH_SLOTS_PER_ETH1_VOTING_PERIOD
+  slot : ∀ t, (code.slot t).val = (rustStateToSpec t).slot
+  eth1VotingPeriod : code.eth1VotingPeriod.val = Spec.LH_SLOTS_PER_ETH1_VOTING_PERIOD
   /-- The eth1 votes reset. -/
-  clearVotes : ∀ t, view (G.clearVotes t) = { view t with eth1_data_votes := [] }
-  currentEpoch : ∀ t, (G.currentEpoch t).val = (view t).slot / Spec.P.SLOTS_PER_EPOCH
-  slashingsLength : G.slashingsLength.val = Spec.P.EPOCHS_PER_SLASHINGS_VECTOR
+  clearVotes : ∀ t, rustStateToSpec (code.clearVotes t) =
+    { rustStateToSpec t with eth1_data_votes := [] }
+  currentEpoch : ∀ t, (code.currentEpoch t).val = (rustStateToSpec t).slot / Spec.P.SLOTS_PER_EPOCH
+  slashingsLength : code.slashingsLength.val = Spec.P.EPOCHS_PER_SLASHINGS_VECTOR
   /-- The slashings reset writes one entry. -/
-  resetSlashing : ∀ t i l, Spec.listSet (view t).slashings i.val 0 = .ok l →
-    ∃ t', G.resetSlashing t i = some t' ∧ view t' = { view t with slashings := l }
-  mixesLength : G.mixesLength.val = Spec.P.EPOCHS_PER_HISTORICAL_VECTOR
+  resetSlashing : ∀ t i l, Spec.listSet (rustStateToSpec t).slashings i.val 0 = .ok l →
+    ∃ t', code.resetSlashing t i = some t' ∧ rustStateToSpec t' =
+      { rustStateToSpec t with slashings := l }
+  mixesLength : code.mixesLength.val = Spec.P.EPOCHS_PER_HISTORICAL_VECTOR
   /-- The RANDAO reset copies one mix. -/
-  copyMix : ∀ t source target mix l, Spec.listGet (view t).randao_mixes source.val = .ok mix →
-    Spec.listSet (view t).randao_mixes target.val mix = .ok l →
-    ∃ t', G.copyMix t source target = some t' ∧ view t' = { view t with randao_mixes := l }
+  copyMix : ∀ t source target mix l, Spec.listGet (rustStateToSpec t).randao_mixes source.val =
+    .ok mix →
+    Spec.listSet (rustStateToSpec t).randao_mixes target.val mix = .ok l →
+    ∃ t', code.copyMix t source target = some t' ∧ rustStateToSpec t' =
+      { rustStateToSpec t with randao_mixes := l }
   /-- `state.next_epoch()` is the spec next epoch. -/
-  nextEpoch : ∀ t n, Spec.uint64Add ((view t).slot / Spec.P.SLOTS_PER_EPOCH) 1 = .ok n →
-    ∃ v, G.nextEpoch t = some v ∧ v.val = n
-  slotsPerHistoricalRoot : G.slotsPerHistoricalRoot.val = Spec.P.SLOTS_PER_HISTORICAL_ROOT
-  slotsPerEpoch : G.slotsPerEpoch.val = Spec.P.SLOTS_PER_EPOCH
+  nextEpoch : ∀ t n, Spec.uint64Add ((rustStateToSpec t).slot / Spec.P.SLOTS_PER_EPOCH) 1 = .ok n →
+    ∃ v, code.nextEpoch t = some v ∧ v.val = n
+  slotsPerHistoricalRoot : code.slotsPerHistoricalRoot.val = Spec.P.SLOTS_PER_HISTORICAL_ROOT
+  slotsPerEpoch : code.slotsPerEpoch.val = Spec.P.SLOTS_PER_EPOCH
   /-- The push succeeds below the Lighthouse limit, and `HistoricalSummary::new` hashes the
   roots as `hash_tree_root` does. -/
-  pushSummary : ∀ t, (view t).historical_summaries.length < Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT →
-    ∃ t', G.pushSummary t = some t' ∧ view t' = { view t with
-      historical_summaries := (view t).historical_summaries ++
-        [{ block_summary_root := o.hash_tree_root_BlockRoots (view t).block_roots
-           state_summary_root := o.hash_tree_root_StateRoots (view t).state_roots }] }
+  pushSummary : ∀ t, (rustStateToSpec t).historical_summaries.length <
+    Spec.LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT →
+    ∃ t', code.pushSummary t = some t' ∧ rustStateToSpec t' = { rustStateToSpec t with
+      historical_summaries := (rustStateToSpec t).historical_summaries ++
+        [{ block_summary_root := oracle.hash_tree_root_BlockRoots (rustStateToSpec t).block_roots
+           state_summary_root := oracle.hash_tree_root_StateRoots (rustStateToSpec t).state_roots }]
+             }
   /-- The participation rotation is the spec step. -/
-  rotate : ∀ t, view (G.rotate t) = Spec.process_participation_flag_updates (view t)
+  rotateParticipation : ∀ t, rustStateToSpec (code.rotateParticipation t) =
+    Spec.process_participation_flag_updates (rustStateToSpec t)
   /-- The check of the sync committee period. -/
-  syncDue : ∀ t b, Spec.syncDue Spec.P (view t) = .ok b → G.syncDue t = some b
+  syncDue : ∀ t b, Spec.syncDue Spec.P (rustStateToSpec t) = .ok b → code.syncDue t = some b
   /-- The next sync committee becomes the current one. -/
-  writeCurrentSync : ∀ t, ∃ t', G.writeCurrentSync t = some t' ∧
-    view t' = { view t with current_sync_committee := (view t).next_sync_committee }
-  hash : HashLink G.hash o
-  effectiveBalances : ∀ t, EBLink G.effectiveBalances t
-    ((view t).validators.map (·.effective_balance))
+  writeCurrentSync : ∀ t, ∃ t', code.writeCurrentSync t = some t' ∧
+    rustStateToSpec t' = { rustStateToSpec t with current_sync_committee :=
+      (rustStateToSpec t).next_sync_committee }
+  hash : HashMatches code.hash oracle
+  effectiveBalances : ∀ t, EffectiveBalancesMatch code.effectiveBalances t
+    ((rustStateToSpec t).validators.map (·.effective_balance))
   /-- The candidates are the active validators of the next epoch. -/
-  syncIndices : ∀ t, (G.syncIndices t).val.map (·.val) =
-    Spec.get_active_validator_indices (view t) (G.syncEpoch t).val
-  syncDomain : u8s G.syncDomain.val = Spec.DOMAIN_SYNC_COMMITTEE.toList
-  syncEpoch : ∀ t ce, Spec.get_current_epoch Spec.P (view t) = .ok ce →
-    (G.syncEpoch t).val = ce + 1
-  syncMix : ∀ t, SeedMixLink Spec.P (view t) (G.syncEpoch t).val (G.syncMix t)
-  syncSize : G.syncSize.val = Spec.P.SYNC_COMMITTEE_SIZE
-  syncConstants : ∀ t, SelectionConstantsMatch Spec.P (G.syncConstants t)
+  syncIndices : ∀ t, (code.syncIndices t).val.map (·.val) =
+    Spec.get_active_validator_indices (rustStateToSpec t) (code.syncEpoch t).val
+  syncDomain : byteValues code.syncDomain.val = Spec.DOMAIN_SYNC_COMMITTEE.toList
+  syncEpoch : ∀ t current, Spec.get_current_epoch Spec.P (rustStateToSpec t) = .ok current →
+    (code.syncEpoch t).val = current + 1
+  syncMix : ∀ t, SeedMixMatches Spec.P (rustStateToSpec t) (code.syncEpoch t).val (code.syncMix t)
+  syncSize : code.syncSize.val = Spec.P.SYNC_COMMITTEE_SIZE
+  syncConstants : ∀ t, SelectionConstantsMatch Spec.P (code.syncConstants t)
   /-- `sync_committee_from_indices` collects the pubkeys and aggregates them with BLS. -/
-  writeNextSync : ∀ t v c, Spec.syncCommitteeOf o (view t) (v.val.map (·.val)) = .ok c →
-    ∃ t', G.writeNextSync t v = some t' ∧ view t' = { view t with next_sync_committee := c }
+  writeNextSync : ∀ t v c, Spec.syncCommitteeOf oracle (rustStateToSpec t) (v.val.map (·.val)) =
+    .ok c →
+    ∃ t', code.writeNextSync t v = some t' ∧ rustStateToSpec t' =
+      { rustStateToSpec t with next_sync_committee := c }
   usize64 : Usize.max = U64.max
 
 /-- The composed resets return the state of the model `lhResets`. -/
-theorem resets_spec [Spec.CurrentPreset.Valid] (G : TailGlue σ) (o : Spec.Oracle)
-    (view : σ → Spec.BeaconState) (hL : TailLinks G o view) (st : σ) (t5 : Spec.BeaconState)
-    (h : Spec.lhResets o (view st) = .ok t5) :
-    ∃ st5, resets G st = ok (some st5) ∧ view st5 = t5 := by
+theorem translatedResets_matches_model [Spec.CurrentPreset.Valid]
+    (code : UntranslatedEndOfEpoch RustState) (oracle : Spec.Oracle)
+    (rustStateToSpec : RustState → Spec.BeaconState)
+    (hL : UntranslatedEndOfEpochFacts code oracle rustStateToSpec) (rustState : RustState)
+    (t5 : Spec.BeaconState)
+    (h : Spec.lhResets oracle (rustStateToSpec rustState) = .ok t5) :
+    ∃ rustState5, translatedResets code rustState = ok (some rustState5) ∧
+      rustStateToSpec rustState5 = t5 := by
   unfold Spec.lhResets at h
   obtain ⟨t1, h1, h⟩ := Spec.specM_bind_ok h
   obtain ⟨t2, h2, h⟩ := Spec.specM_bind_ok h
   obtain ⟨t3, h3, h⟩ := Spec.specM_bind_ok h
   obtain ⟨t4, h4, h⟩ := Spec.specM_bind_ok h
-  unfold resets
+  unfold translatedResets
   -- The eth1 reset.
   unfold Spec.lhEth1DataReset at h1
   obtain ⟨due, hdue, h1⟩ := Spec.specM_bind_ok h1
   obtain ⟨r, hr, he⟩ := spec_imp_exists
-    (eth1_data_votes_reset_due_equiv (G.slot st) G.eth1Period)
-  rw [hL.slot, hL.eth1Period, hdue] at he
-  obtain ⟨due', rfl, hd⟩ := absResult_ok he
+    (eth1_data_votes_reset_due_equiv (code.slot rustState) code.eth1VotingPeriod)
+  rw [hL.slot, hL.eth1VotingPeriod, hdue] at he
+  obtain ⟨due', rfl, hd⟩ := resultToSpec_ok he
   simp only [id] at hd
   subst hd
   rw [hr]
   simp only [bind_tc_ok]
-  obtain ⟨st1, hst1, hv1⟩ : ∃ st1, (if due' then G.clearVotes st else st) = st1 ∧ view st1 = t1 := by
+  obtain ⟨rustState1, hst1, hv1⟩ : ∃ rustState1,
+    (if due' then code.clearVotes rustState else rustState) = rustState1 ∧
+    rustStateToSpec rustState1 = t1 := by
     refine ⟨_, rfl, ?_⟩
     cases due' with
     | true => simp only [if_true] at h1 ⊢; cases h1; rw [hL.clearVotes]
@@ -270,9 +294,9 @@ theorem resets_spec [Spec.CurrentPreset.Valid] (G : TailGlue σ) (o : Spec.Oracl
   unfold Spec.lhSlashingsReset at h2
   obtain ⟨oi, hoi, h2⟩ := Spec.specM_bind_ok h2
   obtain ⟨r, hr, he⟩ := spec_imp_exists
-    (slashings_reset_index_equiv (G.currentEpoch st1) G.slashingsLength)
+    (slashings_reset_index_equiv (code.currentEpoch rustState1) code.slashingsLength)
   rw [hL.currentEpoch, hL.slashingsLength, hv1, hoi] at he
-  obtain ⟨oi', rfl, hd⟩ := absResult_ok he
+  obtain ⟨oi', rfl, hd⟩ := resultToSpec_ok he
   rw [hr]
   simp only [bind_tc_ok]
   cases oi with
@@ -286,16 +310,16 @@ theorem resets_spec [Spec.CurrentPreset.Valid] (G : TailGlue σ) (o : Spec.Oracl
   subst hd
   obtain ⟨l, hl, h2⟩ := Spec.specM_bind_ok h2
   rw [← hv1] at hl
-  obtain ⟨st2, hw2, hv2⟩ := hL.resetSlashing st1 i' l hl
+  obtain ⟨rustState2, hw2, hv2⟩ := hL.resetSlashing rustState1 i' l hl
   simp only [hw2]
-  have hv2' : view st2 = t2 := by rw [hv2, hv1]; cases h2; rfl
+  have hv2' : rustStateToSpec rustState2 = t2 := by rw [hv2, hv1]; cases h2; rfl
   -- The randao reset.
   unfold Spec.lhRandaoMixesReset at h3
   obtain ⟨op, hop, h3⟩ := Spec.specM_bind_ok h3
   obtain ⟨r, hr, he⟩ := spec_imp_exists
-    (randao_mixes_reset_indices_equiv (G.currentEpoch st2) G.mixesLength)
+    (randao_mixes_reset_indices_equiv (code.currentEpoch rustState2) code.mixesLength)
   rw [hL.currentEpoch, hL.mixesLength, hv2', hop] at he
-  obtain ⟨op', rfl, hd⟩ := absResult_ok he
+  obtain ⟨op', rfl, hd⟩ := resultToSpec_ok he
   rw [hr]
   simp only [bind_tc_ok]
   cases op with
@@ -311,35 +335,36 @@ theorem resets_spec [Spec.CurrentPreset.Valid] (G : TailGlue σ) (o : Spec.Oracl
   obtain ⟨mix, hmix, h3⟩ := Spec.specM_bind_ok h3
   obtain ⟨l, hl, h3⟩ := Spec.specM_bind_ok h3
   rw [← hv2'] at hmix hl
-  obtain ⟨st3, hw3, hv3⟩ := hL.copyMix st2 src tgt mix l hmix hl
+  obtain ⟨rustState3, hw3, hv3⟩ := hL.copyMix rustState2 src tgt mix l hmix hl
   simp only [hw3]
-  have hv3' : view st3 = t3 := by rw [hv3, hv2']; cases h3; rfl
+  have hv3' : rustStateToSpec rustState3 = t3 := by rw [hv3, hv2']; cases h3; rfl
   -- The historical summaries update.
   unfold Spec.lhHistoricalSummariesUpdate at h4
   obtain ⟨ne, hne, h4⟩ := Spec.specM_bind_ok h4
   rw [← hv3'] at hne
-  obtain ⟨ne', hne', hnev⟩ := hL.nextEpoch st3 ne hne
+  obtain ⟨ne', hne', hnev⟩ := hL.nextEpoch rustState3 ne hne
   rw [hne']
   simp only
   obtain ⟨due, hdue, h4⟩ := Spec.specM_bind_ok h4
   obtain ⟨r, hr, he⟩ := spec_imp_exists
-    (historical_summary_due_equiv ne' G.slotsPerHistoricalRoot G.slotsPerEpoch)
+    (historical_summary_due_equiv ne' code.slotsPerHistoricalRoot code.slotsPerEpoch)
   rw [hnev, hL.slotsPerHistoricalRoot, hL.slotsPerEpoch, hdue] at he
-  obtain ⟨due', rfl, hd⟩ := absResult_ok he
+  obtain ⟨due', rfl, hd⟩ := resultToSpec_ok he
   simp only [id] at hd
   subst hd
   rw [hr]
   simp only [bind_tc_ok]
-  obtain ⟨st4, hst4, hv4⟩ : ∃ st4, (if due' then G.pushSummary st3 else some st3) = some st4 ∧
-      view st4 = t4 := by
+  obtain ⟨rustState4, hst4, hv4⟩ : ∃ rustState4,
+    (if due' then code.pushSummary rustState3 else some rustState3) = some rustState4 ∧
+      rustStateToSpec rustState4 = t4 := by
     cases due' with
     | true =>
       simp only [if_true] at h4 ⊢
       split at h4
       · rename_i hlt
         rw [← hv3'] at hlt
-        obtain ⟨st4, hp, hv⟩ := hL.pushSummary st3 hlt
-        refine ⟨st4, hp, ?_⟩
+        obtain ⟨rustState4, hp, hv⟩ := hL.pushSummary rustState3 hlt
+        refine ⟨rustState4, hp, ?_⟩
         rw [hv, hv3']
         cases h4
         rfl
@@ -347,64 +372,78 @@ theorem resets_spec [Spec.CurrentPreset.Valid] (G : TailGlue σ) (o : Spec.Oracl
     | false =>
       simp only [Bool.false_eq_true, if_false] at h4 ⊢
       cases h4
-      exact ⟨st3, rfl, hv3'⟩
+      exact ⟨rustState3, rfl, hv3'⟩
   rw [hst4]
   simp only
   -- The participation rotation.
-  refine ⟨G.rotate st4, rfl, ?_⟩
-  rw [hL.rotate, hv4]
+  refine ⟨code.rotateParticipation rustState4, rfl, ?_⟩
+  rw [hL.rotateParticipation, hv4]
   cases h
   rfl
 
 /-- The composed sync committee update returns the state of `process_sync_committee_updates`. -/
-theorem syncUpdate_spec (G : TailGlue σ) (o : Spec.Oracle) (view : σ → Spec.BeaconState)
-    (hL : TailLinks G o view) (st5 : σ) (hn1 : SyncN1 G st5) (T : Spec.BeaconState)
-    (h : Spec.process_sync_committee_updates Spec.P o (view st5) = .ok T) :
-    ∃ st', syncUpdate G st5 = ok (some st') ∧ view st' = T := by
+theorem translatedSyncCommitteeUpdate_matches_model (code : UntranslatedEndOfEpoch RustState)
+    (oracle : Spec.Oracle) (rustStateToSpec : RustState → Spec.BeaconState)
+    (hL : UntranslatedEndOfEpochFacts code oracle rustStateToSpec) (rustState5 : RustState)
+    (hn1 : SyncN1 code rustState5) (T : Spec.BeaconState)
+    (h : Spec.process_sync_committee_updates Spec.P oracle (rustStateToSpec rustState5) = .ok T) :
+    ∃ rustState', translatedSyncCommitteeUpdate code rustState5 = ok (some rustState') ∧
+      rustStateToSpec rustState' = T := by
   rw [Spec.process_sync_committee_updates_split] at h
   obtain ⟨b, hb, h⟩ := Spec.specM_bind_ok h
-  unfold syncUpdate
-  rw [hL.syncDue st5 b hb]
+  unfold translatedSyncCommitteeUpdate
+  rw [hL.syncDue rustState5 b hb]
   cases b with
   | false =>
     simp only [Bool.false_eq_true, if_false] at h
     cases h
-    exact ⟨st5, rfl, rfl⟩
+    exact ⟨rustState5, rfl, rfl⟩
   | true =>
   simp only [if_true] at h
-  obtain ⟨st6, hw6, hv6⟩ := hL.writeCurrentSync st5
+  obtain ⟨rustState6, hw6, hv6⟩ := hL.writeCurrentSync rustState5
   simp only [hw6]
   rw [← hv6] at h
   obtain ⟨idx, hidx, h⟩ := Spec.specM_bind_ok h
   obtain ⟨c, hc, h⟩ := Spec.specM_bind_ok h
-  have hsync := next_sync_committee_indices_spec G.hash G.effectiveBalances st6 Spec.P o hL.hash
-    (view st6) (hL.effectiveBalances st6) (G.syncIndices st6) G.syncDomain hL.syncDomain
-    (G.syncEpoch st6) (hL.syncEpoch st6) (hL.syncIndices st6) (G.syncMix st6) (hL.syncMix st6)
-    G.syncSize hL.syncSize (G.syncConstants st6) (hL.syncConstants st6) (hn1 st6 hw6)
+  have hsync := next_sync_committee_indices_spec code.hash code.effectiveBalances rustState6 Spec.P
+    oracle hL.hash
+    (rustStateToSpec rustState6) (hL.effectiveBalances rustState6) (code.syncIndices rustState6)
+      code.syncDomain hL.syncDomain
+    (code.syncEpoch rustState6) (hL.syncEpoch rustState6) (hL.syncIndices rustState6)
+      (code.syncMix rustState6) (hL.syncMix rustState6)
+    code.syncSize hL.syncSize (code.syncConstants rustState6) (hL.syncConstants rustState6)
+      (hn1 rustState6 hw6)
     hL.usize64 idx hidx
   obtain ⟨r, hr, v, rfl, hv⟩ := spec_imp_exists hsync
   rw [hr]
   simp only [bind_tc_ok]
   rw [← hv] at hc
-  obtain ⟨st7, hw7, hv7⟩ := hL.writeNextSync st6 v c hc
-  refine ⟨st7, by rw [hw7], ?_⟩
+  obtain ⟨rustState7, hw7, hv7⟩ := hL.writeNextSync rustState6 v c hc
+  refine ⟨rustState7, by rw [hw7], ?_⟩
   rw [hv7, hv6]
   cases h
   rfl
 
 /-- The composed tail returns the state of the model: when `lhTailOrder` returns `ok`, the Rust
 returns `Ok` with that state. -/
-theorem tail_spec [Spec.CurrentPreset.Valid] (G : TailGlue σ) (o : Spec.Oracle)
-    (view : σ → Spec.BeaconState) (hL : TailLinks G o view) (st : σ)
-    (hn1 : ∀ st5, resets G st = ok (some st5) → SyncN1 G st5) (T : Spec.BeaconState)
-    (h : Spec.lhTailOrder o (view st) = .ok T) :
-    ∃ st', tail G st = ok (some st') ∧ view st' = T := by
+theorem translatedEndOfEpoch_matches_model [Spec.CurrentPreset.Valid]
+    (code : UntranslatedEndOfEpoch RustState) (oracle : Spec.Oracle)
+    (rustStateToSpec : RustState → Spec.BeaconState)
+    (hL : UntranslatedEndOfEpochFacts code oracle rustStateToSpec) (rustState : RustState)
+    (hn1 : ∀ rustState5, translatedResets code rustState = ok (some rustState5) →
+    SyncN1 code rustState5) (T : Spec.BeaconState)
+    (h : Spec.lhTailOrder oracle (rustStateToSpec rustState) = .ok T) :
+    ∃ rustState', translatedEndOfEpoch code rustState = ok (some rustState') ∧
+      rustStateToSpec rustState' = T := by
   rw [Spec.lhTailOrder_eq] at h
   obtain ⟨t5, h5, h⟩ := Spec.specM_bind_ok h
-  obtain ⟨st5, hr, hv5⟩ := resets_spec G o view hL st t5 h5
-  obtain ⟨st', hs, hv'⟩ := syncUpdate_spec G o view hL st5 (hn1 st5 hr) T (by rw [hv5]; exact h)
-  refine ⟨st', ?_, hv'⟩
-  unfold tail
+  obtain ⟨rustState5, hr, hv5⟩ :=
+    translatedResets_matches_model code oracle rustStateToSpec hL rustState t5 h5
+  obtain ⟨rustState', hs, hv'⟩ :=
+    translatedSyncCommitteeUpdate_matches_model code oracle rustStateToSpec hL rustState5
+    (hn1 rustState5 hr) T (by rw [hv5]; exact h)
+  refine ⟨rustState', ?_, hv'⟩
+  unfold translatedEndOfEpoch
   rw [hr]
   simp only [bind_tc_ok]
   exact hs

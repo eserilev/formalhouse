@@ -27,7 +27,7 @@ def tailNFG [CurrentPreset] (o : Oracle) (K : BeaconState → SpecM BeaconState)
   let handled := (s1.pending_deposits.take next).zip postponed
   let pubkeys := s1.validators.map (·.pubkey)
   let n := s1.validators.length
-  let named := consolidationIndices s1
+  let named := validatorsInConsolidations s1
   let sums ← (knownTopups pubkeys handled).foldlM (fun acc x => increase_balance acc x.1 x.2)
     (List.replicate n 0)
   let t1 ← addSums S4 sums

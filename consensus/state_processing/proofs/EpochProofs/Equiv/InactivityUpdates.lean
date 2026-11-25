@@ -23,14 +23,14 @@ theorem new_inactivity_score_equiv (p : Spec.Preset) (score bias recovery_rate :
     (hrecovery : recovery_rate.val = p.INACTIVITY_SCORE_RECOVERY_RATE) :
     per_epoch_processing.inactivity_updates.new_inactivity_score
       score is_eligible is_participating is_in_leak bias recovery_rate ⦃ r =>
-        absResult (·.val) r =
+        resultToSpec (·.val) r =
           if is_eligible then Spec.inactivityScoreStep p is_participating is_in_leak score.val
           else .ok score.val ⦄ := by
   unfold per_epoch_processing.inactivity_updates.new_inactivity_score
     U64.Insts.Safe_arithSafeArithU64.safe_add U64.Insts.Safe_arithSafeArithU64.safe_sub
   by_cases he : is_eligible = true
   swap
-  · simp [he, absResult]
+  · simp [he, resultToSpec]
   have hs := U64.checked_sub_bv_spec score 1#u64
   have hone : (1#u64 : U64).val = 1 := rfl
   simp only [hone] at hs
@@ -48,14 +48,14 @@ theorem new_inactivity_score_equiv (p : Spec.Preset) (score bias recovery_rate :
         | core.ops.control_flow.ControlFlow.Break residual =>
           core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual U64
             (core.convert.FromSame safe_arith.ArithError) residual) ⦃ r =>
-        absResult (·.val) r =
+        resultToSpec (·.val) r =
           .ok (if v.val > recovery_rate.val then v.val - recovery_rate.val else v.val - v.val) ⦄ := by
     intro v
     have hd := U64.checked_sub_bv_spec v (core.cmp.impls.OrdU64.min recovery_rate v)
     have hmin := core.cmp.impls.OrdU64.min_val recovery_rate v
     cases hc : v.checked_sub (core.cmp.impls.OrdU64.min recovery_rate v) <;> simp only [hc] at hd
     · simp [hmin] at hd
-    · simp [hc, core.result.Result.Insts.CoreOpsTry.branch, absResult, hd.2.1, hmin]
+    · simp [hc, core.result.Result.Insts.CoreOpsTry.branch, resultToSpec, hd.2.1, hmin]
       split <;> omega
   by_cases hp : is_participating = true <;> by_cases hl : is_in_leak = true
   all_goals simp only [he, hp, hl, Spec.inactivityScoreStep, Spec.uint64Add,
@@ -63,7 +63,7 @@ theorem new_inactivity_score_equiv (p : Spec.Preset) (score bias recovery_rate :
     if_false, Bool.false_eq_true]
   · split
     · rename_i h0
-      simp [hzero.mp h0, absResult]
+      simp [hzero.mp h0, resultToSpec]
       rfl
     · rename_i h0
       have h0' : score.val ≠ 0 := fun h => h0 (hzero.mpr h)
@@ -71,11 +71,11 @@ theorem new_inactivity_score_equiv (p : Spec.Preset) (score bias recovery_rate :
       · simp at hs; omega
       · have hdec : (if 1 < score.val then score.val - 1 else 0) = score.val - 1 := by
           split <;> omega
-        simp [core.result.Result.Insts.CoreOpsTry.branch, absResult, hs.2.1, hdec]
+        simp [core.result.Result.Insts.CoreOpsTry.branch, resultToSpec, hs.2.1, hdec]
         rfl
   · split
     · rename_i h0
-      simp [hzero.mp h0, absResult]
+      simp [hzero.mp h0, resultToSpec]
       rfl
     · rename_i h0
       have h0' : score.val ≠ 0 := fun h => h0 (hzero.mpr h)
@@ -94,16 +94,16 @@ theorem new_inactivity_score_equiv (p : Spec.Preset) (score bias recovery_rate :
     · have hov : ¬ score.val + bias.val < 18446744073709551616 := by omega
       simp [hov, core.result.Result.Insts.CoreOpsTry.branch,
         core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-        absResult, absArithError]
+        resultToSpec, arithErrorToSpec]
       rfl
     · have hfit : score.val + bias.val < 18446744073709551616 := by omega
-      simp [hfit, core.result.Result.Insts.CoreOpsTry.branch, absResult, ha.2.1]
+      simp [hfit, core.result.Result.Insts.CoreOpsTry.branch, resultToSpec, ha.2.1]
       rfl
   · cases hc : score.checked_add bias <;> simp only [hc] at ha
     · have hov : ¬ score.val + bias.val < 18446744073709551616 := by omega
       simp [hov, core.result.Result.Insts.CoreOpsTry.branch,
         core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-        absResult, absArithError]
+        resultToSpec, arithErrorToSpec]
       rfl
     · rename_i raised
       have hfit : score.val + bias.val < 18446744073709551616 := by omega

@@ -24,11 +24,11 @@ abbrev LhConsolidationView := per_epoch_processing.pending_consolidations.Consol
 abbrev LhLocalValidator := per_epoch_processing.pending_consolidations.LocalValidator
 
 /-- A Rust `LocalValidator`, read as a model validator. -/
-def absLocal (v : LhLocalValidator) : Spec.LocalValidator :=
+def consolidationValidatorToSpec (v : LhLocalValidator) : Spec.LocalValidator :=
   ⟨v.exists, v.slashed, v.withdrawable_epoch.val, v.effective_balance.val⟩
 
 /-- The source and target positions as numbers. -/
-def absView (c : LhConsolidationView) : Nat × Nat := (c.source.val, c.target.val)
+def consolidationViewToSpec (c : LhConsolidationView) : Nat × Nat := (c.source.val, c.target.val)
 
 theorem get_balance_eq (s : Slice U64) (i : Usize) :
     per_epoch_processing.pending_consolidations.get_balance s i = ok s.val[i.val]? := by
@@ -38,7 +38,7 @@ theorem get_balance_eq (s : Slice U64) (i : Usize) :
 
 theorem validator_exists_eq (validators : Slice LhLocalValidator) (i : Usize) :
     per_epoch_processing.pending_consolidations.validator_exists validators i =
-      ok (Spec.localExists (validators.val.map absLocal) i.val) := by
+      ok (Spec.localExists (validators.val.map consolidationValidatorToSpec) i.val) := by
   unfold per_epoch_processing.pending_consolidations.validator_exists Spec.localExists
   simp only [slice_get_any, bind_tc_ok, List.getElem?_map]
   cases validators.val[i.val]? <;> rfl
@@ -77,7 +77,7 @@ theorem set_balance_eq (balances : alloc.vec.Vec U64) (i : Usize) (value : U64) 
     simp [Slice.set_opt, list_set_opt_none, List.set_eq_of_length_le (Nat.le_of_not_lt h)]
 
 /-- The spec error of a Rust `ConsolidationError`. -/
-def absConsolidationError :
+def consolidationErrorToSpec :
     per_epoch_processing.pending_consolidations.ConsolidationError → Spec.SpecError
   | .UnknownValidator _ => .indexOutOfRange
   | .Overflow => .overflow
@@ -87,17 +87,20 @@ theorem consolidations_loop_spec (consolidations : Slice LhConsolidationView)
     (init : List Spec.Gwei) (balances : alloc.vec.Vec U64) (next i : Usize)
     (hi : i.val ≤ consolidations.val.length) (hnext : next.val ≤ i.val)
     (hlen : balances.val.length = validators.val.length)
-    (hst : Spec.stepLoop (Spec.consolidationStep (validators.val.map absLocal) next_epoch.val)
-      (init, 0) ((consolidations.val.map absView).take i.val) =
+    (hst : Spec.stepLoop (Spec.consolidationStep (validators.val.map consolidationValidatorToSpec)
+    next_epoch.val)
+      (init, 0) ((consolidations.val.map consolidationViewToSpec).take i.val) =
       .ok ((balances.val.map (·.val), next.val), false)) :
     per_epoch_processing.pending_consolidations.process_pending_consolidations_loop
       consolidations validators next_epoch balances next i ⦃ r =>
         (∀ e, r.2.2 = some e → Spec.stepLoop
-            (Spec.consolidationStep (validators.val.map absLocal) next_epoch.val) (init, 0)
-            (consolidations.val.map absView) = .error (absConsolidationError e))
+            (Spec.consolidationStep (validators.val.map consolidationValidatorToSpec)
+              next_epoch.val) (init, 0)
+            (consolidations.val.map consolidationViewToSpec) = .error (consolidationErrorToSpec e))
         ∧ (r.2.2 = none → ∃ stopped, Spec.stepLoop
-            (Spec.consolidationStep (validators.val.map absLocal) next_epoch.val) (init, 0)
-            (consolidations.val.map absView) =
+            (Spec.consolidationStep (validators.val.map consolidationValidatorToSpec)
+              next_epoch.val) (init, 0)
+            (consolidations.val.map consolidationViewToSpec) =
               .ok ((r.1.val.map (·.val), r.2.1.val), stopped)) ⦄ := by
   unfold per_epoch_processing.pending_consolidations.process_pending_consolidations_loop
   apply loop.spec_decr_nat
@@ -106,8 +109,9 @@ theorem consolidations_loop_spec (consolidations : Slice LhConsolidationView)
     (inv := fun (x : alloc.vec.Vec U64 × Usize × Usize) =>
       x.2.2.val ≤ consolidations.val.length ∧ x.2.1.val ≤ x.2.2.val
       ∧ x.1.val.length = validators.val.length
-      ∧ Spec.stepLoop (Spec.consolidationStep (validators.val.map absLocal) next_epoch.val)
-          (init, 0) ((consolidations.val.map absView).take x.2.2.val) =
+      ∧ Spec.stepLoop (Spec.consolidationStep (validators.val.map consolidationValidatorToSpec)
+        next_epoch.val)
+          (init, 0) ((consolidations.val.map consolidationViewToSpec).take x.2.2.val) =
           .ok ((x.1.val.map (·.val), x.2.1.val), false))
   · rintro ⟨bal, nx, j⟩ ⟨hj, hnx, hbl, hstj⟩
     dsimp only at hj hnx hbl hstj
@@ -118,15 +122,15 @@ theorem consolidations_loop_spec (consolidations : Slice LhConsolidationView)
       have hjl : j.val < consolidations.val.length := by scalar_tac
       have hclen : consolidations.val.length ≤ Usize.max := by scalar_tac
       simp only [List.getElem?_eq_getElem hjl]
-      have hget : (consolidations.val.map absView)[j.val]? =
-          some (absView consolidations.val[j.val]) := by
+      have hget : (consolidations.val.map consolidationViewToSpec)[j.val]? =
+          some (consolidationViewToSpec consolidations.val[j.val]) := by
         simp [hjl]
       have hjmax : j.val < Usize.max := by omega
       have hsat := usize_saturating_add_one j hjmax
       have hnxmax : nx.val < Usize.max := by omega
       have hsatn := usize_saturating_add_one nx hnxmax
       rw [validator_exists_eq, bind_tc_ok]
-      by_cases hex : Spec.localExists (validators.val.map absLocal)
+      by_cases hex : Spec.localExists (validators.val.map consolidationValidatorToSpec)
           consolidations.val[j.val].source.val = true
       swap
       · simp only [Bool.not_eq_true] at hex
@@ -135,8 +139,8 @@ theorem consolidations_loop_spec (consolidations : Slice LhConsolidationView)
         simp only [Option.some.injEq] at he
         subst he
         exact Spec.stepLoop_error_at _ _ _ _ j.val _ hget hstj _
-          (by simp [Spec.consolidationStep, absView, hex, throw, throwThe, MonadExceptOf.throw,
-            Bind.bind, Except.bind, absConsolidationError])
+          (by simp [Spec.consolidationStep, consolidationViewToSpec, hex, throw, throwThe, MonadExceptOf.throw,
+            Bind.bind, Except.bind, consolidationErrorToSpec])
       simp only [hex, if_true]
       have hexv := hex
       unfold Spec.localExists at hexv
@@ -147,13 +151,14 @@ theorem consolidations_loop_spec (consolidations : Slice LhConsolidationView)
       simp only [hv, Option.map_some] at hexv
       have hsrc : consolidations.val[j.val].source.val < validators.val.length :=
         (List.getElem?_eq_some_iff.mp hv).1
-      have hlv : (validators.val.map absLocal)[consolidations.val[j.val].source.val]? =
-          some (absLocal v) := by simp [hv]
+      have hlv : (validators.val.map
+        consolidationValidatorToSpec)[consolidations.val[j.val].source.val]? =
+          some (consolidationValidatorToSpec v) := by simp [hv]
       by_cases hsl : v.slashed = true
       · simp only [hsl, if_true, spec_ok, hsat, hsatn]
         refine ⟨⟨by omega, by omega, hbl, ?_⟩, by omega⟩
         exact Spec.stepLoop_next_at _ _ _ _ j.val _ hget hstj _
-          (by simp [Spec.consolidationStep, absView, hex, Spec.listGet, hlv, absLocal, hsl,
+          (by simp [Spec.consolidationStep, consolidationViewToSpec, hex, Spec.listGet, hlv, consolidationValidatorToSpec, hsl,
             Pure.pure, Except.pure, Bind.bind, Except.bind])
       simp only [hsl, Bool.false_eq_true, if_false]
       by_cases hwe : v.withdrawable_epoch > next_epoch
@@ -161,7 +166,7 @@ theorem consolidations_loop_spec (consolidations : Slice LhConsolidationView)
         simp only [hwe, if_true, spec_ok]
         refine ⟨fun e he => by simp at he, fun _ => ⟨true, ?_⟩⟩
         exact Spec.stepLoop_stop_at _ _ _ _ j.val _ hget hstj _
-          (by simp [Spec.consolidationStep, absView, hex, Spec.listGet, hlv, absLocal, hsl, hwe',
+          (by simp [Spec.consolidationStep, consolidationViewToSpec, hex, Spec.listGet, hlv, consolidationValidatorToSpec, hsl, hwe',
             Pure.pure, Except.pure, Bind.bind, Except.bind])
       have hwe' : ¬ next_epoch.val < v.withdrawable_epoch.val := by scalar_tac
       simp only [hwe, if_false]
@@ -186,7 +191,7 @@ theorem consolidations_loop_spec (consolidations : Slice LhConsolidationView)
           .ok (b1.val.map (·.val)) := by
         simp [Spec.decrease_balance, Spec.listGet, Spec.listSet, hsrcb, hL1, saturating_sub_eq,
           Pure.pure, Except.pure, Bind.bind, Except.bind]
-      by_cases hext : Spec.localExists (validators.val.map absLocal)
+      by_cases hext : Spec.localExists (validators.val.map consolidationValidatorToSpec)
           consolidations.val[j.val].target.val = true
       swap
       · simp only [Bool.not_eq_true] at hext
@@ -195,10 +200,10 @@ theorem consolidations_loop_spec (consolidations : Slice LhConsolidationView)
         simp only [Option.some.injEq] at he
         subst he
         exact Spec.stepLoop_error_at _ _ _ _ j.val _ hget hstj _
-          (by simp [Spec.consolidationStep, absView, hex, Spec.listGet, hlv, absLocal, hsl, hwe',
+          (by simp [Spec.consolidationStep, consolidationViewToSpec, hex, Spec.listGet, hlv, consolidationValidatorToSpec, hsl, hwe',
             List.getElem?_map, List.getElem?_eq_getElem hsrcb, hdec, hext, throw, throwThe,
             MonadExceptOf.throw, Pure.pure, Except.pure, Bind.bind, Except.bind,
-            absConsolidationError])
+            consolidationErrorToSpec])
       simp only [hext, if_true]
       have hextv := hext
       unfold Spec.localExists at hextv
@@ -217,11 +222,13 @@ theorem consolidations_loop_spec (consolidations : Slice LhConsolidationView)
             let bs ← Spec.increase_balance (b1.val.map (·.val)) consolidations.val[j.val].target.val
               (min bal.val[consolidations.val[j.val].source.val].val v.effective_balance.val)
             pure ((bs, nx.val + 1), false)) = r →
-          Spec.consolidationStep (validators.val.map absLocal) next_epoch.val
-            (bal.val.map (·.val), nx.val) (absView consolidations.val[j.val]) = r := by
+          Spec.consolidationStep (validators.val.map consolidationValidatorToSpec) next_epoch.val
+            (bal.val.map (·.val), nx.val) (consolidationViewToSpec consolidations.val[j.val]) =
+              r := by
         intro r hr
         rw [← hr]
-        simp [Spec.consolidationStep, absView, hex, Spec.listGet, hlv, absLocal, hsl, hwe',
+        simp [Spec.consolidationStep, consolidationViewToSpec, hex, Spec.listGet, hlv,
+          consolidationValidatorToSpec, hsl, hwe',
           List.getElem?_map, List.getElem?_eq_getElem hsrcb, hdec, hext,
           Pure.pure, Except.pure, Bind.bind, Except.bind]
       cases hc : b1.val[consolidations.val[j.val].target.val].checked_add
@@ -238,7 +245,7 @@ theorem consolidations_loop_spec (consolidations : Slice LhConsolidationView)
         simp [Spec.increase_balance, Spec.listGet, Spec.uint64Add, Spec.UINT64_SIZE,
           List.getElem?_map, List.getElem?_eq_getElem htgt, hov, throw, throwThe,
           MonadExceptOf.throw, Pure.pure, Except.pure, Bind.bind, Except.bind,
-          absConsolidationError]
+          consolidationErrorToSpec]
       · rename_i nb
         obtain ⟨b2, hb2, hb2v⟩ := set_balance_eq b1 consolidations.val[j.val].target nb
         dsimp only
@@ -260,12 +267,12 @@ theorem consolidations_loop_spec (consolidations : Slice LhConsolidationView)
   · exact ⟨hi, hnext, hlen, hst⟩
 
 /-- The Rust result, read as the new balances and the number of consolidations done. -/
-def absConsolidations :
+def consolidationResultToSpec :
     core.result.Result (Usize × alloc.vec.Vec U64)
       per_epoch_processing.pending_consolidations.ConsolidationError →
     Spec.SpecM (List Spec.Gwei × Nat)
   | .Ok (n, b) => .ok (b.val.map (·.val), n.val)
-  | .Err e => .error (absConsolidationError e)
+  | .Err e => .error (consolidationErrorToSpec e)
 
 /-- The translated `process_pending_consolidations` is the loop of the spec step, with the same
 errors. -/
@@ -274,9 +281,9 @@ theorem process_pending_consolidations_equiv (consolidations : Slice LhConsolida
     (hlen : balances.val.length = validators.val.length) :
     per_epoch_processing.pending_consolidations.process_pending_consolidations consolidations
       validators balances next_epoch ⦃ r =>
-        absConsolidations r = (·.1) <$> Spec.stepLoop
-          (Spec.consolidationStep (validators.val.map absLocal) next_epoch.val)
-          (balances.val.map (·.val), 0) (consolidations.val.map absView) ⦄ := by
+        consolidationResultToSpec r = (·.1) <$> Spec.stepLoop
+          (Spec.consolidationStep (validators.val.map consolidationValidatorToSpec) next_epoch.val)
+          (balances.val.map (·.val), 0) (consolidations.val.map consolidationViewToSpec) ⦄ := by
   unfold per_epoch_processing.pending_consolidations.process_pending_consolidations
   apply exists_imp_spec
   obtain ⟨res, hres, hpost⟩ := spec_imp_exists (consolidations_loop_spec consolidations
@@ -289,9 +296,9 @@ theorem process_pending_consolidations_equiv (consolidations : Slice LhConsolida
   | none =>
     obtain ⟨stopped, hloop⟩ := hpost.2 rfl
     refine ⟨_, rfl, ?_⟩
-    simp [absConsolidations, hloop, Functor.map, Except.map]
+    simp [consolidationResultToSpec, hloop, Functor.map, Except.map]
   | some e =>
     refine ⟨_, rfl, ?_⟩
-    simp [absConsolidations, hpost.1 e rfl, Functor.map, Except.map]
+    simp [consolidationResultToSpec, hpost.1 e rfl, Functor.map, Except.map]
 
 end EpochProofs

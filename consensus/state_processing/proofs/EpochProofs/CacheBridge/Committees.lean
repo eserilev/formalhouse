@@ -371,7 +371,8 @@ Aeneas-checked `committee_assignment::shuffling` on the active indices and the s
 committee count is the output of `committee_count_per_slot`. -/
 theorem committeeCacheBuilt_of_rust {H : Type} (cp : CacheProofs.Spec.CommitteeCache.Preset)
     (p : Spec.Preset) (hp : CommitteePresetLink p cp) (o : Spec.Oracle)
-    (instC : CacheProofs.Shuffle.HashInst H) (hH : CacheProofs.Shuffle.HashLink instC (natHash o))
+    (instC : CacheProofs.Shuffle.HashInst H)
+    (hH : CacheProofs.Shuffle.HashMatches instC (natHash o))
     (state : Spec.BeaconState) (epoch : Nat) (seed : Spec.Bytes32)
     (indices : alloc.vec.Vec Usize)
     (hindices : indices.val.map (·.val) = Spec.get_active_validator_indices state epoch)
@@ -454,17 +455,18 @@ committee cache returns the PTCs that the spec `process_ptc_window` appends. Thi
 `ptc_for_epoch_spec` with its committee hypothesis replaced by the committee cache build facts
 (`CommitteeCacheBuilt`) and the way Lighthouse joins the cache committees
 (`CommitteesFromCache`). -/
-theorem lh_ptc_window_from_cache {H B : Type} (inst : ShuffleHashInst H) (ebi : EBInst B)
+theorem lh_ptc_window_from_cache {H B : Type} (inst : ShuffleHashInst H)
+    (ebi : EffectiveBalanceSource B)
     (balances : B) (p : Spec.Preset) (cp : CacheProofs.Spec.CommitteeCache.Preset)
-    (hp : CommitteePresetLink p cp) (o : Spec.Oracle) (hH : HashLink inst o)
+    (hp : CommitteePresetLink p cp) (o : Spec.Oracle) (hH : HashMatches inst o)
     (state : Spec.BeaconState)
-    (hEB : EBLink ebi balances (state.validators.map (·.effective_balance)))
+    (hEB : EffectiveBalancesMatch ebi balances (state.validators.map (·.effective_balance)))
     (committees : Slice (alloc.vec.Vec Usize))
     (hclen : committees.val.length = p.SLOTS_PER_EPOCH) (domain : Array U8 4#usize)
-    (hdomain : u8s domain.val = Spec.DOMAIN_PTC_ATTESTER.toList) (epoch : U64)
+    (hdomain : byteValues domain.val = Spec.DOMAIN_PTC_ATTESTER.toList) (epoch : U64)
     (hepoch : ∀ ce, Spec.get_current_epoch p state = .ok ce →
       epoch.val = ce + p.MIN_SEED_LOOKAHEAD + 1)
-    (mix : Array U8 32#usize) (hmix : SeedMixLink p state epoch.val mix) (start_slot : U64)
+    (mix : Array U8 32#usize) (hmix : SeedMixMatches p state epoch.val mix) (start_slot : U64)
     (hstart : Spec.compute_start_slot_at_epoch p epoch.val = .ok start_slot.val)
     (seed : Spec.Bytes32)
     (hseed : Spec.get_seed p o state epoch.val Spec.DOMAIN_BEACON_ATTESTER = .ok seed)
@@ -483,7 +485,7 @@ theorem lh_ptc_window_from_cache {H B : Type} (inst : ShuffleHashInst H) (ebi : 
     state_processing.per_epoch_processing.epoch_committees.ptc_for_epoch inst ebi balances
       committees domain epoch mix start_slot ptc_size c ⦃ r =>
         ∃ v : alloc.vec.Vec (alloc.vec.Vec Usize), r = core.result.Result.Ok v ∧
-          state'.ptc_window = state.ptc_window.drop p.SLOTS_PER_EPOCH ++ ptcsOf v ⦄ :=
+          state'.ptc_window = state.ptc_window.drop p.SLOTS_PER_EPOCH ++ ptcIndexValues v ⦄ :=
   ptc_for_epoch_spec inst ebi balances p o hH state hEB committees hclen domain hdomain epoch
     hepoch mix hmix start_slot hstart
     (hcomm_of_cache p cp hp o state epoch.val seed hseed shuffling cps spe hbuilt hspe hn hn24

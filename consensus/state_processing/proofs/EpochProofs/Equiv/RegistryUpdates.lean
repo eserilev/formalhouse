@@ -9,7 +9,7 @@ import EpochProofs.Sanity.RegistryUpdates
 `registryStepIndependent`. `registry_update_eq_spec` then uses
 `registryStepIndependent_eq_exclusive` to relate it to the spec's loop body on valid states.
 
-`ConstantsMatch` holds the Gloas constants: the exit churn has no upper limit, so
+`RegistryConstantsMatchGloas` holds the Gloas constants: the exit churn has no upper limit, so
 `exit_churn_cap` is `u64::MAX`. The `_churn` theorems take any constants whose
 `exit_churn_limit` is the Gloas `get_exit_churn_limit` of `T total_active_balance`
 (`ChurnSpec`). Fulu uses them with `T = fuluTotalActiveBalance` (`Equiv/FuluRegistry.lean`). Lighthouse reads the validator fields, the churn state and the finalized epoch in
@@ -27,7 +27,7 @@ abbrev LhRegistryFields := per_epoch_processing.registry_update.RegistryFields
 abbrev LhRegistryConstants := per_epoch_processing.registry_update.RegistryConstants
 
 /-- The Rust registry fields, read as model fields. -/
-def absRegistry (f : LhRegistryFields) : Spec.RegistryFields :=
+def registryFieldsToSpec (f : LhRegistryFields) : Spec.RegistryFields :=
   { activation_eligibility_epoch := f.activation_eligibility_epoch.val
     activation_epoch := f.activation_epoch.val
     exit_epoch := f.exit_epoch.val
@@ -36,7 +36,7 @@ def absRegistry (f : LhRegistryFields) : Spec.RegistryFields :=
     exit_balance_to_consume := f.exit_balance_to_consume.val }
 
 /-- The Lighthouse constants that are not about the churn are the spec values for preset `p`. -/
-structure ConstantsMatchBase (p : Spec.Preset) (c : LhRegistryConstants) : Prop where
+structure RegistryConstantsMatch (p : Spec.Preset) (c : LhRegistryConstants) : Prop where
   far_future_epoch : c.far_future_epoch.val = Spec.FAR_FUTURE_EPOCH
   min_activation_balance : c.min_activation_balance.val = p.MIN_ACTIVATION_BALANCE
   ejection_balance : c.ejection_balance.val = p.EJECTION_BALANCE
@@ -45,8 +45,8 @@ structure ConstantsMatchBase (p : Spec.Preset) (c : LhRegistryConstants) : Prop 
     c.min_validator_withdrawability_delay.val = p.MIN_VALIDATOR_WITHDRAWABILITY_DELAY
 
 /-- The Lighthouse constants are the Gloas spec values for preset `p`. -/
-structure ConstantsMatch (p : Spec.Preset) (c : LhRegistryConstants) : Prop
-    extends ConstantsMatchBase p c where
+structure RegistryConstantsMatchGloas (p : Spec.Preset) (c : LhRegistryConstants) : Prop
+    extends RegistryConstantsMatch p c where
   min_per_epoch_churn_limit : c.min_per_epoch_churn_limit.val = p.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA
   churn_limit_quotient : c.churn_limit_quotient.val = p.CHURN_LIMIT_QUOTIENT_GLOAS
   effective_balance_increment : c.effective_balance_increment.val = p.EFFECTIVE_BALANCE_INCREMENT
@@ -97,7 +97,7 @@ theorem safe_rem_spec (a b : U64) :
 theorem compute_activation_exit_epoch_equiv (p : Spec.Preset) (epoch lookahead : U64)
     (hlookahead : lookahead.val = p.MAX_SEED_LOOKAHEAD) :
     per_epoch_processing.registry_update.compute_activation_exit_epoch epoch lookahead ⦃ r =>
-      absResult (·.val) r = Spec.compute_activation_exit_epoch p epoch.val ⦄ := by
+      resultToSpec (·.val) r = Spec.compute_activation_exit_epoch p epoch.val ⦄ := by
   unfold per_epoch_processing.registry_update.compute_activation_exit_epoch
   apply exists_imp_spec
   obtain ⟨r1, hr1, h1⟩ := spec_imp_exists (safe_add_spec epoch 1#u64)
@@ -109,7 +109,7 @@ theorem compute_activation_exit_epoch_equiv (p : Spec.Preset) (epoch lookahead :
     simp only [hone] at hov
     refine ⟨_, by ok_rfl, ?_⟩
     simp [Spec.compute_activation_exit_epoch, Spec.uint64Add, Spec.UINT64_SIZE, hov,
-      absResult, absArithError, 
+      resultToSpec, arithErrorToSpec, 
       
       except_error_bind, throw, throwThe, MonadExceptOf.throw]
   | Ok v =>
@@ -124,19 +124,19 @@ theorem compute_activation_exit_epoch_equiv (p : Spec.Preset) (epoch lookahead :
     simp only [hv, hlookahead] at hov
     refine ⟨_, by ok_rfl, ?_⟩
     simp [Spec.compute_activation_exit_epoch, Spec.uint64Add, Spec.UINT64_SIZE, hfit, hov,
-      absResult, absArithError, throw, throwThe, MonadExceptOf.throw]
+      resultToSpec, arithErrorToSpec, throw, throwThe, MonadExceptOf.throw]
   | Ok w =>
   obtain ⟨hw, hfit2⟩ := h2.1 w rfl
   simp only [hv, hlookahead] at hw hfit2
   refine ⟨_, by ok_rfl, ?_⟩
   simp [Spec.compute_activation_exit_epoch, Spec.uint64Add, Spec.UINT64_SIZE, hfit, hfit2, hw,
-    absResult, except_ok_bind, Pure.pure, Except.pure]
+    resultToSpec, except_ok_bind, Pure.pure, Except.pure]
 
 /-- The translated churn limit is the spec `get_exit_churn_limit`, with the same errors. -/
 theorem exit_churn_limit_equiv (p : Spec.Preset) (total_active_balance : U64)
-    (c : LhRegistryConstants) (hc : ConstantsMatch p c) :
+    (c : LhRegistryConstants) (hc : RegistryConstantsMatchGloas p c) :
     per_epoch_processing.registry_update.exit_churn_limit total_active_balance c ⦃ r =>
-      absResult (·.val) r = Spec.get_exit_churn_limit p total_active_balance.val ⦄ := by
+      resultToSpec (·.val) r = Spec.get_exit_churn_limit p total_active_balance.val ⦄ := by
   unfold per_epoch_processing.registry_update.exit_churn_limit
   apply exists_imp_spec
   obtain ⟨r1, hr1, h1⟩ := spec_imp_exists (safe_div_spec total_active_balance c.churn_limit_quotient)
@@ -146,7 +146,7 @@ theorem exit_churn_limit_equiv (p : Spec.Preset) (total_active_balance : U64)
     obtain ⟨rfl, hz⟩ := h1.2 e rfl
     rw [hc.churn_limit_quotient] at hz
     refine ⟨_, by ok_rfl, ?_⟩
-    simp [Spec.get_exit_churn_limit, Spec.uint64Div, hz, absResult, absArithError,
+    simp [Spec.get_exit_churn_limit, Spec.uint64Div, hz, resultToSpec, arithErrorToSpec,
       
       
       except_error_bind, throw, throwThe, MonadExceptOf.throw]
@@ -165,7 +165,7 @@ theorem exit_churn_limit_equiv (p : Spec.Preset) (total_active_balance : U64)
     rw [hc.effective_balance_increment] at hz
     refine ⟨_, by ok_rfl, ?_⟩
     simp [Spec.get_exit_churn_limit, Spec.uint64Div, Spec.uint64Mod, hnz, ← hq, hz,
-      absResult, absArithError, except_ok_bind, except_error_bind, throw, throwThe,
+      resultToSpec, arithErrorToSpec, except_ok_bind, except_error_bind, throw, throwThe,
       MonadExceptOf.throw, Pure.pure, Except.pure, 
       
       core.convert.FromSame.from]
@@ -192,7 +192,7 @@ theorem exit_churn_limit_equiv (p : Spec.Preset) (total_active_balance : U64)
   have hle : max p.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA q.val % p.EFFECTIVE_BALANCE_INCREMENT
       ≤ max p.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA q.val := Nat.mod_le _ _
   simp [Spec.get_exit_churn_limit, Spec.uint64Div, Spec.uint64Mod, Spec.uint64Sub, hnz, ← hq,
-    hmnz, absResult, except_ok_bind, Pure.pure, Except.pure, hmin, hd, hm, hmax,
+    hmnz, resultToSpec, except_ok_bind, Pure.pure, Except.pure, hmin, hd, hm, hmax,
     hc.min_per_epoch_churn_limit]
   intro h
   rcases Nat.le_total p.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA q.val with hq' | hq'
@@ -206,10 +206,10 @@ theorem exit_churn_limit_equiv (p : Spec.Preset) (total_active_balance : U64)
 def ChurnSpec (p : Spec.Preset) (c : LhRegistryConstants) (T : Nat → Nat) : Prop :=
   ∀ total_active_balance : U64,
     per_epoch_processing.registry_update.exit_churn_limit total_active_balance c ⦃ r =>
-      absResult (·.val) r = Spec.get_exit_churn_limit p (T total_active_balance.val) ⦄
+      resultToSpec (·.val) r = Spec.get_exit_churn_limit p (T total_active_balance.val) ⦄
 
-theorem ConstantsMatch.churnSpec {p : Spec.Preset} {c : LhRegistryConstants}
-    (hc : ConstantsMatch p c) : ChurnSpec p c id :=
+theorem RegistryConstantsMatchGloas.churnSpec {p : Spec.Preset} {c : LhRegistryConstants}
+    (hc : RegistryConstantsMatchGloas p c) : ChurnSpec p c id :=
   fun total_active_balance => exit_churn_limit_equiv p total_active_balance c hc
 
 theorem ceil_div_mul_ge (x c : Nat) (hc : 0 < c) : x ≤ ((x - 1) / c + 1) * c := by
@@ -221,11 +221,11 @@ theorem ceil_div_mul_ge (x c : Nat) (hc : 0 < c) : x ≤ ((x - 1) / c + 1) * c :
 
 theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
     (exit_balance current_epoch earliest_exit_epoch exit_balance_to_consume total_active_balance : U64)
-    (c : LhRegistryConstants) (hc : ConstantsMatchBase p c) (T : Nat → Nat)
+    (c : LhRegistryConstants) (hc : RegistryConstantsMatch p c) (T : Nat → Nat)
     (hch : ChurnSpec p c T) :
     per_epoch_processing.registry_update.compute_exit_epoch_and_update_churn exit_balance
       current_epoch earliest_exit_epoch exit_balance_to_consume total_active_balance c ⦃ r =>
-        absResult (fun x => (x.1.val, x.2.1.val, x.2.2.val)) r =
+        resultToSpec (fun x => (x.1.val, x.2.1.val, x.2.2.val)) r =
           Spec.exitChurnStep p (T total_active_balance.val) current_epoch.val exit_balance.val
             earliest_exit_epoch.val exit_balance_to_consume.val ⦄ := by
   unfold per_epoch_processing.registry_update.compute_exit_epoch_and_update_churn
@@ -235,16 +235,16 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
   rw [hr1]
   cases r1 with
   | Err e =>
-    simp only [absResult] at h1
+    simp only [resultToSpec] at h1
     refine ⟨_, by ok_rfl, ?_⟩
     simp only [Spec.exitChurnStep, ← h1]
-    simp [absResult, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
+    simp [resultToSpec, arithErrorToSpec, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
       throw, throwThe, MonadExceptOf.throw, 
       
       core.convert.FromSame.from, Spec.uint64Add, Spec.uint64Sub,
       Spec.uint64Div, Spec.uint64Mul, Spec.UINT64_SIZE]
   | Ok act =>
-  simp only [absResult] at h1
+  simp only [resultToSpec] at h1
   simp only [core.result.Result.Insts.CoreOpsTry.branch, bind_tc_ok, core.cmp.max,
     liftFun2]
   have hmax := core.cmp.impls.OrdU64.max_val earliest_exit_epoch act
@@ -252,16 +252,16 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
   rw [hr2]
   cases r2 with
   | Err e =>
-    simp only [absResult] at h2
+    simp only [resultToSpec] at h2
     refine ⟨_, by ok_rfl, ?_⟩
     simp only [Spec.exitChurnStep, ← h1, ← h2]
-    simp [absResult, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
+    simp [resultToSpec, arithErrorToSpec, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
       throw, throwThe, MonadExceptOf.throw, 
       
       core.convert.FromSame.from, Spec.uint64Add, Spec.uint64Sub,
       Spec.uint64Div, Spec.uint64Mul, Spec.UINT64_SIZE]
   | Ok churn =>
-  simp only [absResult] at h2
+  simp only [resultToSpec] at h2
   simp only [bind_tc_ok]
   have hone : (1#u64 : U64).val = 1 := rfl
   generalize hebtc_def : (if earliest_exit_epoch < core.cmp.impls.OrdU64.max earliest_exit_epoch act
@@ -310,7 +310,8 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
       try simp only [hv3, hv4, hmax, hone] at hbad5
       refine ⟨_, by ok_rfl, ?_⟩
       simp only [Spec.exitChurnStep, ← h1, ← h2, except_ok_bind, ← hebtc]
-      simp [absResult, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
+      simp [resultToSpec, arithErrorToSpec, except_ok_bind, except_error_bind, Pure.pure,
+        Except.pure,
         throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.uint64Div,
         Spec.uint64Mul, Spec.UINT64_SIZE, hgt, hle3, hle4, hbad5]
     | Ok q =>
@@ -325,7 +326,8 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
       try simp only [hv5, hone] at hbad6
       refine ⟨_, by ok_rfl, ?_⟩
       simp only [Spec.exitChurnStep, ← h1, ← h2, except_ok_bind, ← hebtc]
-      simp [absResult, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
+      simp [resultToSpec, arithErrorToSpec, except_ok_bind, except_error_bind, Pure.pure,
+        Except.pure,
         throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.uint64Div,
         Spec.uint64Mul, Spec.UINT64_SIZE, hgt, hle3, hle4, hnz5, hbad6]
     | Ok extra =>
@@ -340,7 +342,8 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
       try simp only [hv6, hmax] at hbad7
       refine ⟨_, by ok_rfl, ?_⟩
       simp only [Spec.exitChurnStep, ← h1, ← h2, except_ok_bind, ← hebtc]
-      simp [absResult, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
+      simp [resultToSpec, arithErrorToSpec, except_ok_bind, except_error_bind, Pure.pure,
+        Except.pure,
         throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.uint64Div,
         Spec.uint64Mul, Spec.UINT64_SIZE, hgt, hle3, hle4, hnz5, hfit6, hbad7]
     | Ok newe =>
@@ -355,7 +358,8 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
       try simp only [hv6] at hbad8
       refine ⟨_, by ok_rfl, ?_⟩
       simp only [Spec.exitChurnStep, ← h1, ← h2, except_ok_bind, ← hebtc]
-      simp [absResult, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
+      simp [resultToSpec, arithErrorToSpec, except_ok_bind, except_error_bind, Pure.pure,
+        Except.pure,
         throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.uint64Div,
         Spec.uint64Mul, Spec.UINT64_SIZE, hgt, hle3, hle4, hnz5, hfit6, hfit7, hbad8]
     | Ok m =>
@@ -370,7 +374,8 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
       try simp only [hv8] at hbad9
       refine ⟨_, by ok_rfl, ?_⟩
       simp only [Spec.exitChurnStep, ← h1, ← h2, except_ok_bind, ← hebtc]
-      simp [absResult, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
+      simp [resultToSpec, arithErrorToSpec, except_ok_bind, except_error_bind, Pure.pure,
+        Except.pure,
         throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.uint64Div,
         Spec.uint64Mul, Spec.UINT64_SIZE, hgt, hle3, hle4, hnz5, hfit6, hfit7, hfit8, hbad9]
     | Ok b =>
@@ -393,7 +398,7 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
     simp only [bind_tc_ok]
     refine ⟨_, by ok_rfl, ?_⟩
     simp only [Spec.exitChurnStep, ← h1, ← h2, except_ok_bind, ← hebtc]
-    simp [absResult, except_ok_bind, Pure.pure, Except.pure,
+    simp [resultToSpec, except_ok_bind, Pure.pure, Except.pure,
           throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.uint64Div,
           Spec.uint64Mul, Spec.UINT64_SIZE, hgt, hle3, hle4, hnz5, hfit6, hv7, hfit7, hfit8, hfit9, hv10, hle10]
   · have hgt' : ¬ exit_balance > ebtc := by simp [UScalar.lt_equiv]; omega
@@ -410,16 +415,18 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
     simp only [bind_tc_ok]
     refine ⟨_, by ok_rfl, ?_⟩
     simp only [Spec.exitChurnStep, ← h1, ← h2, except_ok_bind, ← hebtc]
-    simp [absResult, except_ok_bind, Pure.pure, Except.pure,
+    simp [resultToSpec, except_ok_bind, Pure.pure, Except.pure,
           Spec.uint64Sub, 
           hmax, hgt, hv3, hle3]
 
 /-- The translated eligibility step is the model step, with the same errors. -/
 theorem eligibility_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
-    (effective_balance current_epoch : U64) (c : LhRegistryConstants) (hc : ConstantsMatchBase p c) :
+    (effective_balance current_epoch : U64) (c : LhRegistryConstants)
+    (hc : RegistryConstantsMatch p c) :
     per_epoch_processing.registry_update.eligibility_step fields effective_balance current_epoch c
-      ⦃ r => absResult absRegistry r =
-        Spec.eligibilityStep p current_epoch.val effective_balance.val (absRegistry fields) ⦄ := by
+      ⦃ r => resultToSpec registryFieldsToSpec r =
+        Spec.eligibilityStep p current_epoch.val effective_balance.val (registryFieldsToSpec fields)
+          ⦄ := by
   unfold per_epoch_processing.registry_update.eligibility_step
   apply exists_imp_spec
   have hone : (1#u64 : U64).val = 1 := rfl
@@ -428,7 +435,7 @@ theorem eligibility_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
   · have hfar' : fields.activation_eligibility_epoch ≠ c.far_future_epoch := by
       intro h; apply hfar; rw [h, hc.far_future_epoch]
     refine ⟨.Ok fields, by simp [hfar'], ?_⟩
-    simp [Spec.eligibilityStep, absRegistry, hfar, absResult, Pure.pure, Except.pure]
+    simp [Spec.eligibilityStep, registryFieldsToSpec, hfar, resultToSpec, Pure.pure, Except.pure]
   have hfar' : fields.activation_eligibility_epoch = c.far_future_epoch := by
     rw [UScalar.eq_equiv, hfar, hc.far_future_epoch]
   by_cases hmin : p.MIN_ACTIVATION_BALANCE ≤ effective_balance.val
@@ -436,7 +443,8 @@ theorem eligibility_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
   · have hmin' : ¬ effective_balance >= c.min_activation_balance := by
       rw [ge_iff_le, UScalar.le_equiv, hc.min_activation_balance]; exact hmin
     refine ⟨.Ok fields, by simp [hfar', hmin'], ?_⟩
-    simp [Spec.eligibilityStep, absRegistry, hfar, hmin, absResult, Pure.pure, Except.pure]
+    simp [Spec.eligibilityStep, registryFieldsToSpec, hfar, hmin, resultToSpec, Pure.pure,
+      Except.pure]
   have hmin' : effective_balance >= c.min_activation_balance := by
     rw [ge_iff_le, UScalar.le_equiv, hc.min_activation_balance]; exact hmin
   simp only [hfar', hmin', if_true]
@@ -447,7 +455,8 @@ theorem eligibility_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
     obtain ⟨rfl, hov⟩ := h1.2 e rfl
     simp only [hone] at hov
     refine ⟨_, by ok_rfl, ?_⟩
-    simp [Spec.eligibilityStep, hfar, hmin, hov, absResult, absArithError, absRegistry, except_error_bind, Pure.pure,
+    simp [Spec.eligibilityStep, hfar, hmin, hov, resultToSpec, arithErrorToSpec,
+      registryFieldsToSpec, except_error_bind, Pure.pure,
       Except.pure, throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.UINT64_SIZE,
       
       
@@ -456,7 +465,8 @@ theorem eligibility_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
     obtain ⟨hv, hfit⟩ := h1.1 v rfl
     simp only [hone] at hv hfit
     refine ⟨_, by ok_rfl, ?_⟩
-    simp [Spec.eligibilityStep, hfar, hmin, hfit, hv, absResult, absRegistry, except_ok_bind, Pure.pure,
+    simp [Spec.eligibilityStep, hfar, hmin, hfit, hv, resultToSpec, registryFieldsToSpec,
+      except_ok_bind, Pure.pure,
       Except.pure, Spec.uint64Add, Spec.UINT64_SIZE,
       
       
@@ -464,10 +474,12 @@ theorem eligibility_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
 
 /-- The translated activation step is the model step, with the same errors. -/
 theorem activation_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
-    (current_epoch finalized_epoch : U64) (c : LhRegistryConstants) (hc : ConstantsMatchBase p c) :
+    (current_epoch finalized_epoch : U64) (c : LhRegistryConstants)
+    (hc : RegistryConstantsMatch p c) :
     per_epoch_processing.registry_update.activation_step fields current_epoch finalized_epoch c
-      ⦃ r => absResult absRegistry r =
-        Spec.activationStep p current_epoch.val finalized_epoch.val (absRegistry fields) ⦄ := by
+      ⦃ r => resultToSpec registryFieldsToSpec r =
+        Spec.activationStep p current_epoch.val finalized_epoch.val (registryFieldsToSpec fields)
+          ⦄ := by
   unfold per_epoch_processing.registry_update.activation_step
   apply exists_imp_spec
   by_cases hfin : fields.activation_eligibility_epoch.val ≤ finalized_epoch.val
@@ -475,7 +487,7 @@ theorem activation_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
   · have hfin' : ¬ fields.activation_eligibility_epoch <= finalized_epoch := by
       rw [UScalar.le_equiv]; exact hfin
     refine ⟨.Ok fields, by simp [hfin'], ?_⟩
-    simp [Spec.activationStep, absRegistry, hfin, absResult, Pure.pure, Except.pure]
+    simp [Spec.activationStep, registryFieldsToSpec, hfin, resultToSpec, Pure.pure, Except.pure]
   have hfin' : fields.activation_eligibility_epoch <= finalized_epoch := by
     rw [UScalar.le_equiv]; exact hfin
   by_cases hfar : fields.activation_epoch.val = Spec.FAR_FUTURE_EPOCH
@@ -483,27 +495,28 @@ theorem activation_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
   · have hfar' : fields.activation_epoch ≠ c.far_future_epoch := by
       intro h; apply hfar; rw [h, hc.far_future_epoch]
     refine ⟨.Ok fields, by simp [hfin', hfar'], ?_⟩
-    simp [Spec.activationStep, absRegistry, hfin, hfar, absResult, Pure.pure, Except.pure]
+    simp [Spec.activationStep, registryFieldsToSpec, hfin, hfar, resultToSpec, Pure.pure,
+      Except.pure]
   have hfar' : fields.activation_epoch = c.far_future_epoch := by
     rw [UScalar.eq_equiv, hfar, hc.far_future_epoch]
   simp only [hfin', hfar', if_true]
   obtain ⟨r1, hr1, h1⟩ := spec_imp_exists (compute_activation_exit_epoch_equiv p current_epoch
     c.max_seed_lookahead hc.max_seed_lookahead)
   rw [hr1]
-  simp only [absResult] at h1
+  simp only [resultToSpec] at h1
   cases r1 with
   | Err e =>
     refine ⟨_, by ok_rfl, ?_⟩
-    simp only [Spec.activationStep, absRegistry, hfin, hfar, ← h1]
-    simp [absResult, absArithError, except_error_bind, Pure.pure,
+    simp only [Spec.activationStep, registryFieldsToSpec, hfin, hfar, ← h1]
+    simp [resultToSpec, arithErrorToSpec, except_error_bind, Pure.pure,
       Except.pure, 
       
       
       core.convert.FromSame.from]
   | Ok v =>
     refine ⟨_, by ok_rfl, ?_⟩
-    simp only [Spec.activationStep, absRegistry, hfin, hfar, ← h1]
-    simp [absResult, absRegistry, except_ok_bind, Pure.pure,
+    simp only [Spec.activationStep, registryFieldsToSpec, hfin, hfar, ← h1]
+    simp [resultToSpec, registryFieldsToSpec, except_ok_bind, Pure.pure,
       Except.pure, 
       
       
@@ -511,11 +524,11 @@ theorem activation_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
 
 theorem ejection_step_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields)
     (effective_balance current_epoch total_active_balance : U64) (c : LhRegistryConstants)
-    (hc : ConstantsMatchBase p c) (T : Nat → Nat) (hch : ChurnSpec p c T) :
+    (hc : RegistryConstantsMatch p c) (T : Nat → Nat) (hch : ChurnSpec p c T) :
     per_epoch_processing.registry_update.ejection_step fields effective_balance current_epoch
-      total_active_balance c ⦃ r => absResult absRegistry r =
+      total_active_balance c ⦃ r => resultToSpec registryFieldsToSpec r =
         Spec.ejectionStep p (T total_active_balance.val) current_epoch.val effective_balance.val
-          (absRegistry fields) ⦄ := by
+          (registryFieldsToSpec fields) ⦄ := by
   unfold per_epoch_processing.registry_update.ejection_step
   apply exists_imp_spec
   by_cases hact : fields.activation_epoch.val ≤ current_epoch.val
@@ -538,8 +551,8 @@ theorem ejection_step_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields)
           ∧ effective_balance.val ≤ p.EJECTION_BALANCE
       · have hnfar : fields.exit_epoch.val ≠ Spec.FAR_FUTURE_EPOCH :=
           fun h => hact ⟨hcond.1.1, hcond.1.2, hcond.2, h⟩
-        simp [Spec.ejectionStep, Spec.exitStep, absRegistry, hcond.1.1, hcond.1.2, hcond.2,
-          hnfar, absResult, Pure.pure, Except.pure]
+        simp [Spec.ejectionStep, Spec.exitStep, registryFieldsToSpec, hcond.1.1, hcond.1.2, hcond.2,
+          hnfar, resultToSpec, Pure.pure, Except.pure]
       · have : ((decide (fields.activation_epoch.val ≤ current_epoch.val)
             && decide (current_epoch.val < fields.exit_epoch.val))
             && decide (effective_balance.val ≤ p.EJECTION_BALANCE)) = false := by
@@ -549,8 +562,8 @@ theorem ejection_step_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields)
             · exact Or.inr (fun h3 => hcond ⟨⟨h1, h2⟩, h3⟩)
             · exact Or.inl (Or.inr h2)
           · exact Or.inl (Or.inl h1)
-        simp only [Spec.ejectionStep, absRegistry]
-        simp [absResult, absRegistry, Pure.pure, Except.pure]
+        simp only [Spec.ejectionStep, registryFieldsToSpec]
+        simp [resultToSpec, registryFieldsToSpec, Pure.pure, Except.pure]
         intro h1 h2 h3
         exact absurd ⟨⟨of_decide_eq_true h1, of_decide_eq_true h2⟩, h3⟩ hcond
   obtain ⟨h1, h2, h3, h4⟩ := hact
@@ -571,12 +584,12 @@ theorem ejection_step_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields)
     effective_balance current_epoch fields.earliest_exit_epoch fields.exit_balance_to_consume
     total_active_balance c hc T hch)
   rw [hr1]
-  simp only [absResult] at hx
+  simp only [resultToSpec] at hx
   cases r1 with
   | Err e =>
     refine ⟨_, by ok_rfl, ?_⟩
-    simp only [Spec.ejectionStep, Spec.exitStep, absRegistry, h4, ← hx]
-    simp [absResult, absArithError, except_ok_bind, except_error_bind, Pure.pure,
+    simp only [Spec.ejectionStep, Spec.exitStep, registryFieldsToSpec, h4, ← hx]
+    simp [resultToSpec, arithErrorToSpec, except_ok_bind, except_error_bind, Pure.pure,
       Except.pure, throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.UINT64_SIZE,
       
       
@@ -594,8 +607,8 @@ theorem ejection_step_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields)
   | Err e =>
     obtain ⟨rfl, hov⟩ := h2'.2 e rfl
     refine ⟨_, by ok_rfl, ?_⟩
-    simp only [Spec.ejectionStep, Spec.exitStep, absRegistry, h4, ← hx]
-    simp [absResult, absArithError, except_ok_bind, except_error_bind, Pure.pure,
+    simp only [Spec.ejectionStep, Spec.exitStep, registryFieldsToSpec, h4, ← hx]
+    simp [resultToSpec, arithErrorToSpec, except_ok_bind, except_error_bind, Pure.pure,
       Except.pure, throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.UINT64_SIZE,
       
       
@@ -603,8 +616,8 @@ theorem ejection_step_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields)
   | Ok w =>
     obtain ⟨hw, hfit⟩ := h2'.1 w rfl
     refine ⟨_, by ok_rfl, ?_⟩
-    simp only [Spec.ejectionStep, Spec.exitStep, absRegistry, h4, ← hx]
-    simp [absResult, absRegistry, except_ok_bind, Pure.pure,
+    simp only [Spec.ejectionStep, Spec.exitStep, registryFieldsToSpec, h4, ← hx]
+    simp [resultToSpec, registryFieldsToSpec, except_ok_bind, Pure.pure,
       Except.pure, throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.UINT64_SIZE,
       
       
@@ -612,23 +625,23 @@ theorem ejection_step_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields)
 
 theorem registry_update_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields)
     (effective_balance current_epoch finalized_epoch total_active_balance : U64)
-    (c : LhRegistryConstants) (hc : ConstantsMatchBase p c) (T : Nat → Nat)
+    (c : LhRegistryConstants) (hc : RegistryConstantsMatch p c) (T : Nat → Nat)
     (hch : ChurnSpec p c T) :
     per_epoch_processing.registry_update.registry_update fields effective_balance current_epoch
-      finalized_epoch total_active_balance c ⦃ r => absResult absRegistry r =
+      finalized_epoch total_active_balance c ⦃ r => resultToSpec registryFieldsToSpec r =
         Spec.registryStepIndependent p (T total_active_balance.val) current_epoch.val
-          finalized_epoch.val effective_balance.val (absRegistry fields) ⦄ := by
+          finalized_epoch.val effective_balance.val (registryFieldsToSpec fields) ⦄ := by
   unfold per_epoch_processing.registry_update.registry_update
   apply exists_imp_spec
   obtain ⟨r1, hr1, h1⟩ := spec_imp_exists (eligibility_step_equiv p fields effective_balance
     current_epoch c hc)
   rw [hr1]
-  simp only [absResult] at h1
+  simp only [resultToSpec] at h1
   cases r1 with
   | Err e =>
     refine ⟨_, by ok_rfl, ?_⟩
     simp only [Spec.registryStepIndependent, ← h1]
-    simp [absResult, absArithError, except_error_bind,
+    simp [resultToSpec, arithErrorToSpec, except_error_bind,
       
       
       core.convert.FromSame.from]
@@ -637,12 +650,12 @@ theorem registry_update_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields
   obtain ⟨r2, hr2, h2⟩ := spec_imp_exists (ejection_step_equiv_churn p f1 effective_balance
     current_epoch total_active_balance c hc T hch)
   rw [hr2]
-  simp only [absResult] at h2
+  simp only [resultToSpec] at h2
   cases r2 with
   | Err e =>
     refine ⟨_, by ok_rfl, ?_⟩
     simp only [Spec.registryStepIndependent, ← h1, except_ok_bind, ← h2]
-    simp [absResult, absArithError, except_error_bind,
+    simp [resultToSpec, arithErrorToSpec, except_error_bind,
       
       
       core.convert.FromSame.from]
@@ -656,48 +669,49 @@ theorem registry_update_equiv_churn (p : Spec.Preset) (fields : LhRegistryFields
 
 theorem compute_exit_epoch_and_update_churn_equiv (p : Spec.Preset)
     (exit_balance current_epoch earliest_exit_epoch exit_balance_to_consume total_active_balance : U64)
-    (c : LhRegistryConstants) (hc : ConstantsMatch p c) :
+    (c : LhRegistryConstants) (hc : RegistryConstantsMatchGloas p c) :
     per_epoch_processing.registry_update.compute_exit_epoch_and_update_churn exit_balance
       current_epoch earliest_exit_epoch exit_balance_to_consume total_active_balance c ⦃ r =>
-        absResult (fun x => (x.1.val, x.2.1.val, x.2.2.val)) r =
+        resultToSpec (fun x => (x.1.val, x.2.1.val, x.2.2.val)) r =
           Spec.exitChurnStep p total_active_balance.val current_epoch.val exit_balance.val
             earliest_exit_epoch.val exit_balance_to_consume.val ⦄ :=
   compute_exit_epoch_and_update_churn_equiv_churn p exit_balance current_epoch earliest_exit_epoch
-    exit_balance_to_consume total_active_balance c hc.toConstantsMatchBase id hc.churnSpec
+    exit_balance_to_consume total_active_balance c hc.toRegistryConstantsMatch id hc.churnSpec
 
 theorem ejection_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
     (effective_balance current_epoch total_active_balance : U64) (c : LhRegistryConstants)
-    (hc : ConstantsMatch p c) :
+    (hc : RegistryConstantsMatchGloas p c) :
     per_epoch_processing.registry_update.ejection_step fields effective_balance current_epoch
-      total_active_balance c ⦃ r => absResult absRegistry r =
+      total_active_balance c ⦃ r => resultToSpec registryFieldsToSpec r =
         Spec.ejectionStep p total_active_balance.val current_epoch.val effective_balance.val
-          (absRegistry fields) ⦄ :=
+          (registryFieldsToSpec fields) ⦄ :=
   ejection_step_equiv_churn p fields effective_balance current_epoch total_active_balance c
-    hc.toConstantsMatchBase id hc.churnSpec
+    hc.toRegistryConstantsMatch id hc.churnSpec
 
 theorem registry_update_equiv (p : Spec.Preset) (fields : LhRegistryFields)
     (effective_balance current_epoch finalized_epoch total_active_balance : U64)
-    (c : LhRegistryConstants) (hc : ConstantsMatch p c) :
+    (c : LhRegistryConstants) (hc : RegistryConstantsMatchGloas p c) :
     per_epoch_processing.registry_update.registry_update fields effective_balance current_epoch
-      finalized_epoch total_active_balance c ⦃ r => absResult absRegistry r =
+      finalized_epoch total_active_balance c ⦃ r => resultToSpec registryFieldsToSpec r =
         Spec.registryStepIndependent p total_active_balance.val current_epoch.val
-          finalized_epoch.val effective_balance.val (absRegistry fields) ⦄ :=
+          finalized_epoch.val effective_balance.val (registryFieldsToSpec fields) ⦄ :=
   registry_update_equiv_churn p fields effective_balance current_epoch finalized_epoch
-    total_active_balance c hc.toConstantsMatchBase id hc.churnSpec
+    total_active_balance c hc.toRegistryConstantsMatch id hc.churnSpec
 
 /-- On valid states, Lighthouse's registry update equals the spec's loop body for one
 validator. -/
 theorem registry_update_eq_spec (p : Spec.Preset) (fields : LhRegistryFields)
     (effective_balance current_epoch finalized_epoch total_active_balance : U64)
-    (c : LhRegistryConstants) (hc : ConstantsMatch p c) (activation_epoch : Nat)
+    (c : LhRegistryConstants) (hc : RegistryConstantsMatchGloas p c) (activation_epoch : Nat)
     (hbalances : p.EJECTION_BALANCE < p.MIN_ACTIVATION_BALANCE)
     (hfinalized : finalized_epoch.val ≤ current_epoch.val)
     (hcurrent : current_epoch.val + 1 < Spec.UINT64_SIZE)
     (hactivation : Spec.compute_activation_exit_epoch p current_epoch.val = .ok activation_epoch) :
     per_epoch_processing.registry_update.registry_update fields effective_balance current_epoch
-      finalized_epoch total_active_balance c ⦃ r => absResult absRegistry r =
+      finalized_epoch total_active_balance c ⦃ r => resultToSpec registryFieldsToSpec r =
         Spec.registryStepExclusive p total_active_balance.val current_epoch.val
-          finalized_epoch.val activation_epoch effective_balance.val (absRegistry fields) ⦄ := by
+          finalized_epoch.val activation_epoch effective_balance.val (registryFieldsToSpec fields)
+            ⦄ := by
   apply WP.spec_mono (registry_update_equiv p fields effective_balance current_epoch
     finalized_epoch total_active_balance c hc)
   intro r hr
@@ -706,6 +720,6 @@ theorem registry_update_eq_spec (p : Spec.Preset) (fields : LhRegistryFields)
     hactivation
   have hb : fields.exit_epoch.val ≤ 18446744073709551615 := by
     have := fields.exit_epoch.hBounds; simp at this; omega
-  simpa [absRegistry, Spec.FAR_FUTURE_EPOCH] using hb
+  simpa [registryFieldsToSpec, Spec.FAR_FUTURE_EPOCH] using hb
 
 end EpochProofs

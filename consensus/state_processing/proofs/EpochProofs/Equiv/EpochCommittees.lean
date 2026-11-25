@@ -16,10 +16,10 @@ import EpochProofs.Sanity.PtcIndices
 The untranslated code in `single_pass.rs` and `sync_committee_updates.rs` passes the inputs. Each
 theorem takes the facts about the untranslated code as hypotheses:
 
-- `SeedMixLink`: `get_seed_mix` reads the RANDAO mix that `get_seed` reads.
+- `SeedMixMatches`: `get_seed_mix` reads the RANDAO mix that `get_seed` reads.
 - the index lists: the active (and unslashed) validators, or the committees of each slot that
   the committee cache holds (see the committee cache proofs, eserilev/lighthouse-aeneas #28).
-- `EBLink`: `BeaconState::get_effective_balance` reads the registry.
+- `EffectiveBalancesMatch`: `BeaconState::get_effective_balance` reads the registry.
 -/
 
 namespace EpochProofs
@@ -41,17 +41,18 @@ theorem get_seed_eq (p : Spec.Preset) (o : Spec.Oracle) (state : Spec.BeaconStat
   simp only [Spec.get_seed, Spec.seedMix, bind_assoc]
 
 /-- The mix that Lighthouse passes is the mix that `get_seed` reads. -/
-def SeedMixLink (p : Spec.Preset) (state : Spec.BeaconState) (epoch : Nat)
+def SeedMixMatches (p : Spec.Preset) (state : Spec.BeaconState) (epoch : Nat)
     (mix : Array U8 32#usize) : Prop :=
-  ∀ m, Spec.seedMix p state epoch = .ok m → u8s mix.val = m.toList
+  ∀ m, Spec.seedMix p state epoch = .ok m → byteValues mix.val = m.toList
 
 theorem compute_seed_eq {H : Type} (inst : ShuffleHashInst H) (p : Spec.Preset)
-    (o : Spec.Oracle) (hH : HashLink inst o) (state : Spec.BeaconState) (domainSpec : Spec.DomainType)
-    (domain : Array U8 4#usize) (hdomain : u8s domain.val = domainSpec.toList) (epoch : U64)
-    (mix : Array U8 32#usize) (hmix : SeedMixLink p state epoch.val mix) (s : Spec.Bytes32)
+    (o : Spec.Oracle) (hH : HashMatches inst o) (state : Spec.BeaconState)
+    (domainSpec : Spec.DomainType)
+    (domain : Array U8 4#usize) (hdomain : byteValues domain.val = domainSpec.toList) (epoch : U64)
+    (mix : Array U8 32#usize) (hmix : SeedMixMatches p state epoch.val mix) (s : Spec.Bytes32)
     (hs : Spec.get_seed p o state epoch.val domainSpec = .ok s) :
     types.state.balance_weighted_selection.compute_seed inst domain epoch mix ⦃ d =>
-      u8s d.val = s.toList ⦄ := by
+      byteValues d.val = s.toList ⦄ := by
   rw [get_seed_eq] at hs
   simp only [except_bind_ok_iff, pure, Except.pure, Except.ok.injEq] at hs
   obtain ⟨m, hm, hsm⟩ := hs
@@ -70,14 +71,15 @@ structure SelectionConstantsMatch (p : Spec.Preset) (c : LhSelectionConstants) :
 
 /-- `next_sync_committee_indices` equals `get_next_sync_committee_indices`. -/
 theorem next_sync_committee_indices_spec {H B : Type} (inst : ShuffleHashInst H)
-    (ebi : EBInst B) (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashLink inst o)
+    (ebi : EffectiveBalanceSource B) (balances : B) (p : Spec.Preset) (o : Spec.Oracle)
+    (hH : HashMatches inst o)
     (state : Spec.BeaconState)
-    (hEB : EBLink ebi balances (state.validators.map (·.effective_balance)))
+    (hEB : EffectiveBalancesMatch ebi balances (state.validators.map (·.effective_balance)))
     (indices : Slice Usize) (domain : Array U8 4#usize)
-    (hdomain : u8s domain.val = Spec.DOMAIN_SYNC_COMMITTEE.toList) (epoch : U64)
+    (hdomain : byteValues domain.val = Spec.DOMAIN_SYNC_COMMITTEE.toList) (epoch : U64)
     (hepoch : ∀ ce, Spec.get_current_epoch p state = .ok ce → epoch.val = ce + 1)
     (hindices : indices.val.map (·.val) = Spec.get_active_validator_indices state epoch.val)
-    (mix : Array U8 32#usize) (hmix : SeedMixLink p state epoch.val mix) (size : Usize)
+    (mix : Array U8 32#usize) (hmix : SeedMixMatches p state epoch.val mix) (size : Usize)
     (hsize : size.val = p.SYNC_COMMITTEE_SIZE) (c : LhSelectionConstants)
     (hc : SelectionConstantsMatch p c) (hn24 : indices.val.length ≤ 2 ^ 24) (hus : Usize.max = U64.max)
     (res : List Nat) (hspec : Spec.get_next_sync_committee_indices p o state = .ok res) :
@@ -158,12 +160,12 @@ theorem spec_proposers_get (p : Spec.Preset) (o : Spec.Oracle) (state : Spec.Bea
     · rename_i a ha; rw [ha, Except.ok.inj hget]
     · simp [throw, throwThe, MonadExceptOf.throw] at hget
 
-theorem proposer_at_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EBInst B)
-    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashLink inst o)
+theorem proposer_at_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EffectiveBalanceSource B)
+    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
     (state : Spec.BeaconState)
-    (hEB : EBLink ebi balances (state.validators.map (·.effective_balance)))
+    (hEB : EffectiveBalancesMatch ebi balances (state.validators.map (·.effective_balance)))
     (indices : Slice Usize) (seed : Array U8 32#usize) (seedSpec : Spec.Bytes32)
-    (hseed : u8s seed.val = seedSpec.toList) (start_slot i : U64) (R : U8)
+    (hseed : byteValues seed.val = seedSpec.toList) (start_slot i : U64) (R : U8)
     (hR : R.val = p.SHUFFLE_ROUND_COUNT) (maxeb : U64)
     (hmaxeb : maxeb.val = p.MAX_EFFECTIVE_BALANCE_ELECTRA)
     (hn24 : indices.val.length ≤ 2 ^ 24) (hus : Usize.max = U64.max)
@@ -203,12 +205,13 @@ theorem u64_saturating_add_one' (x : U64) (h : x.val < 2 ^ 64 - 1) :
 
 /-- `compute_proposer_indices` equals the reference, for the epoch that starts at
 `start_slot`. -/
-theorem compute_proposer_indices_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EBInst B)
-    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashLink inst o)
+theorem compute_proposer_indices_spec {H B : Type} (inst : ShuffleHashInst H)
+    (ebi : EffectiveBalanceSource B)
+    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
     (state : Spec.BeaconState)
-    (hEB : EBLink ebi balances (state.validators.map (·.effective_balance)))
+    (hEB : EffectiveBalancesMatch ebi balances (state.validators.map (·.effective_balance)))
     (indices : Slice Usize) (seed : Array U8 32#usize) (seedSpec : Spec.Bytes32)
-    (hseed : u8s seed.val = seedSpec.toList) (epoch : Nat) (start_slot spe : U64) (R : U8)
+    (hseed : byteValues seed.val = seedSpec.toList) (epoch : Nat) (start_slot spe : U64) (R : U8)
     (hR : R.val = p.SHUFFLE_ROUND_COUNT) (maxeb : U64)
     (hmaxeb : maxeb.val = p.MAX_EFFECTIVE_BALANCE_ELECTRA) (hspe : spe.val = p.SLOTS_PER_EPOCH)
     (hstart : Spec.compute_start_slot_at_epoch p epoch = .ok start_slot.val)
@@ -374,19 +377,20 @@ theorem get_beacon_proposer_indices_frame (p : Spec.Preset) (o : Spec.Oracle)
       Spec.get_beacon_proposer_indices p o state e := rfl
 
 /-- `next_proposer_lookahead` equals `process_proposer_lookahead`. -/
-theorem next_proposer_lookahead_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EBInst B)
-    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashLink inst o)
+theorem next_proposer_lookahead_spec {H B : Type} (inst : ShuffleHashInst H)
+    (ebi : EffectiveBalanceSource B)
+    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
     (state : Spec.BeaconState)
-    (hEB : EBLink ebi balances (state.validators.map (·.effective_balance)))
+    (hEB : EffectiveBalancesMatch ebi balances (state.validators.map (·.effective_balance)))
     (look : Slice U64) (hlook : look.val.map (·.val) = state.proposer_lookahead)
     (indices : Slice Usize) (domain : Array U8 4#usize)
-    (hdomain : u8s domain.val = Spec.DOMAIN_BEACON_PROPOSER.toList) (epoch : U64)
+    (hdomain : byteValues domain.val = Spec.DOMAIN_BEACON_PROPOSER.toList) (epoch : U64)
     (hepoch : ∀ ce, Spec.get_current_epoch p state = .ok ce →
       epoch.val = ce + p.MIN_SEED_LOOKAHEAD + 1)
     (hindices : ∀ l, (Spec.get_active_validator_indices state epoch.val).filterM
       (fun index => do pure !(← Spec.listGet state.validators index).slashed) = .ok l →
         indices.val.map (·.val) = l)
-    (mix : Array U8 32#usize) (hmix : SeedMixLink p state epoch.val mix) (start_slot : U64)
+    (mix : Array U8 32#usize) (hmix : SeedMixMatches p state epoch.val mix) (start_slot : U64)
     (hstart : Spec.compute_start_slot_at_epoch p epoch.val = .ok start_slot.val)
     (c : LhSelectionConstants) (hc : SelectionConstantsMatch p c)
     (hspe32 : p.SLOTS_PER_EPOCH < 2 ^ 32)
@@ -451,12 +455,12 @@ theorem next_proposer_lookahead_spec {H B : Type} (inst : ShuffleHashInst H) (eb
   rw [List.take_of_length_le (by simp)]
 
 /-- Lighthouse `compute_ptc` equals the reference selection of `compute_ptc`. -/
-theorem compute_ptc_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EBInst B)
-    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashLink inst o)
+theorem compute_ptc_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EffectiveBalanceSource B)
+    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
     (state : Spec.BeaconState)
-    (hEB : EBLink ebi balances (state.validators.map (·.effective_balance)))
+    (hEB : EffectiveBalancesMatch ebi balances (state.validators.map (·.effective_balance)))
     (committee : Slice Usize) (attester_seed : Array U8 32#usize) (s : Spec.Bytes32)
-    (hs : u8s attester_seed.val = s.toList) (slot : U64) (ptc_size : Usize) (R : U8)
+    (hs : byteValues attester_seed.val = s.toList) (slot : U64) (ptc_size : Usize) (R : U8)
     (hR : R.val = p.SHUFFLE_ROUND_COUNT) (maxeb : U64)
     (hmaxeb : maxeb.val = p.MAX_EFFECTIVE_BALANCE_ELECTRA)
     (hn24 : committee.val.length ≤ 2 ^ 24) (hus : Usize.max = U64.max) (res : List Nat)
@@ -571,21 +575,23 @@ theorem slice_get_vec (s : Slice (alloc.vec.Vec Usize)) (i : Usize) :
   rfl
 
 /-- The validator indices of a Lighthouse vector. -/
-def natsOf (w : alloc.vec.Vec Usize) : List Nat := w.val.map (·.val)
+def indexValues (w : alloc.vec.Vec Usize) : List Nat := w.val.map (·.val)
 
 /-- The PTCs of a Lighthouse vector, as lists of validator indices. -/
-def ptcsOf (v : alloc.vec.Vec (alloc.vec.Vec Usize)) : List (List Nat) := v.val.map natsOf
+def ptcIndexValues (v : alloc.vec.Vec (alloc.vec.Vec Usize)) : List (List Nat) :=
+    v.val.map indexValues
 
 /-- `ptc_for_epoch` returns the PTCs of the slots of `epoch`, for any `epoch`: `ptcs[k]` is
 `compute_ptc(state, start_slot + k)`. -/
-theorem ptc_for_epoch_spec_gen {H B : Type} (inst : ShuffleHashInst H) (ebi : EBInst B)
-    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashLink inst o)
+theorem ptc_for_epoch_spec_gen {H B : Type} (inst : ShuffleHashInst H)
+    (ebi : EffectiveBalanceSource B)
+    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
     (state : Spec.BeaconState)
-    (hEB : EBLink ebi balances (state.validators.map (·.effective_balance)))
+    (hEB : EffectiveBalancesMatch ebi balances (state.validators.map (·.effective_balance)))
     (committees : Slice (alloc.vec.Vec Usize))
     (hclen : committees.val.length = p.SLOTS_PER_EPOCH) (domain : Array U8 4#usize)
-    (hdomain : u8s domain.val = Spec.DOMAIN_PTC_ATTESTER.toList) (epoch : U64)
-    (mix : Array U8 32#usize) (hmix : SeedMixLink p state epoch.val mix) (start_slot : U64)
+    (hdomain : byteValues domain.val = Spec.DOMAIN_PTC_ATTESTER.toList) (epoch : U64)
+    (mix : Array U8 32#usize) (hmix : SeedMixMatches p state epoch.val mix) (start_slot : U64)
     (hstart : Spec.compute_start_slot_at_epoch p epoch.val = .ok start_slot.val)
     (hfit : start_slot.val + p.SLOTS_PER_EPOCH < 2 ^ 64)
     (ptcs : List (List Nat)) (hplen : ptcs.length = p.SLOTS_PER_EPOCH)
@@ -600,7 +606,7 @@ theorem ptc_for_epoch_spec_gen {H B : Type} (inst : ShuffleHashInst H) (ebi : EB
     (hus : Usize.max = U64.max) :
     per_epoch_processing.epoch_committees.ptc_for_epoch inst ebi balances committees domain epoch
       mix start_slot ptc_size c ⦃ r =>
-        ∃ v : alloc.vec.Vec (alloc.vec.Vec Usize), r = .Ok v ∧ ptcsOf v = ptcs ⦄ := by
+        ∃ v : alloc.vec.Vec (alloc.vec.Vec Usize), r = .Ok v ∧ ptcIndexValues v = ptcs ⦄ := by
   obtain ⟨hk0, h0⟩ := hk 0 hspe
   obtain ⟨s, -, hs, -, -⟩ := ptc_slot_facts p o state epoch.val start_slot.val 0 hspe hstart hspe
     _ h0
@@ -609,7 +615,7 @@ theorem ptc_for_epoch_spec_gen {H B : Type} (inst : ShuffleHashInst H) (ebi : EB
   intro aseed haseed
   have hloop : per_epoch_processing.epoch_committees.ptc_for_epoch_loop inst ebi balances
       committees start_slot ptc_size c aseed (alloc.vec.Vec.new (alloc.vec.Vec Usize)) 0#usize
-      ⦃ r => r.2 = none ∧ ptcsOf r.1 = ptcs ⦄ := by
+      ⦃ r => r.2 = none ∧ ptcIndexValues r.1 = ptcs ⦄ := by
     unfold per_epoch_processing.epoch_committees.ptc_for_epoch_loop
     obtain ⟨L, hL⟩ : ∃ L, committees.val.length = L := ⟨_, rfl⟩
     apply loop.spec_decr_nat
@@ -617,7 +623,7 @@ theorem ptc_for_epoch_spec_gen {H B : Type} (inst : ShuffleHashInst H) (ebi : EB
         L - x.2.2.val)
       (inv := fun (x : LhSelectionConstants × alloc.vec.Vec (alloc.vec.Vec Usize) × Usize) =>
         x.1 = c ∧ x.2.2.val ≤ L ∧
-        ptcsOf x.2.1 = ptcs.take x.2.2.val)
+        ptcIndexValues x.2.1 = ptcs.take x.2.2.val)
     · rintro ⟨cst, ps, i⟩ ⟨hcst, hi, hps⟩
       dsimp only at hcst hi hps ⊢
       have hc' : SelectionConstantsMatch p cst := hcst ▸ hc
@@ -659,16 +665,16 @@ theorem ptc_for_epoch_spec_gen {H B : Type} (inst : ShuffleHashInst H) (ebi : EB
         dsimp only
         have hpsl : ps.val.length < Usize.max := by
           have := congrArg List.length hps
-          simp only [ptcsOf, List.length_map, List.length_take] at this
+          simp only [ptcIndexValues, List.length_map, List.length_take] at this
           have := committees.property
           omega
         step*
         have hi1 := usize_saturating_add_one i (by have := committees.property; omega)
         rw [hi1]
         refine ⟨hcst, by omega, ?_, by omega⟩
-        simp only [ptcsOf] at hps ⊢
+        simp only [ptcIndexValues] at hps ⊢
         rw [ptcs1_post, List.map_append, hps, List.take_succ_eq_append_getElem hki]
-        simp only [List.map_cons, List.map_nil, natsOf, hv]
+        simp only [List.map_cons, List.map_nil, indexValues, hv]
       · rename_i hge
         have : i.val = L := by
           have : ¬ i.val < committees.val.length := by simpa [Slice.len_val] using hge
@@ -676,7 +682,7 @@ theorem ptc_for_epoch_spec_gen {H B : Type} (inst : ShuffleHashInst H) (ebi : EB
         simp only [spec_ok]
         refine ⟨by simp, ?_⟩
         rw [hps, this, ← hL, hclen, ← hplen, List.take_length]
-    · exact ⟨rfl, by simp, by simp [ptcsOf]⟩
+    · exact ⟨rfl, by simp, by simp [ptcIndexValues]⟩
   apply spec_bind hloop
   intro r hr
   obtain ⟨herr, hv⟩ := hr
@@ -686,16 +692,16 @@ theorem ptc_for_epoch_spec_gen {H B : Type} (inst : ShuffleHashInst H) (ebi : EB
   exact ⟨v, rfl, hv⟩
 
 /-- `ptc_for_epoch` returns the PTCs that `process_ptc_window` appends. -/
-theorem ptc_for_epoch_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EBInst B)
-    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashLink inst o)
+theorem ptc_for_epoch_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EffectiveBalanceSource B)
+    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
     (state : Spec.BeaconState)
-    (hEB : EBLink ebi balances (state.validators.map (·.effective_balance)))
+    (hEB : EffectiveBalancesMatch ebi balances (state.validators.map (·.effective_balance)))
     (committees : Slice (alloc.vec.Vec Usize))
     (hclen : committees.val.length = p.SLOTS_PER_EPOCH) (domain : Array U8 4#usize)
-    (hdomain : u8s domain.val = Spec.DOMAIN_PTC_ATTESTER.toList) (epoch : U64)
+    (hdomain : byteValues domain.val = Spec.DOMAIN_PTC_ATTESTER.toList) (epoch : U64)
     (hepoch : ∀ ce, Spec.get_current_epoch p state = .ok ce →
       epoch.val = ce + p.MIN_SEED_LOOKAHEAD + 1)
-    (mix : Array U8 32#usize) (hmix : SeedMixLink p state epoch.val mix) (start_slot : U64)
+    (mix : Array U8 32#usize) (hmix : SeedMixMatches p state epoch.val mix) (start_slot : U64)
     (hstart : Spec.compute_start_slot_at_epoch p epoch.val = .ok start_slot.val)
     (hcomm : ∀ k (hk : k < committees.val.length) l,
       Spec.ptcIndices p o state epoch.val (start_slot.val + k) = .ok l →
@@ -709,7 +715,7 @@ theorem ptc_for_epoch_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EBInst
       mix start_slot ptc_size c ⦃ r =>
         ∃ v : alloc.vec.Vec (alloc.vec.Vec Usize), r = .Ok v ∧
           state'.ptc_window = state.ptc_window.drop p.SLOTS_PER_EPOCH ++
-            ptcsOf v ⦄ := by
+            ptcIndexValues v ⦄ := by
   obtain ⟨e, start, ptcs, ⟨ce, hce, he⟩, hst, hfit, -, hw, hplen, hk⟩ :=
     spec_ptc_window_get p o state state' hspec
   have hev : e = epoch.val := by rw [he, hepoch ce hce]

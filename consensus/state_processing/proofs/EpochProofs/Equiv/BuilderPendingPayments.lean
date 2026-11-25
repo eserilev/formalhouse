@@ -238,21 +238,22 @@ theorem process_builder_pending_payments_spec (payments : Slice LhPayment) (spe 
   exact ⟨hw, hu1⟩
 
 /-- The spec error of a Rust `ArithError`. -/
-def absArithError : safe_arith.ArithError → Spec.SpecError
+def arithErrorToSpec : safe_arith.ArithError → Spec.SpecError
   | .Overflow => .overflow
   | .DivisionByZero => .divisionByZero
 
 /-- A Rust `Result`, read as a spec result. `f` reads the value. -/
-def absResult {α β : Type} (f : α → β) : core.result.Result α safe_arith.ArithError → Spec.SpecM β
+def resultToSpec {α β : Type} (f : α → β) : core.result.Result α safe_arith.ArithError →
+    Spec.SpecM β
   | .Ok x => .ok (f x)
-  | .Err e => .error (absArithError e)
+  | .Err e => .error (arithErrorToSpec e)
 
 /-- The Rust builder payment threshold is the spec threshold, with the same errors. -/
 theorem quorum_equiv (p : Spec.Preset) (total_active_balance slots_per_epoch : U64)
     (hslots : slots_per_epoch.val = p.SLOTS_PER_EPOCH) :
     per_epoch_processing.builder_pending_payments.get_builder_payment_quorum_threshold
       total_active_balance slots_per_epoch 6#u64 10#u64 ⦃ r =>
-        absResult (·.val) r =
+        resultToSpec (·.val) r =
           Spec.get_builder_payment_quorum_threshold p total_active_balance.val ⦄ := by
   unfold per_epoch_processing.builder_pending_payments.get_builder_payment_quorum_threshold
     U64.Insts.Safe_arithSafeArithU64.safe_div U64.Insts.Safe_arithSafeArithU64.safe_mul
@@ -265,7 +266,7 @@ theorem quorum_equiv (p : Spec.Preset) (total_active_balance slots_per_epoch : U
     simp only [hc1] at h1
     simp [h1, core.result.Result.Insts.CoreOpsTry.branch,
       core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-      absResult, absArithError]
+      resultToSpec, arithErrorToSpec]
     rfl
   | some q1 =>
     simp only [hc1] at h1
@@ -278,7 +279,7 @@ theorem quorum_equiv (p : Spec.Preset) (total_active_balance slots_per_epoch : U
         simp only [U64.max_eq] at h2; simp at h2; omega
       simp [h1.1, hq1, hov, hc2, core.result.Result.Insts.CoreOpsTry.branch,
         core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-        absResult, absArithError]
+        resultToSpec, arithErrorToSpec]
       rfl
     | some q2 =>
       simp only [hc2] at h2
@@ -294,35 +295,37 @@ theorem quorum_equiv (p : Spec.Preset) (total_active_balance slots_per_epoch : U
         have hq3 : q3.val = q2.val / 10 := by have := h3.2.1; simp at this; omega
         have hfit2 : q2.val < 18446744073709551616 := by omega
         simp [h1.1, hq1, hc2, hc3, hq2, hq3, hfit2, core.result.Result.Insts.CoreOpsTry.branch,
-          absResult]
+          resultToSpec]
         rfl
 
 /-- A Rust address, read as a spec address. -/
-def absAddress (a : alloy_primitives.bits.address.Address) : Spec.ExecutionAddress :=
+def addressToSpec (a : alloy_primitives.bits.address.Address) : Spec.ExecutionAddress :=
   ⟨(a.val.map fun b => UInt8.ofNat b.val).toArray, by simp⟩
 
 /-- A Rust withdrawal, read as a spec withdrawal. -/
-def absWithdrawal (w : LhWithdrawal) : Spec.BuilderPendingWithdrawal :=
-  { fee_recipient := absAddress w.fee_recipient
+def withdrawalToSpec (w : LhWithdrawal) : Spec.BuilderPendingWithdrawal :=
+  { fee_recipient := addressToSpec w.fee_recipient
     amount := w.amount.val
     builder_index := w.builder_index.val }
 
 /-- A Rust payment, read as a spec payment. -/
-def absPayment (p : LhPayment) : Spec.BuilderPendingPayment :=
+def paymentToSpec (p : LhPayment) : Spec.BuilderPendingPayment :=
   { weight := p.weight.val
-    withdrawal := absWithdrawal p.withdrawal
+    withdrawal := withdrawalToSpec p.withdrawal
     proposer_index := p.proposer_index.val }
 
-theorem absPayment_default : absPayment lhDefaultPayment = Spec.BuilderPendingPayment.empty := by
-  simp only [absPayment, absWithdrawal, absAddress, lhDefaultPayment,
+theorem paymentToSpec_default : paymentToSpec lhDefaultPayment =
+    Spec.BuilderPendingPayment.empty := by
+  simp only [paymentToSpec, withdrawalToSpec, addressToSpec, lhDefaultPayment,
     Spec.BuilderPendingPayment.empty, Spec.BuilderPendingWithdrawal.empty,
     alloy_primitives.bits.fixed.FixedBytes.ZERO]
   congr 2
 
 theorem map_newWithdrawals (payments : List LhPayment) (n : Nat) (quorum : U64) :
-    (newWithdrawals payments n quorum).map absWithdrawal =
-      (((payments.map absPayment).take n).filter (·.weight ≥ quorum.val)).map (·.withdrawal) := by
-  simp [newWithdrawals, ← List.map_take, List.filter_map, Function.comp_def, absPayment]
+    (newWithdrawals payments n quorum).map withdrawalToSpec =
+      (((payments.map paymentToSpec).take n).filter (·.weight ≥ quorum.val)).map
+        (·.withdrawal) := by
+  simp [newWithdrawals, ← List.map_take, List.filter_map, Function.comp_def, paymentToSpec]
   rfl
 
 /-- Models the untranslated code in `single_pass.rs`. Not generated.
@@ -342,9 +345,9 @@ def lighthouseBuilderPendingPayments (total_active_balance slots_per_epoch : U64
 
 /-- The spec state that holds the given builder withdrawals and payments. Its other fields have
 their default values. -/
-def absState (x : List LhWithdrawal × List LhPayment) : Spec.BeaconState :=
-  { builder_pending_payments := x.2.map absPayment
-    builder_pending_withdrawals := x.1.map absWithdrawal }
+def builderStateToSpec (x : List LhWithdrawal × List LhPayment) : Spec.BeaconState :=
+  { builder_pending_payments := x.2.map paymentToSpec
+    builder_pending_withdrawals := x.1.map withdrawalToSpec }
 
 /-- Lighthouse equals the reference. An error maps to the same spec error.
 
@@ -356,12 +359,12 @@ theorem builder_pending_payments_equiv (p : Spec.Preset)
     (payments : Slice LhPayment) (withdrawals : List LhWithdrawal)
     (hlen : payments.val.length = 2 * p.SLOTS_PER_EPOCH) :
     lighthouseBuilderPendingPayments total_active_balance slots_per_epoch spe payments withdrawals
-      ⦃ r => absResult absState r =
+      ⦃ r => resultToSpec builderStateToSpec r =
         Spec.process_builder_pending_payments p total_active_balance.val
-          (absState (withdrawals, payments.val)) ⦄ := by
+          (builderStateToSpec (withdrawals, payments.val)) ⦄ := by
   unfold lighthouseBuilderPendingPayments
   rw [Spec.process_builder_pending_payments_eq _ _ _
-    (by simp [absState, Spec.BeaconState.WellFormed, hlen])]
+    (by simp [builderStateToSpec, Spec.BeaconState.WellFormed, hlen])]
   step with quorum_equiv p _ _ hslots as ⟨r, hr⟩
   cases r with
   | Err e =>
@@ -371,7 +374,8 @@ theorem builder_pending_payments_equiv (p : Spec.Preset)
   | Ok quorum =>
     step with process_builder_pending_payments_spec as ⟨res, h1, h2⟩
     rw [← hr]
-    simp only [absResult, Except.map, absState, Spec.builderPendingPaymentsResult, List.map_append,
-      h1, h2, map_newWithdrawals, List.map_drop, List.map_replicate, absPayment_default, ← hspe]
+    simp only [resultToSpec, Except.map, builderStateToSpec, Spec.builderPendingPaymentsResult,
+      List.map_append,
+      h1, h2, map_newWithdrawals, List.map_drop, List.map_replicate, paymentToSpec_default, ← hspe]
 
 end EpochProofs

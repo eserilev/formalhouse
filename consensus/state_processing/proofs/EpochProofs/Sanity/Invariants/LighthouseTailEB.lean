@@ -591,12 +591,12 @@ theorem consolidations_blind [CurrentPreset] (t : BeaconState) (vs : List Valida
           | (cases h; exact hst)
 
 
-/-- A validator outside `consolidationIndices` is neither a source nor a target. -/
+/-- A validator outside `validatorsInConsolidations` is neither a source nor a target. -/
 theorem not_mem_consolidationIndices {t : BeaconState} {i : Nat}
-    (h : i ∉ consolidationIndices t) :
+    (h : i ∉ validatorsInConsolidations t) :
     ∀ c ∈ t.pending_consolidations, c.source_index ≠ i ∧ c.target_index ≠ i := by
   intro c hc
-  unfold consolidationIndices at h
+  unfold validatorsInConsolidations at h
   rw [List.mem_mergeSort, List.mem_eraseDups, List.mem_flatMap] at h
   constructor
   · intro hs
@@ -635,7 +635,7 @@ theorem decrease_balance_other {bs bs' : List Gwei} {j : Nat} {a : Gwei}
 consolidation names. -/
 theorem consolidations_frame [CurrentPreset] (t t' : BeaconState)
     (h : process_pending_consolidations P t = .ok t') :
-    t'.validators = t.validators ∧ ∀ i, i ∉ consolidationIndices t →
+    t'.validators = t.validators ∧ ∀ i, i ∉ validatorsInConsolidations t →
       t'.balances[i]? = t.balances[i]? := by
   let Fr : BeaconState → Prop := fun st => st.validators = t.validators ∧
     ∀ i, (∀ c ∈ t.pending_consolidations, c.source_index ≠ i ∧ c.target_index ≠ i) →
@@ -663,9 +663,9 @@ theorem consolidations_frame [CurrentPreset] (t t' : BeaconState)
   exact ⟨key.1, fun i hi => key.2 i (not_mem_consolidationIndices hi)⟩
 
 
-/-- `setEB` keeps `consolidationIndices`. -/
-theorem consolidationIndices_setEB (t : BeaconState) (i : Nat) (e : Gwei) :
-    consolidationIndices (setEB t i e) = consolidationIndices t := by
+/-- `setEB` keeps `validatorsInConsolidations`. -/
+theorem validatorsInConsolidations_setEB (t : BeaconState) (i : Nat) (e : Gwei) :
+    validatorsInConsolidations (setEB t i e) = validatorsInConsolidations t := by
   obtain ⟨vs, h⟩ := setEB_eq_with t i e
   rw [h]
   rfl
@@ -673,7 +673,7 @@ theorem consolidationIndices_setEB (t : BeaconState) (i : Nat) (e : Gwei) :
 /-- Instance f: `process_pending_consolidations` commutes with `setEB` at a validator that no
 consolidation names. -/
 theorem consolidations_hF1 [CurrentPreset] (i : Nat) (t : BeaconState) (e : Gwei)
-    (hi : i ∉ consolidationIndices t) :
+    (hi : i ∉ validatorsInConsolidations t) :
     process_pending_consolidations P (setEB t i e) =
       (fun t' => setEB t' i e) <$> process_pending_consolidations P t := by
   cases hv : t.validators[i]? with
@@ -696,7 +696,8 @@ theorem consolidations_hF1 [CurrentPreset] (i : Nat) (t : BeaconState) (e : Gwei
 
 /-- Instance f: `process_pending_consolidations` keeps a validator that no consolidation names,
 and its balance. -/
-theorem consolidations_hF2 [CurrentPreset] (i : Nat) (t t' : BeaconState) (hi : i ∉ consolidationIndices t)
+theorem consolidations_hF2 [CurrentPreset] (i : Nat) (t t' : BeaconState)
+    (hi : i ∉ validatorsInConsolidations t)
     (h : process_pending_consolidations P t = .ok t') :
     t'.validators[i]? = t.validators[i]? ∧ t'.balances[i]? = t.balances[i]? := by
   obtain ⟨hv, hb⟩ := consolidations_frame t t' h

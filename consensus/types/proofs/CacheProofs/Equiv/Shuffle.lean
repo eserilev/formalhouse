@@ -9,7 +9,7 @@ The main theorem is `shuffling_spec`. The pure function `shuffling` (backwards `
 returns a list whose entry `i` is `indices[compute_shuffled_index(i, len(indices), seed)]`. This is
 `IsShuffling`, the hypothesis of the `CommitteeCache` theorems.
 
-The hash function is the trait instance `inst`. `HashLink inst sha256` says that `inst.hash`
+The hash function is the trait instance `inst`. `HashMatches inst sha256` says that `inst.hash`
 computes `sha256` and does not fail. The theorems hold for every such pair.
 
 Proof outline:
@@ -144,11 +144,11 @@ theorem mix_in_position_spec (b : Buf) (x : Usize) :
 abbrev HashInst (H : Type) := swap_or_not_shuffle.shuffle_hash.ShuffleHash H
 
 /-- `inst.hash` computes `sha256` on every byte slice and does not fail. -/
-def HashLink {H : Type} (inst : HashInst H) (sha256 : List Nat → List Nat) : Prop :=
+def HashMatches {H : Type} (inst : HashInst H) (sha256 : List Nat → List Nat) : Prop :=
   ∀ s : Slice U8, ∃ d, inst.hash s = ok d ∧ bytes d = sha256 (s.val.map (·.val))
 
 theorem hash_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Nat)
-    (hH : HashLink inst sha256) (b : Buf) :
+    (hH : HashMatches inst sha256) (b : Buf) :
     swap_or_not_shuffle.shuffle_list.Buf.hash inst b ⦃ d => bytes d = sha256 (bytes b) ⦄ := by
   unfold swap_or_not_shuffle.shuffle_list.Buf.hash
   obtain ⟨d, hd, hdb⟩ := hH (Array.to_slice b)
@@ -179,7 +179,7 @@ theorem bytes_to_uint64_take8 (l : List Nat) (h : 8 ≤ l.length) :
     simp [Spec.CommitteeCache.bytes_to_uint64]; ring
 
 theorem raw_pivot_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Nat)
-    (hH : HashLink inst sha256) (b : Buf) :
+    (hH : HashMatches inst sha256) (b : Buf) :
     swap_or_not_shuffle.shuffle_list.Buf.raw_pivot inst b ⦃ v =>
       v.val = Spec.CommitteeCache.bytes_to_uint64 ((sha256 ((bytes b).take 33)).take 8) ⦄ := by
   unfold swap_or_not_shuffle.shuffle_list.Buf.raw_pivot
@@ -339,7 +339,7 @@ theorem mix_bytes (pre : List Nat) (hpre : pre.length = 33) (tail : List Nat)
         rcases this with rfl | rfl | rfl | rfl <;> simp [hpre]
 
 theorem bit_at_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Nat)
-    (hH : HashLink inst sha256) (pre : List Nat) (hpre : pre.length = 33) (buf : Buf)
+    (hH : HashMatches inst sha256) (pre : List Nat) (hpre : pre.length = 33) (buf : Buf)
     (src : Array U8 32#usize) (byv : U8) (c : Nat) (j : Usize)
     (hcache : CacheOK sha256 pre buf src byv c) (hcj : c = j.val ∨ c = j.val + 1) :
     swap_or_not_shuffle.shuffle_list.bit_at inst buf src byv j ⦃ bit buf' src' byv' =>
@@ -455,7 +455,7 @@ theorem masked_swap_spec (s : Slice Usize) (i j : Usize) (b : U8) (hb : b.val �
 def nats (v : alloc.vec.Vec Usize) (x : Nat) : Nat := (v.val.map (·.val)).getD x 0
 
 theorem loop1_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Nat)
-    (hH : HashLink inst sha256)
+    (hH : HashMatches inst sha256)
     (seed : List Nat) (hseed : seed.length = 32) (r n : Nat) (A0 : List Nat)
     (hn24 : n ≤ 16777216)
     (pivot mirror : Usize) (hp : pivot.val = pivotOf sha256 seed n r) (hpn : pivot.val < n)
@@ -545,7 +545,7 @@ theorem loop1_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Na
   · exact ⟨hi, hlen, hA, hc⟩
 
 theorem loop2_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Nat)
-    (hH : HashLink inst sha256)
+    (hH : HashMatches inst sha256)
     (seed : List Nat) (hseed : seed.length = 32) (r n : Nat) (A0 : List Nat)
     (hn24 : n ≤ 16777216)
     (pivot mirror «end» : Usize) (hp : pivot.val = pivotOf sha256 seed n r) (hpn : pivot.val < n)
@@ -645,7 +645,7 @@ theorem buf_split (pre : List Nat) (b : Buf) (h1 : (bytes b).take 33 = pre)
   ⟨(bytes b).drop 33, by rw [← h1, List.take_append_drop], by simp [h2]⟩
 
 theorem round_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Nat)
-    (hH : HashLink inst sha256) (seed : List Nat) (hseed : seed.length = 32) (n : Nat)
+    (hH : HashMatches inst sha256) (seed : List Nat) (hseed : seed.length = 32) (n : Nat)
     (hn : 0 < n) (hn24 : n ≤ 16777216) (rounds : U8) (list_size : Usize)
     (hls : list_size.val = n) (input : alloc.vec.Vec Usize) (hlen : input.val.length = n)
     (buf : Buf) (hb1 : (bytes buf).take 32 = seed) (hb2 : (bytes buf).length = 37) (r : U8) :
@@ -790,7 +790,7 @@ theorem gFrom_self (sha256 : List Nat → List Nat) (seed : List Nat) (n R x : N
   simp [gFrom]
 
 theorem rounds_loop_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Nat)
-    (hH : HashLink inst sha256) (seed : List Nat) (hseed : seed.length = 32) (n : Nat)
+    (hH : HashMatches inst sha256) (seed : List Nat) (hseed : seed.length = 32) (n : Nat)
     (hn : 0 < n) (hn24 : n ≤ 16777216) (rounds : U8) (list_size : Usize)
     (hls : list_size.val = n) (input0 input : alloc.vec.Vec Usize)
     (hlen : input.val.length = n) (buf : Buf) (hb1 : (bytes buf).take 32 = seed)
@@ -827,7 +827,7 @@ theorem rounds_loop_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → L
   · exact ⟨hr, hlen, hb1, hb2, hA⟩
 
 theorem shuffle_list_with_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Nat)
-    (hH : HashLink inst sha256) (seed : Slice U8) (hseed : seed.val.length = 32)
+    (hH : HashMatches inst sha256) (seed : Slice U8) (hseed : seed.val.length = 32)
     (input : alloc.vec.Vec Usize) (rounds : U8) (hn : 0 < input.val.length)
     (hn24 : input.val.length ≤ 16777216) (hr : 0 < rounds.val) :
     swap_or_not_shuffle.shuffle_list.shuffle_list_with inst input rounds seed false ⦃ out =>
@@ -875,7 +875,7 @@ theorem compute_shuffled_index_eq (p : Preset) (sha256 : List Nat → List Nat)
 
 /-- The committee shuffling of the pure function is the spec shuffling. -/
 theorem shuffling_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Nat)
-    (hH : HashLink inst sha256) (hsha : ∀ l, (sha256 l).length = 32)
+    (hH : HashMatches inst sha256) (hsha : ∀ l, (sha256 l).length = 32)
     (p : Spec.CommitteeCache.Preset) (seed : Slice U8) (hseed : seed.val.length = 32)
     (indices : alloc.vec.Vec Usize) (rounds : U8) (hR : p.SHUFFLE_ROUND_COUNT = rounds.val)
     (hn : 0 < indices.val.length) (hn24 : indices.val.length ≤ 16777216)

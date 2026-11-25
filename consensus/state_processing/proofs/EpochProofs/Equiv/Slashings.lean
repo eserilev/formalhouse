@@ -36,7 +36,7 @@ theorem slashings_context_equiv (p : Spec.Preset) (slashings : List Spec.Gwei)
     (htarget : current_epoch.val + vector.val / 2 < 18446744073709551616) :
     per_epoch_processing.slashings_penalty.slashings_context
       sum_slashings multiplier total_active_balance current_epoch vector increment ⦃ r =>
-        absResult (fun x => (x.1.val, x.2.2.val)) r =
+        resultToSpec (fun x => (x.1.val, x.2.2.val)) r =
           Spec.slashingsPreamble p total_active_balance.val slashings
         ∧ ∀ x, r = .Ok x → x.2.1.val = current_epoch.val + p.EPOCHS_PER_SLASHINGS_VECTOR / 2 ⦄ := by
   have hsumfit : Spec.uint64Sum slashings = .ok sum_slashings.val := by
@@ -54,7 +54,7 @@ theorem slashings_context_equiv (p : Spec.Preset) (slashings : List Spec.Gwei)
   · have hov : ¬ sum_slashings.val * multiplier.val < 18446744073709551616 := by omega
     simp [hov, core.result.Result.Insts.CoreOpsTry.branch,
       core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-      absResult, absArithError, Bind.bind, Except.bind, throw, throwThe,
+      resultToSpec, arithErrorToSpec, Bind.bind, Except.bind, throw, throwThe,
       MonadExceptOf.throw]
   rename_i scaled
   have hfit1 : sum_slashings.val * multiplier.val < 18446744073709551616 := by omega
@@ -73,7 +73,8 @@ theorem slashings_context_equiv (p : Spec.Preset) (slashings : List Spec.Gwei)
   cases hcd : total_active_balance.checked_div increment <;> simp only [hcd] at hd
   · simp [hd, hca, hfit1, core.result.Result.Insts.CoreOpsTry.branch,
       core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-      absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, throw, throwThe,
+      resultToSpec, arithErrorToSpec, Bind.bind, Except.bind, Pure.pure, Except.pure, throw,
+        throwThe,
       MonadExceptOf.throw]
   rename_i increments
   have hm := core.cmp.impls.OrdU64.min_val scaled total_active_balance
@@ -88,7 +89,8 @@ theorem slashings_context_equiv (p : Spec.Preset) (slashings : List Spec.Gwei)
       · exact h
     simp [hlt, hd.1, hca, hcd2, hfit1, core.result.Result.Insts.CoreOpsTry.branch,
       core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-      absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, throw, throwThe,
+      resultToSpec, arithErrorToSpec, Bind.bind, Except.bind, Pure.pure, Except.pure, throw,
+        throwThe,
       MonadExceptOf.throw]
   · have hnlt : ¬ total_active_balance.val < increment.val := by
       intro h
@@ -98,7 +100,7 @@ theorem slashings_context_equiv (p : Spec.Preset) (slashings : List Spec.Gwei)
     simp [hnlt, hd.1, hd.2.1, hd2.2.1, hm, hca, hcd2, hscaled, hfit1, ha.2.1,
       hhalf, core.result.Result.Insts.CoreOpsTry.branch,
       core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-      absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, 
+      resultToSpec, arithErrorToSpec, Bind.bind, Except.bind, Pure.pure, Except.pure, 
       ]
 
 theorem saturating_sub_eq (a b : Nat) : Spec.saturating_sub a b = a - b := by
@@ -119,7 +121,7 @@ theorem new_balance_after_slashing_equiv (p : Spec.Preset) (validator : Spec.Val
     per_epoch_processing.slashings_penalty.new_balance_after_slashing balance slashed
       withdrawable_epoch effective_balance target adjusted penalty_per_increment
       total_active_balance increment true ⦃ r =>
-        absResult (·.val) r =
+        resultToSpec (·.val) r =
           Spec.slashingBalanceStep p target.val penalty_per_increment.val validator balance.val ⦄ := by
   unfold per_epoch_processing.slashings_penalty.new_balance_after_slashing
     U64.Insts.Safe_arithSafeArithU64.safe_div U64.Insts.Safe_arithSafeArithU64.safe_mul
@@ -127,17 +129,17 @@ theorem new_balance_after_slashing_equiv (p : Spec.Preset) (validator : Spec.Val
     saturating_sub_eq, lift, bind_tc_ok, hslashed, ← hwithdrawable, ← heffective, ← hincrement]
   by_cases hs : slashed = true
   swap
-  · simp [hs, absResult, Pure.pure, Except.pure]
+  · simp [hs, resultToSpec, Pure.pure, Except.pure]
   by_cases ht : target.val = withdrawable_epoch.val
   swap
   · have ht' : target ≠ withdrawable_epoch := fun h => ht (by rw [h])
-    simp [hs, ht, ht', absResult, Pure.pure, Except.pure]
+    simp [hs, ht, ht', resultToSpec, Pure.pure, Except.pure]
   have ht' : target = withdrawable_epoch := by rw [UScalar.eq_equiv]; exact ht
   have hd := U64.checked_div_bv_spec effective_balance increment
   cases hcd : effective_balance.checked_div increment <;> simp only [hcd] at hd
   · simp [hs, ht', hd, core.result.Result.Insts.CoreOpsTry.branch,
       core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-      absResult, absArithError, Bind.bind, Except.bind, throw, throwThe,
+      resultToSpec, arithErrorToSpec, Bind.bind, Except.bind, throw, throwThe,
       MonadExceptOf.throw]
   rename_i n
   have hm := U64.checked_mul_bv_spec penalty_per_increment n
@@ -146,12 +148,13 @@ theorem new_balance_after_slashing_equiv (p : Spec.Preset) (validator : Spec.Val
   · have hov : ¬ penalty_per_increment.val * n.val < 18446744073709551616 := by omega
     simp [hs, ht', hd.1, ← hd.2.1, hov, hcm, core.result.Result.Insts.CoreOpsTry.branch,
       core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-      absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, throw, throwThe,
+      resultToSpec, arithErrorToSpec, Bind.bind, Except.bind, Pure.pure, Except.pure, throw,
+        throwThe,
       MonadExceptOf.throw]
   · have hfit : penalty_per_increment.val * n.val < 18446744073709551616 := by omega
     simp [hs, ht', hd.1, ← hd.2.1, hfit, hcm, hm.2.1, u64_saturating_sub_val, core.result.Result.Insts.CoreOpsTry.branch,
       core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-      absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, 
+      resultToSpec, arithErrorToSpec, Bind.bind, Except.bind, Pure.pure, Except.pure, 
       ]
 
 end EpochProofs

@@ -12,14 +12,14 @@ def recordStep (s : Nat × Nat) (e : Nat) : Option (Nat × Nat) :=
   else if s.1 < e then some (e, 1) else some s
 
 /-- The Rust result of `record_exit`, read as numbers. -/
-def absRecord : core.result.Result (U64 × U64) safe_arith.ArithError → Option (Nat × Nat)
+def recordResultToSpec : core.result.Result (U64 × U64) safe_arith.ArithError → Option (Nat × Nat)
   | .Ok (m, c) => some (m.val, c.val)
   | .Err _ => none
 
 /-- The translated `record_exit` is `recordStep`. -/
 theorem record_exit_spec (m c e : U64) :
     ∃ r, state.exit_queue.record_exit m c e = ok r ∧
-      absRecord r = recordStep (m.val, c.val) e.val := by
+      recordResultToSpec r = recordStep (m.val, c.val) e.val := by
   unfold state.exit_queue.record_exit U64.Insts.Safe_arithSafeArithU64.safe_add
   by_cases heq : e = m
   · subst heq
@@ -27,23 +27,23 @@ theorem record_exit_spec (m c e : U64) :
     cases hc : U64.checked_add c 1#u64 with
     | none =>
       simp only [hc] at h
-      simp [recordStep, absRecord, core.option.Option.ok_or, lift,
+      simp [recordStep, recordResultToSpec, core.option.Option.ok_or, lift,
         core.result.Result.Insts.CoreOpsTry.branch,
         core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual]
       simp [U64.max_eq] at h
       omega
     | some v =>
       simp only [hc] at h
-      simp [recordStep, absRecord, core.option.Option.ok_or, lift,
+      simp [recordStep, recordResultToSpec, core.option.Option.ok_or, lift,
         core.result.Result.Insts.CoreOpsTry.branch]
       simp [U64.max_eq] at h
       omega
   · have hne : e.val ≠ m.val := fun h => heq (by scalar_tac)
     by_cases hlt : m.val < e.val
     · have hgt : e > m := by scalar_tac
-      simp [heq, hgt, recordStep, absRecord, hne, hlt]
+      simp [heq, hgt, recordStep, recordResultToSpec, hne, hlt]
     · have hgt : ¬ e > m := by scalar_tac
-      simp [heq, hgt, recordStep, absRecord, hne, hlt]
+      simp [heq, hgt, recordStep, recordResultToSpec, hne, hlt]
 
 /-- The largest element, or 0 for an empty list. -/
 def maxOr0 (L : List Nat) : Nat := L.foldl max 0
@@ -148,9 +148,9 @@ theorem lhBuildFrom_spec (es : List U64) :
       rw [← hs] at hstep
       rw [hstep] at habs
       cases r with
-      | Err err => simp [absRecord] at habs
+      | Err err => simp [recordResultToSpec] at habs
       | Ok s' =>
-        simp only [absRecord, Option.some.injEq] at habs
+        simp only [recordResultToSpec, Option.some.injEq] at habs
         obtain ⟨s'', h1, h2⟩ := ih (L ++ [e.val]) s' habs (by simp; omega)
         refine ⟨s'', ?_, by simpa using h2⟩
         simp [lhBuildFrom, hfar, hr, h1]
@@ -196,13 +196,13 @@ def lhExitQueueEpoch (m c delayed limit : U64) : Result (Except LhExitError Nat)
   | some ch => ok (lhFinish q.val ch.val limit.val)
 
 /-- The result of the exit queue code, read as a spec result. -/
-def absExit : Except LhExitError Nat → Spec.SpecM Nat
+def exitResultToSpec : Except LhExitError Nat → Spec.SpecM Nat
   | .ok q => .ok q
   | .error .arith => .error .overflow
   | .error .invalidEpoch => .error .assertionFailed
 
 theorem finish_eq (q ch l : Nat) :
-    absExit (lhFinish q ch l) = (if ch ≥ l then Spec.uint64Add q 1 else pure q) := by
+    exitResultToSpec (lhFinish q ch l) = (if ch ≥ l then Spec.uint64Add q 1 else pure q) := by
   unfold lhFinish Spec.uint64Add Spec.UINT64_SIZE
   by_cases hl : l ≤ ch
   · by_cases ho : q + 1 ≤ 18446744073709551615
@@ -229,7 +229,7 @@ theorem exit_queue_epoch_equiv (es : List U64) (delayed limit : U64)
     (hdelayed : delayed.val < Spec.FAR_FUTURE_EPOCH)
     (hlen : es.length ≤ 18446744073709551615) :
     ∃ s, lhBuild es = ok (.Ok s) ∧
-      (do let r ← lhExitQueueEpoch s.1 s.2 delayed limit; ok (absExit r)) =
+      (do let r ← lhExitQueueEpoch s.1 s.2 delayed limit; ok (exitResultToSpec r)) =
         ok (Spec.exitQueueEpoch (es.map (·.val)) delayed.val limit.val) := by
   obtain ⟨s, hb, hcf⟩ := build_eq es hlen
   refine ⟨s, hb, ?_⟩
@@ -332,9 +332,9 @@ theorem build_set_record (es : List U64) (i : Nat) (e : U64) (hi : i < es.length
   obtain ⟨r, hr, habs⟩ := record_exit_spec s.1 s.2 e
   rw [hcf, closedForm_snoc _ _ hlenF, ← closedForm_perm hperm, ← hcf'] at habs
   cases r with
-  | Err err => simp [absRecord] at habs
+  | Err err => simp [recordResultToSpec] at habs
   | Ok r =>
-    simp only [absRecord, Option.some.injEq, Prod.mk.injEq] at habs
+    simp only [recordResultToSpec, Option.some.injEq, Prod.mk.injEq] at habs
     exact ⟨s, r, s', hb, hr, hb', habs.1, habs.2⟩
 
 end CacheProofs

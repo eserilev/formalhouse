@@ -147,8 +147,8 @@ theorem map_bind' {α β γ : Type} (x : SpecM α) (f : α → β) (g : β → S
   cases x <;> rfl
 
 /-- The consolidation indices of a state are validator indices. -/
-theorem consolidationIndices_lt (s : BeaconState) (hcons : ConsolidationsInRange s) :
-    ∀ i ∈ consolidationIndices s, i < s.validators.length := by
+theorem validatorsInConsolidations_lt (s : BeaconState) (hcons : ConsolidationsInRange s) :
+    ∀ i ∈ validatorsInConsolidations s, i < s.validators.length := by
   intro i hi
   have hi' : i ∈ (s.pending_consolidations.flatMap fun c =>
       [c.source_index, c.target_index]).eraseDups :=
@@ -221,7 +221,7 @@ theorem process_epoch_lh_full_genesis [CurrentPreset] [CurrentPreset.Valid] (o :
     (Nat.le_of_eq hfin0) (by decide) hactivation hexit1 hvalid htab4
     (pass_balances_lt _ _ s1 _ x
       (fun i h => Nat.lt_trans (hbalance i h) (by decide)) hx)
-    (consolidationIndices_lt s1 hcons)
+    (validatorsInConsolidations_lt s1 hcons)
 
 /-- On mainnet, at a state that `process_epoch` starts from, the Lighthouse epoch with the
 deposits and effective balance updates in the single pass gives the same `ok` results as the
@@ -273,7 +273,7 @@ theorem process_epoch_lh_full_sameResultOrBothFail' [CurrentPreset] [CurrentPres
   have hvalid1 : ∀ v ∈ s1.validators, v.exit_epoch = FAR_FUTURE_EPOCH →
       v.withdrawable_epoch = FAR_FUTURE_EPOCH := by
     rw [hs1]; exact hvalid
-  have hnamed : ∀ i ∈ consolidationIndices s1, i < s1.validators.length := by
+  have hnamed : ∀ i ∈ validatorsInConsolidations s1, i < s1.validators.length := by
     intro i hi
     have hi' : i ∈ (s1.pending_consolidations.flatMap fun c =>
         [c.source_index, c.target_index]).eraseDups :=

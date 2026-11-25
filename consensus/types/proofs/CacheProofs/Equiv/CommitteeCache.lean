@@ -106,14 +106,14 @@ export CacheProofs.Spec.CommitteeCache (Preset get_committee_count_per_slot uint
 end Spec
 
 /-- The spec error of a Rust `ArithError`. -/
-def absArithError : ArithError → CacheProofs.Spec.SpecError
+def arithErrorToSpec : ArithError → CacheProofs.Spec.SpecError
   | .Overflow => .overflow
   | .DivisionByZero => .divisionByZero
 
 /-- A Rust `Result`, read as a spec result. `f` reads the value. -/
-def absResult {α β : Type} (f : α → β) : RResult α ArithError → CacheProofs.Spec.SpecM β
+def resultToSpec {α β : Type} (f : α → β) : RResult α ArithError → CacheProofs.Spec.SpecM β
   | .Ok x => .ok (f x)
-  | .Err e => .error (absArithError e)
+  | .Err e => .error (arithErrorToSpec e)
 
 open state.committee_assignment in
 /-- The translated committee count is the spec count, with the same errors. -/
@@ -122,15 +122,15 @@ theorem committee_count_per_slot_equiv (p : Spec.Preset)
     (hspe : spe.val = p.SLOTS_PER_EPOCH) (hmax : max_cps.val = p.MAX_COMMITTEES_PER_SLOT)
     (htarget : target.val = p.TARGET_COMMITTEE_SIZE) :
     committee_count_per_slot active_count spe max_cps target ⦃ r =>
-      absResult (·.val) r = Spec.get_committee_count_per_slot p active_count.val ⦄ := by
+      resultToSpec (·.val) r = Spec.get_committee_count_per_slot p active_count.val ⦄ := by
   unfold committee_count_per_slot
   obtain ⟨r1, h1, hr1⟩ := safe_div_eq active_count spe
   rw [h1]
   cases r1 with
   | Err e =>
     obtain ⟨rfl, h0⟩ := hr1
-    simp [Spec.get_committee_count_per_slot, Spec.uint64Div, ← hspe, h0, absResult,
-      absArithError]; rfl
+    simp [Spec.get_committee_count_per_slot, Spec.uint64Div, ← hspe, h0, resultToSpec,
+      arithErrorToSpec]; rfl
   | Ok a =>
     obtain ⟨ha, h0⟩ := hr1
     obtain ⟨r2, h2, hr2⟩ := safe_div_eq a target
@@ -139,11 +139,11 @@ theorem committee_count_per_slot_equiv (p : Spec.Preset)
     | Err e =>
       obtain ⟨rfl, h0'⟩ := hr2
       simp [Spec.get_committee_count_per_slot, Spec.uint64Div, ← hspe, ← htarget, h0, h0',
-        absResult, absArithError]; rfl
+        resultToSpec, arithErrorToSpec]; rfl
     | Ok b =>
       obtain ⟨hb, h0'⟩ := hr2
       simp [Spec.get_committee_count_per_slot, Spec.uint64Div, ← hspe, ← htarget, h0, h0',
-        absResult, hb, ha, hmax]; rfl
+        resultToSpec, hb, ha, hmax]; rfl
 
 
 open state.committee_assignment

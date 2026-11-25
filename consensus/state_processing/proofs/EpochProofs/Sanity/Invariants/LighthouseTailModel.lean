@@ -78,7 +78,7 @@ def ebUpdateAt [CurrentPreset] (s : BeaconState) (i : Nat) : SpecM BeaconState :
 
 /-- The validators that the pending consolidations name, as sources or targets, sorted and
 without duplicates. -/
-def consolidationIndices (s : BeaconState) : List ValidatorIndex :=
+def validatorsInConsolidations (s : BeaconState) : List ValidatorIndex :=
   ((s.pending_consolidations.flatMap fun c => [c.source_index, c.target_index]).eraseDups).mergeSort
 
 /-- The steps after the builder payments: they are the same in Lighthouse and the spec. -/
@@ -102,7 +102,7 @@ def lhFullTailG [CurrentPreset] (o : Oracle) (rt : Gwei → Gwei) (fin : Gwei �
   let (_, per) ← slashingsPreamble P total_active_balance s.slashings
   let plan ← lhDepositPlan s (rt total_active_balance) current_epoch
   let (downward, upward) ← hysteresisThresholds P
-  let named := consolidationIndices s
+  let named := validatorsInConsolidations s
   let ctx := lhContextOf s (rt total_active_balance) current_epoch rctx per
   let (churn, rows) ← passM (fun churn r => lhRowStepFull P ctx downward upward
       ⟨lhBaseReward total_active_balance r, plan.topups.getD r.index 0, decide (r.index ∈ named)⟩

@@ -231,7 +231,7 @@ theorem cast_shift_byte64 (x y : U64) (k : Nat) (hy : y.val = x.val / 2 ^ (8 * k
 @[step]
 theorem le_bytes8_spec (x : U64) :
     types.state.balance_weighted_selection.le_bytes8 x ⦃ r =>
-      u8s r.val = Spec.uint_to_bytes 8 x.val ⦄ := by
+      byteValues r.val = Spec.uint_to_bytes 8 x.val ⦄ := by
   unfold types.state.balance_weighted_selection.le_bytes8
   step*
   have e0 : i.val = x.val / 256 ^ 0 % 256 := by
@@ -250,18 +250,18 @@ theorem le_bytes8_spec (x : U64) :
     rw [i12_post]; exact cast_shift_byte64 x i11 6 (by rw [i11_post, Nat.shiftRight_eq_div_pow])
   have e7 : i14.val = x.val / 256 ^ 7 % 256 := by
     rw [i14_post]; exact cast_shift_byte64 x i13 7 (by rw [i13_post, Nat.shiftRight_eq_div_pow])
-  simp [u8s, Array.make, Spec.uint_to_bytes, List.range_succ, e0, e1, e2, e3, e4, e5, e6, e7]
+  simp [byteValues, Array.make, Spec.uint_to_bytes, List.range_succ, e0, e1, e2, e3, e4, e5, e6, e7]
 
-theorem u8s_take_drop (b b0 : List U8) (n : Nat) (pre src : List U8)
+theorem byteValues_take_drop (b b0 : List U8) (n : Nat) (pre src : List U8)
     (h1 : b.take n = pre ++ src) (h2 : b.drop n = b0.drop n) :
-    u8s b = u8s pre ++ u8s src ++ u8s (b0.drop n) := by
+    byteValues b = byteValues pre ++ byteValues src ++ byteValues (b0.drop n) := by
   rw [← List.take_append_drop n b, h1, h2]
-  simp [u8s]
+  simp [byteValues]
 
 theorem hash_with_u64_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle)
-    (hH : HashLink inst o) (seed : Array U8 32#usize) (x : U64) :
+    (hH : HashMatches inst o) (seed : Array U8 32#usize) (x : U64) :
     types.state.balance_weighted_selection.hash_with_u64 inst seed x ⦃ d =>
-      u8s d.val = (o.hash (u8s seed.val ++ Spec.uint_to_bytes 8 x.val)).toList ⦄ := by
+      byteValues d.val = (o.hash (byteValues seed.val ++ Spec.uint_to_bytes 8 x.val)).toList ⦄ := by
   unfold types.state.balance_weighted_selection.hash_with_u64
   step with le_bytes8_spec as ⟨bytes, hbytes⟩
   apply spec_bind (hash_with_u64_loop0_spec seed _ 0#usize (by simp))
@@ -279,14 +279,14 @@ theorem hash_with_u64_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracl
   have : b2.val = b1.val.take 32 ++ bytes.val := by
     have e : b2.val.take (32 + 8) = b2.val := List.take_of_length_le (by simp)
     rw [← e, h2]
-  simp only [Array.to_slice, Slice.from_val, this, hb1, u8s_append, hbytes]
+  simp only [Array.to_slice, Slice.from_val, this, hb1, byteValues_append, hbytes]
 
 /-- The translated `compute_seed` hashes the domain, the epoch and the RANDAO mix. -/
 theorem compute_seed_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle)
-    (hH : HashLink inst o) (domain : Array U8 4#usize) (epoch : U64) (mix : Array U8 32#usize) :
+    (hH : HashMatches inst o) (domain : Array U8 4#usize) (epoch : U64) (mix : Array U8 32#usize) :
     types.state.balance_weighted_selection.compute_seed inst domain epoch mix ⦃ d =>
-      u8s d.val = (o.hash (u8s domain.val ++ Spec.uint_to_bytes 8 epoch.val ++
-        u8s mix.val)).toList ⦄ := by
+      byteValues d.val = (o.hash (byteValues domain.val ++ Spec.uint_to_bytes 8 epoch.val ++
+        byteValues mix.val)).toList ⦄ := by
   unfold types.state.balance_weighted_selection.compute_seed
   step with le_bytes8_spec as ⟨bytes, hbytes⟩
   apply spec_bind (compute_seed_loop0_spec domain _ 0#usize (by simp))
@@ -309,12 +309,13 @@ theorem compute_seed_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle
   have : b3.val = b2.val.take 12 ++ mix.val := by
     have e : b3.val.take (12 + 32) = b3.val := List.take_of_length_le (by simp)
     rw [← e, h3]
-  simp only [Array.to_slice, Slice.from_val, this, hb2, hb1, u8s_append, hbytes]
+  simp only [Array.to_slice, Slice.from_val, this, hb2, hb1, byteValues_append, hbytes]
 
 theorem random_value_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle)
-    (hH : HashLink inst o) (seed : Array U8 32#usize) (i : Usize) :
+    (hH : HashMatches inst o) (seed : Array U8 32#usize) (i : Usize) :
     types.state.balance_weighted_selection.random_value inst seed i ⦃ v =>
-      v.val = Spec.littleEndianValue (((o.hash (u8s seed.val ++ Spec.uint_to_bytes 8 (i.val / 16))).toList.drop
+      v.val = Spec.littleEndianValue
+        (((o.hash (byteValues seed.val ++ Spec.uint_to_bytes 8 (i.val / 16))).toList.drop
         (i.val % 16 * 2)).take 2) ⦄ := by
   unfold types.state.balance_weighted_selection.random_value
   step*
@@ -330,9 +331,9 @@ theorem random_value_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle
   have s1 := or_shift_step i5.val i7.val 8 (by rw [hc _ _ i5_post]; exact u8_lt i4) (u8_lt i7)
     (by norm_num)
   rw [UScalar.val_or, i9_post, hc _ _ i8_post, s1.1, hc _ _ i5_post, ← hrb, ← hoff]
-  have hlen : (u8s rb.val).length = 32 := by simp [u8s]
+  have hlen : (byteValues rb.val).length = 32 := by simp [byteValues]
   rw [List.drop_eq_getElem_cons (by omega), List.drop_eq_getElem_cons (by rw [hlen]; omega)]
-  simp [Spec.littleEndianValue, u8s, i4_post, i7_post, i6_post]
+  simp [Spec.littleEndianValue, byteValues, i4_post, i7_post, i6_post]
   ring
 
 end EpochProofs

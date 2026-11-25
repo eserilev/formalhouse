@@ -248,8 +248,8 @@ decreasing_by
   simp only [List.length_cons]
   omega
 
-/-- `consolidationIndices` has no duplicates. -/
-theorem consolidationIndices_nodup (s : BeaconState) : (consolidationIndices s).Nodup :=
+/-- `validatorsInConsolidations` has no duplicates. -/
+theorem validatorsInConsolidations_nodup (s : BeaconState) : (validatorsInConsolidations s).Nodup :=
   (List.mergeSort_perm _ _).nodup_iff.mpr (nodup_eraseDups' _)
 
 /-- The indices below `m` in three groups: the ones below `n` that `named` does not hold, the
@@ -454,7 +454,7 @@ def newsOf (s1 : BeaconState) (x : Nat × Gwei × List Bool) : List PendingDepos
 def specNfAfterG [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM BeaconState) (s1 S4 : BeaconState)
     (x : Nat × Gwei × List Bool) (sums : List Gwei) : SpecM BeaconState := do
   let n := s1.validators.length
-  let named := consolidationIndices s1
+  let named := validatorsInConsolidations s1
   let t1 ← addSums S4 sums
   let t2 ← ((List.range n).filter (fun i => !decide (i ∈ named))).foldlM ebUpdateAt t1
   let t3 ← process_eth1_data_reset P t2
@@ -663,15 +663,15 @@ theorem ebFold_len [CurrentPreset] : ∀ (l : List Nat) (t t' : BeaconState),
     obtain ⟨v, b, e, -, -, -, rfl⟩ := (ebUpdateAt_ok t t1 i).mp h1
     rw [ebFold_len l _ t' h, setEB_length]
 
-/-- A fold of updates keeps `consolidationIndices`. -/
+/-- A fold of updates keeps `validatorsInConsolidations`. -/
 theorem ebFold_ci [CurrentPreset] : ∀ (l : List Nat) (t t' : BeaconState),
-    l.foldlM ebUpdateAt t = .ok t' → consolidationIndices t' = consolidationIndices t
+    l.foldlM ebUpdateAt t = .ok t' → validatorsInConsolidations t' = validatorsInConsolidations t
   | [], t, t', h => by cases h; rfl
   | i :: l, t, t', h => by
     rw [List.foldlM_cons] at h
     obtain ⟨t1, h1, h⟩ := specM_bind_ok h
     obtain ⟨v, b, e, -, -, -, rfl⟩ := (ebUpdateAt_ok t t1 i).mp h1
-    rw [ebFold_ci l _ t' h, consolidationIndices_setEB]
+    rw [ebFold_ci l _ t' h, validatorsInConsolidations_setEB]
 
 /-- `add_validator_to_registry` keeps the pending consolidations. -/
 theorem add_validator_pc [CurrentPreset] (t t' : BeaconState) (pubkey : BLSPubkey)
@@ -778,7 +778,7 @@ theorem ebL12_not_named (n : Nat) (named : List Nat) (hsub : ∀ i ∈ named, i 
 /-- The updates of the first two groups move before the consolidations. -/
 theorem inner_co [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : EBBlind B) (n : Nat) (named : List Nat) (hnd : named.Nodup)
     (hsub : ∀ i ∈ named, i < n) (t5 : BeaconState) (hn : n ≤ t5.validators.length)
-    (hci : consolidationIndices t5 = named) :
+    (hci : validatorsInConsolidations t5 = named) :
     SameResultOrBothFail (process_pending_consolidations P t5 >>= fun t7 =>
         B t7 >>= fun t8 =>
         process_effective_balance_updates P t8 >>= K)
@@ -796,18 +796,18 @@ theorem inner_co [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM Beaco
     refine SameResultOrBothFail.trans (inner_py o B K hB n named hnd hsub t7 (by rw [hv]; exact hn)) ?_
     rw [hl2, List.foldlM_append, bind_assoc]
     exact SameResultOrBothFail.refl _
-  · refine fold_past _ (fun t => consolidationIndices t = named) _
-      (fun i _ t e h => by rw [consolidationIndices_setEB]; exact h)
+  · refine fold_past _ (fun t => validatorsInConsolidations t = named) _
+      (fun i _ t e h => by rw [validatorsInConsolidations_setEB]; exact h)
       (fun i hi t e h => consolidations_hF1 i t e
         (by rw [h]; exact ebL12_not_named n named hsub t5 i hi))
       (fun i hi t t' h h' => consolidations_hF2 i t t'
         (by rw [h]; exact ebL12_not_named n named hsub t5 i hi) h') t5 hci _
 
-/-- `consolidationIndices` reads only the pending consolidations. -/
-theorem consolidationIndices_of_pc {t t' : BeaconState}
+/-- `validatorsInConsolidations` reads only the pending consolidations. -/
+theorem validatorsInConsolidations_of_pc {t t' : BeaconState}
     (h : t'.pending_consolidations = t.pending_consolidations) :
-    consolidationIndices t' = consolidationIndices t := by
-  unfold consolidationIndices
+    validatorsInConsolidations t' = validatorsInConsolidations t := by
+  unfold validatorsInConsolidations
   rw [h]
 
 /-- The updates of the old validators that no consolidation names move before the deposits for
@@ -815,7 +815,7 @@ new pubkeys. -/
 theorem inner_news [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM BeaconState) (hB : EBBlind B) (n : Nat) (named : List Nat) (hnd : named.Nodup)
     (hsub : ∀ i ∈ named, i < n) (Pk : List BLSPubkey) (ds : List PendingDeposit)
     (hds : ∀ d ∈ ds, d.pubkey ∉ Pk) (t3 : BeaconState) (hlen : t3.validators.length = n)
-    (hq : ∀ i ∈ ebL1 n named, NewsQ Pk i t3) (hci : consolidationIndices t3 = named) :
+    (hq : ∀ i ∈ ebL1 n named, NewsQ Pk i t3) (hci : validatorsInConsolidations t3 = named) :
     SameResultOrBothFail (ds.foldlM (apply_pending_deposit P o) t3 >>= fun t5 =>
         process_pending_consolidations P t5 >>= fun t7 =>
         B t7 >>= fun t8 =>
@@ -835,7 +835,7 @@ theorem inner_news [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM Bea
     (SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t5 h5 => ?_)) ?_
   · obtain ⟨hpc, hle⟩ := applyFold_pc o ds t3 t5 h5
     refine SameResultOrBothFail.trans (inner_co o B K hB n named hnd hsub t5 (hlen ▸ hle)
-      ((consolidationIndices_of_pc hpc).trans hci)) ?_
+      ((validatorsInConsolidations_of_pc hpc).trans hci)) ?_
     rw [List.foldlM_append, bind_assoc]
     refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun t4 h4 => ?_)
     have hl2 : ebL2 n t4 = ebL2 n t5 := by unfold ebL2; rw [ebFold_len _ _ _ h4]
@@ -860,7 +860,7 @@ theorem inner_t1 [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM Beaco
     (hsub : ∀ i ∈ named, i < n) (Pk : List BLSPubkey) (ds : List PendingDeposit)
     (hds : ∀ d ∈ ds, d.pubkey ∉ Pk) (q : List PendingDeposit) (dbtc : Gwei) (t1 : BeaconState)
     (hpk : t1.validators.map (·.pubkey) = Pk) (hlen : t1.validators.length = n)
-    (hci : consolidationIndices t1 = named) :
+    (hci : validatorsInConsolidations t1 = named) :
     SameResultOrBothFail (process_eth1_data_reset P t1 >>= fun t2 => writeQueue q dbtc t2 >>=
         fun t3 => ds.foldlM (apply_pending_deposit P o) t3 >>= fun t5 =>
         process_pending_consolidations P t5 >>= fun t7 =>
@@ -923,7 +923,7 @@ theorem specAfter_nf [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM B
     (x : Nat × Gwei × List Bool) (sums : List Gwei)
     (hpk : S4.validators.map (·.pubkey) = s1.validators.map (·.pubkey))
     (hpc : S4.pending_consolidations = s1.pending_consolidations)
-    (hnamed : ∀ i ∈ consolidationIndices s1, i < s1.validators.length) :
+    (hnamed : ∀ i ∈ validatorsInConsolidations s1, i < s1.validators.length) :
     SameResultOrBothFail (process_eth1_data_reset P S4 >>= fun S5 =>
         innerAfterG o B K s1 S5 x sums)
       (specNfAfterG o B K s1 S4 x sums) := by
@@ -940,9 +940,9 @@ theorem specAfter_nf [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM B
       process_pending_consolidations P S6 >>= fun S7 =>
       B S7 >>= fun S8 =>
       process_effective_balance_updates P S8 >>= K)))) ?_
-  exact inner_t1 o B K hB s1.validators.length (consolidationIndices s1)
-    (consolidationIndices_nodup s1) hnamed _ (newsOf s1 x) (newsOf_not_mem s1 x)
-    (queueOf s1 x) x.2.1 _ hpk hn (consolidationIndices_of_pc hpc)
+  exact inner_t1 o B K hB s1.validators.length (validatorsInConsolidations s1)
+    (validatorsInConsolidations_nodup s1) hnamed _ (newsOf s1 x) (newsOf_not_mem s1 x)
+    (queueOf s1 x) x.2.1 _ hpk hn (validatorsInConsolidations_of_pc hpc)
 
 /-! ## The spec tail reaches the common form -/
 
@@ -986,7 +986,7 @@ theorem specRest_nf [CurrentPreset] (o : Oracle) (B K : BeaconState → SpecM Be
     (hvalid : ∀ v ∈ s1.validators, v.exit_epoch = FAR_FUTURE_EPOCH →
       v.withdrawable_epoch = FAR_FUTURE_EPOCH)
     (hbal4 : ∀ r ∈ rows, r.balance < 2 ^ 64)
-    (hnamed : ∀ i ∈ consolidationIndices s1, i < s1.validators.length) :
+    (hnamed : ∀ i ∈ validatorsInConsolidations s1, i < s1.validators.length) :
     SameResultOrBothFail (process_eth1_data_reset P (s1.withRowsChurn churn rows) >>=
         specTailG o tab B K)
       (tailNFG o (fun t => B t >>= K) s1 (s1.withRowsChurn churn rows) tab current_epoch) := by
@@ -1035,7 +1035,7 @@ theorem epochRest_nf [CurrentPreset] (o : Oracle) (s1 : BeaconState) (current_ep
     (htab4 : get_total_active_balance P (s1.withRowsChurn churn rows) =
       .ok total_active_balance)
     (hbal4 : ∀ r ∈ rows, r.balance < 2 ^ 64)
-    (hnamed : ∀ i ∈ consolidationIndices s1, i < s1.validators.length) :
+    (hnamed : ∀ i ∈ validatorsInConsolidations s1, i < s1.validators.length) :
     SameResultOrBothFail (epochRest P o (s1.withRowsChurn churn rows))
       (tailNF o s1 (s1.withRowsChurn churn rows) total_active_balance current_epoch) := by
   have hfar : current_epoch < FAR_FUTURE_EPOCH := Nat.lt_trans (Nat.lt_succ_self _) hnext

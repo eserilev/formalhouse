@@ -16,7 +16,7 @@ the Rust computes the formula.
   (`glue_epoch_add_fits`).
 - `start_slot + i` is slot `i` of the lookahead epoch (`glue_lookahead_slot_fits`).
 - `BeaconState::get_seed_mix` reads the RANDAO mix that the spec `get_seed` reads
-  (`glue_seed_mix_index`). `SeedMixLink` states the value.
+  (`glue_seed_mix_index`). `SeedMixMatches` states the value.
 - `Vector::new` accepts the new lookahead (`process_proposer_lookahead_length`).
 - `build_exit_cache` counts the exits of each epoch in a `u64` (`glue_exit_count`).
 - The pending deposits of one validator sum in a `u64` (`glue_validator_deposit_sum`).

@@ -41,7 +41,7 @@ theorem flag_delta_equiv (base_reward weight increments active_increments : U64)
     (is_participating is_head_flag in_leak : Bool) :
     per_epoch_processing.rewards_penalties.flag_delta base_reward weight is_participating
       is_head_flag in_leak increments active_increments ⦃ r =>
-        absResult (fun x => (x.1.val, x.2.val)) r =
+        resultToSpec (fun x => (x.1.val, x.2.val)) r =
           Spec.flagDelta base_reward.val weight.val is_participating is_head_flag in_leak
             increments.val active_increments.val ⦄ := by
   unfold per_epoch_processing.rewards_penalties.flag_delta
@@ -52,12 +52,12 @@ theorem flag_delta_equiv (base_reward weight increments active_increments : U64)
   simp only [U64.max_eq] at h1
   by_cases hp : is_participating = true
   · by_cases hl : in_leak = true
-    · simp [hp, hl, absResult, Pure.pure, Except.pure]
+    · simp [hp, hl, resultToSpec, Pure.pure, Except.pure]
     · cases hc1 : base_reward.checked_mul weight <;> simp only [hc1] at h1
       · have hov : ¬ base_reward.val * weight.val < 18446744073709551616 := by omega
         simp [hp, hl, hov, core.result.Result.Insts.CoreOpsTry.branch,
           core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-          absResult, absArithError, Bind.bind, Except.bind, throw,
+          resultToSpec, arithErrorToSpec, Bind.bind, Except.bind, throw,
           throwThe, MonadExceptOf.throw]
       rename_i v1
       have hv1 : v1.val = base_reward.val * weight.val := h1.2.1
@@ -69,7 +69,7 @@ theorem flag_delta_equiv (base_reward weight increments active_increments : U64)
           omega
         simp [hp, hl, hov, hfit1, hc2, core.result.Result.Insts.CoreOpsTry.branch,
           core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-          absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, throw,
+          resultToSpec, arithErrorToSpec, Bind.bind, Except.bind, Pure.pure, Except.pure, throw,
           throwThe, MonadExceptOf.throw]
       rename_i v2
       have hfit2 : base_reward.val * weight.val * increments.val < 18446744073709551616 := by
@@ -83,7 +83,7 @@ theorem flag_delta_equiv (base_reward weight increments active_increments : U64)
         simp [hp, hl, hov, hfit1, hfit2, hc2, 
           core.result.Result.Insts.CoreOpsTry.branch,
           core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-          absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, throw,
+          resultToSpec, arithErrorToSpec, Bind.bind, Except.bind, Pure.pure, Except.pure, throw,
           throwThe, MonadExceptOf.throw]
       rename_i v3
       have hfit3 : active_increments.val * 64 < 18446744073709551616 := by omega
@@ -94,18 +94,18 @@ theorem flag_delta_equiv (base_reward weight increments active_increments : U64)
       · simp [hp, hl, hfit1, hc2, hc4, ← h2.2.1, ← h3.2.1, hv2, h4,
           core.result.Result.Insts.CoreOpsTry.branch,
           core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-          absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, throw,
+          resultToSpec, arithErrorToSpec, Bind.bind, Except.bind, Pure.pure, Except.pure, throw,
           throwThe, MonadExceptOf.throw]
       · simp [hp, hl, hfit1, hc2, hc4, ← h2.2.1, ← h3.2.1, hv2, hv3, h4.1,
-          h4.2.1, core.result.Result.Insts.CoreOpsTry.branch, absResult, Bind.bind,
+          h4.2.1, core.result.Result.Insts.CoreOpsTry.branch, resultToSpec, Bind.bind,
           Except.bind, Pure.pure, Except.pure]
   · by_cases hh : is_head_flag = true
-    · simp [hp, hh, absResult, Pure.pure, Except.pure]
+    · simp [hp, hh, resultToSpec, Pure.pure, Except.pure]
     · cases hc1 : base_reward.checked_mul weight <;> simp only [hc1] at h1
       · have hov : ¬ base_reward.val * weight.val < 18446744073709551616 := by omega
         simp [hp, hh, hov, core.result.Result.Insts.CoreOpsTry.branch,
           core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-          absResult, absArithError, Bind.bind, Except.bind, throw,
+          resultToSpec, arithErrorToSpec, Bind.bind, Except.bind, throw,
           throwThe, MonadExceptOf.throw]
       rename_i v1
       have hfit1 : base_reward.val * weight.val < 18446744073709551616 := by omega
@@ -116,7 +116,7 @@ theorem flag_delta_equiv (base_reward weight increments active_increments : U64)
       · simp at h2
       · have hv1 : v1.val < 18446744073709551616 := by rw [h1.2.1]; exact hfit1
         simp [hp, hh, hv1, hc2, ← h1.2.1, h2.2.1, 
-          core.result.Result.Insts.CoreOpsTry.branch, absResult, Bind.bind, Except.bind,
+          core.result.Result.Insts.CoreOpsTry.branch, resultToSpec, Bind.bind, Except.bind,
           Pure.pure, Except.pure]
 
 /-- The translated inactivity penalty is the model penalty, with the same errors. -/
@@ -126,7 +126,7 @@ theorem inactivity_penalty_equiv (p : Spec.Preset)
     (hquotient : quotient.val = p.INACTIVITY_PENALTY_QUOTIENT_BELLATRIX) :
     per_epoch_processing.rewards_penalties.inactivity_penalty effective_balance inactivity_score
       is_participating_target bias quotient ⦃ r =>
-        absResult (·.val) r =
+        resultToSpec (·.val) r =
           Spec.inactivityDelta p effective_balance.val inactivity_score.val
             is_participating_target ⦄ := by
   unfold per_epoch_processing.rewards_penalties.inactivity_penalty
@@ -134,14 +134,14 @@ theorem inactivity_penalty_equiv (p : Spec.Preset)
   simp only [Spec.inactivityDelta, Spec.uint64Mul, Spec.uint64Div, Spec.UINT64_SIZE, lift,
     bind_tc_ok, ← hbias, ← hquotient]
   by_cases hp : is_participating_target = true
-  · simp [hp, absResult, Pure.pure, Except.pure]
+  · simp [hp, resultToSpec, Pure.pure, Except.pure]
   have h1 := U64.checked_mul_bv_spec effective_balance inactivity_score
   simp only [U64.max_eq] at h1
   cases hc1 : effective_balance.checked_mul inactivity_score <;> simp only [hc1] at h1
   · have hov : ¬ effective_balance.val * inactivity_score.val < 18446744073709551616 := by omega
     simp [hp, hov, core.result.Result.Insts.CoreOpsTry.branch,
         core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-        absResult, absArithError, Bind.bind, Except.bind, throw,
+        resultToSpec, arithErrorToSpec, Bind.bind, Except.bind, throw,
         throwThe, MonadExceptOf.throw]
   rename_i num
   have hfit1 : effective_balance.val * inactivity_score.val < 18446744073709551616 := by omega
@@ -152,7 +152,7 @@ theorem inactivity_penalty_equiv (p : Spec.Preset)
   · have hov : ¬ bias.val * quotient.val < 18446744073709551616 := by omega
     simp [hp, hov, hfit1, core.result.Result.Insts.CoreOpsTry.branch,
         core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-        absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, throw,
+        resultToSpec, arithErrorToSpec, Bind.bind, Except.bind, Pure.pure, Except.pure, throw,
         throwThe, MonadExceptOf.throw]
   rename_i den
   have hfit2 : bias.val * quotient.val < 18446744073709551616 := by omega
@@ -161,11 +161,11 @@ theorem inactivity_penalty_equiv (p : Spec.Preset)
   cases hc3 : num.checked_div den <;> simp only [hc3] at h3
   · simp [hp, ← h1.2.1, ← h2.2.1, hnum, h3, hc3, core.result.Result.Insts.CoreOpsTry.branch,
         core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-        absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, throw,
+        resultToSpec, arithErrorToSpec, Bind.bind, Except.bind, Pure.pure, Except.pure, throw,
         throwThe, MonadExceptOf.throw]
   · simp [hp, ← h1.2.1, ← h2.2.1, hnum, hden, h3.1, h3.2.1, hc3, core.result.Result.Insts.CoreOpsTry.branch,
         core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
-        absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, 
+        resultToSpec, arithErrorToSpec, Bind.bind, Except.bind, Pure.pure, Except.pure, 
         ]
 
 theorem result_bind {S T : Type} (m : Result (core.result.Result S safe_arith.ArithError))
@@ -217,7 +217,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
       base_reward effective_balance inactivity_score source target head in_leak
       source_increments target_increments head_increments active_increments bias quotient
       ⦃ r =>
-        absResult (·.val) r =
+        resultToSpec (·.val) r =
           if is_eligible then
             (do
               let deltas ← Spec.rewardDeltas p base_reward.val effective_balance.val
@@ -228,7 +228,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
   unfold per_epoch_processing.rewards_penalties.new_balance_after_rewards
   by_cases he : is_eligible = true
   swap
-  · simp [he, absResult]
+  · simp [he, resultToSpec]
   apply exists_imp_spec
   obtain ⟨rS, hrS, hS⟩ := spec_imp_exists (flag_delta_equiv base_reward
     types.core.consts.altair.TIMELY_SOURCE_WEIGHT source_increments active_increments source false
@@ -241,7 +241,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
     in_leak)
   obtain ⟨rI, hrI, hI⟩ := spec_imp_exists (inactivity_penalty_equiv p effective_balance
     inactivity_score bias quotient target hbias hquotient)
-  simp only [source_weight_val, target_weight_val, head_weight_val, absResult] at hS hT hH hI
+  simp only [source_weight_val, target_weight_val, head_weight_val, resultToSpec] at hS hT hH hI
   simp only [he, if_true, hrS, hrT, hrH, hrI, bind_tc_ok, Spec.rewardDeltas, Spec.TIMELY_SOURCE_WEIGHT, Spec.TIMELY_TARGET_WEIGHT, Spec.TIMELY_HEAD_WEIGHT]
   cases rS with
   | Err e =>
@@ -294,7 +294,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
         core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         core.convert.FromSame.from]
     refine ⟨_, rfl, ?_⟩
-    simp [absResult, absArithError, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
+    simp [resultToSpec, arithErrorToSpec, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
         Spec.UINT64_SIZE, except_ok_bind, except_error_bind, Pure.pure, Except.pure, throw,
         throwThe, MonadExceptOf.throw, hb_source_reward, hb_source_penalty, hov]
   | Ok v4 =>
@@ -310,7 +310,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
         core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         core.convert.FromSame.from]
     refine ⟨_, rfl, ?_⟩
-    simp [absResult, absArithError, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
+    simp [resultToSpec, arithErrorToSpec, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
         Spec.UINT64_SIZE, except_ok_bind, except_error_bind, Pure.pure, Except.pure, throw,
         throwThe, MonadExceptOf.throw, hb_source_reward, hb_source_penalty, hfit4, hov]
   | Ok v5 =>
@@ -326,7 +326,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
         core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         core.convert.FromSame.from]
     refine ⟨_, rfl, ?_⟩
-    simp [absResult, absArithError, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
+    simp [resultToSpec, arithErrorToSpec, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
         Spec.UINT64_SIZE, except_ok_bind, except_error_bind, Pure.pure, Except.pure, throw,
         throwThe, MonadExceptOf.throw, hb_source_reward, hb_source_penalty, hfit4, hfit5, hov]
   | Ok v6 =>
@@ -342,7 +342,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
         core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         core.convert.FromSame.from]
     refine ⟨_, rfl, ?_⟩
-    simp [absResult, absArithError, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
+    simp [resultToSpec, arithErrorToSpec, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
         Spec.UINT64_SIZE, except_ok_bind, except_error_bind, Pure.pure, Except.pure, throw,
         throwThe, MonadExceptOf.throw, hb_source_reward, hb_source_penalty, hfit4, hfit5, hfit6, hov]
   | Ok v7 =>
@@ -359,7 +359,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
         core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         core.convert.FromSame.from]
     refine ⟨_, rfl, ?_⟩
-    simp [absResult, absArithError, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
+    simp [resultToSpec, arithErrorToSpec, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
         Spec.UINT64_SIZE, except_ok_bind, except_error_bind, Pure.pure, Except.pure, throw,
         throwThe, MonadExceptOf.throw, hb_source_reward, hb_source_penalty, hfit4, hfit5, hfit6, hfit7, hov]
   | Ok v8 =>
@@ -376,7 +376,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
         core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         core.convert.FromSame.from]
     refine ⟨_, rfl, ?_⟩
-    simp [absResult, absArithError, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
+    simp [resultToSpec, arithErrorToSpec, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
         Spec.UINT64_SIZE, except_ok_bind, except_error_bind, Pure.pure, Except.pure, throw,
         throwThe, MonadExceptOf.throw, hb_source_reward, hb_source_penalty, hfit4, hfit5, hfit6, hfit7, hfit8, hov]
   | Ok v9 =>
@@ -384,7 +384,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
   simp only [hv5] at hv9 hfit9
   simp only [bind_tc_ok, lift]
   refine ⟨_, rfl, ?_⟩
-  simp [absResult, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
+  simp [resultToSpec, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
         Spec.UINT64_SIZE, except_ok_bind, Pure.pure, Except.pure, throw,
         throwThe, MonadExceptOf.throw, hb_source_reward, hb_source_penalty, hfit4, hfit5, hfit6, hfit7, hv8, hfit8, hv9, hfit9,
     u64_saturating_sub_val, saturating_sub_eq]
@@ -406,7 +406,7 @@ theorem new_balance_after_rewards_eq_spec (p : Spec.Preset)
     per_epoch_processing.rewards_penalties.new_balance_after_rewards balance true
       base_reward effective_balance inactivity_score source target head in_leak
       source_increments target_increments head_increments active_increments bias quotient
-      ⦃ r => absResult (·.val) r = Spec.rewardsSequential balance.val deltas ⦄ := by
+      ⦃ r => resultToSpec (·.val) r = Spec.rewardsSequential balance.val deltas ⦄ := by
   apply WP.spec_mono (new_balance_after_rewards_equiv p balance base_reward effective_balance
     inactivity_score source_increments target_increments head_increments active_increments bias
     quotient true source target head in_leak hbias hquotient)

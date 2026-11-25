@@ -8,7 +8,7 @@ import EpochProofs.Sanity.ShuffleClosedForm
 returns `some (shuffledIndexAfterRounds index)`. With `Spec.compute_shuffled_index_eq`, it returns the reference
 `compute_shuffled_index`.
 
-The hash is the trait instance `inst`. `HashLink inst o` says that `inst.hash` computes
+The hash is the trait instance `inst`. `HashMatches inst o` says that `inst.hash` computes
 `o.hash` and does not fail.
 -/
 
@@ -20,13 +20,13 @@ open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 abbrev ShuffleHashInst (H : Type) := swap_or_not_shuffle.shuffle_hash.ShuffleHash H
 
 /-- The bytes of a Lighthouse byte list. -/
-def u8s (l : List U8) : List UInt8 := l.map (fun b => UInt8.ofNat b.val)
+def byteValues (l : List U8) : List UInt8 := l.map (fun b => UInt8.ofNat b.val)
 
 /-- `inst.hash` computes `o.hash` and does not fail. -/
-def HashLink {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle) : Prop :=
-  ∀ s : Slice U8, ∃ d, inst.hash s = ok d ∧ u8s d.val = (o.hash (u8s s.val)).toList
+def HashMatches {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle) : Prop :=
+  ∀ s : Slice U8, ∃ d, inst.hash s = ok d ∧ byteValues d.val = (o.hash (byteValues s.val)).toList
 
-theorem u8s_length (l : List U8) : (u8s l).length = l.length := by simp [u8s]
+theorem byteValues_length (l : List U8) : (byteValues l).length = l.length := by simp [byteValues]
 
 theorem u8_lt (b : U8) : b.val < 256 := by
   have := b.hBounds; simpa using this
@@ -162,17 +162,17 @@ theorem or_shift_step (acc x k : Nat) (hacc : acc < 2 ^ k) (hx : x < 256) (hk : 
     rw [hpow]; omega
 
 theorem littleEndianValue_take8 (l : List U8) (h : 8 ≤ l.length) :
-    Spec.littleEndianValue ((u8s l).take 8) =
+    Spec.littleEndianValue ((byteValues l).take 8) =
       l[0].val + l[1].val * 2 ^ 8 + l[2].val * 2 ^ 16 + l[3].val * 2 ^ 24 + l[4].val * 2 ^ 32 +
         l[5].val * 2 ^ 40 + l[6].val * 2 ^ 48 + l[7].val * 2 ^ 56 := by
   match l, h with
   | a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: rest, _ =>
-    simp [Spec.littleEndianValue, u8s]; ring
+    simp [Spec.littleEndianValue, byteValues]; ring
 
 @[step]
 theorem first_u64_spec (digest : Array U8 32#usize) :
     swap_or_not_shuffle.compute_shuffled_index_with.first_u64 digest ⦃ v =>
-      v.val = Spec.littleEndianValue ((u8s digest.val).take 8) ⦄ := by
+      v.val = Spec.littleEndianValue ((byteValues digest.val).take 8) ⦄ := by
   unfold swap_or_not_shuffle.compute_shuffled_index_with.first_u64
   step*
   have hc : ∀ (x : U8) (y : U64), y = UScalar.cast UScalarTy.U64 x → y.val = x.val := by
@@ -204,20 +204,23 @@ theorem first_u64_spec (digest : Array U8 32#usize) :
   rw [e7, e6, e5, e4, e3, e2, e1, hc _ _ i1_post, littleEndianValue_take8 _ (by simp)]
   simp [i_post, i2_post, i6_post, i10_post, i14_post, i18_post, i22_post, i26_post]
 
-theorem hash_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle) (hH : HashLink inst o)
-    (s : Slice U8) : inst.hash s ⦃ d => u8s d.val = (o.hash (u8s s.val)).toList ⦄ := by
+theorem hash_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle) (hH : HashMatches inst o)
+    (s : Slice U8) : inst.hash s ⦃ d => byteValues d.val = (o.hash (byteValues s.val)).toList
+    ⦄ := by
   obtain ⟨d, hd, hdb⟩ := hH s
   rw [hd]; exact (spec_ok d).mpr hdb
 
-theorem u8s_append (a b : List U8) : u8s (a ++ b) = u8s a ++ u8s b := by simp [u8s]
+theorem byteValues_append (a b : List U8) : byteValues (a ++ b) = byteValues a ++
+    byteValues b := by simp [byteValues]
 
-theorem u8s_source (seed : Array U8 32#usize) (round : U8) (bucket : Usize) (l : List U8)
+theorem byteValues_source (seed : Array U8 32#usize) (round : U8) (bucket : Usize) (l : List U8)
     (h : l.map (·.val) = seed.val.map (·.val) ++ [round.val] ++
         (List.range 4).map (fun k => bucket.val / 256 ^ k % 256)) :
-    u8s l = u8s seed.val ++ [UInt8.ofNat round.val] ++ Spec.uint_to_bytes 4 bucket.val := by
-  have : u8s l = (l.map (·.val)).map UInt8.ofNat := by simp [u8s]
+    byteValues l = byteValues seed.val ++
+      [UInt8.ofNat round.val] ++ Spec.uint_to_bytes 4 bucket.val := by
+  have : byteValues l = (l.map (·.val)).map UInt8.ofNat := by simp [byteValues]
   rw [this, h]
-  simp [u8s, Spec.uint_to_bytes, Function.comp_def]
+  simp [byteValues, Spec.uint_to_bytes, Function.comp_def]
 
 theorem cast_usize_of_lt (x : U64) (h : x.val < 2 ^ 32) :
     (UScalar.cast UScalarTy.Usize x).val = x.val := by
@@ -236,10 +239,10 @@ theorem usize_max_ge : 2 ^ 32 - 1 ≤ Usize.max := by
   rcases System.Platform.numBits_eq with hb | hb <;> simp [Usize.max_def, Usize.numBits, hb]
 
 theorem shuffle_round_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle)
-    (hH : HashLink inst o) (seed : Array U8 32#usize) (index : Usize) (round : U8) (n : Usize)
+    (hH : HashMatches inst o) (seed : Array U8 32#usize) (index : Usize) (round : U8) (n : Usize)
     (hn : 0 < n.val) (hn24 : n.val ≤ 2 ^ 24) (hi : index.val < n.val) :
     swap_or_not_shuffle.compute_shuffled_index_with.shuffle_round inst seed index round n ⦃ r =>
-      r.val = Spec.sigma o (u8s seed.val) n.val round.val index.val ⦄ := by
+      r.val = Spec.sigma o (byteValues seed.val) n.val round.val index.val ⦄ := by
   unfold swap_or_not_shuffle.compute_shuffled_index_with.shuffle_round
   step*
   step with hash_spec inst o hH as ⟨a1, ha1⟩
@@ -253,11 +256,12 @@ theorem shuffle_round_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracl
   have hi1 : i1.val = n.val := by rw [i1_post, cast_u64_of_usize]
   have hi2 : i2.val < n.val := by rw [i2_post, hi1]; exact Nat.mod_lt _ hn
   have hp : pivot.val = i2.val := by rw [pivot_post]; exact cast_usize_of_lt _ (by omega)
-  have hpiv : pivot.val = Spec.pivotOf o (u8s seed.val) n.val round.val := by
+  have hpiv : pivot.val = Spec.pivotOf o (byteValues seed.val) n.val round.val := by
     rw [hp, i2_post, hi1, i_post, ha1, s_post]
-    simp only [Spec.pivotOf, Array.to_slice, Slice.from_val, a_post, u8s_append]
+    simp only [Spec.pivotOf, Array.to_slice, Slice.from_val, a_post, byteValues_append]
     rfl
-  have hflip : flip.val = (Spec.pivotOf o (u8s seed.val) n.val round.val + n.val - index.val) % n.val := by
+  have hflip : flip.val = (Spec.pivotOf o (byteValues seed.val) n.val round.val + n.val - index.val)
+    % n.val := by
     rw [flip_post, i4_post, hpiv, i3_post]
     congr 1
     omega
@@ -275,29 +279,30 @@ theorem shuffle_round_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracl
         let i9 ← byte >>> i8
         let i10 ← i9 % 2#u8
         if i10 = 1#u8 then ok flip else ok index) ⦃ r =>
-          r.val = Spec.sigma o (u8s seed.val) n.val round.val index.val ⦄ := by
+          r.val = Spec.sigma o (byteValues seed.val) n.val round.val index.val ⦄ := by
     intro position hposv
     step*
     case hy => rcases System.Platform.numBits_eq with h | h <;> simp [h]
     step with hash_spec inst o hH as ⟨source, hsrc⟩
     have hi5 : i5.val = position.val / 256 := by rw [i5_post, Nat.shiftRight_eq_div_pow]
-    have hs1 : u8s s1.val = u8s seed.val ++ [UInt8.ofNat round.val] ++
+    have hs1 : byteValues s1.val = byteValues seed.val ++ [UInt8.ofNat round.val] ++
         Spec.uint_to_bytes 4 (position.val / 256) := by
-      rw [s1_post, ← hi5, Array.to_slice, Slice.from_val]; exact u8s_source seed round i5 a2.val a2_post
+      rw [s1_post, ← hi5, Array.to_slice,
+        Slice.from_val]; exact byteValues_source seed round i5 a2.val a2_post
     rw [hs1] at hsrc
     have hsl : source.val.length = 32 := by simp
     have hidx : position.val % 256 / 8 < 32 := by omega
     have hbyte : (source.val[position.val % 256 / 8]'(by omega)).val =
-        ((o.hash (u8s seed.val ++ [UInt8.ofNat round.val] ++
+        ((o.hash (byteValues seed.val ++ [UInt8.ofNat round.val] ++
           Spec.uint_to_bytes 4 (position.val / 256))).toList.getD (position.val % 256 / 8) 0).toNat := by
       rw [← hsrc]
-      simp [u8s, List.getD_eq_getElem?_getD, hidx]
-    have hbit : Spec.bitOf o (u8s seed.val) round.val position.val =
+      simp [byteValues, List.getD_eq_getElem?_getD, hidx]
+    have hbit : Spec.bitOf o (byteValues seed.val) round.val position.val =
         (source.val[position.val % 256 / 8]'(by omega)).val / 2 ^ (position.val % 8) % 2 := by
       rw [hbyte]; rfl
     step*
     all_goals
-      have hb10 : i10.val = Spec.bitOf o (u8s seed.val) round.val position.val := by
+      have hb10 : i10.val = Spec.bitOf o (byteValues seed.val) round.val position.val := by
         rw [hbit, i10_post, i9_post, i8_post, Nat.shiftRight_eq_div_pow]
         simp only [byte_post, i7_post, i6_post]
       have hlt2 : i10.val < 2 := by rw [i10_post]; exact Nat.mod_lt _ (by decide)
@@ -321,16 +326,19 @@ theorem shuffledIndexAfterRounds_succ (o : Spec.Oracle) (seed : List UInt8) (n r
   simp [Spec.shuffledIndexAfterRounds, List.range_succ, List.foldl_append]
 
 theorem rounds_loop_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle)
-    (hH : HashLink inst o) (n : Usize) (seed : Array U8 32#usize) (R : U8) (index : Usize)
+    (hH : HashMatches inst o) (n : Usize) (seed : Array U8 32#usize) (R : U8) (index : Usize)
     (round : U8) (x0 : Nat) (hn : 0 < n.val) (hn24 : n.val ≤ 2 ^ 24) (hr : round.val ≤ R.val)
-    (hidx : index.val = Spec.shuffledIndexAfterRounds o (u8s seed.val) n.val round.val x0) (hi : index.val < n.val) :
+    (hidx : index.val = Spec.shuffledIndexAfterRounds o (byteValues seed.val) n.val round.val x0)
+    (hi : index.val < n.val) :
     swap_or_not_shuffle.compute_shuffled_index_with.compute_shuffled_index_with_loop inst n seed R
-      index round ⦃ r => r.val = Spec.shuffledIndexAfterRounds o (u8s seed.val) n.val R.val x0 ⦄ := by
+      index round ⦃ r => r.val =
+        Spec.shuffledIndexAfterRounds o (byteValues seed.val) n.val R.val x0 ⦄ := by
   unfold swap_or_not_shuffle.compute_shuffled_index_with.compute_shuffled_index_with_loop
   apply loop.spec_decr_nat
     (measure := fun (x : Usize × U8) => R.val - x.2.val)
     (inv := fun (x : Usize × U8) => x.2.val ≤ R.val ∧
-      x.1.val = Spec.shuffledIndexAfterRounds o (u8s seed.val) n.val x.2.val x0 ∧ x.1.val < n.val)
+      x.1.val = Spec.shuffledIndexAfterRounds o (byteValues seed.val) n.val x.2.val x0 ∧ x.1.val <
+        n.val)
   · rintro ⟨j, rd⟩ ⟨hr, hj, hjn⟩
     dsimp only at hr hj hjn ⊢
     unfold swap_or_not_shuffle.compute_shuffled_index_with.compute_shuffled_index_with_loop.body
@@ -349,11 +357,11 @@ theorem rounds_loop_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle)
   · exact ⟨hr, hidx, hi⟩
 
 theorem compute_shuffled_index_with_spec {H : Type} (inst : ShuffleHashInst H)
-    (o : Spec.Oracle) (hH : HashLink inst o) (index n : Usize) (seed : Array U8 32#usize)
+    (o : Spec.Oracle) (hH : HashMatches inst o) (index n : Usize) (seed : Array U8 32#usize)
     (R : U8) (hn24 : n.val ≤ 2 ^ 24) (hi : index.val < n.val) :
     swap_or_not_shuffle.compute_shuffled_index_with.compute_shuffled_index_with inst index n seed R
       ⦃ r => ∃ x : Usize, r = some x ∧
-        x.val = Spec.shuffledIndexAfterRounds o (u8s seed.val) n.val R.val index.val ⦄ := by
+        x.val = Spec.shuffledIndexAfterRounds o (byteValues seed.val) n.val R.val index.val ⦄ := by
   unfold swap_or_not_shuffle.compute_shuffled_index_with.compute_shuffled_index_with
   have hn0 : n ≠ 0#usize := by intro h; rw [h] at hi; simp at hi
   have hge : ¬ index >= n := by scalar_tac
@@ -375,8 +383,8 @@ theorem compute_shuffled_index_with_spec {H : Type} (inst : ShuffleHashInst H)
 
 /-- The Lighthouse shuffle equals the reference `compute_shuffled_index`. -/
 theorem compute_shuffled_index_with_eq {H : Type} (inst : ShuffleHashInst H) (p : Spec.Preset)
-    (o : Spec.Oracle) (hH : HashLink inst o) (index n : Usize) (seed : Array U8 32#usize)
-    (seedSpec : Spec.Bytes32) (hseed : u8s seed.val = seedSpec.toList) (R : U8)
+    (o : Spec.Oracle) (hH : HashMatches inst o) (index n : Usize) (seed : Array U8 32#usize)
+    (seedSpec : Spec.Bytes32) (hseed : byteValues seed.val = seedSpec.toList) (R : U8)
     (hR : R.val = p.SHUFFLE_ROUND_COUNT) (hn24 : n.val ≤ 2 ^ 24) (hi : index.val < n.val) :
     swap_or_not_shuffle.compute_shuffled_index_with.compute_shuffled_index_with inst index n seed R
       ⦃ r => ∃ x : Usize, r = some x ∧

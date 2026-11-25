@@ -151,9 +151,9 @@ theorem step_context_spec [Spec.CurrentPreset] (s : Spec.BeaconState) (cur : Nat
   rw [hi.total_active_balance, hpre] at hq2
   obtain ⟨x, rfl⟩ : ∃ x, r2 = .Ok x := by
     cases r2 with
-    | Err e => simp [absResult] at hq2
+    | Err e => simp [resultToSpec] at hq2
     | Ok x => exact ⟨x, rfl⟩
-  simp only [absResult, Except.ok.injEq, Prod.mk.injEq] at hq2
+  simp only [resultToSpec, Except.ok.injEq, Prod.mk.injEq] at hq2
   have hx2 := hq2t x rfl
   -- The hysteresis thresholds.
   obtain ⟨r3, h3, hq3⟩ := spec_imp_exists
@@ -164,9 +164,9 @@ theorem step_context_spec [Spec.CurrentPreset] (s : Spec.BeaconState) (cur : Nat
   rw [hh] at hq3
   obtain ⟨y, rfl⟩ : ∃ y, r3 = .Ok y := by
     cases r3 with
-    | Err e => simp [absResult] at hq3
+    | Err e => simp [resultToSpec] at hq3
     | Ok y => exact ⟨y, rfl⟩
-  simp only [absResult, Except.ok.injEq, Prod.mk.injEq] at hq3
+  simp only [resultToSpec, Except.ok.injEq, Prod.mk.injEq] at hq3
   obtain ⟨x1, x2, x3⟩ := x
   obtain ⟨y1, y2⟩ := y
   unfold per_epoch_processing.single_pass_step.step_context
@@ -209,7 +209,7 @@ theorem single_pass_rows_model_inputs [Spec.CurrentPreset] {R E : Type} (inst : 
     (s : Spec.BeaconState) (tab : Spec.Gwei) (topups : List Spec.Gwei)
     (named : List Spec.ValidatorIndex) (view : R → List Spec.Row) (rows : R)
     (hview : view rows = Spec.rowsOf s)
-    (hc : RowsContract inst Spec.P view (modelRowInputs tab topups named))
+    (hc : ValidatorRowsMatchSpec inst Spec.P view (modelRowInputs tab topups named))
     (cur : Nat) (hcur : Spec.get_current_epoch Spec.P s = .ok cur) (rctx : Spec.RewardsContext)
     (hr : Spec.rewardsContextOf Spec.P tab s = .ok rctx) (adjusted per : Nat)
     (hpre : Spec.slashingsPreamble Spec.P tab s.slashings = .ok (adjusted, per))
@@ -217,11 +217,11 @@ theorem single_pass_rows_model_inputs [Spec.CurrentPreset] {R E : Type} (inst : 
     (htarget : cur + Spec.P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < Spec.UINT64_SIZE)
     (i : ContextInputs) (hi : ContextInputsMatch s cur tab i)
     (k : per_epoch_processing.registry_update.RegistryConstants)
-    (hk : ConstantsMatch Spec.P k) (ch : ExitChurn)
-    (hch : absChurn ch = (s.earliest_exit_epoch, s.exit_balance_to_consume)) :
+    (hk : RegistryConstantsMatchGloas Spec.P k) (ch : ExitChurn)
+    (hch : exitChurnToSpec ch = (s.earliest_exit_epoch, s.exit_balance_to_consume)) :
     per_epoch_processing.single_pass_step.step_context i ⦃ r => ∃ c, r = .Ok c ∧
       per_epoch_processing.registry_rows.single_pass_rows inst rows ch c k ⦃ res =>
-        LoopPost view (Spec.passM (fun churn r => Spec.lhRowStepFull Spec.P
+        LoopResultMatchesModel view (Spec.passM (fun churn r => Spec.lhRowStepFull Spec.P
             (Spec.lhContextOf s tab cur rctx per) downward upward
             ⟨Spec.lhBaseReward tab r, topups.getD r.index 0, decide (r.index ∈ named)⟩ churn r)
           (s.earliest_exit_epoch, s.exit_balance_to_consume) (Spec.rowsOf s)) res ⦄ ⦄ := by

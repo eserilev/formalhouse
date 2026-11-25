@@ -150,7 +150,7 @@ theorem gloas_cache_reads_correct {PubkeyMap : Type} {progressiveCache : LhCache
     caches.pubkeyCache
   rw [← activeSum_eq_active_balances] at htotal
   obtain ⟨h1, h2, h3⟩ := lh_cache_reads_mainnet s hin.1.1.1.2.1 hin.1.1.2.2.2.2 progressiveCache
-    (coherent_of_upkeep hstart hupdates) cachedTotal
+    (progressive_balances_correct_after_updates hstart hupdates) cachedTotal
     (epoch_cache_total_carry cachedTotal.val htotal hagree)
   refine ⟨h1, h2, h3, fun pubkey => ?_⟩
   obtain ⟨result, hget, hresult⟩ := CacheProofs.get_coherent_of_nodup laws
@@ -390,20 +390,23 @@ theorem lighthouse_rust_gloas_epoch_of_ethlib_ok
     (slotFarFromOverflow : (toSpecState state).slot + 8192 < 2 ^ 64)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle)
-    {σ E : Type} {rustCode : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
-    (rust : GloasUntranslatedRustFacts rustCode oracle view rustState (toSpecState state))
+    {RustState RustError : Type} {rustCode : Compose.UntranslatedEpochCode RustState RustError}
+    {rustStateToSpec : RustState → Spec.BeaconState} {rustState : RustState}
+    (rust : GloasUntranslatedRustFacts rustCode oracle rustStateToSpec rustState
+    (toSpecState state))
     {result : BeaconState preset .glamsterdam}
     (ethLibSucceeds : processEpoch config checks state = .ok result) :
-    ∃ rustResult, (Compose.epoch rustCode rustState).run = ok (some rustResult) ∧
-      view rustResult = toSpecState result := by
+    ∃ rustResult, (Compose.translatedEpoch rustCode rustState).run = ok (some rustResult) ∧
+      rustStateToSpec rustResult = toSpecState result := by
   have hmodel := (lighthouse_model_gloas_epoch_agrees_ethlib presetMatches invariants
     atLastSlotOfEpoch slotFarFromOverflow roomForDeposits oracleMatches (toSpecState result)).mpr
     (by rw [ethLibSucceeds]; rfl)
   have hvectors := vectorLengths_toSpecState (config := config) state
   rw [presetMatches.values] at hvectors
-  exact Compose.epoch_spec rustCode oracle view rustState rust.glue
-    (by rw [rust.viewEq]; exact Nat.lt_of_le_of_lt (Nat.le_succ _) atLastSlotOfEpoch.2.1)
-    (by rw [rust.viewEq]; exact hvectors) _ (by rw [rust.viewEq]; exact hmodel)
+  exact Compose.translatedEpoch_matches_model rustCode oracle rustStateToSpec rustState
+    rust.untranslatedCode
+    (by rw [rust.holdsInput]; exact Nat.lt_of_le_of_lt (Nat.le_succ _) atLastSlotOfEpoch.2.1)
+    (by rw [rust.holdsInput]; exact hvectors) _ (by rw [rust.holdsInput]; exact hmodel)
 
 /-- Gloas, for the composed Rust: at every epoch input of a run, the Rust returns `Ok`, and EthLib's
 `processEpoch` succeeds with the same state. Each cache read of the epoch gives the spec value. -/
@@ -416,10 +419,13 @@ theorem lighthouse_rust_gloas_epoch_eq_ethlib {PubkeyMap : Type} {progressiveCac
     (oracleMatches : OracleMatches preset checks oracle)
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state))
-    {σ E : Type} {rustCode : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
-    (rust : GloasUntranslatedRustFacts rustCode oracle view rustState (toSpecState state)) :
-    (∃ rustResult result, (Compose.epoch rustCode rustState).run = ok (some rustResult) ∧
-      processEpoch config checks state = .ok result ∧ view rustResult = toSpecState result) ∧
+    {RustState RustError : Type} {rustCode : Compose.UntranslatedEpochCode RustState RustError}
+    {rustStateToSpec : RustState → Spec.BeaconState} {rustState : RustState}
+    (rust : GloasUntranslatedRustFacts rustCode oracle rustStateToSpec rustState
+    (toSpecState state)) :
+    (∃ rustResult result, (Compose.translatedEpoch rustCode rustState).run = ok (some rustResult) ∧
+      processEpoch config checks state = .ok result ∧ rustStateToSpec rustResult =
+        toSpecState result) ∧
     GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state) := by
   obtain ⟨⟨result, -, hresult⟩, hreads⟩ := lighthouse_model_gloas_epoch_eq_ethlib presetMatches run
@@ -536,13 +542,14 @@ theorem lighthouse_rust_fulu_epoch_of_ethlib_ok [Spec.CurrentPreset.Bounds]
     (atLastSlotOfEpoch : Spec.AtLastSlotOfEpoch (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle)
-    {σ E : Type} {rustCode : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
-    {rustState : σ}
-    (rust : FuluUntranslatedRustFacts rustCode oracle view rustState (toSpecState state))
+    {RustState RustError : Type} {rustCode : Compose.UntranslatedEpochCodeFulu RustState RustError}
+    {rustStateToSpec : RustState → Spec.BeaconState}
+    {rustState : RustState}
+    (rust : FuluUntranslatedRustFacts rustCode oracle rustStateToSpec rustState (toSpecState state))
     {result : BeaconState preset .fusaka}
     (ethLibSucceeds : processEpoch config checks state = .ok result) :
-    (∃ rustResult, (Compose.epochFulu rustCode rustState).run = ok (some rustResult) ∧
-      view rustResult = toSpecState result) ∧
+    (∃ rustResult, (Compose.translatedEpochFulu rustCode rustState).run = ok (some rustResult) ∧
+      rustStateToSpec rustResult = toSpecState result) ∧
     result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader := by
   have hmodel : Spec.process_epoch_lighthouse_fulu oracle (toSpecState state) =
       .ok (toSpecState result) := by
@@ -556,10 +563,11 @@ theorem lighthouse_rust_fulu_epoch_of_ethlib_ok [Spec.CurrentPreset.Bounds]
   obtain ⟨-, -, -, -, hbits, -, -, hlookahead⟩ :=
     fuluVectorLengths_toSpecState (config := config) (by decide) state
   rw [presetMatches.values] at hlookahead
-  exact ⟨Compose.epochFulu_spec rustCode oracle view rustState rust.glue
-    (by rw [rust.viewEq]; exact Nat.lt_of_le_of_lt (Nat.le_succ _) atLastSlotOfEpoch.2.1)
-    (by rw [rust.viewEq]; exact hbits) (by rw [rust.viewEq]; exact hlookahead) _
-    (by rw [rust.viewEq]; exact hmodel), epoch_keeps_payload_header ethLibSucceeds⟩
+  exact ⟨Compose.translatedEpochFulu_matches_model rustCode oracle rustStateToSpec rustState
+    rust.untranslatedCode
+    (by rw [rust.holdsInput]; exact Nat.lt_of_le_of_lt (Nat.le_succ _) atLastSlotOfEpoch.2.1)
+    (by rw [rust.holdsInput]; exact hbits) (by rw [rust.holdsInput]; exact hlookahead) _
+    (by rw [rust.holdsInput]; exact hmodel), epoch_keeps_payload_header ethLibSucceeds⟩
 
 /-- Fulu, for the composed Rust: at every epoch input of a run, the Rust returns `Ok`, and EthLib's
 `processEpoch` succeeds with the same state, and keeps the payload header. -/
@@ -570,11 +578,15 @@ theorem lighthouse_rust_fulu_epoch_eq_ethlib [Spec.CurrentPreset.Bounds]
     (chain : FuluChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle)
-    {σ E : Type} {rustCode : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
-    {rustState : σ}
-    (rust : FuluUntranslatedRustFacts rustCode oracle view rustState (toSpecState state)) :
-    ∃ rustResult result, (Compose.epochFulu rustCode rustState).run = ok (some rustResult) ∧
-      processEpoch config checks state = .ok result ∧ view rustResult = toSpecState result ∧
+    {RustState RustError : Type} {rustCode : Compose.UntranslatedEpochCodeFulu RustState RustError}
+    {rustStateToSpec : RustState → Spec.BeaconState}
+    {rustState : RustState}
+    (rust : FuluUntranslatedRustFacts rustCode oracle rustStateToSpec rustState
+    (toSpecState state)) :
+    ∃ rustResult result, (Compose.translatedEpochFulu rustCode rustState).run = ok (some rustResult)
+      ∧
+      processEpoch config checks state = .ok result ∧ rustStateToSpec rustResult =
+        toSpecState result ∧
       result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader := by
   obtain ⟨result, -, hresult, -⟩ := lighthouse_model_fulu_epoch_eq_ethlib presetMatches
     fuluConfigMatches run chain roomForDeposits oracleMatches

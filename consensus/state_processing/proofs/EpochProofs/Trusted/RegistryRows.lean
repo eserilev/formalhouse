@@ -5,10 +5,11 @@ import EpochProofs.Equiv.SinglePassStep
 
 `single_pass_rows` in `registry_rows.rs` is generic over the trait `RegistryRows`.
 `single_pass.rs` implements the trait over the milhouse lists and caches of the state. Aeneas
-does not read that implementation, so the theorems take `RowsContract` as a hypothesis. This file
+does not read that implementation, so the theorems take `ValidatorRowsMatchSpec` as a hypothesis.
+This file
 is the only statement the proofs trust about the single-pass loop.
 
-`RowsContract` says what `StateRows` in `single_pass.rs` does, in spec terms:
+`ValidatorRowsMatchSpec` says what `StateRows` in `single_pass.rs` does, in spec terms:
 
 - `row_count` returns the number of rows.
 - `apply_step` on row `i` reads the row, runs `single_pass_step` on it, writes the new row back
@@ -42,7 +43,7 @@ def rowAfter (r : Spec.Row) (lr' : ValidatorRow) : Spec.Row :=
 
 /-- The row inputs that `single_pass.rs` reads hold the spec inputs. The base reward is the
 spec base reward, or the validator is not eligible. -/
-structure InputsRead (p : Spec.Preset) (previous_epoch : Spec.Epoch) (i : RowInputs)
+structure RowInputsMatchSpec (p : Spec.Preset) (previous_epoch : Spec.Epoch) (i : RowInputs)
     (inputs : Spec.LhRowInputs) (r : Spec.Row) : Prop where
   base_reward : i.base_reward.val = inputs.base_reward
     ∨ Spec.validatorEligible previous_epoch r.validator ≠ .ok true
@@ -57,19 +58,20 @@ def rowsResult {E : Type} :
   | .Ok (_, ch') => .Ok ch'
   | .Err e => .Err (.Step e)
 
-/-- Trusted: what the `RegistryRows` implementation in `single_pass.rs` does. `view` gives the
+/-- Trusted: what the `RegistryRows` implementation in `single_pass.rs` does. `toSpec` gives the
 spec rows that an implementation value holds, and `inputsOf` gives the spec inputs of a row. -/
-structure RowsContract {R E : Type} (inst : LhRegistryRows R E) (p : Spec.Preset)
-    (view : R → List Spec.Row) (inputsOf : Spec.Row → Spec.LhRowInputs) : Prop where
+structure ValidatorRowsMatchSpec {R E : Type} (implementation : LhRegistryRows R E)
+    (p : Spec.Preset)
+    (toSpec : R → List Spec.Row) (inputsOf : Spec.Row → Spec.LhRowInputs) : Prop where
   /-- One row for each validator. -/
-  row_count : ∀ s, ∃ n : Usize, inst.row_count s = ok n ∧ n.val = (view s).length
+  row_count : ∀ s, ∃ n : Usize, implementation.row_count s = ok n ∧ n.val = (toSpec s).length
   /-- Row `i` gets the result of `single_pass_step`. No other row changes. -/
   apply_step : ∀ (s : R) (i : Usize) (ch : ExitChurn) (c : StepContext)
     (k : per_epoch_processing.registry_update.RegistryConstants) (r : Spec.Row),
-    (view s)[i.val]? = some r →
-    ∃ lr ri, RowMatches lr r ∧ InputsRead p c.previous_epoch.val ri (inputsOf r) r ∧
+    (toSpec s)[i.val]? = some r →
+    ∃ lr ri, RowMatches lr r ∧ RowInputsMatchSpec p c.previous_epoch.val ri (inputsOf r) r ∧
       ∀ res, per_epoch_processing.single_pass_step.single_pass_step lr ri ch c k = ok res →
-        ∃ s', inst.apply_step s i ch c k = ok (rowsResult res, s') ∧
-          ∀ lr' ch', res = .Ok (lr', ch') → view s' = (view s).set i.val (rowAfter r lr')
+        ∃ s', implementation.apply_step s i ch c k = ok (rowsResult res, s') ∧
+          ∀ lr' ch', res = .Ok (lr', ch') → toSpec s' = (toSpec s).set i.val (rowAfter r lr')
 
 end EpochProofs

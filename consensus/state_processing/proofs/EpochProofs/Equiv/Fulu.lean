@@ -32,7 +32,7 @@ theorem exit_churn_limit_capped (p : Spec.Preset) (total_active_balance : U64)
     (hinc : c.effective_balance_increment.val = p.EFFECTIVE_BALANCE_INCREMENT)
     (hcap : c.exit_churn_cap.val = p.MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS) :
     per_epoch_processing.registry_update.exit_churn_limit total_active_balance c ⦃ r =>
-      absResult (·.val) r = Spec.get_activation_churn_limit p total_active_balance.val ⦄ := by
+      resultToSpec (·.val) r = Spec.get_activation_churn_limit p total_active_balance.val ⦄ := by
   unfold per_epoch_processing.registry_update.exit_churn_limit
   apply exists_imp_spec
   obtain ⟨r1, hr1, h1⟩ := spec_imp_exists (safe_div_spec total_active_balance c.churn_limit_quotient)
@@ -42,7 +42,7 @@ theorem exit_churn_limit_capped (p : Spec.Preset) (total_active_balance : U64)
     obtain ⟨rfl, hz⟩ := h1.2 e rfl
     rw [hq] at hz
     refine ⟨_, by ok_rfl, ?_⟩
-    simp [Spec.get_activation_churn_limit, Spec.uint64Div, hz, absResult, absArithError,
+    simp [Spec.get_activation_churn_limit, Spec.uint64Div, hz, resultToSpec, arithErrorToSpec,
       except_error_bind, throw, throwThe, MonadExceptOf.throw]
   | Ok q =>
   obtain ⟨hqv, hnz⟩ := h1.1 q rfl
@@ -59,7 +59,7 @@ theorem exit_churn_limit_capped (p : Spec.Preset) (total_active_balance : U64)
     rw [hinc] at hz
     refine ⟨_, by ok_rfl, ?_⟩
     simp [Spec.get_activation_churn_limit, Spec.uint64Div, Spec.uint64Mod, hnz, ← hqv, hz,
-      absResult, absArithError, except_ok_bind, except_error_bind, throw, throwThe,
+      resultToSpec, arithErrorToSpec, except_ok_bind, except_error_bind, throw, throwThe,
       MonadExceptOf.throw, Pure.pure, Except.pure, core.convert.FromSame.from]
   | Ok m =>
   obtain ⟨hm, hmnz⟩ := h2.1 m rfl
@@ -88,12 +88,13 @@ theorem exit_churn_limit_capped (p : Spec.Preset) (total_active_balance : U64)
     · right; rw [Nat.max_eq_right hq'] at hle ⊢; exact hle
     · left; rw [Nat.max_eq_left hq'] at hle ⊢; exact hle
   simp [Spec.get_activation_churn_limit, Spec.uint64Div, Spec.uint64Mod, Spec.uint64Sub, hnz,
-    ← hqv, hmnz, absResult, except_ok_bind, Pure.pure, Except.pure, hmin', hd, hm, hmax, hmin,
+    ← hqv, hmnz, resultToSpec, except_ok_bind, Pure.pure, Except.pure, hmin', hd, hm, hmax, hmin,
     hcond]
 
 /-- The Lighthouse registry constants are the Fulu values: the exit churn is
 `get_activation_exit_churn_limit`. -/
-structure FuluChurnMatch (p : Spec.Preset) (f : Spec.FuluConfig) (c : LhRegistryConstants) :
+structure ChurnConstantsMatchFulu (p : Spec.Preset) (f : Spec.FuluConfig)
+    (c : LhRegistryConstants) :
     Prop where
   min_per_epoch_churn_limit : c.min_per_epoch_churn_limit.val = p.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA
   churn_limit_quotient : c.churn_limit_quotient.val = f.CHURN_LIMIT_QUOTIENT
@@ -104,9 +105,9 @@ structure FuluChurnMatch (p : Spec.Preset) (f : Spec.FuluConfig) (c : LhRegistry
 Gloas Lighthouse passes the same constants for exits (`registry_constants`) and for pending
 deposits (`activation_churn_constants`). -/
 theorem exit_churn_limit_fulu (p : Spec.Preset) (f : Spec.FuluConfig) (total_active_balance : U64)
-    (c : LhRegistryConstants) (hc : FuluChurnMatch p f c) :
+    (c : LhRegistryConstants) (hc : ChurnConstantsMatchFulu p f c) :
     per_epoch_processing.registry_update.exit_churn_limit total_active_balance c ⦃ r =>
-      absResult (·.val) r =
+      resultToSpec (·.val) r =
         Spec.get_activation_exit_churn_limit p f total_active_balance.val ⦄ := by
   rw [← Spec.get_activation_churn_limit_fuluView]
   exact exit_churn_limit_capped (p.fuluView f) total_active_balance c hc.min_per_epoch_churn_limit
@@ -121,19 +122,20 @@ theorem activation_churn_limit_gloas (p : Spec.Preset) (total_active_balance : U
     (hinc : c.effective_balance_increment.val = p.EFFECTIVE_BALANCE_INCREMENT)
     (hcap : c.exit_churn_cap.val = p.MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS) :
     per_epoch_processing.registry_update.exit_churn_limit total_active_balance c ⦃ r =>
-      absResult (·.val) r = Spec.get_activation_churn_limit p total_active_balance.val ⦄ :=
+      resultToSpec (·.val) r = Spec.get_activation_churn_limit p total_active_balance.val ⦄ :=
   exit_churn_limit_capped p total_active_balance c hmin hq hinc hcap
 
 /-- `next_sync_committee_indices` equals the Electra `get_next_sync_committee_indices`. -/
 theorem next_sync_committee_indices_spec_fulu {H B : Type} (inst : ShuffleHashInst H)
-    (ebi : EBInst B) (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashLink inst o)
+    (ebi : EffectiveBalanceSource B) (balances : B) (p : Spec.Preset) (o : Spec.Oracle)
+    (hH : HashMatches inst o)
     (state : Spec.BeaconState)
-    (hEB : EBLink ebi balances (state.validators.map (·.effective_balance)))
+    (hEB : EffectiveBalancesMatch ebi balances (state.validators.map (·.effective_balance)))
     (indices : Slice Usize) (domain : Array U8 4#usize)
-    (hdomain : u8s domain.val = Spec.DOMAIN_SYNC_COMMITTEE.toList) (epoch : U64)
+    (hdomain : byteValues domain.val = Spec.DOMAIN_SYNC_COMMITTEE.toList) (epoch : U64)
     (hepoch : ∀ ce, Spec.get_current_epoch p state = .ok ce → epoch.val = ce + 1)
     (hindices : indices.val.map (·.val) = Spec.get_active_validator_indices state epoch.val)
-    (mix : Array U8 32#usize) (hmix : SeedMixLink p state epoch.val mix) (size : Usize)
+    (mix : Array U8 32#usize) (hmix : SeedMixMatches p state epoch.val mix) (size : Usize)
     (hsize : size.val = p.SYNC_COMMITTEE_SIZE) (hsize0 : 0 < p.SYNC_COMMITTEE_SIZE)
     (c : LhSelectionConstants) (hc : SelectionConstantsMatch p c)
     (hn24 : indices.val.length ≤ 2 ^ 24) (hus : Usize.max = U64.max) (res : List Nat)
@@ -152,18 +154,19 @@ theorem get_beacon_proposer_indices_fulu_frame (p : Spec.Preset) (o : Spec.Oracl
 
 /-- `next_proposer_lookahead` on all the active validators equals Fulu
 `process_proposer_lookahead`. -/
-theorem next_proposer_lookahead_spec_fulu {H B : Type} (inst : ShuffleHashInst H) (ebi : EBInst B)
-    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashLink inst o)
+theorem next_proposer_lookahead_spec_fulu {H B : Type} (inst : ShuffleHashInst H)
+    (ebi : EffectiveBalanceSource B)
+    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
     (state : Spec.BeaconState)
-    (hEB : EBLink ebi balances (state.validators.map (·.effective_balance)))
+    (hEB : EffectiveBalancesMatch ebi balances (state.validators.map (·.effective_balance)))
     (look : Slice U64) (hlook : look.val.map (·.val) = state.proposer_lookahead)
     (indices : Slice Usize) (domain : Array U8 4#usize)
-    (hdomain : u8s domain.val = Spec.DOMAIN_BEACON_PROPOSER.toList) (epoch : U64)
+    (hdomain : byteValues domain.val = Spec.DOMAIN_BEACON_PROPOSER.toList) (epoch : U64)
     (hepoch : ∀ ce, Spec.get_current_epoch p state = .ok ce →
       epoch.val = ce + p.MIN_SEED_LOOKAHEAD + 1)
     (hindices : indices.val.map (·.val) = Spec.get_active_validator_indices state epoch.val)
     (hfin : ∀ s, Spec.ProposerSelectionEnds p o state (Spec.get_active_validator_indices state epoch.val) s)
-    (mix : Array U8 32#usize) (hmix : SeedMixLink p state epoch.val mix) (start_slot : U64)
+    (mix : Array U8 32#usize) (hmix : SeedMixMatches p state epoch.val mix) (start_slot : U64)
     (hstart : Spec.compute_start_slot_at_epoch p epoch.val = .ok start_slot.val)
     (c : LhSelectionConstants) (hc : SelectionConstantsMatch p c)
     (hspe32 : p.SLOTS_PER_EPOCH < 2 ^ 32)

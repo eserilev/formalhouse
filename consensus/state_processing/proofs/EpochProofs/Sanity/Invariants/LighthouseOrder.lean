@@ -44,7 +44,7 @@ def lhMid [CurrentPreset] (o : Oracle) (s : BeaconState) (total_active_balance :
     (s1 : BeaconState) : SpecM BeaconState := do
   let s4 ← lhNewValidators o plan (lhQueueWrite s plan s1)
   let s5 ← process_pending_consolidations P s4
-  let s6 ← (consolidationIndices s).foldlM ebUpdateAt s5
+  let s6 ← (validatorsInConsolidations s).foldlM ebUpdateAt s5
   process_builder_pending_payments P total_active_balance s6
 
 theorem lhAfterPass_eq [CurrentPreset] (o : Oracle) (s : BeaconState) (total_active_balance : Gwei)
@@ -90,7 +90,7 @@ theorem lhMid_votesBlind [CurrentPreset] (o : Oracle) (s : BeaconState) (tab : G
   have h := votesBlind_bind (lhNewValidators_votesBlind o plan)
     (votesBlind_bind consolidations_votesBlind
       (votesBlind_bind (votesBlind_foldlM (fun t i => ebUpdateAt t i) ebUpdateAt_votesBlind
-        (consolidationIndices s)) (payments_votesBlind tab))) (lhQueueWrite s plan t)
+        (validatorsInConsolidations s)) (payments_votesBlind tab))) (lhQueueWrite s plan t)
   simp only [bind_assoc] at h
   simp only [lhMid, hq, bind_assoc]
   exact h
@@ -101,7 +101,7 @@ theorem lhMid_slotKeep [CurrentPreset] (o : Oracle) (s : BeaconState) (tab : Gwe
   have k := slotKeep_bind (lhNewValidators_slotKeep o plan)
     (slotKeep_bind consolidations_slotKeep
       (slotKeep_bind (slotKeep_foldlM (fun t i => ebUpdateAt t i) ebUpdateAt_slotKeep
-        (consolidationIndices s)) (payments_slotKeep tab))) (lhQueueWrite s plan t) t'
+        (validatorsInConsolidations s)) (payments_slotKeep tab))) (lhQueueWrite s plan t) t'
   simp only [bind_assoc] at k
   simp only [lhMid, bind_assoc] at h
   exact k h
@@ -224,7 +224,7 @@ def lhFullTailWith [CurrentPreset]
   let (_, per) ← slashingsPreamble P total_active_balance s.slashings
   let plan ← lhDepositPlan s total_active_balance current_epoch
   let (downward, upward) ← hysteresisThresholds P
-  let named := consolidationIndices s
+  let named := validatorsInConsolidations s
   let ctx := lhContextOf s total_active_balance current_epoch rctx per
   let x ← passM (fun churn r => lhRowStepFull P ctx downward upward
       ⟨lhBaseReward total_active_balance r, plan.topups.getD r.index 0, decide (r.index ∈ named)⟩

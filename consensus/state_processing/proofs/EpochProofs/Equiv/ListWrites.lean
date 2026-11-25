@@ -70,7 +70,7 @@ abbrev LhLWError (E : Type) := per_epoch_processing.list_writes.ListWritesError 
 
 theorem push_withdrawals_loop_spec {S E : Type} (inst : LhPaymentWrites S E)
     (wview : S → List LhWithdrawal) (pview : S → List LhPayment)
-    (hc : PaymentWritesContract inst wview pview) (ws : Slice LhWithdrawal)
+    (hc : BuilderPaymentWritesMatchSpec inst wview pview) (ws : Slice LhWithdrawal)
     (w0 : List LhWithdrawal) (p0 : List LhPayment) (s : S) (i : Usize) (hi : i.val ≤ ws.length)
     (hw : wview s = w0 ++ ws.val.take i.val) (hp : pview s = p0) :
     per_epoch_processing.list_writes.push_withdrawals_loop inst s ws i ⦃ res =>
@@ -109,11 +109,11 @@ theorem push_withdrawals_loop_spec {S E : Type} (inst : LhPaymentWrites S E)
   · exact ⟨hi, hw, hp⟩
 
 /-- `apply_builder_pending_payments` does what `lighthouseBuilderPendingPayments` models by hand,
-under the trusted `PaymentWritesContract`. So `builder_pending_payments_equiv` now holds for the
-Lighthouse code, not for a hand model. -/
+under the trusted `BuilderPaymentWritesMatchSpec`. So `builder_pending_payments_equiv` now holds
+for the Lighthouse code, not for a hand model. -/
 theorem apply_builder_pending_payments_spec [EpochProofs.Spec.CurrentPreset] {S E : Type} (inst : LhPaymentWrites S E)
     (wview : S → List LhWithdrawal) (pview : S → List LhPayment)
-    (hc : PaymentWritesContract inst wview pview) (s : S) (tab spe64 : U64) (spe : Usize)
+    (hc : BuilderPaymentWritesMatchSpec inst wview pview) (s : S) (tab spe64 : U64) (spe : Usize)
     (hspe : spe.val ≤ (pview s).length) (pslice : Slice LhPayment) (hps : pslice.val = pview s) :
     per_epoch_processing.list_writes.apply_builder_pending_payments inst s tab spe64 spe 6#u64
       10#u64 ⦃ res => match res with
@@ -166,19 +166,19 @@ theorem apply_builder_pending_payments_spec [EpochProofs.Spec.CurrentPreset] {S 
       simp [alloc.vec.Vec.deref]
 
 /-- `apply_builder_pending_payments` equals the spec `process_builder_pending_payments` on the
-builder lists, under the trusted `PaymentWritesContract`. -/
+builder lists, under the trusted `BuilderPaymentWritesMatchSpec`. -/
 theorem apply_builder_pending_payments_equiv [EpochProofs.Spec.CurrentPreset] {S E : Type} (p : Spec.Preset)
     (inst : LhPaymentWrites S E) (wview : S → List LhWithdrawal) (pview : S → List LhPayment)
-    (hc : PaymentWritesContract inst wview pview) (s : S) (tab spe64 : U64) (spe : Usize)
+    (hc : BuilderPaymentWritesMatchSpec inst wview pview) (s : S) (tab spe64 : U64) (spe : Usize)
     (hslots : spe64.val = p.SLOTS_PER_EPOCH) (hspe : spe.val = p.SLOTS_PER_EPOCH)
     (hlen : (pview s).length = 2 * p.SLOTS_PER_EPOCH) (pslice : Slice LhPayment)
     (hps : pslice.val = pview s) :
     per_epoch_processing.list_writes.apply_builder_pending_payments inst s tab spe64 spe 6#u64
       10#u64 ⦃ res => match res with
         | (.Ok _, s') => Spec.process_builder_pending_payments p tab.val
-            (absState (wview s, pview s)) = .ok (absState (wview s', pview s'))
+            (builderStateToSpec (wview s, pview s)) = .ok (builderStateToSpec (wview s', pview s'))
         | (.Err _, _) => ∃ e, Spec.process_builder_pending_payments p tab.val
-            (absState (wview s, pview s)) = .error e ⦄ := by
+            (builderStateToSpec (wview s, pview s)) = .error e ⦄ := by
   obtain ⟨r, hr, habs⟩ := spec_imp_exists (builder_pending_payments_equiv p tab spe64 spe hslots
     hspe pslice (wview s) (by rw [hps, hlen]))
   apply spec_mono (apply_builder_pending_payments_spec inst wview pview hc s tab spe64 spe
@@ -196,7 +196,7 @@ theorem apply_builder_pending_payments_equiv [EpochProofs.Spec.CurrentPreset] {S
     | Arith e =>
       simp only [hr, ok.injEq] at h
       subst h
-      exact ⟨absArithError e, by rw [← habs]; rfl⟩
+      exact ⟨arithErrorToSpec e, by rw [← habs]; rfl⟩
     | State e => exact h.elim
 
 
@@ -209,7 +209,7 @@ def EbPost {S E : Type} (view : S → Spec.BeaconState) (spec : Spec.SpecM Spec.
   | (.Err _, _) => ∃ e, spec = .error e
 
 theorem update_effective_balances_at_loop_spec [EpochProofs.Spec.CurrentPreset] {S E : Type} (inst : LhEffectiveBalanceWrites S E)
-    (view : S → Spec.BeaconState) (hc : EffectiveBalanceContract inst view)
+    (view : S → Spec.BeaconState) (hc : EffectiveBalanceWritesMatchSpec inst view)
     (idx : Slice Usize) (t0 : Spec.BeaconState) (s : S) (j : Usize) (hj : j.val ≤ idx.length)
     (hp : ((idx.val.map (·.val)).take j.val).foldlM Spec.ebUpdateAt t0 = .ok (view s)) :
     per_epoch_processing.list_writes.update_effective_balances_at_loop inst s idx j
@@ -263,11 +263,12 @@ theorem update_effective_balances_at_loop_spec [EpochProofs.Spec.CurrentPreset] 
   · exact ⟨hj, hp⟩
 
 /-- The effective balance updates after the consolidations are the model step
-`(consolidationIndices s).foldlM ebUpdateAt`, under the trusted `EffectiveBalanceContract`, when
-the Rust indices are the model indices. Lighthouse collects them from a `BTreeSet`, which iterates
-in ascending order without duplicates, as `consolidationIndices` sorts and removes duplicates. -/
+`(validatorsInConsolidations s).foldlM ebUpdateAt`, under the trusted
+`EffectiveBalanceWritesMatchSpec`, when the Rust indices are the model indices. Lighthouse collects
+them from a `BTreeSet`, which iterates in ascending order without duplicates, as
+`validatorsInConsolidations` sorts and removes duplicates. -/
 theorem update_effective_balances_at_spec [EpochProofs.Spec.CurrentPreset] {S E : Type} (inst : LhEffectiveBalanceWrites S E)
-    (view : S → Spec.BeaconState) (hc : EffectiveBalanceContract inst view) (s : S)
+    (view : S → Spec.BeaconState) (hc : EffectiveBalanceWritesMatchSpec inst view) (s : S)
     (idx : Slice Usize) (named : List Nat) (hidx : idx.val.map (·.val) = named) :
     per_epoch_processing.list_writes.update_effective_balances_at inst s idx
       ⦃ res => EbPost view (named.foldlM Spec.ebUpdateAt (view s)) res ⦄ := by
@@ -280,18 +281,19 @@ theorem update_effective_balances_at_spec [EpochProofs.Spec.CurrentPreset] {S E 
 /-! ## The PTC window shift -/
 
 theorem push_items_loop_spec {W T E α : Type} (inst : LhWindowWrites W T E)
-    (view committed : W → List α) (absItem : T → α) (itemOk : T → Prop) (N : Nat)
-    (hc : WindowContract inst view committed absItem itemOk N) (items : Slice T) (base : List α)
+    (view committed : W → List α) (itemToSpec : T → α) (itemOk : T → Prop) (N : Nat)
+    (hc : PtcWindowWritesMatchSpec inst view committed itemToSpec itemOk N) (items : Slice T)
+    (base : List α)
     (w : W) (i : Usize) (hi : i.val ≤ items.length)
-    (hv : view w = base ++ (items.val.take i.val).map absItem)
+    (hv : view w = base ++ (items.val.take i.val).map itemToSpec)
     (hok : ∀ t ∈ items.val, itemOk t) (hN : base.length + items.length ≤ N) :
     per_epoch_processing.list_writes.push_items_loop inst w items i ⦃ res =>
-      ∃ w', res = (.Ok (), w') ∧ view w' = base ++ items.val.map absItem ⦄ := by
+      ∃ w', res = (.Ok (), w') ∧ view w' = base ++ items.val.map itemToSpec ⦄ := by
   unfold per_epoch_processing.list_writes.push_items_loop
   apply loop.spec_decr_nat
     (measure := fun (x : W × Usize) => items.length - x.2.val)
     (inv := fun (x : W × Usize) => x.2.val ≤ items.length ∧
-      view x.1 = base ++ (items.val.take x.2.val).map absItem)
+      view x.1 = base ++ (items.val.take x.2.val).map itemToSpec)
   · rintro ⟨w1, i1⟩ ⟨hi1, hv1⟩
     dsimp only at hi1 hv1 ⊢
     unfold per_epoch_processing.list_writes.push_items_loop.body
@@ -331,19 +333,19 @@ theorem push_items_loop_spec {W T E α : Type} (inst : LhWindowWrites W T E)
 and returns `Ok`, when the window has its full length, the items replace exactly the dropped
 entries and each item fits an entry. -/
 theorem shift_window_spec {W T E α : Type} (inst : LhWindowWrites W T E)
-    (view committed : W → List α) (absItem : T → α) (itemOk : T → Prop) (N : Nat)
-    (hc : WindowContract inst view committed absItem itemOk N) (w : W) (shift : Usize)
+    (view committed : W → List α) (itemToSpec : T → α) (itemOk : T → Prop) (N : Nat)
+    (hc : PtcWindowWritesMatchSpec inst view committed itemToSpec itemOk N) (w : W) (shift : Usize)
     (items : Slice T) (hlen : (view w).length = N) (hshift : shift.val ≤ N)
     (hitems : items.length = shift.val) (hok : ∀ t ∈ items.val, itemOk t) :
     per_epoch_processing.list_writes.shift_window inst w shift items ⦃ res =>
       ∃ w', res = (.Ok (), w') ∧
-        committed w' = (view w).drop shift.val ++ items.val.map absItem ⦄ := by
+        committed w' = (view w).drop shift.val ++ items.val.map itemToSpec ⦄ := by
   unfold per_epoch_processing.list_writes.shift_window
   obtain ⟨w1, hpop, hv1⟩ := hc.pop_front w shift (by omega)
   rw [hpop]
   simp only [bind_tc_ok, uncurry_apply_pair]
   unfold per_epoch_processing.list_writes.push_items
-  apply spec_bind (push_items_loop_spec inst view committed absItem itemOk N hc items
+  apply spec_bind (push_items_loop_spec inst view committed itemToSpec itemOk N hc items
     ((view w).drop shift.val) w1 0#usize (by simp) (by simp [hv1]) hok
     (by simp only [List.length_drop]; omega))
   rintro ⟨r, w2⟩ ⟨w2x, hx, hv2⟩
@@ -370,25 +372,26 @@ spec window. Each PTC has `PTC_SIZE` entries (`compute_ptc_length`), so each one
 theorem ptc_window_writes_spec {W E : Type} (p : Spec.Preset) (o : Spec.Oracle)
     (inst : LhWindowWrites W (alloc.vec.Vec Usize) E) (view committed : W → List (List Nat))
     (N : Nat)
-    (hc : WindowContract inst view committed natsOf (fun t => (natsOf t).length = p.PTC_SIZE) N)
+    (hc : PtcWindowWritesMatchSpec inst view committed indexValues (fun t =>
+    (indexValues t).length = p.PTC_SIZE) N)
     (state state' : Spec.BeaconState) (hspec : Spec.process_ptc_window p o state = .ok state')
     (v : alloc.vec.Vec (alloc.vec.Vec Usize))
-    (hv : state'.ptc_window = state.ptc_window.drop p.SLOTS_PER_EPOCH ++ ptcsOf v) (w : W)
+    (hv : state'.ptc_window = state.ptc_window.drop p.SLOTS_PER_EPOCH ++ ptcIndexValues v) (w : W)
     (hw : view w = state.ptc_window) (hN : state.ptc_window.length = N) (shift : Usize)
     (hshift : shift.val = p.SLOTS_PER_EPOCH) :
     per_epoch_processing.list_writes.shift_window inst w shift (alloc.vec.Vec.deref v) ⦃ res =>
       ∃ w', res = (.Ok (), w') ∧ committed w' = state'.ptc_window ⦄ := by
   obtain ⟨epoch, start, ptcs, -, -, -, hle, hw', hplen, hk⟩ :=
     spec_ptc_window_get p o state state' hspec
-  have hpt : ptcsOf v = ptcs := by
+  have hpt : ptcIndexValues v = ptcs := by
     rw [hw'] at hv
     exact (List.append_cancel_left hv).symm
   have hvlen : v.val.length = p.SLOTS_PER_EPOCH := by
     have := congrArg List.length hpt
-    simp only [ptcsOf, List.length_map] at this
+    simp only [ptcIndexValues, List.length_map] at this
     omega
-  apply spec_mono (shift_window_spec inst view committed natsOf
-    (fun t => (natsOf t).length = p.PTC_SIZE) N hc w shift (alloc.vec.Vec.deref v)
+  apply spec_mono (shift_window_spec inst view committed indexValues
+    (fun t => (indexValues t).length = p.PTC_SIZE) N hc w shift (alloc.vec.Vec.deref v)
     (by rw [hw, hN]) (by omega) (by simp [alloc.vec.Vec.deref, Slice.length, hvlen, hshift])
     ?_)
   · rintro ⟨r, w3⟩ ⟨w4, hx, hc'⟩
@@ -396,16 +399,17 @@ theorem ptc_window_writes_spec {W E : Type} (p : Spec.Preset) (o : Spec.Oracle)
     obtain ⟨rfl, rfl⟩ := hx
     refine ⟨_, rfl, ?_⟩
     rw [hc', hw, hv, hshift]
-    simp only [alloc.vec.Vec.deref, Slice.from_val, ptcsOf]
+    simp only [alloc.vec.Vec.deref, Slice.from_val, ptcIndexValues]
   · intro t ht
     simp only [alloc.vec.Vec.deref, Slice.from_val] at ht
     obtain ⟨k, hk', rfl⟩ := List.getElem_of_mem ht
     have hkp : k < p.SLOTS_PER_EPOCH := by omega
     obtain ⟨hk2, hcp⟩ := hk k hkp
     have := Spec.compute_ptc_length p o state _ _ hcp
-    have hk3 : (ptcsOf v)[k]'(by simp [ptcsOf]; omega) = ptcs[k] := by simp only [hpt]
-    simp only [ptcsOf, List.getElem_map] at hk3
-    show (natsOf v.val[k]).length = p.PTC_SIZE
+    have hk3 : (ptcIndexValues v)[k]'(by simp [ptcIndexValues]; omega) =
+      ptcs[k] := by simp only [hpt]
+    simp only [ptcIndexValues, List.getElem_map] at hk3
+    show (indexValues v.val[k]).length = p.PTC_SIZE
     rw [hk3, this]
 
 end EpochProofs

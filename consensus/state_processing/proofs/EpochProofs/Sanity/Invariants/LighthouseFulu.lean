@@ -402,7 +402,7 @@ theorem epochRestFulu_nf [CurrentPreset] [CurrentPreset.Valid] [CurrentFuluConfi
     (htab4 : get_total_active_balance P (s1.withRowsChurn churn rows) =
       .ok total_active_balance)
     (hbal4 : ∀ r ∈ rows, r.balance < 2 ^ 64)
-    (hnamed : ∀ i ∈ consolidationIndices s1, i < s1.validators.length) :
+    (hnamed : ∀ i ∈ validatorsInConsolidations s1, i < s1.validators.length) :
     SameResultOrBothFail (epochRestFulu o (s1.withRowsChurn churn rows))
       (tailNFG o (epochRest2Fulu o) s1 (s1.withRowsChurn churn rows)
         (fuluChurnTotal total_active_balance) current_epoch) := by
@@ -481,7 +481,7 @@ theorem process_epoch_lh_full_fulu_genesis [CurrentPreset] [CurrentPreset.Valid]
     (Nat.le_of_eq hfin0) (by decide) hactivation hexit1 hvalid htab4
     (pass_balances_lt _ _ s1 _ x
       (fun i h => Nat.lt_trans (hbalance i h) (by decide)) hx)
-    (consolidationIndices_lt s1 hcons)
+    (validatorsInConsolidations_lt s1 hcons)
 
 /-- On mainnet, at a state that the Fulu `process_epoch` starts from, the Lighthouse Fulu epoch
 with the deposits and effective balance updates in the single pass gives the same `ok` results
@@ -534,7 +534,7 @@ theorem process_epoch_lh_full_fulu_sameResultOrBothFail' [CurrentPreset] [Curren
   have hvalid1 : ∀ v ∈ s1.validators, v.exit_epoch = FAR_FUTURE_EPOCH →
       v.withdrawable_epoch = FAR_FUTURE_EPOCH := by
     rw [hs1]; exact hvalid
-  have hnamed : ∀ i ∈ consolidationIndices s1, i < s1.validators.length := by
+  have hnamed : ∀ i ∈ validatorsInConsolidations s1, i < s1.validators.length := by
     intro i hi
     have hi' : i ∈ (s1.pending_consolidations.flatMap fun c =>
         [c.source_index, c.target_index]).eraseDups :=

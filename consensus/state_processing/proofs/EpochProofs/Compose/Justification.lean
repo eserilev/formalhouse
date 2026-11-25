@@ -8,9 +8,9 @@ import EpochProofs.Sanity.Invariants.LighthouseOrder
 `justification` is `process_justification_and_finalization` of `altair.rs` with
 `weigh_justification_and_finalization.rs`: the reads of the epochs, the bits and the balances,
 the translated `weigh_justification`, and the checkpoint and bit writes. The reads and the writes
-are untranslated code (`JustificationGlue`), each with the fact that links it to the spec
-(`JustificationLinks`). `justification_spec` shows that it returns the state of the model
-`lhJustificationAndFinalization`.
+are untranslated code (`UntranslatedJustification`), each with the fact that links it to the spec
+(`UntranslatedJustificationFacts`). `translatedJustification_matches_model` shows that it returns
+the state of the model `lhJustificationAndFinalization`.
 -/
 
 namespace EpochProofs.Spec
@@ -66,117 +66,135 @@ open per_epoch_processing.justification
 
 /-- The untranslated Rust of `process_justification_and_finalization`: the genesis check, the
 reads passed to `weigh_justification`, and the writes of its outcome. -/
-structure JustificationGlue (σ : Type) where
+structure UntranslatedJustification (RustState : Type) where
   /-- `state.current_epoch() <= genesis_epoch + 1`. -/
-  early : σ → Bool
-  currentEpoch : σ → U64
-  previousJustifiedEpoch : σ → U64
-  currentJustifiedEpoch : σ → U64
-  bits : σ → JustificationBits
+  skippedNearGenesis : RustState → Bool
+  currentEpoch : RustState → U64
+  previousJustifiedEpoch : RustState → U64
+  currentJustifiedEpoch : RustState → U64
+  bits : RustState → JustificationBits
   /-- The total active balance and the two target balances of the caches. -/
-  totalActiveBalance : σ → U64
-  previousTargetBalance : σ → U64
-  currentTargetBalance : σ → U64
+  totalActiveBalance : RustState → U64
+  previousTargetBalance : RustState → U64
+  currentTargetBalance : RustState → U64
   /-- The checkpoint and bit writes. `none`: a block root read fails. -/
-  write : σ → JustificationOutcome → Option σ
+  writeOutcome : RustState → JustificationOutcome → Option RustState
 
-variable {σ : Type}
+variable {RustState : Type}
 
 /-- `process_justification_and_finalization`, as the call of the translated
-`weigh_justification` joined by the untranslated code `G`. `none`: the Rust returns an error. -/
-def justification (G : JustificationGlue σ) (st : σ) : Result (Option σ) :=
-  if G.early st then ok (some st) else do
-  let r ← weigh_justification (G.currentEpoch st) (G.previousJustifiedEpoch st)
-    (G.currentJustifiedEpoch st) (G.bits st) (G.totalActiveBalance st)
-    (G.previousTargetBalance st) (G.currentTargetBalance st)
+`weigh_justification` joined by the untranslated code. `none`: the Rust returns an error. -/
+def translatedJustification (code : UntranslatedJustification RustState)
+    (rustState : RustState) : Result (Option RustState) :=
+  if code.skippedNearGenesis rustState then ok (some rustState) else do
+  let r ← weigh_justification (code.currentEpoch rustState) (code.previousJustifiedEpoch rustState)
+    (code.currentJustifiedEpoch rustState) (code.bits rustState) (code.totalActiveBalance rustState)
+    (code.previousTargetBalance rustState) (code.currentTargetBalance rustState)
   match r with
   | .Err _ => ok none
-  | .Ok outcome => ok (G.write st outcome)
+  | .Ok outcome => ok (code.writeOutcome rustState outcome)
 
 variable [Spec.CurrentPreset]
 
-/-- The trusted facts about the untranslated code `G` at the state `st`: each read is the spec
+/-- The trusted facts about the untranslated code at the state `rustState`: each read is the spec
 value, and the writes are the spec writes (`lhJustificationWrite`). The balances are cache reads. -/
-structure JustificationLinks (G : JustificationGlue σ) (view : σ → Spec.BeaconState) (st : σ) :
+structure UntranslatedJustificationFacts (code : UntranslatedJustification RustState)
+    (rustStateToSpec : RustState → Spec.BeaconState) (rustState : RustState) :
     Prop where
   /-- The genesis check is the spec check. -/
-  early : ∀ cur, Spec.get_current_epoch Spec.P (view st) = .ok cur →
-    G.early st = decide (cur ≤ Spec.GENESIS_EPOCH + 1)
-  currentEpoch : ∀ cur, Spec.get_current_epoch Spec.P (view st) = .ok cur →
-    (G.currentEpoch st).val = cur
+  skippedNearGenesis : ∀ current, Spec.get_current_epoch Spec.P (rustStateToSpec rustState) =
+    .ok current →
+    code.skippedNearGenesis rustState = decide (current ≤ Spec.GENESIS_EPOCH + 1)
+  currentEpoch : ∀ current, Spec.get_current_epoch Spec.P (rustStateToSpec rustState) = .ok current
+    →
+    (code.currentEpoch rustState).val = current
   previousJustifiedEpoch :
-    (G.previousJustifiedEpoch st).val = (view st).previous_justified_checkpoint.epoch
+    (code.previousJustifiedEpoch rustState).val =
+      (rustStateToSpec rustState).previous_justified_checkpoint.epoch
   currentJustifiedEpoch :
-    (G.currentJustifiedEpoch st).val = (view st).current_justified_checkpoint.epoch
+    (code.currentJustifiedEpoch rustState).val =
+      (rustStateToSpec rustState).current_justified_checkpoint.epoch
   /-- The justification bits. -/
-  bits : ∀ b0 b1 b2 b3, (view st).justification_bits = [b0, b1, b2, b3] →
-    absJustificationBits (G.bits st) = ⟨b0, b1, b2, b3⟩
+  bits : ∀ b0 b1 b2 b3, (rustStateToSpec rustState).justification_bits = [b0, b1, b2, b3] →
+    justificationBitsToSpec (code.bits rustState) = ⟨b0, b1, b2, b3⟩
   /-- The three balances are cache reads. -/
-  totalActiveBalance : ∀ tab, Spec.get_total_active_balance Spec.P (view st) = .ok tab →
-    (G.totalActiveBalance st).val = tab
-  previousTargetBalance : ∀ e i x, Spec.get_previous_epoch Spec.P (view st) = .ok e →
-    Spec.get_unslashed_participating_indices Spec.P (view st) Spec.TIMELY_TARGET_FLAG_INDEX e =
-      .ok i → Spec.get_total_balance Spec.P (view st) i = .ok x →
-    (G.previousTargetBalance st).val = x
-  currentTargetBalance : ∀ e i x, Spec.get_current_epoch Spec.P (view st) = .ok e →
-    Spec.get_unslashed_participating_indices Spec.P (view st) Spec.TIMELY_TARGET_FLAG_INDEX e =
-      .ok i → Spec.get_total_balance Spec.P (view st) i = .ok x →
-    (G.currentTargetBalance st).val = x
+  totalActiveBalance : ∀ total, Spec.get_total_active_balance Spec.P (rustStateToSpec rustState) =
+    .ok total →
+    (code.totalActiveBalance rustState).val = total
+  previousTargetBalance : ∀ e i x, Spec.get_previous_epoch Spec.P (rustStateToSpec rustState) =
+    .ok e →
+    Spec.get_unslashed_participating_indices Spec.P (rustStateToSpec rustState)
+      Spec.TIMELY_TARGET_FLAG_INDEX e =
+      .ok i → Spec.get_total_balance Spec.P (rustStateToSpec rustState) i = .ok x →
+    (code.previousTargetBalance rustState).val = x
+  currentTargetBalance : ∀ e i x, Spec.get_current_epoch Spec.P (rustStateToSpec rustState) = .ok e
+    →
+    Spec.get_unslashed_participating_indices Spec.P (rustStateToSpec rustState)
+      Spec.TIMELY_TARGET_FLAG_INDEX e =
+      .ok i → Spec.get_total_balance Spec.P (rustStateToSpec rustState) i = .ok x →
+    (code.currentTargetBalance rustState).val = x
   /-- The writes are the spec writes. -/
-  write : ∀ prev cur outcome t, Spec.get_previous_epoch Spec.P (view st) = .ok prev →
-    Spec.get_current_epoch Spec.P (view st) = .ok cur →
-    Spec.lhJustificationWrite Spec.P (view st) prev cur (absJustificationOutcome outcome) =
+  writeOutcome : ∀ prev current outcome t,
+    Spec.get_previous_epoch Spec.P (rustStateToSpec rustState) = .ok prev →
+    Spec.get_current_epoch Spec.P (rustStateToSpec rustState) = .ok current →
+    Spec.lhJustificationWrite Spec.P (rustStateToSpec rustState) prev current
+      (justificationOutcomeToSpec outcome) =
       .ok t →
-    ∃ t', G.write st outcome = some t' ∧ view t' = t
+    ∃ t', code.writeOutcome rustState outcome = some t' ∧ rustStateToSpec t' = t
 
 /-- The composed justification returns the state of the model: when
 `lhJustificationAndFinalization` returns `ok`, the Rust returns `Ok` with that state. -/
-theorem justification_spec (G : JustificationGlue σ) (view : σ → Spec.BeaconState) (st : σ)
-    (hL : JustificationLinks G view st)
-    (hlen : (view st).justification_bits.length = Spec.JUSTIFICATION_BITS_LENGTH)
-    (s1 : Spec.BeaconState) (h : Spec.lhJustificationAndFinalization Spec.P (view st) = .ok s1) :
-    ∃ st1, justification G st = ok (some st1) ∧ view st1 = s1 := by
+theorem translatedJustification_matches_model (code : UntranslatedJustification RustState)
+    (rustStateToSpec : RustState → Spec.BeaconState) (rustState : RustState)
+    (hL : UntranslatedJustificationFacts code rustStateToSpec rustState)
+    (hlen : (rustStateToSpec rustState).justification_bits.length = Spec.JUSTIFICATION_BITS_LENGTH)
+    (s1 : Spec.BeaconState) (h : Spec.lhJustificationAndFinalization Spec.P
+    (rustStateToSpec rustState) = .ok s1) :
+    ∃ rustState1, translatedJustification code rustState = ok (some rustState1) ∧
+      rustStateToSpec rustState1 = s1 := by
   obtain ⟨b0, b1, b2, b3, hbits⟩ : ∃ b0 b1 b2 b3,
-      (view st).justification_bits = [b0, b1, b2, b3] := by
-    match hb : (view st).justification_bits, hlen with
+      (rustStateToSpec rustState).justification_bits = [b0, b1, b2, b3] := by
+    match hb : (rustStateToSpec rustState).justification_bits, hlen with
     | [b0, b1, b2, b3], _ => exact ⟨b0, b1, b2, b3, rfl⟩
   unfold Spec.lhJustificationAndFinalization at h
   rw [if_neg (by rw [hlen]; exact not_not.mpr rfl)] at h
-  obtain ⟨cur, hcur, h⟩ := Spec.specM_bind_ok h
-  unfold justification
-  rw [hL.early cur hcur]
-  by_cases hc : cur ≤ Spec.GENESIS_EPOCH + 1
+  obtain ⟨current, hcur, h⟩ := Spec.specM_bind_ok h
+  unfold translatedJustification
+  rw [hL.skippedNearGenesis current hcur]
+  by_cases hc : current ≤ Spec.GENESIS_EPOCH + 1
   · rw [if_pos hc] at h
     cases h
-    exact ⟨st, by simp [hc], rfl⟩
+    exact ⟨rustState, by simp [hc], rfl⟩
   rw [if_neg hc] at h
   simp only [hc, decide_false, Bool.false_eq_true, if_false]
   obtain ⟨prev, hprev, h⟩ := Spec.specM_bind_ok h
   obtain ⟨pi, hpi, h⟩ := Spec.specM_bind_ok h
-  obtain ⟨cur', hcur', h⟩ := Spec.specM_bind_ok h
+  obtain ⟨current', hcur', h⟩ := Spec.specM_bind_ok h
   rw [hcur] at hcur'
   cases hcur'
   obtain ⟨ci, hci, h⟩ := Spec.specM_bind_ok h
-  obtain ⟨tab, htab, h⟩ := Spec.specM_bind_ok h
+  obtain ⟨total, htab, h⟩ := Spec.specM_bind_ok h
   obtain ⟨px, hpx, h⟩ := Spec.specM_bind_ok h
   obtain ⟨cx, hcx, h⟩ := Spec.specM_bind_ok h
   rw [Spec.lhWeighJustificationAndFinalization_eq, hprev, hcur, hbits] at h
   simp only [Spec.listGet, Bind.bind, Except.bind, Pure.pure, Except.pure,
     List.getElem?_cons_succ, List.getElem?_cons_zero] at h
-  obtain ⟨r, hr, habs⟩ := spec_imp_exists (weigh_justification_equiv (G.currentEpoch st)
-    (G.previousJustifiedEpoch st) (G.currentJustifiedEpoch st) (G.bits st)
-    (G.totalActiveBalance st) (G.previousTargetBalance st) (G.currentTargetBalance st))
-  rw [hL.currentEpoch cur hcur, hL.previousJustifiedEpoch, hL.currentJustifiedEpoch,
-    hL.bits b0 b1 b2 b3 hbits, hL.totalActiveBalance tab htab,
+  obtain ⟨r, hr, habs⟩ := spec_imp_exists (weigh_justification_equiv (code.currentEpoch rustState)
+    (code.previousJustifiedEpoch rustState) (code.currentJustifiedEpoch rustState)
+      (code.bits rustState)
+    (code.totalActiveBalance rustState) (code.previousTargetBalance rustState)
+      (code.currentTargetBalance rustState))
+  rw [hL.currentEpoch current hcur, hL.previousJustifiedEpoch, hL.currentJustifiedEpoch,
+    hL.bits b0 b1 b2 b3 hbits, hL.totalActiveBalance total htab,
     hL.previousTargetBalance prev pi px hprev hpi hpx,
-    hL.currentTargetBalance cur ci cx hcur hci hcx] at habs
+    hL.currentTargetBalance current ci cx hcur hci hcx] at habs
   rw [hr]
   simp only [bind_tc_ok]
   rw [← habs] at h
   cases r with
   | Err e => cases h
   | Ok out =>
-    obtain ⟨t', hw, hv⟩ := hL.write prev cur out s1 hprev hcur h
+    obtain ⟨t', hw, hv⟩ := hL.writeOutcome prev current out s1 hprev hcur h
     exact ⟨t', by simp only [hw], hv⟩
 
 end EpochProofs.Compose

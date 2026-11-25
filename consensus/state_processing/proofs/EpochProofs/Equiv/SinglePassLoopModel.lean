@@ -8,8 +8,8 @@ import EpochProofs.Sanity.Invariants.LighthouseTailModel
 `process_epoch_lh_full` (`LighthouseTailModel.lean`) runs one `passM` of `lhRowStepFull` over
 `rowsOf s`, from the exit churn of `s`. `single_pass_rows_model` shows that the Rust loop
 `single_pass_rows` computes exactly this `passM`, when the `RegistryRows` value holds `rowsOf s`
-and satisfies the trusted `RowsContract`. So the loop in the model is no longer a hand-written
-assumption about `single_pass.rs`: only `RowsContract` is.
+and satisfies the trusted `ValidatorRowsMatchSpec`. So the loop in the model is no longer a
+hand-written assumption about `single_pass.rs`: only `ValidatorRowsMatchSpec` is.
 -/
 
 namespace EpochProofs
@@ -27,16 +27,16 @@ theorem single_pass_rows_model [EpochProofs.Spec.CurrentPreset] {R E : Type} (in
     (total_active_balance : Spec.Gwei) (topups : List Spec.Gwei)
     (named : List Spec.ValidatorIndex) (view : R → List Spec.Row) (rows : R)
     (hview : view rows = Spec.rowsOf s)
-    (hc : RowsContract inst Spec.P view
+    (hc : ValidatorRowsMatchSpec inst Spec.P view
       (modelRowInputs total_active_balance topups named))
     (c : StepContext) (ctx : Spec.LhStepContext) (hcm : ContextMatches Spec.P c ctx)
     (downward upward : Spec.Uint64) (hdownward : c.downward_threshold.val = downward)
     (hupward : c.upward_threshold.val = upward)
     (k : per_epoch_processing.registry_update.RegistryConstants)
-    (hk : ConstantsMatch Spec.P k) (ch : ExitChurn)
-    (hch : absChurn ch = (s.earliest_exit_epoch, s.exit_balance_to_consume)) :
+    (hk : RegistryConstantsMatchGloas Spec.P k) (ch : ExitChurn)
+    (hch : exitChurnToSpec ch = (s.earliest_exit_epoch, s.exit_balance_to_consume)) :
     per_epoch_processing.registry_rows.single_pass_rows inst rows ch c k ⦃ res =>
-      LoopPost view (Spec.passM (fun churn r => Spec.lhRowStepFull Spec.P ctx
+      LoopResultMatchesModel view (Spec.passM (fun churn r => Spec.lhRowStepFull Spec.P ctx
           downward upward
           ⟨Spec.lhBaseReward total_active_balance r, topups.getD r.index 0,
             decide (r.index ∈ named)⟩ churn r)

@@ -9,7 +9,7 @@ import Mathlib.Data.List.Basic
 
 `onboard_spec` relates `onboard` in `upgrade/builder_onboarding.rs` to the spec
 `onboard_builders_from_pending_deposits`, on a state with an empty builder registry. It assumes
-`OnboardingContract`. If the spec succeeds, Lighthouse returns the kept deposits and the new
+`OnboardingMatchesSpec`. If the spec succeeds, Lighthouse returns the kept deposits and the new
 builders of the spec result. If the spec fails, Lighthouse fails.
 
 Lighthouse differs from the spec in three ways, and the proof covers each one:
@@ -137,16 +137,17 @@ theorem onboard_step_builder (p : Spec.Preset) (o : Spec.Oracle) (pubkeys : List
 
 /-- The loop invariant. -/
 structure OnbInv {S D B : Type} (p : Spec.Preset) (o : Spec.Oracle)
-    (pubkeys : List Spec.BLSPubkey) (absDep : D → Spec.PendingDeposit) (absB : B → Spec.Builder)
+    (pubkeys : List Spec.BLSPubkey) (depositToSpec : D → Spec.PendingDeposit)
+    (builderToSpec : B → Spec.Builder)
     (table : S → List (Spec.BLSPubkey × Nat)) (pending : S → List Spec.BLSPubkey)
     (state0 : Spec.BeaconState) (deps : Slice D)
     (y : S × alloc.vec.Vec D × alloc.vec.Vec B × Usize) : Prop where
   le : y.2.2.2.val ≤ deps.val.length
-  fold : specFold p o pubkeys state0 ((deps.val.take y.2.2.2.val).map absDep) =
-    .ok ({ state0 with builders := y.2.2.1.val.map absB }, y.2.1.val.map absDep)
-  table : TableOk (table y.1) (y.2.2.1.val.map absB)
-  pending : PendingOk p o pubkeys (pending y.1) (y.2.1.val.map absDep)
-  far : ∀ b ∈ y.2.2.1.val, (absB b).withdrawable_epoch = Spec.FAR_FUTURE_EPOCH
+  fold : specFold p o pubkeys state0 ((deps.val.take y.2.2.2.val).map depositToSpec) =
+    .ok ({ state0 with builders := y.2.2.1.val.map builderToSpec }, y.2.1.val.map depositToSpec)
+  table : TableOk (table y.1) (y.2.2.1.val.map builderToSpec)
+  pending : PendingOk p o pubkeys (pending y.1) (y.2.1.val.map depositToSpec)
+  far : ∀ b ∈ y.2.2.1.val, (builderToSpec b).withdrawable_epoch = Spec.FAR_FUTURE_EPOCH
   count : y.2.2.1.val.length ≤ y.2.2.2.val
   kept : y.2.1.val.length ≤ y.2.2.2.val
 
@@ -165,31 +166,36 @@ theorem cast_u64_usize (hus : Usize.max = U64.max) (x : Usize) :
 
 /-- What the loop returns, in spec terms. -/
 def OnbPost {S D B E : Type} (p : Spec.Preset) (o : Spec.Oracle)
-    (pubkeys : List Spec.BLSPubkey) (absDep : D → Spec.PendingDeposit) (absB : B → Spec.Builder)
+    (pubkeys : List Spec.BLSPubkey) (depositToSpec : D → Spec.PendingDeposit)
+    (builderToSpec : B → Spec.Builder)
     (state0 : Spec.BeaconState) (deps : Slice D)
     (r : S × alloc.vec.Vec D × alloc.vec.Vec B ×
       Option (upgrade.builder_onboarding.OnboardingError E)) : Prop :=
-  (r.2.2.2 = none → specFold p o pubkeys state0 (deps.val.map absDep) =
-    .ok ({ state0 with builders := r.2.2.1.val.map absB }, r.2.1.val.map absDep)) ∧
-  (∀ err, r.2.2.2 = some err → ∃ e, specFold p o pubkeys state0 (deps.val.map absDep) = .error e)
+  (r.2.2.2 = none → specFold p o pubkeys state0 (deps.val.map depositToSpec) =
+    .ok ({ state0 with builders := r.2.2.1.val.map builderToSpec }, r.2.1.val.map depositToSpec)) ∧
+  (∀ err, r.2.2.2 = some err → ∃ e, specFold p o pubkeys state0 (deps.val.map depositToSpec) =
+    .error e)
 
 theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
     (cloneInst : core.clone.Clone D) (p : Spec.Preset) (o : Spec.Oracle)
-    (pubkeys : List Spec.BLSPubkey) (absDep : D → Spec.PendingDeposit) (absB : B → Spec.Builder)
+    (pubkeys : List Spec.BLSPubkey) (depositToSpec : D → Spec.PendingDeposit)
+    (builderToSpec : B → Spec.Builder)
     (table : S → List (Spec.BLSPubkey × Nat)) (pending : S → List Spec.BLSPubkey)
-    (hc : OnboardingContract inst cloneInst p o pubkeys absDep absB table pending)
+    (hc : OnboardingMatchesSpec inst cloneInst p o pubkeys depositToSpec builderToSpec table
+    pending)
     (hus : Usize.max = U64.max) (state0 : Spec.BeaconState) (ce : Nat)
     (hce : Spec.get_current_epoch p state0 = .ok ce) (hlt : ce < Spec.FAR_FUTURE_EPOCH)
     (hspe : p.SLOTS_PER_EPOCH ≠ 0) (deps : Slice D)
     (s : S) (pend : alloc.vec.Vec D) (bs : alloc.vec.Vec B) (i : Usize)
-    (hinv : OnbInv p o pubkeys absDep absB table pending state0 deps (s, pend, bs, i)) :
+    (hinv : OnbInv p o pubkeys depositToSpec builderToSpec table pending state0 deps (s, pend, bs,
+    i)) :
     upgrade.builder_onboarding.onboard_loop cloneInst inst s deps pend bs i ⦃ r =>
-      OnbPost p o pubkeys absDep absB state0 deps r ⦄ := by
+      OnbPost p o pubkeys depositToSpec builderToSpec state0 deps r ⦄ := by
   unfold upgrade.builder_onboarding.onboard_loop
   apply loop.spec_decr_nat
     (measure := fun (y : S × alloc.vec.Vec D × alloc.vec.Vec B × Usize) =>
       deps.val.length - y.2.2.2.val)
-    (inv := OnbInv p o pubkeys absDep absB table pending state0 deps)
+    (inv := OnbInv p o pubkeys depositToSpec builderToSpec table pending state0 deps)
   · rintro ⟨s1, pend1, bs1, i1⟩ hinv1
     obtain ⟨hle, hfold, htab, hpen, hfar, hcount, hkept⟩ := hinv1
     dsimp only at hle hfold htab hpen hfar hcount hkept ⊢
@@ -203,16 +209,16 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
       generalize hd : deps.val[i1.val] = d
       have hmax : i1.val < Usize.max := by have := deps.property; scalar_tac
       have hsat := usize_saturating_add_one i1 hmax
-      have htake : (deps.val.take (i1.val + 1)).map absDep =
-          (deps.val.take i1.val).map absDep ++ [absDep d] := by
+      have htake : (deps.val.take (i1.val + 1)).map depositToSpec =
+          (deps.val.take i1.val).map depositToSpec ++ [depositToSpec d] := by
         rw [List.take_succ_eq_append_getElem hil, List.map_append, hd]; rfl
-      have hstep := specFold_snoc p o pubkeys state0 _ (absDep d) _ hfold
+      have hstep := specFold_snoc p o pubkeys state0 _ (depositToSpec d) _ hfold
       rw [← htake] at hstep
       have hpendlen : pend1.val.length < Usize.max := by omega
       obtain ⟨s2, hiv, ht2, hp2⟩ := hc.is_validator s1 d
       rw [hiv, bind_tc_ok]
       simp only [uncurry_apply_pair]
-      by_cases hpk : (absDep d).pubkey ∈ pubkeys
+      by_cases hpk : (depositToSpec d).pubkey ∈ pubkeys
       · -- A validator pubkey: the deposit stays.
         simp only [hpk, decide_true, if_true]
         obtain ⟨d', hcl, hd'⟩ := hc.clone d
@@ -233,30 +239,31 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
         · (try dsimp only)
           try rw [hsat]
           intro pk hpk'
-          have hne : (absDep d).pubkey ≠ pk := fun h => hpk' (h ▸ hpk)
+          have hne : (depositToSpec d).pubkey ≠ pk := fun h => hpk' (h ▸ hpk)
           rw [hp2, hpen pk hpk', hpend2, List.map_append, List.map_singleton, hd',
             is_pending_validator_append]
           simp [hne]
       · simp only [hpk, decide_false, Bool.false_eq_true, if_false]
         obtain ⟨ro, hbi, hro⟩ := hc.builder_index s2 d
         rw [hbi, bind_tc_ok]
-        have hL := htab (absDep d).pubkey
+        have hL := htab (depositToSpec d).pubkey
         rw [← ht2] at hL
         cases ro with
         | none =>
           -- A pubkey with no builder.
-          have hnot : (absDep d).pubkey ∉ (bs1.val.map absB).map (·.pubkey) := by
+          have hnot : (depositToSpec d).pubkey ∉ (bs1.val.map builderToSpec).map (·.pubkey) := by
             intro hin
             rw [hL, if_pos hin] at hro
             simp at hro
           dsimp only
           rw [hc.is_builder_credential s2 d, bind_tc_ok]
-          by_cases hcred : Spec.is_builder_withdrawal_credential (absDep d).withdrawal_credentials
+          by_cases hcred : Spec.is_builder_withdrawal_credential
+            (depositToSpec d).withdrawal_credentials
           · simp only [hcred, if_true]
             rw [hc.is_pending_validator s2 d, bind_tc_ok]
-            have hpv := hpen (absDep d).pubkey hpk
+            have hpv := hpen (depositToSpec d).pubkey hpk
             rw [← hp2] at hpv
-            by_cases hpending : (absDep d).pubkey ∈ pending s2
+            by_cases hpending : (depositToSpec d).pubkey ∈ pending s2
             · -- A valid kept deposit has the pubkey: the deposit stays.
               simp only [hpending, decide_true, if_true]
               obtain ⟨d', hcl, hd'⟩ := hc.clone d
@@ -267,7 +274,8 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
               simp only [lift, bind_tc_ok, spec_ok]
               try dsimp only
               rw [hsat]
-              have hspv : Spec.is_pending_validator p o (pend1.val.map absDep) (absDep d).pubkey =
+              have hspv : Spec.is_pending_validator p o (pend1.val.map depositToSpec)
+                (depositToSpec d).pubkey =
                   true := hpv.mp hpending
               refine ⟨⟨by (try dsimp only); (try rw [hsat]); omega, ?_, ?_, ?_, hfar, by (try dsimp only); (try rw [hsat]); omega, by (try dsimp only); (try rw [hsat]); rw [hpend2]; simp; omega⟩, by (try dsimp only); (try rw [hsat]); omega⟩
               · (try dsimp only)
@@ -282,18 +290,21 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
                 intro pk hpk'
                 rw [hp2, hpen pk hpk', hpend2, List.map_append, List.map_singleton, hd',
                   is_pending_validator_append]
-                by_cases hpe : (absDep d).pubkey = pk
+                by_cases hpe : (depositToSpec d).pubkey = pk
                 · subst hpe; simp [hspv]
                 · simp [hpe]
-            · have hspv : Spec.is_pending_validator p o (pend1.val.map absDep) (absDep d).pubkey =
+            · have hspv : Spec.is_pending_validator p o (pend1.val.map depositToSpec)
+                (depositToSpec d).pubkey =
                   false := by
-                cases h : Spec.is_pending_validator p o (pend1.val.map absDep) (absDep d).pubkey
+                cases h : Spec.is_pending_validator p o (pend1.val.map depositToSpec)
+                  (depositToSpec d).pubkey
                 · rfl
                 · exact absurd (hpv.mpr h) hpending
               simp only [hpending, decide_false, Bool.false_eq_true, if_false]
               rw [hc.is_valid_signature s2 d, bind_tc_ok]
-              by_cases hsig : Spec.is_valid_deposit_signature p o (absDep d).pubkey
-                  (absDep d).withdrawal_credentials (absDep d).amount (absDep d).signature = true
+              by_cases hsig : Spec.is_valid_deposit_signature p o (depositToSpec d).pubkey
+                  (depositToSpec d).withdrawal_credentials (depositToSpec d).amount
+                    (depositToSpec d).signature = true
               · -- A new builder.
                 simp only [hsig, if_true]
                 obtain ⟨b, hnb, hb⟩ := hc.new_builder s2 d
@@ -310,19 +321,22 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
                 simp only [lift, bind_tc_ok, spec_ok]
                 try dsimp only
                 rw [hsat]
-                have hstate : { state0 with builders := bs1.val.map absB } =
-                    { state0 with builders := bs1.val.map absB } := rfl
-                have hall : ∀ b' ∈ ({ state0 with builders := bs1.val.map absB } : Spec.BeaconState).builders,
+                have hstate : { state0 with builders := bs1.val.map builderToSpec } =
+                    { state0 with builders := bs1.val.map builderToSpec } := rfl
+                have hall : ∀ b' ∈
+                    ({ state0 with
+                        builders := bs1.val.map builderToSpec } : Spec.BeaconState).builders,
                     b'.withdrawable_epoch = Spec.FAR_FUTURE_EPOCH := by
                   intro b' hb'
                   obtain ⟨x, hx, rfl⟩ := List.mem_map.mp hb'
                   exact hfar x hx
                 have hadd := Spec.add_builder_to_registry_far p
-                  { state0 with builders := bs1.val.map absB } ce
+                  { state0 with builders := bs1.val.map builderToSpec } ce
                   (by rw [get_current_epoch_builders]; exact hce) hlt hall hspe
-                  (absDep d).pubkey Spec.PAYLOAD_BUILDER_VERSION
-                  (Spec.withdrawalAddress (absDep d).withdrawal_credentials) (absDep d).amount
-                  (absDep d).slot
+                  (depositToSpec d).pubkey Spec.PAYLOAD_BUILDER_VERSION
+                  (Spec.withdrawalAddress (depositToSpec d).withdrawal_credentials)
+                    (depositToSpec d).amount
+                  (depositToSpec d).slot
                 refine ⟨⟨by (try dsimp only); (try rw [hsat]); omega, ?_, ?_, ?_, ?_, ?_, by (try dsimp only); (try rw [hsat]); omega⟩, by (try dsimp only); (try rw [hsat]); omega⟩
                 · (try dsimp only)
                   try rw [hsat]
@@ -335,10 +349,10 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
                 · (try dsimp only)
                   try rw [hsat]
                   rw [ht3, hbs2, List.map_append, List.map_singleton, hb, hcast]
-                  have : (alloc.vec.Vec.len bs1).val = (bs1.val.map absB).length := by simp
+                  have : (alloc.vec.Vec.len bs1).val = (bs1.val.map builderToSpec).length := by simp
                   rw [this]
-                  exact tableOk_add (table s2) (bs1.val.map absB) (by rw [ht2]; exact htab)
-                    (onboardedBuilder p (absDep d)) hnot
+                  exact tableOk_add (table s2) (bs1.val.map builderToSpec) (by rw [ht2]; exact htab)
+                    (onboardedBuilder p (depositToSpec d)) hnot
                 · (try dsimp only)
                   try rw [hsat]
                   intro pk hpk'
@@ -358,8 +372,9 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
                 simp only [lift, bind_tc_ok, spec_ok]
                 try dsimp only
                 rw [hsat]
-                have hsig' : Spec.is_valid_deposit_signature p o (absDep d).pubkey
-                    (absDep d).withdrawal_credentials (absDep d).amount (absDep d).signature =
+                have hsig' : Spec.is_valid_deposit_signature p o (depositToSpec d).pubkey
+                    (depositToSpec d).withdrawal_credentials (depositToSpec d).amount
+                      (depositToSpec d).signature =
                     false := by simpa using hsig
                 refine ⟨⟨by (try dsimp only); (try rw [hsat]); omega, ?_, ?_, ?_, hfar, by (try dsimp only); (try rw [hsat]); omega, by (try dsimp only); (try rw [hsat]); omega⟩, by (try dsimp only); (try rw [hsat]); omega⟩
                 · (try dsimp only)
@@ -374,7 +389,7 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
                   intro pk hpk'; rw [hp2]; exact hpen pk hpk'
           · -- Not a builder credential: the deposit stays.
             have hcred' : Spec.is_builder_withdrawal_credential
-                (absDep d).withdrawal_credentials = false := by simpa using hcred
+                (depositToSpec d).withdrawal_credentials = false := by simpa using hcred
             simp only [hcred', Bool.false_eq_true, if_false]
             obtain ⟨d', hcl, hd'⟩ := hc.clone d
             rw [hcl, bind_tc_ok]
@@ -384,7 +399,7 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
             rw [hc.is_valid_signature s2 d, bind_tc_ok]
             have hrest : ∀ s3, table s3 = table s1 →
                 (∀ pk, pk ∉ pubkeys → (pk ∈ pending s3 ↔
-                  Spec.is_pending_validator p o (pend2.val.map absDep) pk = true)) →
+                  Spec.is_pending_validator p o (pend2.val.map depositToSpec) pk = true)) →
                 (do
                   let i2 ← lift (core.num.Usize.saturating_add i1 1#usize)
                   ok (ControlFlow.cont (s3, pend2, bs1, i2)) :
@@ -392,9 +407,10 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
                     (S × alloc.vec.Vec D × alloc.vec.Vec B ×
                       Option (upgrade.builder_onboarding.OnboardingError E)))) ⦃ r =>
                   match r with
-                  | ControlFlow.done y => OnbPost p o pubkeys absDep absB state0 deps y
+                  | ControlFlow.done y =>
+                      OnbPost p o pubkeys depositToSpec builderToSpec state0 deps y
                   | ControlFlow.cont x' =>
-                    OnbInv p o pubkeys absDep absB table pending state0 deps x' ∧
+                    OnbInv p o pubkeys depositToSpec builderToSpec table pending state0 deps x' ∧
                       deps.val.length - x'.2.2.2.val < deps.val.length - i1.val ⦄ := by
               intro s3 ht3 hp3
               simp only [lift, bind_tc_ok, spec_ok]
@@ -408,8 +424,9 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
               · (try dsimp only)
                 try rw [hsat]
                 rw [ht3]; exact htab
-            by_cases hsig : Spec.is_valid_deposit_signature p o (absDep d).pubkey
-                (absDep d).withdrawal_credentials (absDep d).amount (absDep d).signature = true
+            by_cases hsig : Spec.is_valid_deposit_signature p o (depositToSpec d).pubkey
+                (depositToSpec d).withdrawal_credentials (depositToSpec d).amount
+                  (depositToSpec d).signature = true
             · simp only [hsig, if_true]
               obtain ⟨s3, hap, ht3, hp3⟩ := hc.add_pending_validator s2 d
               rw [hap, bind_tc_ok]
@@ -417,11 +434,12 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
               intro pk hpk'
               rw [hp3, hpend2, List.map_append, List.map_singleton, hd',
                 is_pending_validator_append, List.mem_cons, hp2, hpen pk hpk']
-              by_cases hpe : (absDep d).pubkey = pk
+              by_cases hpe : (depositToSpec d).pubkey = pk
               · subst hpe; simp [hsig]
               · simp [hpe, Ne.symm hpe]
-            · have hsig' : Spec.is_valid_deposit_signature p o (absDep d).pubkey
-                  (absDep d).withdrawal_credentials (absDep d).amount (absDep d).signature =
+            · have hsig' : Spec.is_valid_deposit_signature p o (depositToSpec d).pubkey
+                  (depositToSpec d).withdrawal_credentials (depositToSpec d).amount
+                    (depositToSpec d).signature =
                   false := by simpa using hsig
               simp only [hsig', Bool.false_eq_true, if_false, bind_tc_ok]
               refine spec_mono (hrest s2 ht2 ?_) (fun r h => by cases r <;> exact h)
@@ -431,7 +449,7 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
               simp [hsig']
         | some idx =>
           -- A builder with the pubkey: top up.
-          have hin : (absDep d).pubkey ∈ (bs1.val.map absB).map (·.pubkey) := by
+          have hin : (depositToSpec d).pubkey ∈ (bs1.val.map builderToSpec).map (·.pubkey) := by
             by_contra hin
             rw [hL, if_neg hin] at hro
             simp at hro
@@ -453,25 +471,30 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
           rw [hget]
           dsimp only
           have hspec := onboard_step_builder p o pubkeys
-            ({ state0 with builders := bs1.val.map absB }, pend1.val.map absDep) (absDep d) hpk hin
+            ({ state0 with builders := bs1.val.map builderToSpec }, pend1.val.map depositToSpec)
+              (depositToSpec d) hpk hin
           rw [hspec] at hstep
-          have hsidx : ((bs1.val.map absB).map (·.pubkey)).idxOf (absDep d).pubkey = idx.val :=
+          have hsidx : ((bs1.val.map builderToSpec).map (·.pubkey)).idxOf (depositToSpec d).pubkey =
+            idx.val :=
             hro.symm
-          have hgetb : Spec.listGet (bs1.val.map absB) idx.val = .ok (absB bs1.val[idx.val]) := by
+          have hgetb : Spec.listGet (bs1.val.map builderToSpec) idx.val =
+            .ok (builderToSpec bs1.val[idx.val]) := by
             simp [Spec.listGet, List.getElem?_eq_getElem hidxlt, Pure.pure, Except.pure]
           obtain ⟨htu_ok, htu_err⟩ := hc.top_up s2 bs1.val[idx.val] d
-          cases hadd : Spec.uint64Add (absB bs1.val[idx.val]).balance (absDep d).amount with
+          cases hadd : Spec.uint64Add (builderToSpec bs1.val[idx.val]).balance
+            (depositToSpec d).amount with
           | error e =>
             obtain ⟨e', b', htu⟩ := htu_err e hadd
             rw [htu, bind_tc_ok]
             simp only [uncurry_apply_pair, spec_ok]
             refine ⟨fun h => by simp at h, fun err _ => ⟨e, ?_⟩⟩
             have herr : specFold p o pubkeys state0
-                ((deps.val.take (i1.val + 1)).map absDep) = .error e := by
+                ((deps.val.take (i1.val + 1)).map depositToSpec) = .error e := by
               rw [hstep]
               simp only [hsidx, hgetb, hadd, Bind.bind, Except.bind]
-            have hsplit : deps.val.map absDep = (deps.val.take (i1.val + 1)).map absDep ++
-                (deps.val.drop (i1.val + 1)).map absDep := by
+            have hsplit : deps.val.map depositToSpec =
+              (deps.val.take (i1.val + 1)).map depositToSpec ++
+                (deps.val.drop (i1.val + 1)).map depositToSpec := by
               rw [← List.map_append, List.take_append_drop]
             rw [hsplit]
             exact specFold_error_append p o pubkeys state0 _ _ e herr
@@ -495,7 +518,7 @@ theorem onboard_loop_spec {S D B E : Type} (inst : LhOnboarding S D B E)
                 List.length_map, hidxlt, if_true, Pure.pure, Except.pure, List.map_set, hb']
             · (try dsimp only)
               rw [hset, List.map_set]
-              exact tableOk_set _ _ (by rw [ht2]; exact htab) idx.val (absB b')
+              exact tableOk_set _ _ (by rw [ht2]; exact htab) idx.val (builderToSpec b')
                 (by simpa using hidxlt) (by rw [hb']; simp)
             · (try dsimp only)
               intro pk hpk'
@@ -520,46 +543,51 @@ succeeds, Lighthouse returns the kept deposits and the builders of the spec resu
 spec fails, Lighthouse fails. -/
 theorem onboard_spec {S D B E : Type} (inst : LhOnboarding S D B E)
     (cloneInst : core.clone.Clone D) (p : Spec.Preset) (o : Spec.Oracle)
-    (pubkeys : List Spec.BLSPubkey) (absDep : D → Spec.PendingDeposit) (absB : B → Spec.Builder)
+    (pubkeys : List Spec.BLSPubkey) (depositToSpec : D → Spec.PendingDeposit)
+    (builderToSpec : B → Spec.Builder)
     (table : S → List (Spec.BLSPubkey × Nat)) (pending : S → List Spec.BLSPubkey)
-    (hc : OnboardingContract inst cloneInst p o pubkeys absDep absB table pending)
+    (hc : OnboardingMatchesSpec inst cloneInst p o pubkeys depositToSpec builderToSpec table
+    pending)
     (hus : Usize.max = U64.max) (state0 : Spec.BeaconState) (ce : Nat)
     (hce : Spec.get_current_epoch p state0 = .ok ce) (hlt : ce < Spec.FAR_FUTURE_EPOCH)
     (hspe : p.SLOTS_PER_EPOCH ≠ 0) (deps : Slice D) (s : S)
-    (hdeps : deps.val.map absDep = state0.pending_deposits)
+    (hdeps : deps.val.map depositToSpec = state0.pending_deposits)
     (hpk : pubkeys = state0.validators.map (·.pubkey)) (hb0 : state0.builders = [])
     (ht0 : table s = []) (hp0 : pending s = []) :
     upgrade.builder_onboarding.onboard cloneInst inst s deps ⦃ r =>
       (∀ t, Spec.onboard_builders_from_pending_deposits p o state0 = .ok t →
         ∃ kept bs, r.1 = .Ok (kept, bs) ∧
-          t = { state0 with builders := bs.val.map absB, pending_deposits := kept.val.map absDep }) ∧
+          t = { state0 with
+            builders := bs.val.map builderToSpec, pending_deposits := kept.val.map depositToSpec }) ∧
       (∀ e, Spec.onboard_builders_from_pending_deposits p o state0 = .error e →
         ∃ e', r.1 = .Err e') ⦄ := by
   have hspecdef : Spec.onboard_builders_from_pending_deposits p o state0 = (do
-      let r ← specFold p o pubkeys state0 (deps.val.map absDep)
+      let r ← specFold p o pubkeys state0 (deps.val.map depositToSpec)
       pure { r.1 with pending_deposits := r.2 }) := by
     unfold Spec.onboard_builders_from_pending_deposits specFold
     rw [hdeps, hpk]
   rw [hspecdef]
   unfold upgrade.builder_onboarding.onboard
   apply exists_imp_spec
-  have hinit : OnbInv p o pubkeys absDep absB table pending state0 deps
+  have hinit : OnbInv p o pubkeys depositToSpec builderToSpec table pending state0 deps
       (s, alloc.vec.Vec.new D, alloc.vec.Vec.new B, 0#usize) := by
     refine ⟨by simp, ?_, ?_, ?_, by simp [alloc.vec.Vec.new], by simp [alloc.vec.Vec.new],
       by simp [alloc.vec.Vec.new]⟩
-    · have : ({ state0 with builders := ([] : List B).map absB } : Spec.BeaconState) = state0 := by
+    · have : ({ state0 with builders := ([] : List B).map builderToSpec } : Spec.BeaconState) =
+        state0 := by
         rw [List.map_nil, ← hb0]
       have hv0 : (alloc.vec.Vec.new B).val = [] := rfl
       have hd0 : (alloc.vec.Vec.new D).val = [] := rfl
-      show specFold p o pubkeys state0 ((deps.val.take 0).map absDep) =
-        .ok ({ state0 with builders := (alloc.vec.Vec.new B).val.map absB },
-          (alloc.vec.Vec.new D).val.map absDep)
+      show specFold p o pubkeys state0 ((deps.val.take 0).map depositToSpec) =
+        .ok ({ state0 with builders := (alloc.vec.Vec.new B).val.map builderToSpec },
+          (alloc.vec.Vec.new D).val.map depositToSpec)
       rw [hv0, hd0, this]
       rfl
     · intro pk; simp [ht0, alloc.vec.Vec.new]
     · intro pk _; simp [hp0, alloc.vec.Vec.new, Spec.is_pending_validator]
-  obtain ⟨res, hres, hpost⟩ := spec_imp_exists (onboard_loop_spec inst cloneInst p o pubkeys absDep
-    absB table pending hc hus state0 ce hce hlt hspe deps s _ _ 0#usize hinit)
+  obtain ⟨res, hres, hpost⟩ := spec_imp_exists
+    (onboard_loop_spec inst cloneInst p o pubkeys depositToSpec
+    builderToSpec table pending hc hus state0 ce hce hlt hspe deps s _ _ 0#usize hinit)
   rw [hres]
   obtain ⟨s', kept, bs, err⟩ := res
   simp only [uncurry_apply_pair, bind_tc_ok]

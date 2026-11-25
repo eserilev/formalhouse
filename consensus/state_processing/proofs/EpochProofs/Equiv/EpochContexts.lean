@@ -56,8 +56,8 @@ theorem hysteresis_thresholds_ok_mainnet [EpochProofs.Spec.CurrentPreset] :
   rw [Spec.tot_hysteresis] at hq
   cases r with
   | Ok v =>
-    simp only [absResult, Except.ok.injEq, Prod.mk.injEq] at hq
+    simp only [resultToSpec, Except.ok.injEq, Prod.mk.injEq] at hq
     exact ⟨v.1, v.2, hr, hq.1, hq.2⟩
-  | Err e => simp [absResult] at hq
+  | Err e => simp [resultToSpec] at hq
 
 end EpochProofs

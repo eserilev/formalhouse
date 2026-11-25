@@ -14,7 +14,8 @@ namespace EpochProofs
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 theorem compute_balance_weighted_selection_empty {H B : Type} (inst : ShuffleHashInst H)
-    (ebi : EBInst B) (balances : B) (indices : Slice Usize) (seed : Array U8 32#usize)
+    (ebi : EffectiveBalanceSource B) (balances : B) (indices : Slice Usize)
+    (seed : Array U8 32#usize)
     (size : Usize) (shuffle : Bool) (R : U8) (maxeb : U64) (hn : indices.val.length = 0) :
     types.state.balance_weighted_selection.compute_balance_weighted_selection inst ebi balances
       indices seed size shuffle R maxeb =

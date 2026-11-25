@@ -159,27 +159,32 @@ section Glue
 
 variable [Spec.CurrentPreset]
 
-/-- The Rust state `st` holds the epoch input `s`, and the untranslated Rust does what the proofs
-assume (`Compose.EpochLinks`). One field is a fact about the state: `SinglePassLinks.depositRoom`,
-the new validators of the epoch fit under the `2^40` limit of Lighthouse's validator list. -/
-structure GloasUntranslatedRustFacts {σ E : Type} (G : Compose.EpochGlue σ E) (o : Spec.Oracle)
-    (view : σ → Spec.BeaconState) (st : σ) (s : Spec.BeaconState) : Prop where
+/-- The Rust state `rustState` holds the epoch input `s`, and the untranslated Rust does what the
+proofs assume (`Compose.UntranslatedEpochFacts`). One field is a fact about the state:
+`UntranslatedSinglePassFacts.depositRoom`, the new validators of the epoch fit under the `2^40`
+limit of Lighthouse's validator list. -/
+structure GloasUntranslatedRustFacts {RustState RustError : Type}
+    (rustCode : Compose.UntranslatedEpochCode RustState RustError) (oracle : Spec.Oracle)
+    (rustStateToSpec : RustState → Spec.BeaconState) (rustState : RustState)
+    (s : Spec.BeaconState) : Prop where
   /-- The Rust state holds the epoch input. -/
-  viewEq : view st = s
+  holdsInput : rustStateToSpec rustState = s
   /-- What the proofs assume about the untranslated Rust. -/
-  glue : Compose.EpochLinks G o view st
+  untranslatedCode : Compose.UntranslatedEpochFacts rustCode oracle rustStateToSpec rustState
 
 variable [Spec.CurrentFuluConfig]
 
-/-- The Rust state `st` holds the epoch input `s`, and the untranslated Rust of the Fulu epoch does
-what the proofs assume (`Compose.EpochLinksFulu`). As for Gloas, `SinglePassLinks.depositRoom` is a
-fact about the state. -/
-structure FuluUntranslatedRustFacts {σ E : Type} (G : Compose.EpochGlueFulu σ E) (o : Spec.Oracle)
-    (view : σ → Spec.BeaconState) (st : σ) (s : Spec.BeaconState) : Prop where
+/-- The Rust state `rustState` holds the epoch input `s`, and the untranslated Rust of the Fulu
+epoch does what the proofs assume (`Compose.UntranslatedEpochFactsFulu`). As for Gloas,
+`UntranslatedSinglePassFacts.depositRoom` is a fact about the state. -/
+structure FuluUntranslatedRustFacts {RustState RustError : Type}
+    (rustCode : Compose.UntranslatedEpochCodeFulu RustState RustError) (oracle : Spec.Oracle)
+    (rustStateToSpec : RustState → Spec.BeaconState) (rustState : RustState)
+    (s : Spec.BeaconState) : Prop where
   /-- The Rust state holds the epoch input. -/
-  viewEq : view st = s
+  holdsInput : rustStateToSpec rustState = s
   /-- What the proofs assume about the untranslated Rust. -/
-  glue : Compose.EpochLinksFulu G o view st
+  untranslatedCode : Compose.UntranslatedEpochFactsFulu rustCode oracle rustStateToSpec rustState
 
 end Glue
 

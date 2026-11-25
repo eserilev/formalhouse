@@ -23,7 +23,7 @@ def lhAfterPassG [CurrentPreset] (o : Oracle) (K : BeaconState → SpecM BeaconS
   let s4 ← (List.range' s2.validators.length (s3.validators.length - s2.validators.length)).foldlM
     ebUpdateAt s3
   let s5 ← process_pending_consolidations P s4
-  let s6 ← (consolidationIndices s).foldlM ebUpdateAt s5
+  let s6 ← (validatorsInConsolidations s).foldlM ebUpdateAt s5
   K s6
 
 /-- The steps of `lhFullTail` after the pass. -/
@@ -46,7 +46,7 @@ theorem lhFullTailG_eq [CurrentPreset] (o : Oracle) (rt : Gwei → Gwei)
       fun plan => passM (fun churn r => lhRowStepFull P
           (lhContextOf s1 (rt total_active_balance) current_epoch rctx per) downward upward
           ⟨lhBaseReward total_active_balance r, plan.topups.getD r.index 0,
-            decide (r.index ∈ consolidationIndices s1)⟩ churn r)
+            decide (r.index ∈ validatorsInConsolidations s1)⟩ churn r)
         (s1.earliest_exit_epoch, s1.exit_balance_to_consume) (rowsOf s1) >>=
       lhAfterPassG o (fin total_active_balance) s1 plan) := by
   unfold lhFullTailG
@@ -116,7 +116,7 @@ def nfAfterG [CurrentPreset] (o : Oracle) (K : BeaconState → SpecM BeaconState
   let handled := handledOfDec s1 dec
   let pubkeys := s1.validators.map (·.pubkey)
   let n := s1.validators.length
-  let named := consolidationIndices s1
+  let named := validatorsInConsolidations s1
   let t1 ← addSums S4 sums
   let t2 ← ((List.range n).filter (fun i => !decide (i ∈ named))).foldlM ebUpdateAt t1
   let t3 ← process_eth1_data_reset P t2
@@ -182,7 +182,7 @@ def lhRest [CurrentPreset] (o : Oracle) (K : BeaconState → SpecM BeaconState) 
   let s4 ← (List.range' s2.validators.length (s3.validators.length - s2.validators.length)).foldlM
     ebUpdateAt s3
   let s5 ← process_pending_consolidations P s4
-  let s6 ← (consolidationIndices s).foldlM ebUpdateAt s5
+  let s6 ← (validatorsInConsolidations s).foldlM ebUpdateAt s5
   K s6
 
 /-- The steps of `nfAfterG` from the state after the updates of the validators that are not
@@ -198,7 +198,7 @@ def nfRest [CurrentPreset] (o : Oracle) (K : BeaconState → SpecM BeaconState) 
     (apply_pending_deposit P o) t4
   let t6 ← (List.range' n (t5.validators.length - n)).foldlM ebUpdateAt t5
   let t7 ← process_pending_consolidations P t6
-  let t8 ← (consolidationIndices s1).foldlM ebUpdateAt t7
+  let t8 ← (validatorsInConsolidations s1).foldlM ebUpdateAt t7
   K t8
 
 /-- With a state of `n` validators, the two rests are equal. -/
@@ -247,12 +247,12 @@ theorem lhAfter_pass2_nf [CurrentPreset] (o : Oracle) (K : BeaconState → SpecM
     (dec : Nat × Gwei × List Bool) (sums : List Gwei) (x : (Epoch × Gwei) × List Row)
     (hkey : x.2.map rowKey = (rowsOf s1).map rowKey) :
     SameResultOrBothFail (passM (fun _ r => (fun r' => ((), r')) <$> lhRowStep2 downward upward
-        (sums.getD r.index 0) (decide (r.index ∈ consolidationIndices s1)) r) () x.2 >>=
+        (sums.getD r.index 0) (decide (r.index ∈ validatorsInConsolidations s1)) r) () x.2 >>=
         fun y => lhAfterPassG o K s1 (planOf s1 dec sums) (x.1, y.2))
       (nfAfterG o K s1 (s1.withRowsChurn x.1 x.2) dec sums) := by
   let S4 := s1.withRowsChurn x.1 x.2
   let td := fun i => sums.getD i 0
-  let nm := fun i => decide (i ∈ consolidationIndices s1)
+  let nm := fun i => decide (i ∈ validatorsInConsolidations s1)
   have hrowsS4 : rowsOf S4 = x.2 := rowsOf_withRows s1 x.2 hkey
   have hokS4 : ListLengthsMatch S4 := rowsOk_withRows_of_key s1 x.2 hrows hkey
   have hlen2 : x.2.length = s1.validators.length := by
@@ -325,7 +325,7 @@ theorem lhFullTailG_nf [CurrentPreset] (o : Oracle) (rt : Gwei → Gwei)
   refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun sums _ => ?_)
   refine SameResultOrBothFail.trans (SameResultOrBothFail.bind (lhRowStepFull_split ctx downward upward
     (lhBaseReward total_active_balance) (fun i => sums.getD i 0)
-    (fun i => decide (i ∈ consolidationIndices s1)) c0 (rowsOf s1))
+    (fun i => decide (i ∈ validatorsInConsolidations s1)) c0 (rowsOf s1))
     (fun _ _ => SameResultOrBothFail.refl _)) ?_
   simp only [bind_assoc, pure_bind]
   refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun x hx => ?_)

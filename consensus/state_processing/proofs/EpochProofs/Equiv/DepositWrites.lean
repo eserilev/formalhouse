@@ -9,7 +9,7 @@ import EpochProofs.Equiv.Justification
 
 `apply_deposit_writes` in `deposit_writes.rs` writes the deposit queue, applies the new validator
 deposits and runs the effective balance update of each new validator. `apply_deposit_writes_spec`
-shows that, under the trusted `DepositWritesContract`, it returns `Ok` exactly when
+shows that, under the trusted `DepositWritesMatchSpec`, it returns `Ok` exactly when
 `depositWritesSpec` returns `ok`, with the same state. `depositWritesSpec` is the part of the
 Lighthouse model from the deposit queue write to the effective balance updates of the new
 validators (`lhNewValidators` after `lhQueueWrite`, `LighthouseOrder.lean`).
@@ -150,7 +150,8 @@ theorem slice_get_some {α : Type} (s : Slice α) (i : Usize) (h : i.val < s.val
   rw [List.getElem?_eq_getElem h]
 
 /-- What a deposit write returns, in spec terms. -/
-def TailPost {S E A : Type} (view : S → Spec.BeaconState) (spec : Spec.SpecM Spec.BeaconState) :
+def DepositWritesResultMatchesModel {S E A : Type} (view : S → Spec.BeaconState)
+    (spec : Spec.SpecM Spec.BeaconState) :
     core.result.Result A (LhDWError E) × S → Prop
   | (.Ok _, s') => spec = .ok (view s')
   | (.Err _, _) => ∃ e, spec = .error e
@@ -177,12 +178,14 @@ theorem foldlM_error_of_take {α β : Type} (f : β → α → Spec.SpecM β) (b
   rfl
 
 theorem update_effective_balances_loop_spec [EpochProofs.Spec.CurrentPreset] {S D E : Type} (inst : LhDepositWrites S D E)
-    (o : Spec.Oracle) (view : S → Spec.BeaconState) (absDep : D → Spec.PendingDeposit)
-    (postOf : S → List Spec.PendingDeposit) (hc : DepositWritesContract inst o view absDep postOf)
+    (o : Spec.Oracle) (view : S → Spec.BeaconState) (depositToSpec : D → Spec.PendingDeposit)
+    (postOf : S → List Spec.PendingDeposit)
+    (hc : DepositWritesMatchSpec inst o view depositToSpec postOf)
     (idx : Slice Usize) (t0 : Spec.BeaconState) (s : S) (j : Usize) (hj : j.val ≤ idx.length)
     (hp : ((idx.val.map (·.val)).take j.val).foldlM Spec.ebUpdateAt t0 = .ok (view s)) :
     per_epoch_processing.deposit_writes.update_effective_balances_loop inst s idx j
-      ⦃ res => TailPost view ((idx.val.map (·.val)).foldlM Spec.ebUpdateAt t0) res ⦄ := by
+      ⦃ res => DepositWritesResultMatchesModel view
+        ((idx.val.map (·.val)).foldlM Spec.ebUpdateAt t0) res ⦄ := by
   unfold per_epoch_processing.deposit_writes.update_effective_balances_loop
   apply loop.spec_decr_nat
     (measure := fun (x : S × Usize) => idx.length - x.2.val)
@@ -248,23 +251,24 @@ theorem range'_snoc (L0 n : Nat) (h : L0 ≤ n) :
   omega
 
 theorem apply_new_validator_deposits_loop_spec [EpochProofs.Spec.CurrentPreset] {S D E : Type} (inst : LhDepositWrites S D E)
-    (o : Spec.Oracle) (view : S → Spec.BeaconState) (absDep : D → Spec.PendingDeposit)
-    (postOf : S → List Spec.PendingDeposit) (hc : DepositWritesContract inst o view absDep postOf)
+    (o : Spec.Oracle) (view : S → Spec.BeaconState) (depositToSpec : D → Spec.PendingDeposit)
+    (postOf : S → List Spec.PendingDeposit)
+    (hc : DepositWritesMatchSpec inst o view depositToSpec postOf)
     (deps : Slice D) (t0 : Spec.BeaconState) (L0 : Nat) (s : S) (added : alloc.vec.Vec Usize)
     (i : Usize) (hi : i.val ≤ deps.length)
-    (hp : ((deps.val.map absDep).take i.val).foldlM (Spec.apply_pending_deposit
+    (hp : ((deps.val.map depositToSpec).take i.val).foldlM (Spec.apply_pending_deposit
       Spec.P o) t0 = .ok (view s))
     (hL : L0 ≤ (view s).validators.length)
     (ha : added.val.map (·.val) = List.range' L0 ((view s).validators.length - L0))
     (hal : added.length ≤ i.val) (hroom : L0 + deps.length ≤ 2 ^ 40) :
     per_epoch_processing.deposit_writes.apply_new_validator_deposits_loop inst s deps added i
-      ⦃ res => NewPost view L0 ((deps.val.map absDep).foldlM (Spec.apply_pending_deposit
+      ⦃ res => NewPost view L0 ((deps.val.map depositToSpec).foldlM (Spec.apply_pending_deposit
         Spec.P o) t0) res ⦄ := by
   unfold per_epoch_processing.deposit_writes.apply_new_validator_deposits_loop
   apply loop.spec_decr_nat
     (measure := fun (x : S × alloc.vec.Vec Usize × Usize) => deps.length - x.2.2.val)
     (inv := fun (x : S × alloc.vec.Vec Usize × Usize) => x.2.2.val ≤ deps.length ∧
-      ((deps.val.map absDep).take x.2.2.val).foldlM (Spec.apply_pending_deposit
+      ((deps.val.map depositToSpec).take x.2.2.val).foldlM (Spec.apply_pending_deposit
         Spec.P o) t0 = .ok (view x.1) ∧
       L0 ≤ (view x.1).validators.length ∧
       x.2.1.val.map (·.val) = List.range' L0 ((view x.1).validators.length - L0) ∧
@@ -277,26 +281,26 @@ theorem apply_new_validator_deposits_loop_spec [EpochProofs.Spec.CurrentPreset] 
     · rename_i hlt
       have hil : i1.val < deps.length := by scalar_tac
       have hiv : i1.val < deps.val.length := hil
-      have hml : i1.val < (deps.val.map absDep).length := by simpa using hiv
+      have hml : i1.val < (deps.val.map depositToSpec).length := by simpa using hiv
       have hmax : i1.val < Usize.max := by scalar_tac
       rw [slice_get_some deps i1 hiv, bind_tc_ok]
       dsimp only
       set x := deps.val[i1.val] with hxv
-      have hget : (deps.val.map absDep)[i1.val] = absDep x := by simp [hxv]
+      have hget : (deps.val.map depositToSpec)[i1.val] = depositToSpec x := by simp [hxv]
       have hstep := Spec.foldlM_take_succ' (Spec.apply_pending_deposit Spec.P o)
         t0 (view s1) _ _ hml hp1
       rw [hget] at hstep
       obtain ⟨r, s2, hvi, hv2, hr⟩ := hc.validator_index s1 x
       rw [hvi]
       simp only [bind_tc_ok, uncurry_apply_pair]
-      by_cases hm : (absDep x).pubkey ∈ (view s1).validators.map (·.pubkey)
+      by_cases hm : (depositToSpec x).pubkey ∈ (view s1).validators.map (·.pubkey)
       · rw [if_pos hm] at hr
         obtain ⟨index, rfl, hidx⟩ : ∃ index : Usize, r = some index ∧
-            index.val = ((view s1).validators.map (·.pubkey)).idxOf (absDep x).pubkey := by
+            index.val = ((view s1).validators.map (·.pubkey)).idxOf (depositToSpec x).pubkey := by
           cases r with
           | none => simp at hr
           | some index => exact ⟨index, rfl, by simpa using hr⟩
-        have hsp := Spec.apply_pending_deposit_known o (view s1) (absDep x) hm
+        have hsp := Spec.apply_pending_deposit_known o (view s1) (depositToSpec x) hm
         dsimp only
         rcases hc.balance s2 index with ⟨b, hb, hbv⟩ | ⟨hnone, e, hb⟩
         · rw [hb]
@@ -305,7 +309,8 @@ theorem apply_new_validator_deposits_loop_spec [EpochProofs.Spec.CurrentPreset] 
           rw [ham, bind_tc_ok]
           rw [hv2] at hbv
           have hlg : Spec.listGet (view s1).balances
-              (((view s1).validators.map (·.pubkey)).idxOf (absDep x).pubkey) = .ok b.val := by
+              (((view s1).validators.map (·.pubkey)).idxOf (depositToSpec x).pubkey) =
+                .ok b.val := by
             rw [← hidx]; simp [Spec.listGet, hbv, pure, Except.pure]
           rcases safe_add_cases b a with ⟨c, hcadd, huc⟩ | ⟨hcadd, huc⟩
           · rw [hcadd]
@@ -319,14 +324,14 @@ theorem apply_new_validator_deposits_loop_spec [EpochProofs.Spec.CurrentPreset] 
             rw [hadd]
             simp only [bind_tc_ok, spec_ok]
             have hset : Spec.listSet (view s1).balances
-                (((view s1).validators.map (·.pubkey)).idxOf (absDep x).pubkey) c.val =
+                (((view s1).validators.map (·.pubkey)).idxOf (depositToSpec x).pubkey) c.val =
                 .ok ((view s1).balances.set index.val c.val) := by
               rw [← hidx]
               have : index.val < (view s1).balances.length := by rw [← hv2]; exact hlt'
               simp [Spec.listSet, this, pure, Except.pure]
             have hv3' : view s3 = { view s1 with
                 balances := (view s1).balances.set index.val c.val } := by rw [hv3, hv2]
-            have hstep' : (List.take (i1.val + 1) (deps.val.map absDep)).foldlM
+            have hstep' : (List.take (i1.val + 1) (deps.val.map depositToSpec)).foldlM
                 (Spec.apply_pending_deposit Spec.P o) t0 = .ok (view s3) := by
               rw [hstep, hsp, hlg]
               simp only [except_ok_bind]
@@ -352,22 +357,24 @@ theorem apply_new_validator_deposits_loop_spec [EpochProofs.Spec.CurrentPreset] 
           rw [hget, hsp]
           rw [hv2] at hnone
           have hlg : Spec.listGet (view s1).balances
-              (((view s1).validators.map (·.pubkey)).idxOf (absDep x).pubkey) =
+              (((view s1).validators.map (·.pubkey)).idxOf (depositToSpec x).pubkey) =
               .error .indexOutOfRange := by
             rw [← hidx]; simp [Spec.listGet, hnone, throw, throwThe, MonadExceptOf.throw]
           rw [hlg]
           rfl
       · rw [if_neg hm] at hr
         obtain rfl : r = none := by cases r <;> simp_all
-        have hsp := Spec.apply_pending_deposit_new o (view s1) (absDep x) hm
+        have hsp := Spec.apply_pending_deposit_new o (view s1) (depositToSpec x) hm
         dsimp only
         rw [hc.is_valid_signature, bind_tc_ok]
-        by_cases hsig : Spec.is_valid_deposit_signature Spec.P o (absDep x).pubkey
-            (absDep x).withdrawal_credentials (absDep x).amount (absDep x).signature = true
+        by_cases hsig : Spec.is_valid_deposit_signature Spec.P o (depositToSpec x).pubkey
+            (depositToSpec x).withdrawal_credentials (depositToSpec x).amount
+              (depositToSpec x).signature = true
         · rw [if_pos hsig] at hsp
           simp only [hsig, if_true]
           cases hreg : Spec.add_validator_to_registry Spec.P (view s1)
-              (absDep x).pubkey (absDep x).withdrawal_credentials (absDep x).amount with
+              (depositToSpec x).pubkey (depositToSpec x).withdrawal_credentials
+                (depositToSpec x).amount with
           | ok t' =>
             rw [← hv2] at hreg
             have hroom2 : (view s2).validators.length < 2 ^ 40 := by
@@ -417,30 +424,32 @@ theorem apply_new_validator_deposits_loop_spec [EpochProofs.Spec.CurrentPreset] 
     · rename_i hge
       have hiv : i1.val = deps.length := by scalar_tac
       simp only [spec_ok]
-      have h1 : (deps.val.map absDep).take i1.val = deps.val.map absDep := by
+      have h1 : (deps.val.map depositToSpec).take i1.val = deps.val.map depositToSpec := by
         rw [hiv]; simp
       exact ⟨by rw [← h1, hp1], hL1, ha1⟩
   · exact ⟨hi, hp, hL, ha, hal⟩
 
 /-- The deposit writes after the single pass equal the model under the trusted
-`DepositWritesContract`: `Ok` exactly when `depositWritesSpec` is `ok`, with the same state. The
+`DepositWritesMatchSpec`: `Ok` exactly when `depositWritesSpec` is `ok`, with the same state. The
 queue write needs the next deposit index to be at most the queue length, which
 `lhDepositPlan_next_le` gives for the plan. -/
 theorem apply_deposit_writes_spec [EpochProofs.Spec.CurrentPreset] {S D E : Type} (inst : LhDepositWrites S D E) (o : Spec.Oracle)
-    (view : S → Spec.BeaconState) (absDep : D → Spec.PendingDeposit)
-    (postOf : S → List Spec.PendingDeposit) (hc : DepositWritesContract inst o view absDep postOf)
+    (view : S → Spec.BeaconState) (depositToSpec : D → Spec.PendingDeposit)
+    (postOf : S → List Spec.PendingDeposit)
+    (hc : DepositWritesMatchSpec inst o view depositToSpec postOf)
     (s : S) (next : Usize) (dbtc : U64) (deps : Slice D) (eb : Bool)
     (hnext : next.val ≤ (view s).pending_deposits.length)
     (hroom : (view s).validators.length + deps.length ≤ 2 ^ 40) :
     per_epoch_processing.deposit_writes.apply_deposit_writes inst s next dbtc deps eb
-      ⦃ res => TailPost view (Spec.depositWritesSpec o (view s) next.val dbtc.val (postOf s)
-        (deps.val.map absDep) eb) res ⦄ := by
+      ⦃ res => DepositWritesResultMatchesModel view
+        (Spec.depositWritesSpec o (view s) next.val dbtc.val (postOf s)
+        (deps.val.map depositToSpec) eb) res ⦄ := by
   unfold per_epoch_processing.deposit_writes.apply_deposit_writes
   obtain ⟨s1, hw, hv1⟩ := hc.write_queue s next dbtc hnext
   rw [hw]
   simp only [bind_tc_ok, uncurry_apply_pair]
   unfold per_epoch_processing.deposit_writes.apply_new_validator_deposits
-  apply spec_bind (apply_new_validator_deposits_loop_spec inst o view absDep postOf hc deps
+  apply spec_bind (apply_new_validator_deposits_loop_spec inst o view depositToSpec postOf hc deps
     (view s1) (view s1).validators.length s1 (alloc.vec.Vec.new Usize) 0#usize (by simp)
     (by simp [pure, Except.pure]) le_rfl (by simp) (by simp) (by rw [hv1]; exact hroom))
   rintro ⟨r1, s2⟩ hpost
@@ -449,7 +458,7 @@ theorem apply_deposit_writes_spec [EpochProofs.Spec.CurrentPreset] {S D E : Type
     obtain ⟨hf, hL, ha⟩ := hpost
     simp only [core.result.Result.Insts.CoreOpsTry.branch, bind_tc_ok]
     have hspec : Spec.depositWritesSpec o (view s) next.val dbtc.val (postOf s)
-        (deps.val.map absDep) eb = (if eb then
+        (deps.val.map depositToSpec) eb = (if eb then
           (List.range' (view s1).validators.length
             ((view s2).validators.length - (view s1).validators.length)).foldlM
             Spec.ebUpdateAt (view s2) else pure (view s2)) := by
@@ -467,7 +476,7 @@ theorem apply_deposit_writes_spec [EpochProofs.Spec.CurrentPreset] {S D E : Type
     | true =>
       simp only [if_true]
       unfold per_epoch_processing.deposit_writes.update_effective_balances
-      apply spec_bind (update_effective_balances_loop_spec inst o view absDep postOf hc
+      apply spec_bind (update_effective_balances_loop_spec inst o view depositToSpec postOf hc
         (alloc.vec.Vec.deref added) (view s2) s2 0#usize (by simp)
         (by simp [pure, Except.pure]))
       rintro ⟨r2, s3⟩ hpost2
@@ -503,23 +512,25 @@ theorem apply_deposit_writes_spec [EpochProofs.Spec.CurrentPreset] {S D E : Type
 of the new validators (`lhNewValidators` after `lhQueueWrite`), for the plan of the epoch input
 `s`, on any state `view st` that still holds the queue of `s`. -/
 theorem apply_deposit_writes_model [EpochProofs.Spec.CurrentPreset] {S D E : Type} (inst : LhDepositWrites S D E)
-    (o : Spec.Oracle) (view : S → Spec.BeaconState) (absDep : D → Spec.PendingDeposit)
-    (postOf : S → List Spec.PendingDeposit) (hc : DepositWritesContract inst o view absDep postOf)
+    (o : Spec.Oracle) (view : S → Spec.BeaconState) (depositToSpec : D → Spec.PendingDeposit)
+    (postOf : S → List Spec.PendingDeposit)
+    (hc : DepositWritesMatchSpec inst o view depositToSpec postOf)
     (s : Spec.BeaconState) (tab : Spec.Gwei) (current_epoch : Spec.Epoch) (plan : Spec.LhDepositPlan)
     (hplan : Spec.lhDepositPlan s tab current_epoch = .ok plan) (st : S)
     (hq : (view st).pending_deposits = s.pending_deposits) (next : Usize) (dbtc : U64)
     (deps : Slice D) (hnext : next.val = plan.next_deposit_index)
     (hdbtc : dbtc.val = plan.deposit_balance_to_consume) (hpost : postOf st = plan.postponed)
-    (hdeps : deps.val.map absDep = plan.new_validator_deposits)
+    (hdeps : deps.val.map depositToSpec = plan.new_validator_deposits)
     (hroom : (view st).validators.length + plan.new_validator_deposits.length ≤ 2 ^ 40) :
     per_epoch_processing.deposit_writes.apply_deposit_writes inst st next dbtc deps true
-      ⦃ res => TailPost view (Spec.lhNewValidators o plan (Spec.lhQueueWrite s plan (view st)))
+      ⦃ res => DepositWritesResultMatchesModel view
+        (Spec.lhNewValidators o plan (Spec.lhQueueWrite s plan (view st)))
         res ⦄ := by
   have hle : next.val ≤ (view st).pending_deposits.length := by
     rw [hq, hnext]; exact Spec.lhDepositPlan_next_le s tab current_epoch plan hplan
   have hdl : deps.length = plan.new_validator_deposits.length := by
     rw [← hdeps, List.length_map]
-  have h := apply_deposit_writes_spec inst o view absDep postOf hc st next dbtc deps true hle
+  have h := apply_deposit_writes_spec inst o view depositToSpec postOf hc st next dbtc deps true hle
     (by rw [hdl]; exact hroom)
   rwa [hnext, hdbtc, hpost, hdeps, Spec.depositWritesSpec_eq o s (view st) plan hq] at h
 

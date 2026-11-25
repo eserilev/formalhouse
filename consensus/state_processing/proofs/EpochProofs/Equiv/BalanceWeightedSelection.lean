@@ -11,8 +11,8 @@ import EpochProofs.Sanity.SelectionPass
 `Spec.selectionPass`. `compute_balance_weighted_selection_spec`: if the reference returns
 `selected`, Lighthouse returns `Ok selected`.
 
-`EBLink inst balances ebs` says that `inst.effective_balance balances i` returns the effective
-balance `ebs[i]` of validator `i`, or `None` past the end of the registry.
+`EffectiveBalancesMatch inst balances ebs` says that `inst.effective_balance balances i` returns
+the effective balance `ebs[i]` of validator `i`, or `None` past the end of the registry.
 -/
 
 namespace EpochProofs
@@ -20,10 +20,12 @@ namespace EpochProofs
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 /-- The Rust trait that gives the effective balance of a validator. -/
-abbrev EBInst (B : Type) := types.state.balance_weighted_selection.EffectiveBalances B
+abbrev EffectiveBalanceSource (B : Type) :=
+    types.state.balance_weighted_selection.EffectiveBalances B
 
 /-- `inst.effective_balance balances i` reads the effective balance `ebs[i]`. -/
-def EBLink {B : Type} (inst : EBInst B) (balances : B) (ebs : List Nat) : Prop :=
+def EffectiveBalancesMatch {B : Type} (inst : EffectiveBalanceSource B) (balances : B)
+    (ebs : List Nat) : Prop :=
   ∀ i : Usize, ∃ r, inst.effective_balance balances i = ok r ∧ r.map (·.val) = ebs[i.val]?
 
 theorem except_bind_ok_iff {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} :
@@ -64,11 +66,11 @@ def RandomBytesOk (o : Spec.Oracle) (seedSpec : Spec.Bytes32) (i : Nat) (rb : Sp
     Prop :=
   i % 16 ≠ 0 → rb = o.hash (seedSpec.toList ++ Spec.uint_to_bytes 8 (i / 16))
 
-theorem selection_pass_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EBInst B)
-    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashLink inst o)
-    (reg : List Nat) (hEB : EBLink ebi balances reg)
+theorem selection_pass_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EffectiveBalanceSource B)
+    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
+    (reg : List Nat) (hEB : EffectiveBalancesMatch ebi balances reg)
     (indices : Slice Usize) (seed : Array U8 32#usize) (seedSpec : Spec.Bytes32)
-    (hseed : u8s seed.val = seedSpec.toList)
+    (hseed : byteValues seed.val = seedSpec.toList)
     (shuffle : Bool) (R : U8) (hR : R.val = p.SHUFFLE_ROUND_COUNT)
     (maxeb : U64) (hmaxeb : maxeb.val = p.MAX_EFFECTIVE_BALANCE_ELECTRA)
     (hn : 0 < indices.val.length) (hn24 : indices.val.length ≤ 2 ^ 24)
@@ -317,11 +319,11 @@ theorem selection_loop_zero (p : Spec.Preset) (o : Spec.Oracle) (indices : List 
       sel i rb ≠ .ok res := by
   simp [Spec.compute_balance_weighted_selection_loop, throw, throwThe, MonadExceptOf.throw]
 
-theorem selection_loop_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EBInst B)
-    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashLink inst o)
-    (reg : List Nat) (hEB : EBLink ebi balances reg)
+theorem selection_loop_spec {H B : Type} (inst : ShuffleHashInst H) (ebi : EffectiveBalanceSource B)
+    (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashMatches inst o)
+    (reg : List Nat) (hEB : EffectiveBalancesMatch ebi balances reg)
     (indices : Slice Usize) (seed : Array U8 32#usize) (seedSpec : Spec.Bytes32)
-    (hseed : u8s seed.val = seedSpec.toList)
+    (hseed : byteValues seed.val = seedSpec.toList)
     (shuffle : Bool) (R : U8) (hR : R.val = p.SHUFFLE_ROUND_COUNT)
     (maxeb : U64) (hmaxeb : maxeb.val = p.MAX_EFFECTIVE_BALANCE_ELECTRA)
     (hn : 0 < indices.val.length) (hn24 : indices.val.length ≤ 2 ^ 24)
@@ -469,11 +471,12 @@ theorem mapM_effective_balances (vals : List Spec.Validator) (indices : List Nat
 
 /-- Lighthouse `compute_balance_weighted_selection` equals the reference. -/
 theorem compute_balance_weighted_selection_spec {H B : Type} (inst : ShuffleHashInst H)
-    (ebi : EBInst B) (balances : B) (p : Spec.Preset) (o : Spec.Oracle) (hH : HashLink inst o)
+    (ebi : EffectiveBalanceSource B) (balances : B) (p : Spec.Preset) (o : Spec.Oracle)
+    (hH : HashMatches inst o)
     (state : Spec.BeaconState)
-    (hEB : EBLink ebi balances (state.validators.map (·.effective_balance)))
+    (hEB : EffectiveBalancesMatch ebi balances (state.validators.map (·.effective_balance)))
     (indices : Slice Usize) (seed : Array U8 32#usize) (seedSpec : Spec.Bytes32)
-    (hseed : u8s seed.val = seedSpec.toList)
+    (hseed : byteValues seed.val = seedSpec.toList)
     (shuffle : Bool) (R : U8) (hR : R.val = p.SHUFFLE_ROUND_COUNT)
     (maxeb : U64) (hmaxeb : maxeb.val = p.MAX_EFFECTIVE_BALANCE_ELECTRA)
     (hn24 : indices.val.length ≤ 2 ^ 24) (size : Usize) (hus : Usize.max = U64.max)

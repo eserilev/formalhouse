@@ -6,8 +6,8 @@ import EpochProofs.Sanity.ConsolidationTable
 
 `process_on_table` in `pending_consolidations.rs` is generic over the `ConsolidationState`
 trait. Aeneas translates it, but not `StateConsolidations` in `single_pass.rs`, which reads and
-writes the milhouse lists. `ConsolidationStateContract` says what each trait method does, in spec
-terms:
+writes the milhouse lists. `ConsolidationAccessMatchesSpec` says what each trait method does, in
+spec terms:
 
 - `next_epoch` is `get_current_epoch(state) + 1`, and fails when the spec addition fails.
 - `pending` returns the source and target index of each pending consolidation, in order.
@@ -18,7 +18,7 @@ terms:
 - `set_balance` sets one balance, and does nothing past the registry.
 - `pop_pending` drops the first `n` pending consolidations when there are at least `n`.
 
-`BTreeSetIter` says what `get_validators_in_consolidations` in `single_pass.rs` gives: the
+`IteratesLikeBTreeSet` says what `get_validators_in_consolidations` in `single_pass.rs` gives: the
 `BTreeSet` of the source and target indices, iterated. A Rust `BTreeSet` iterates its members in
 increasing order, each once. The `as usize` cast keeps the value, because `usize` has 64 bits.
 
@@ -44,31 +44,31 @@ def specNextEpoch (p : Spec.Preset) (state : Spec.BeaconState) : Spec.SpecM Nat 
 def pendingPairs (state : Spec.BeaconState) : List (Nat × Nat) :=
   state.pending_consolidations.map fun c => (c.source_index, c.target_index)
 
-/-- Trusted: what the `ConsolidationState` implementation in `single_pass.rs` does. `view` gives
+/-- Trusted: what the `ConsolidationState` implementation in `single_pass.rs` does. `toSpec` gives
 the spec state that an implementation value holds. -/
-structure ConsolidationStateContract {S E : Type} (inst : LhConsolidationState S E)
-    (p : Spec.Preset) (view : S → Spec.BeaconState) : Prop where
+structure ConsolidationAccessMatchesSpec {S E : Type} (implementation : LhConsolidationState S E)
+    (p : Spec.Preset) (toSpec : S → Spec.BeaconState) : Prop where
   next_epoch : ∀ (s : S),
-    (∀ n, specNextEpoch p (view s) = .ok n →
-      ∃ v : U64, inst.next_epoch s = ok (.Ok v) ∧ v.val = n) ∧
-    (∀ e, specNextEpoch p (view s) = .error e → ∃ e', inst.next_epoch s = ok (.Err e'))
-  pending : ∀ (s : S), ∃ v : alloc.vec.Vec LhPendingPair, inst.pending s = ok (.Ok v) ∧
-    v.val.map (fun q => (q.source.val, q.target.val)) = pendingPairs (view s)
-  local_validator : ∀ (s : S) (i : Usize), ∃ lv, inst.local_validator s i = ok lv ∧
-    absLocal lv = Spec.localRow (view s).validators i.val
-  balance : ∀ (s : S) (i : Usize), ∃ b : U64, inst.balance s i = ok b ∧
-    b.val = ((view s).balances[i.val]?).getD 0
-  set_balance : ∀ (s : S) (i : Usize) (b : U64), ∃ s', inst.set_balance s i b = ok s' ∧
-    view s' = { view s with balances :=
-      if i.val < (view s).balances.length then (view s).balances.set i.val b.val
-      else (view s).balances }
-  pop_pending : ∀ (s : S) (n : Usize), n.val ≤ (view s).pending_consolidations.length →
-    ∃ s', inst.pop_pending s n = ok (.Ok (), s') ∧
-      view s' = { view s with
-        pending_consolidations := (view s).pending_consolidations.drop n.val }
+    (∀ n, specNextEpoch p (toSpec s) = .ok n →
+      ∃ v : U64, implementation.next_epoch s = ok (.Ok v) ∧ v.val = n) ∧
+    (∀ e, specNextEpoch p (toSpec s) = .error e → ∃ e', implementation.next_epoch s = ok (.Err e'))
+  pending : ∀ (s : S), ∃ v : alloc.vec.Vec LhPendingPair, implementation.pending s = ok (.Ok v) ∧
+    v.val.map (fun q => (q.source.val, q.target.val)) = pendingPairs (toSpec s)
+  local_validator : ∀ (s : S) (i : Usize), ∃ lv, implementation.local_validator s i = ok lv ∧
+    consolidationValidatorToSpec lv = Spec.localRow (toSpec s).validators i.val
+  balance : ∀ (s : S) (i : Usize), ∃ b : U64, implementation.balance s i = ok b ∧
+    b.val = ((toSpec s).balances[i.val]?).getD 0
+  set_balance : ∀ (s : S) (i : Usize) (b : U64), ∃ s', implementation.set_balance s i b = ok s' ∧
+    toSpec s' = { toSpec s with balances :=
+      if i.val < (toSpec s).balances.length then (toSpec s).balances.set i.val b.val
+      else (toSpec s).balances }
+  pop_pending : ∀ (s : S) (n : Usize), n.val ≤ (toSpec s).pending_consolidations.length →
+    ∃ s', implementation.pop_pending s n = ok (.Ok (), s') ∧
+      toSpec s' = { toSpec s with
+        pending_consolidations := (toSpec s).pending_consolidations.drop n.val }
 
 /-- Trusted: `it` is the iteration of a Rust `BTreeSet` after inserting each of `inserted`. -/
-def BTreeSetIter (inserted : List Nat) (it : List Nat) : Prop :=
+def IteratesLikeBTreeSet (inserted : List Nat) (it : List Nat) : Prop :=
   it.Pairwise (· < ·) ∧ ∀ x, x ∈ it ↔ x ∈ inserted
 
 end EpochProofs

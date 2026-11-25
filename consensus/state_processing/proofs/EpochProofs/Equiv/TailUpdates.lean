@@ -52,49 +52,49 @@ open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 theorem safe_add_abs (a b : U64) :
     U64.Insts.Safe_arithSafeArithU64.safe_add a b ⦃ r =>
-      absResult (·.val) r = Spec.uint64Add a.val b.val ⦄ := by
+      resultToSpec (·.val) r = Spec.uint64Add a.val b.val ⦄ := by
   obtain ⟨r, hr, h⟩ := spec_imp_exists (safe_add_spec a b)
   rw [hr]
   simp only [WP.spec_ok]
   cases r with
   | Ok v =>
     obtain ⟨hv, hfit⟩ := h.1 v rfl
-    simp [absResult, Spec.uint64Add, Spec.UINT64_SIZE, hv, hfit, pure, Except.pure]
+    simp [resultToSpec, Spec.uint64Add, Spec.UINT64_SIZE, hv, hfit, pure, Except.pure]
   | Err e =>
     obtain ⟨he, hov⟩ := h.2 e rfl
     subst he
-    simp [absResult, absArithError, Spec.uint64Add, Spec.UINT64_SIZE, hov, throw, throwThe,
+    simp [resultToSpec, arithErrorToSpec, Spec.uint64Add, Spec.UINT64_SIZE, hov, throw, throwThe,
       MonadExceptOf.throw]
 
 theorem safe_rem_abs (a b : U64) :
     U64.Insts.Safe_arithSafeArithU64.safe_rem a b ⦃ r =>
-      absResult (·.val) r = Spec.uint64Mod a.val b.val ⦄ := by
+      resultToSpec (·.val) r = Spec.uint64Mod a.val b.val ⦄ := by
   obtain ⟨r, hr, h⟩ := spec_imp_exists (safe_rem_spec a b)
   rw [hr]
   simp only [WP.spec_ok]
   cases r with
   | Ok v =>
     obtain ⟨hv, hb⟩ := h.1 v rfl
-    simp [absResult, Spec.uint64Mod, hv, hb, pure, Except.pure]
+    simp [resultToSpec, Spec.uint64Mod, hv, hb, pure, Except.pure]
   | Err e =>
     obtain ⟨he, hb⟩ := h.2 e rfl
     subst he
-    simp [absResult, absArithError, Spec.uint64Mod, hb, throw, throwThe, MonadExceptOf.throw]
+    simp [resultToSpec, arithErrorToSpec, Spec.uint64Mod, hb, throw, throwThe, MonadExceptOf.throw]
 
 theorem safe_div_abs (a b : U64) :
     U64.Insts.Safe_arithSafeArithU64.safe_div a b ⦃ r =>
-      absResult (·.val) r = Spec.uint64Div a.val b.val ⦄ := by
+      resultToSpec (·.val) r = Spec.uint64Div a.val b.val ⦄ := by
   obtain ⟨r, hr, h⟩ := spec_imp_exists (safe_div_spec a b)
   rw [hr]
   simp only [WP.spec_ok]
   cases r with
   | Ok v =>
     obtain ⟨hv, hb⟩ := h.1 v rfl
-    simp [absResult, Spec.uint64Div, hv, hb, pure, Except.pure]
+    simp [resultToSpec, Spec.uint64Div, hv, hb, pure, Except.pure]
   | Err e =>
     obtain ⟨he, hb⟩ := h.2 e rfl
     subst he
-    simp [absResult, absArithError, Spec.uint64Div, hb, throw, throwThe, MonadExceptOf.throw]
+    simp [resultToSpec, arithErrorToSpec, Spec.uint64Div, hb, throw, throwThe, MonadExceptOf.throw]
 
 /-- The `Err` branch of a `?`: both sides give the same error. `h` relates the Rust call to the
 `SpecM` value that the spec side binds first. -/
@@ -106,7 +106,8 @@ macro "abs_err" h:ident : tactic =>
 
 /-- The `Ok` branch of a `?`: the spec side binds the same value. -/
 macro "abs_ok" h:ident : tactic =>
-  `(tactic| (simp only [core.result.Result.Insts.CoreOpsTry.branch, bind_tc_ok]; rw [← $h:ident]; simp only [absResult, except_ok_bind]))
+  `(tactic| (simp only [core.result.Result.Insts.CoreOpsTry.branch,
+    bind_tc_ok]; rw [← $h:ident]; simp only [resultToSpec, except_ok_bind]))
 
 /-- `decide (m = 0)` on a `U64` is `m.val == 0`. -/
 theorem decide_eq_zero (m : U64) : decide (m = 0#u64) = (m.val == 0) := by
@@ -118,7 +119,7 @@ theorem decide_eq_zero (m : U64) : decide (m = 0#u64) = (m.val == 0) := by
 /-- The translated check of the eth1 votes reset is the model check, with the same errors. -/
 theorem eth1_data_votes_reset_due_equiv (slot period : U64) :
     per_epoch_processing.tail_updates.eth1_data_votes_reset_due slot period ⦃ r =>
-      absResult id r = Spec.lhEth1ResetDue slot.val period.val ⦄ := by
+      resultToSpec id r = Spec.lhEth1ResetDue slot.val period.val ⦄ := by
   unfold per_epoch_processing.tail_updates.eth1_data_votes_reset_due Spec.lhEth1ResetDue
   obtain ⟨r1, hr1, h1⟩ := spec_imp_exists (safe_add_abs slot 1#u64)
   have h1v : (1#u64 : U64).val = 1 := rfl
@@ -140,7 +141,7 @@ theorem eth1_data_votes_reset_due_equiv (slot period : U64) :
 /-- The translated check of the historical summary is the model check, with the same errors. -/
 theorem historical_summary_due_equiv (next_epoch root epoch : U64) :
     per_epoch_processing.tail_updates.historical_summary_due next_epoch root epoch ⦃ r =>
-      absResult id r = Spec.historicalSummaryDue next_epoch.val root.val epoch.val ⦄ := by
+      resultToSpec id r = Spec.historicalSummaryDue next_epoch.val root.val epoch.val ⦄ := by
   unfold per_epoch_processing.tail_updates.historical_summary_due Spec.historicalSummaryDue
   obtain ⟨r1, hr1, h1⟩ := spec_imp_exists (safe_div_abs root epoch)
   simp only [hr1, bind_tc_ok]
@@ -167,7 +168,7 @@ theorem epoch_vector_index_rem (epoch length : U64) :
       | core.ops.control_flow.ControlFlow.Break residual =>
         core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
           (Option U64) (core.convert.FromSame safe_arith.ArithError) residual) ⦃ r =>
-        absResult (Option.map (·.val)) r = (do
+        resultToSpec (Option.map (·.val)) r = (do
           pure (some (← Spec.uint64Mod epoch.val length.val)) : Spec.SpecM (Option Nat)) ⦄ := by
   obtain ⟨r, hr, h⟩ := spec_imp_exists (safe_rem_abs epoch length)
   simp only [hr, bind_tc_ok]
@@ -180,7 +181,7 @@ theorem epoch_vector_index_rem (epoch length : U64) :
 
 theorem epoch_vector_index_equiv (current_epoch epoch length : U64) (allow : Bool) :
     per_epoch_processing.tail_updates.epoch_vector_index current_epoch epoch length allow ⦃ r =>
-      absResult (Option.map (·.val)) r =
+      resultToSpec (Option.map (·.val)) r =
         Spec.epochVectorIndex current_epoch.val epoch.val length.val allow ⦄ := by
   unfold per_epoch_processing.tail_updates.epoch_vector_index Spec.epochVectorIndex
   obtain ⟨r1, hr1, h1⟩ := spec_imp_exists (safe_add_abs epoch length)
@@ -225,7 +226,7 @@ theorem epoch_vector_index_equiv (current_epoch epoch length : U64) (allow : Boo
 /-- The translated slashings reset index is the model index, with the same errors. -/
 theorem slashings_reset_index_equiv (current_epoch length : U64) :
     per_epoch_processing.tail_updates.slashings_reset_index current_epoch length ⦃ r =>
-      absResult (Option.map (·.val)) r =
+      resultToSpec (Option.map (·.val)) r =
         Spec.slashingsResetIndex current_epoch.val length.val ⦄ := by
   unfold per_epoch_processing.tail_updates.slashings_reset_index Spec.slashingsResetIndex
   obtain ⟨r1, hr1, h1⟩ := spec_imp_exists (safe_add_abs current_epoch 1#u64)
@@ -241,7 +242,7 @@ theorem slashings_reset_index_equiv (current_epoch length : U64) :
 /-- The translated RANDAO reset indices are the model indices, with the same errors. -/
 theorem randao_mixes_reset_indices_equiv (current_epoch length : U64) :
     per_epoch_processing.tail_updates.randao_mixes_reset_indices current_epoch length ⦃ r =>
-      absResult (Option.map (fun x => (x.1.val, x.2.val))) r =
+      resultToSpec (Option.map (fun x => (x.1.val, x.2.val))) r =
         Spec.randaoMixesResetIndices current_epoch.val length.val ⦄ := by
   unfold per_epoch_processing.tail_updates.randao_mixes_reset_indices
     Spec.randaoMixesResetIndices

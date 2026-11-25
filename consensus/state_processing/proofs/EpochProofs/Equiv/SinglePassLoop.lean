@@ -5,12 +5,12 @@ import EpochProofs.Trusted.RegistryRows
 # The single-pass loop equals one pass over the rows
 
 `single_pass_rows_spec` relates `single_pass_rows` in `registry_rows.rs` to `Spec.passM` over the
-rows of a `RegistryRows` value. `StepSpec` states what one `apply_step` call does.
-`rowsContract_stepSpec` derives it from the trusted `RowsContract` and
+rows of a `RegistryRows` value. `StepMatchesModel` states what one `apply_step` call does.
+`rowsContract_stepSpec` derives it from the trusted `ValidatorRowsMatchSpec` and
 `single_pass_step_equiv`, with the step `Spec.lhRowStepFull`.
 
-`single_pass_rows_eq_passM` puts the two together: under `RowsContract`, the Lighthouse loop
-returns `Ok` exactly when `passM lhRowStepFull` over the rows returns `ok`, with the same churn
+`single_pass_rows_eq_passM` puts the two together: under `ValidatorRowsMatchSpec`, the Lighthouse
+loop returns `Ok` exactly when `passM lhRowStepFull` over the rows returns `ok`, with the same churn
 and rows. On an error, both fail.
 -/
 
@@ -24,7 +24,7 @@ open state_processing.per_epoch_processing.single_pass_step (ValidatorRow ExitCh
 abbrev LhRowsError (E : Type) := per_epoch_processing.registry_rows.RowsError E
 
 /-- The exit churn as numbers: the earliest exit epoch and the exit balance to consume. -/
-def absChurn (ch : ExitChurn) : Spec.Epoch × Spec.Gwei :=
+def exitChurnToSpec (ch : ExitChurn) : Spec.Epoch × Spec.Gwei :=
   (ch.earliest_exit_epoch.val, ch.exit_balance_to_consume.val)
 
 theorem passM_append {A R : Type} (f : A → R → Spec.SpecM (A × R)) (a : A) (xs ys : List R) :
@@ -61,21 +61,22 @@ theorem drop_succ_set {α : Type} (l V : List α) (i : Nat) (x : α)
   simpa [List.drop_drop, Nat.add_comm] using this
 
 /-- One `apply_step` call on row `i` runs `step` on that row and writes the new row. -/
-def StepSpec {R E : Type} (inst : LhRegistryRows R E) (view : R → List Spec.Row)
+def StepMatchesModel {R E : Type} (inst : LhRegistryRows R E) (view : R → List Spec.Row)
     (step : Spec.Epoch × Spec.Gwei → Spec.Row → Spec.SpecM ((Spec.Epoch × Spec.Gwei) × Spec.Row))
     (c : StepContext) (k : per_epoch_processing.registry_update.RegistryConstants) : Prop :=
   ∀ (s : R) (i : Usize) (ch : ExitChurn) (r : Spec.Row), (view s)[i.val]? = some r →
     (∃ ch' r' s', inst.apply_step s i ch c k = ok (.Ok ch', s') ∧
-        step (absChurn ch) r = .ok (absChurn ch', r') ∧ view s' = (view s).set i.val r')
+        step (exitChurnToSpec ch) r = .ok (exitChurnToSpec ch', r') ∧ view s' =
+          (view s).set i.val r')
     ∨ (∃ e s', inst.apply_step s i ch c k = ok (.Err (.Step e), s') ∧
-        step (absChurn ch) r = .error (absArithError e))
+        step (exitChurnToSpec ch) r = .error (arithErrorToSpec e))
 
 /-- What the loop returns, in spec terms. -/
-def LoopPost {R E : Type} (view : R → List Spec.Row)
+def LoopResultMatchesModel {R E : Type} (view : R → List Spec.Row)
     (spec : Spec.SpecM ((Spec.Epoch × Spec.Gwei) × List Spec.Row)) :
     core.result.Result ExitChurn (LhRowsError E) × R → Prop
-  | (.Ok ch', s') => spec = .ok (absChurn ch', view s')
-  | (.Err (.Step e), _) => spec = .error (absArithError e)
+  | (.Ok ch', s') => spec = .ok (exitChurnToSpec ch', view s')
+  | (.Err (.Step e), _) => spec = .error (arithErrorToSpec e)
   | (.Err (.Rows _), _) => False
 
 theorem usize_safe_add_one (j : Usize) (h : j.val < Usize.max) :
@@ -95,20 +96,21 @@ theorem single_pass_rows_loop_spec {R E : Type} (inst : LhRegistryRows R E)
     (view : R → List Spec.Row)
     (step : Spec.Epoch × Spec.Gwei → Spec.Row → Spec.SpecM ((Spec.Epoch × Spec.Gwei) × Spec.Row))
     (c : StepContext) (k : per_epoch_processing.registry_update.RegistryConstants)
-    (hstep : StepSpec inst view step c k) (V : List Spec.Row) (a0 : Spec.Epoch × Spec.Gwei)
+    (hstep : StepMatchesModel inst view step c k) (V : List Spec.Row) (a0 : Spec.Epoch × Spec.Gwei)
     (len : Usize) (hlen : len.val = V.length) (rows : R) (ch : ExitChurn) (j : Usize)
     (hj : j.val ≤ V.length) (hl : (view rows).length = V.length)
     (hd : (view rows).drop j.val = V.drop j.val)
-    (hp : Spec.passM step a0 (V.take j.val) = .ok (absChurn ch, (view rows).take j.val)) :
+    (hp : Spec.passM step a0 (V.take j.val) = .ok (exitChurnToSpec ch, (view rows).take j.val)) :
     per_epoch_processing.registry_rows.single_pass_rows_loop inst rows c k len ch j
-      ⦃ res => LoopPost view (Spec.passM step a0 V) res ⦄ := by
+      ⦃ res => LoopResultMatchesModel view (Spec.passM step a0 V) res ⦄ := by
   unfold per_epoch_processing.registry_rows.single_pass_rows_loop
   apply loop.spec_decr_nat
     (measure := fun (x : R × ExitChurn × Usize) => V.length - x.2.2.val)
     (inv := fun (x : R × ExitChurn × Usize) =>
       x.2.2.val ≤ V.length ∧ (view x.1).length = V.length
       ∧ (view x.1).drop x.2.2.val = V.drop x.2.2.val
-      ∧ Spec.passM step a0 (V.take x.2.2.val) = .ok (absChurn x.2.1, (view x.1).take x.2.2.val))
+      ∧ Spec.passM step a0 (V.take x.2.2.val) =
+        .ok (exitChurnToSpec x.2.1, (view x.1).take x.2.2.val))
   · rintro ⟨s, chj, i⟩ ⟨hi, hls, hds, hps⟩
     dsimp only at hi hls hds hps ⊢
     unfold per_epoch_processing.registry_rows.single_pass_rows_loop.body
@@ -139,7 +141,7 @@ theorem single_pass_rows_loop_spec {R E : Type} (inst : LhRegistryRows R E)
         simp only [bind_tc_ok, uncurry_apply_pair, core.result.Result.Insts.CoreOpsTry.branch,
           core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
           core.convert.FromSame.from, spec_ok]
-        show Spec.passM step a0 V = .error (absArithError e)
+        show Spec.passM step a0 V = .error (arithErrorToSpec e)
         have hsplit : V = V.take i.val ++ (V[i.val] :: V.drop (i.val + 1)) := by
           rw [← List.drop_eq_getElem_cons hil, List.take_append_drop]
         rw [hsplit, passM_append, hps, except_ok_bind, Spec.passM_cons, hst, except_error_bind,
@@ -147,7 +149,7 @@ theorem single_pass_rows_loop_spec {R E : Type} (inst : LhRegistryRows R E)
     · rename_i hge
       have hiv : i.val = V.length := by scalar_tac
       simp only [spec_ok]
-      show Spec.passM step a0 V = .ok (absChurn chj, view s)
+      show Spec.passM step a0 V = .ok (exitChurnToSpec chj, view s)
       have h1 : V.take i.val = V := by rw [hiv, List.take_length]
       have h2 : (view s).take i.val = view s := by rw [hiv, ← hls, List.take_length]
       rw [← h1, hps, h2]
@@ -158,13 +160,15 @@ theorem single_pass_rows_spec {R E : Type} (inst : LhRegistryRows R E)
     (step : Spec.Epoch × Spec.Gwei → Spec.Row → Spec.SpecM ((Spec.Epoch × Spec.Gwei) × Spec.Row))
     (c : StepContext) (k : per_epoch_processing.registry_update.RegistryConstants)
     (hcount : ∀ s, ∃ n : Usize, inst.row_count s = ok n ∧ n.val = (view s).length)
-    (hstep : StepSpec inst view step c k) (rows : R) (ch : ExitChurn) :
+    (hstep : StepMatchesModel inst view step c k) (rows : R) (ch : ExitChurn) :
     per_epoch_processing.registry_rows.single_pass_rows inst rows ch c k
-      ⦃ res => LoopPost view (Spec.passM step (absChurn ch) (view rows)) res ⦄ := by
+      ⦃ res => LoopResultMatchesModel view (Spec.passM step (exitChurnToSpec ch) (view rows)) res
+        ⦄ := by
   unfold per_epoch_processing.registry_rows.single_pass_rows
   obtain ⟨n, hn, hnv⟩ := hcount rows
   rw [hn, bind_tc_ok]
-  exact single_pass_rows_loop_spec inst view step c k hstep (view rows) (absChurn ch) n hnv rows
+  exact single_pass_rows_loop_spec inst view step c k hstep (view rows) (exitChurnToSpec ch) n hnv
+    rows
     ch 0#usize (by simp) rfl rfl (by simp [Spec.passM, pure, Except.pure])
 
 /-- `lhRowStepFull` reads the base reward only for an eligible validator. -/
@@ -185,11 +189,13 @@ theorem lhRowStepFull_base_reward (p : Spec.Preset) (ctx : Spec.LhStepContext)
 
 theorem rowsContract_stepSpec {R E : Type} (inst : LhRegistryRows R E) (p : Spec.Preset)
     (view : R → List Spec.Row) (inputsOf : Spec.Row → Spec.LhRowInputs)
-    (hc : RowsContract inst p view inputsOf) (c : StepContext) (ctx : Spec.LhStepContext)
+    (hc : ValidatorRowsMatchSpec inst p view inputsOf) (c : StepContext) (ctx : Spec.LhStepContext)
     (hcm : ContextMatches p c ctx) (downward upward : Spec.Uint64)
     (hdownward : c.downward_threshold.val = downward) (hupward : c.upward_threshold.val = upward)
-    (k : per_epoch_processing.registry_update.RegistryConstants) (hk : ConstantsMatch p k) :
-    StepSpec inst view (fun churn r => Spec.lhRowStepFull p ctx downward upward (inputsOf r) churn r)
+    (k : per_epoch_processing.registry_update.RegistryConstants)
+    (hk : RegistryConstantsMatchGloas p k) :
+    StepMatchesModel inst view (fun churn r =>
+      Spec.lhRowStepFull p ctx downward upward (inputsOf r) churn r)
       c k := by
   intro s i ch r hr
   obtain ⟨lr, ri, hm, hi, hrun⟩ := hc.apply_step s i ch c k r hr
@@ -225,17 +231,19 @@ theorem rowsContract_stepSpec {R E : Type} (inst : LhRegistryRows R E) (p : Spec
     rfl
 
 /-- The Lighthouse single-pass loop equals one `passM` of `lhRowStepFull` over the rows, under
-the trusted `RowsContract`. -/
+the trusted `ValidatorRowsMatchSpec`. -/
 theorem single_pass_rows_eq_passM {R E : Type} (inst : LhRegistryRows R E) (p : Spec.Preset)
     (view : R → List Spec.Row) (inputsOf : Spec.Row → Spec.LhRowInputs)
-    (hc : RowsContract inst p view inputsOf) (c : StepContext) (ctx : Spec.LhStepContext)
+    (hc : ValidatorRowsMatchSpec inst p view inputsOf) (c : StepContext) (ctx : Spec.LhStepContext)
     (hcm : ContextMatches p c ctx) (downward upward : Spec.Uint64)
     (hdownward : c.downward_threshold.val = downward) (hupward : c.upward_threshold.val = upward)
-    (k : per_epoch_processing.registry_update.RegistryConstants) (hk : ConstantsMatch p k)
+    (k : per_epoch_processing.registry_update.RegistryConstants)
+    (hk : RegistryConstantsMatchGloas p k)
     (rows : R) (ch : ExitChurn) :
     per_epoch_processing.registry_rows.single_pass_rows inst rows ch c k ⦃ res =>
-      LoopPost view (Spec.passM (fun churn r =>
-        Spec.lhRowStepFull p ctx downward upward (inputsOf r) churn r) (absChurn ch) (view rows))
+      LoopResultMatchesModel view (Spec.passM (fun churn r =>
+        Spec.lhRowStepFull p ctx downward upward (inputsOf r) churn r) (exitChurnToSpec ch)
+          (view rows))
         res ⦄ :=
   single_pass_rows_spec inst view _ c k hc.row_count
     (rowsContract_stepSpec inst p view inputsOf hc c ctx hcm downward upward hdownward hupward k

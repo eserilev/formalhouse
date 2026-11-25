@@ -219,11 +219,11 @@ theorem deposits_loop_spec (p : Spec.Preset) (views : Slice LhDepositView)
 
 /-- The Rust outcome, read as the next index, the balance left to consume and the postponed flags.
 -/
-def absDeposits :
+def depositDecisionsToSpec :
     core.result.Result per_epoch_processing.pending_deposits.DepositsOutcome
       safe_arith.ArithError → Spec.SpecM (Nat × Spec.Gwei × List Bool)
   | .Ok o => .ok (o.next_deposit_index.val, o.deposit_balance_to_consume.val, o.postponed.val)
-  | .Err e => .error (absArithError e)
+  | .Err e => .error (arithErrorToSpec e)
 
 /-- The translated `process_pending_deposits` makes the spec decisions, with the same errors. -/
 theorem process_pending_deposits_equiv (p : Spec.Preset) (views : Slice LhDepositView)
@@ -231,7 +231,8 @@ theorem process_pending_deposits_equiv (p : Spec.Preset) (views : Slice LhDeposi
     (c : LhDepositConstants) (hc : DepositConstantsMatch p c) :
     per_epoch_processing.pending_deposits.process_pending_deposits views finalized_slot
       current_epoch next_epoch deposit_balance_to_consume churn c ⦃ r =>
-        absDeposits r = Spec.depositDecisions p finalized_slot.val deposit_balance_to_consume.val
+        depositDecisionsToSpec r =
+          Spec.depositDecisions p finalized_slot.val deposit_balance_to_consume.val
           churn.val (specViews p c current_epoch next_epoch views) ⦄ := by
   unfold per_epoch_processing.pending_deposits.process_pending_deposits
   apply exists_imp_spec
@@ -241,7 +242,8 @@ theorem process_pending_deposits_equiv (p : Spec.Preset) (views : Slice LhDeposi
   | Err e =>
     obtain ⟨rfl, hov⟩ := h1.2 e rfl
     refine ⟨_, by ok_rfl, ?_⟩
-    simp [Spec.depositDecisions, hov, absDeposits, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
+    simp [Spec.depositDecisions, hov, depositDecisionsToSpec, arithErrorToSpec, except_ok_bind,
+      except_error_bind, Pure.pure, Except.pure,
       throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.UINT64_SIZE,
       
       
@@ -266,7 +268,8 @@ theorem process_pending_deposits_equiv (p : Spec.Preset) (views : Slice LhDeposi
     simp only [Bool.false_eq_true, if_false]
     cases reached
     · refine ⟨_, by ok_rfl, ?_⟩
-      simp [Spec.depositDecisions, hfit, hloop, absDeposits, except_ok_bind, Pure.pure, Except.pure,
+      simp [Spec.depositDecisions, hfit, hloop, depositDecisionsToSpec, except_ok_bind, Pure.pure,
+        Except.pure,
       throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.UINT64_SIZE,
       
       
@@ -280,7 +283,8 @@ theorem process_pending_deposits_equiv (p : Spec.Preset) (views : Slice LhDeposi
         refine ⟨_, by ok_rfl, ?_⟩
         rw [hav] at hlt
         have hn : ¬ pa.val ≤ deposit_balance_to_consume.val + churn.val := by omega
-        simp [Spec.depositDecisions, hfit, hloop, hn, absDeposits, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
+        simp [Spec.depositDecisions, hfit, hloop, hn, depositDecisionsToSpec, arithErrorToSpec,
+          except_ok_bind, except_error_bind, Pure.pure, Except.pure,
       throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.UINT64_SIZE,
       
       
@@ -289,7 +293,8 @@ theorem process_pending_deposits_equiv (p : Spec.Preset) (views : Slice LhDeposi
         obtain ⟨hd, hle⟩ := h2.1 d rfl
         refine ⟨_, by ok_rfl, ?_⟩
         rw [hav] at hd hle
-        simp [Spec.depositDecisions, hfit, hloop, hd, hle, absDeposits, except_ok_bind, Pure.pure, Except.pure,
+        simp [Spec.depositDecisions, hfit, hloop, hd, hle, depositDecisionsToSpec, except_ok_bind,
+          Pure.pure, Except.pure,
       throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.UINT64_SIZE,
       
       
@@ -298,7 +303,8 @@ theorem process_pending_deposits_equiv (p : Spec.Preset) (views : Slice LhDeposi
     rw [hav] at hloop
     simp only [if_true]
     refine ⟨_, by ok_rfl, ?_⟩
-    simp [Spec.depositDecisions, hfit, hloop, absDeposits, absArithError, except_ok_bind, except_error_bind, Pure.pure, Except.pure,
+    simp [Spec.depositDecisions, hfit, hloop, depositDecisionsToSpec, arithErrorToSpec,
+      except_ok_bind, except_error_bind, Pure.pure, Except.pure,
       throw, throwThe, MonadExceptOf.throw, Spec.uint64Add, Spec.uint64Sub, Spec.UINT64_SIZE,
       
       

@@ -12,12 +12,13 @@ import EpochProofs.Sanity.Invariants.LighthouseTailSpecNF
 `singlePass` is `process_epoch_single_pass` of `single_pass.rs` up to the builder payments, as one
 Lean function: the translated `step_context`, `single_pass_rows`, `apply_deposit_writes`,
 `process_on_table`, `update_effective_balances_at` and `apply_builder_pending_payments`, joined by
-the untranslated code (`SinglePassGlue`, `PaymentsGlue`): the trait implementations over the
-milhouse lists, the borrows of the state by each wrapper, and the values read from the state and
-the spec. `singlePass_spec` shows that, under the trusted facts about the untranslated code
-(`SinglePassLinks`, `PaymentsLinks`), it returns the state of the model `lhSinglePass`, the
-single pass of `process_epoch_lighthouse`. `singlePassCore` stops before the builder payments; the
-Fulu epoch uses it (`Compose/Fulu.lean`).
+the untranslated code (`UntranslatedSinglePass`, `UntranslatedBuilderPayments`): the trait
+implementations over the milhouse lists, the borrows of the state by each wrapper, and the values
+read from the state and the spec. `translatedSinglePass_matches_model` shows that, under the
+trusted facts about the untranslated code (`UntranslatedSinglePassFacts`,
+`UntranslatedBuilderPaymentsFacts`), it returns the state of the model `lhSinglePass`, the single
+pass of `process_epoch_lighthouse`. `translatedSinglePassBeforePayments` stops before the builder
+payments; the Fulu epoch uses it (`Compose/Fulu.lean`).
 
 The first part of the file proves the frame facts of the model steps that the composition needs:
 which fields each step after the loop keeps.
@@ -26,11 +27,11 @@ which fields each step after the loop keeps.
 namespace EpochProofs.Spec
 
 /-- The Lighthouse model from the start of the single pass to the builder payments. -/
-def lhSinglePass [CurrentPreset] (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
-  lhFullTailWith (fun s tab plan x => lhMid o s tab plan (s.withRowsChurn x.1 x.2)) s
+def lhSinglePass [CurrentPreset] (oracle : Oracle) (s : BeaconState) : SpecM BeaconState :=
+  lhFullTailWith (fun s tab plan x => lhMid oracle s tab plan (s.withRowsChurn x.1 x.2)) s
 
-theorem lhFullTailWith_order_eq [CurrentPreset] (o : Oracle) (s : BeaconState) :
-    lhFullTailWith (lhAfterPassOrder o) s = lhSinglePass o s >>= lhRestOrder o := by
+theorem lhFullTailWith_order_eq [CurrentPreset] (oracle : Oracle) (s : BeaconState) :
+    lhFullTailWith (lhAfterPassOrder oracle) s = lhSinglePass oracle s >>= lhRestOrder oracle := by
   unfold lhSinglePass lhFullTailWith lhAfterPassOrder
   simp only [bind, Except.bind]
   repeat' split
@@ -86,8 +87,8 @@ theorem add_validator_balLen (p : Preset) (t t' : BeaconState) (pubkey : BLSPubk
   show l2.length = l1.length
   omega
 
-theorem apply_balLen [CurrentPreset] (o : Oracle) (t t' : BeaconState) (d : PendingDeposit)
-    (h : apply_pending_deposit P o t d = .ok t') (ht : BalLen t) : BalLen t' := by
+theorem apply_balLen [CurrentPreset] (oracle : Oracle) (t t' : BeaconState) (d : PendingDeposit)
+    (h : apply_pending_deposit P oracle t d = .ok t') (ht : BalLen t) : BalLen t' := by
   unfold apply_pending_deposit at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   split at h
@@ -146,8 +147,8 @@ theorem add_validator_midKeep (p : Preset) (t t' : BeaconState) (pubkey : BLSPub
     | contradiction
     | (cases h; exact ⟨rfl, rfl, rfl, rfl⟩)
 
-theorem apply_midKeep [CurrentPreset] (o : Oracle) (t t' : BeaconState) (d : PendingDeposit)
-    (h : apply_pending_deposit P o t d = .ok t') : MidKeep t t' := by
+theorem apply_midKeep [CurrentPreset] (oracle : Oracle) (t t' : BeaconState) (d : PendingDeposit)
+    (h : apply_pending_deposit P oracle t d = .ok t') : MidKeep t t' := by
   unfold apply_pending_deposit at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   split at h
@@ -181,13 +182,15 @@ theorem consolidations_keepB (p : Preset) (t t' : BeaconState)
       | contradiction
       | (cases hb; exact hst)
 
-theorem lhNewValidators_keep [CurrentPreset] (o : Oracle) (plan : LhDepositPlan) (t t' : BeaconState)
-    (h : lhNewValidators o plan t = .ok t') (ht : BalLen t) : MidKeep t t' ∧ BalLen t' := by
+theorem lhNewValidators_keep [CurrentPreset] (oracle : Oracle)
+    (plan : LhDepositPlan) (t t' : BeaconState)
+    (h : lhNewValidators oracle plan t = .ok t') (ht : BalLen t) : MidKeep t t' ∧ BalLen t' := by
   unfold lhNewValidators at h
   rw [lhApplyPendingDeposit_mainnet] at h
   obtain ⟨t3, h3, h⟩ := specM_bind_ok h
-  have k3 := foldlM_keep (fun u => MidKeep t u ∧ BalLen u) (apply_pending_deposit P o)
-    (fun u d u' hu hd => ⟨hu.1.trans (apply_midKeep o u u' d hd), apply_balLen o u u' d hd hu.2⟩)
+  have k3 := foldlM_keep (fun u => MidKeep t u ∧ BalLen u) (apply_pending_deposit P oracle)
+    (fun u d u' hu hd => ⟨hu.1.trans (apply_midKeep oracle u u' d hd),
+      apply_balLen oracle u u' d hd hu.2⟩)
     _ t t3 ⟨⟨rfl, rfl, rfl, rfl⟩, ht⟩ h3
   exact foldlM_keep (fun u => MidKeep t u ∧ BalLen u) ebUpdateAt
     (fun u i u' hu hd => ⟨hu.1.trans (ebUpdateAt_midKeep u u' i hd), ebUpdateAt_balLen u u' i hd hu.2⟩)
@@ -216,33 +219,35 @@ theorem process_builder_pending_payments_frame (p : Preset) (tab : Gwei) (t t0 t
 
 /-- The steps of `lhMid` before the builder payments: the deposit writes, the pending
 consolidations and the effective balance updates of the validators that consolidations name. -/
-def lhMidCore [CurrentPreset] (o : Oracle) (s : BeaconState) (plan : LhDepositPlan)
+def lhMidCore [CurrentPreset] (oracle : Oracle) (s : BeaconState) (plan : LhDepositPlan)
     (s1 : BeaconState) : SpecM BeaconState := do
-  let s4 ← lhNewValidators o plan (lhQueueWrite s plan s1)
+  let s4 ← lhNewValidators oracle plan (lhQueueWrite s plan s1)
   let s5 ← process_pending_consolidations P s4
-  (consolidationIndices s).foldlM ebUpdateAt s5
+  (validatorsInConsolidations s).foldlM ebUpdateAt s5
 
-theorem lhMid_eq [CurrentPreset] (o : Oracle) (s : BeaconState) (tab : Gwei) (plan : LhDepositPlan)
+theorem lhMid_eq [CurrentPreset] (oracle : Oracle) (s : BeaconState) (tab : Gwei)
+    (plan : LhDepositPlan)
     (s1 : BeaconState) :
-    lhMid o s tab plan s1 = lhMidCore o s plan s1 >>= process_builder_pending_payments P tab := by
+    lhMid oracle s tab plan s1 = lhMidCore oracle s plan s1 >>=
+      process_builder_pending_payments P tab := by
   simp only [lhMid, lhMidCore, bind_assoc]
 
 /-- `lhMidCore` does not write the builder pending payments, the proposer lookahead or the PTC
 window. -/
-theorem lhMidCore_keep [CurrentPreset] (o : Oracle) (s : BeaconState) (plan : LhDepositPlan)
+theorem lhMidCore_keep [CurrentPreset] (oracle : Oracle) (s : BeaconState) (plan : LhDepositPlan)
     (x : (Epoch × Gwei) × List Row) (s6 : BeaconState)
-    (h : lhMidCore o s plan (s.withRowsChurn x.1 x.2) = .ok s6) : KeepB s s6 := by
+    (h : lhMidCore oracle s plan (s.withRowsChurn x.1 x.2) = .ok s6) : KeepB s s6 := by
   unfold lhMidCore at h
   obtain ⟨s4, h4, h⟩ := specM_bind_ok h
   obtain ⟨s5, h5, h6⟩ := specM_bind_ok h
   have hW : BalLen (lhQueueWrite s plan (s.withRowsChurn x.1 x.2)) := by
     simp [BalLen, lhQueueWrite, BeaconState.withRowsChurn, BeaconState.withRows]
-  exact ((lhNewValidators_keep o plan _ s4 h4 hW).1.2.trans
+  exact ((lhNewValidators_keep oracle plan _ s4 h4 hW).1.2.trans
     (consolidations_keepB _ s4 s5 h5)).trans (ebFold_keepB _ s5 s6 h6)
 
 /-- The single pass does not write the proposer lookahead or the PTC window. -/
-theorem lhSinglePass_keep [CurrentPreset] (o : Oracle) (s T : BeaconState)
-    (h : lhSinglePass o s = .ok T) :
+theorem lhSinglePass_keep [CurrentPreset] (oracle : Oracle) (s T : BeaconState)
+    (h : lhSinglePass oracle s = .ok T) :
     T.proposer_lookahead = s.proposer_lookahead ∧ T.ptc_window = s.ptc_window := by
   unfold lhSinglePass lhFullTailWith at h
   obtain ⟨cur, -, h⟩ := specM_bind_ok h
@@ -254,7 +259,7 @@ theorem lhSinglePass_keep [CurrentPreset] (o : Oracle) (s T : BeaconState)
   obtain ⟨x, -, h⟩ := specM_bind_ok h
   simp only [lhMid_eq] at h
   obtain ⟨s6, h6, h7⟩ := specM_bind_ok h
-  have k := lhMidCore_keep o s plan x s6 h6
+  have k := lhMidCore_keep oracle s plan x s6 h6
   have h8 := process_builder_pending_payments_frame P tab s6 s6 T rfl rfl h7
   rw [h7] at h8
   have hT := Except.ok.inj h8
@@ -269,214 +274,259 @@ open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 open state_processing.per_epoch_processing.single_pass_step (ExitChurn StepContext ContextInputs)
 
 /-- What `PendingDepositsContext::new` hands to `apply_deposit_writes`. -/
-structure DepositPlan (D : Type) where
-  next : Usize
-  dbtc : U64
+structure TranslatedDepositPlan (D : Type) where
+  nextDepositIndex : Usize
+  depositBalanceToConsume : U64
   postponed : List D
-  news : Slice D
+  newValidators : Slice D
 
 /-- The untranslated Rust around the translated calls of `process_epoch_single_pass`, from the
-step context to the effective balance updates after the consolidations. `σ` is the Rust
+step context to the effective balance updates after the consolidations. `RustState` is the Rust
 `BeaconState` with its caches. Each trait of the translated code has its implementation
 (`StateRows`, `StateDeposits`, ...), and each borrow of the state by a wrapper has its start and
 its end. The other fields are the values that `single_pass.rs` reads and passes to the
 translated code. -/
-structure SinglePassGlue (σ E : Type) where
+structure UntranslatedSinglePass (RustState RustError : Type) where
   /-- `StateRows`: the per-validator lists, borrowed for the loop. -/
-  R : Type
-  rows : LhRegistryRows R E
-  rowsView : R → List Spec.Row
-  rowsBorrow : σ → R
+  Rows : Type
+  rowOperations : LhRegistryRows Rows RustError
+  rowsToSpec : Rows → List Spec.Row
+  rowsBorrow : RustState → Rows
   /-- The end of the borrow, and the write of the exit churn that the loop returns. -/
-  rowsReturn : σ → R → ExitChurn → σ
+  rowsReturn : RustState → Rows → ExitChurn → RustState
   /-- `ContextInputs`, `registry_constants` and the exit churn of the state. -/
-  contextInputs : σ → ContextInputs
+  contextInputs : RustState → ContextInputs
   registryConstants : per_epoch_processing.registry_update.RegistryConstants
-  churn : σ → ExitChurn
+  exitChurn : RustState → ExitChurn
   /-- `StateDeposits` and the plan of `PendingDepositsContext::new`. -/
-  SD : Type
-  D : Type
-  deposits : LhDepositWrites SD D E
-  absDep : D → Spec.PendingDeposit
-  postOf : SD → List Spec.PendingDeposit
-  depositPlan : σ → DepositPlan D
-  depositBorrow : σ → List D → SD
-  depositReturn : SD → σ
+  DepositState : Type
+  Deposit : Type
+  depositOperations : LhDepositWrites DepositState Deposit RustError
+  depositToSpec : Deposit → Spec.PendingDeposit
+  postponedDeposits : DepositState → List Spec.PendingDeposit
+  depositPlan : RustState → TranslatedDepositPlan Deposit
+  depositBorrow : RustState → List Deposit → DepositState
+  depositReturn : DepositState → RustState
   /-- `StateConsolidations`, `StateEffectiveBalances` and `get_validators_in_consolidations`. -/
-  consolidations : LhConsolidationState σ E
-  effectiveBalances : LhEffectiveBalanceWrites σ E
-  consolidationIndices : σ → Slice Usize
+  consolidationOperations : LhConsolidationState RustState RustError
+  effectiveBalanceOperations : LhEffectiveBalanceWrites RustState RustError
+  validatorsInConsolidations : RustState → Slice Usize
 
-variable {σ E : Type}
+variable {RustState RustError : Type}
 
 /-- The steps of `process_epoch_single_pass` after the loop and before the builder payments:
-`apply_deposit_writes`, `process_on_table` and `update_effective_balances_at`. `st` is the input
-of the single pass, where `single_pass.rs` computed the plan and the indices, and `st1` the
-state after the loop. `none`: the Rust returns an error. -/
-def afterLoop (G : SinglePassGlue σ E) (st st1 : σ) : Result (Option σ) := do
-  let (r, sd) ← per_epoch_processing.deposit_writes.apply_deposit_writes G.deposits
-    (G.depositBorrow st1 (G.depositPlan st).postponed) (G.depositPlan st).next
-    (G.depositPlan st).dbtc (G.depositPlan st).news true
+`apply_deposit_writes`, `process_on_table` and `update_effective_balances_at`. `rustState` is the
+input of the single pass, where `single_pass.rs` computed the plan and the indices, and
+`rustState1` the state after the loop. `none`: the Rust returns an error. -/
+def translatedStepsAfterLoop (code : UntranslatedSinglePass RustState RustError)
+    (rustState rustState1 : RustState) : Result (Option RustState) := do
+  let (r, sd) ← per_epoch_processing.deposit_writes.apply_deposit_writes code.depositOperations
+    (code.depositBorrow rustState1 (code.depositPlan rustState).postponed)
+      (code.depositPlan rustState).nextDepositIndex
+    (code.depositPlan rustState).depositBalanceToConsume (code.depositPlan rustState).newValidators
+      true
   match r with
   | .Err _ => ok none
   | .Ok _ =>
-  let (r, st3) ← per_epoch_processing.pending_consolidations.process_on_table G.consolidations
-    (G.depositReturn sd) (G.consolidationIndices st)
+  let (r, rustState3) ← per_epoch_processing.pending_consolidations.process_on_table
+    code.consolidationOperations
+    (code.depositReturn sd) (code.validatorsInConsolidations rustState)
   match r with
   | .Err _ => ok none
   | .Ok _ =>
-  let (r, st4) ← per_epoch_processing.list_writes.update_effective_balances_at G.effectiveBalances
-    st3 (G.consolidationIndices st)
+  let (r, rustState4) ← per_epoch_processing.list_writes.update_effective_balances_at
+    code.effectiveBalanceOperations
+    rustState3 (code.validatorsInConsolidations rustState)
   match r with
   | .Err _ => ok none
-  | .Ok _ => ok (some st4)
+  | .Ok _ => ok (some rustState4)
 
 /-- `process_epoch_single_pass` from the step context to the effective balance updates after the
-consolidations: `step_context`, `single_pass_rows` and `afterLoop`. -/
-def singlePassCore (G : SinglePassGlue σ E) (st : σ) : Result (Option σ) := do
-  let c ← per_epoch_processing.single_pass_step.step_context (G.contextInputs st)
+consolidations: `step_context`, `single_pass_rows` and `translatedStepsAfterLoop`. -/
+def translatedSinglePassBeforePayments (code : UntranslatedSinglePass RustState RustError)
+    (rustState : RustState) : Result (Option RustState) := do
+  let c ← per_epoch_processing.single_pass_step.step_context (code.contextInputs rustState)
   match c with
   | .Err _ => ok none
   | .Ok c =>
-  let (r, rows) ← per_epoch_processing.registry_rows.single_pass_rows G.rows (G.rowsBorrow st)
-    (G.churn st) c G.registryConstants
+  let (r, rows) ← per_epoch_processing.registry_rows.single_pass_rows code.rowOperations
+    (code.rowsBorrow rustState)
+    (code.exitChurn rustState) c code.registryConstants
   match r with
   | .Err _ => ok none
-  | .Ok ch => afterLoop G st (G.rowsReturn st rows ch)
+  | .Ok ch => translatedStepsAfterLoop code rustState (code.rowsReturn rustState rows ch)
 
 /-- The untranslated Rust of `process_builder_pending_payments` in `single_pass.rs`:
 `StateBuilderPayments` and the arguments of `apply_builder_pending_payments`. -/
-structure PaymentsGlue (σ E : Type) where
-  SP : Type
-  payments : LhPaymentWrites SP E
-  wview : SP → List LhWithdrawal
-  pview : SP → List LhPayment
-  paymentsBorrow : σ → SP
-  paymentsReturn : σ → SP → σ
+structure UntranslatedBuilderPayments (RustState RustError : Type) where
+  PaymentState : Type
+  paymentOperations : LhPaymentWrites PaymentState RustError
+  pendingWithdrawals : PaymentState → List LhWithdrawal
+  pendingPayments : PaymentState → List LhPayment
+  paymentsBorrow : RustState → PaymentState
+  paymentsReturn : RustState → PaymentState → RustState
   /-- `state_ctxt.total_active_balance`, read at the input of the single pass. -/
-  totalActiveBalance : σ → U64
+  totalActiveBalance : RustState → U64
   slotsPerEpoch : U64
   slotsPerEpochUsize : Usize
   thresholdNumerator : U64
   thresholdDenominator : U64
 
-/-- `process_builder_pending_payments`. `st` is the input of the single pass. -/
-def payments (P : PaymentsGlue σ E) (st st4 : σ) : Result (Option σ) := do
-  let (r, sp) ← per_epoch_processing.list_writes.apply_builder_pending_payments P.payments
-    (P.paymentsBorrow st4) (P.totalActiveBalance st) P.slotsPerEpoch P.slotsPerEpochUsize
-    P.thresholdNumerator P.thresholdDenominator
+/-- `process_builder_pending_payments`. `rustState` is the input of the single pass. -/
+def translatedBuilderPayments (paymentsCode : UntranslatedBuilderPayments RustState RustError)
+    (rustState rustState4 : RustState) : Result (Option RustState) := do
+  let (r, sp) ← per_epoch_processing.list_writes.apply_builder_pending_payments
+    paymentsCode.paymentOperations
+    (paymentsCode.paymentsBorrow rustState4) (paymentsCode.totalActiveBalance rustState)
+      paymentsCode.slotsPerEpoch paymentsCode.slotsPerEpochUsize
+    paymentsCode.thresholdNumerator paymentsCode.thresholdDenominator
   match r with
   | .Err _ => ok none
-  | .Ok _ => ok (some (P.paymentsReturn st4 sp))
+  | .Ok _ => ok (some (paymentsCode.paymentsReturn rustState4 sp))
 
 /-- The Gloas `process_epoch_single_pass` up to the builder payments, as the calls of the
 translated functions in `Generated.lean` joined by the untranslated code. `none`: the Rust
 returns an error. -/
-def singlePass (G : SinglePassGlue σ E) (P : PaymentsGlue σ E) (st : σ) : Result (Option σ) := do
-  let r ← singlePassCore G st
+def translatedSinglePass (code : UntranslatedSinglePass RustState RustError)
+    (paymentsCode : UntranslatedBuilderPayments RustState RustError)
+    (rustState : RustState) : Result (Option RustState) := do
+  let r ← translatedSinglePassBeforePayments code rustState
   match r with
   | none => ok none
-  | some st4 => payments P st st4
+  | some rustState4 => translatedBuilderPayments paymentsCode rustState rustState4
 
 variable [Spec.CurrentPreset]
 
-/-- The trusted facts about the untranslated code `G` at the input `st` of the single pass, with
-`view` the spec state that a Rust state holds. The contracts are those of `Trusted/`. The borrow
+/-- The trusted facts about the untranslated code at the input `rustState` of the single pass, with
+`rustStateToSpec` the spec state that a Rust state holds. The contracts are those of `Trusted/`.
+The borrow
 facts say which fields of the state each wrapper holds. The read facts say that the values passed
-to the translated code are the spec values. `planTab` is the total that the deposit plan uses: the
+to the translated code are the spec values. `planTotal` is the total that the deposit plan uses: the
 total active balance in Gloas, `fuluTotalActiveBalance` in Fulu. -/
-structure SinglePassLinks (G : SinglePassGlue σ E) (o : Spec.Oracle)
-    (view : σ → Spec.BeaconState) (st : σ) (planTab : Spec.Gwei → Spec.Gwei) : Prop where
-  /-- `RowsContract`, with the row inputs of the model. -/
-  rowsContract : ∀ tab cur plan, Spec.get_total_active_balance Spec.P (view st) = .ok tab →
-    Spec.get_current_epoch Spec.P (view st) = .ok cur →
-    Spec.lhDepositPlan (view st) (planTab tab) cur = .ok plan →
-    RowsContract G.rows Spec.P G.rowsView
-      (modelRowInputs tab plan.topups (Spec.consolidationIndices (view st)))
-  depositContract : DepositWritesContract G.deposits o (fun sd => view (G.depositReturn sd))
-    G.absDep G.postOf
-  consolidationContract : ConsolidationStateContract G.consolidations Spec.P view
-  /-- `BTreeSetIter` of `get_validators_in_consolidations`. -/
-  btree : BTreeSetIter ((view st).pending_consolidations.flatMap
-    fun c => [c.source_index, c.target_index]) ((G.consolidationIndices st).val.map (·.val))
-  effectiveBalanceContract : EffectiveBalanceContract G.effectiveBalances view
+structure UntranslatedSinglePassFacts (code : UntranslatedSinglePass RustState RustError)
+    (oracle : Spec.Oracle)
+    (rustStateToSpec : RustState → Spec.BeaconState) (rustState : RustState)
+    (planTotal : Spec.Gwei → Spec.Gwei) : Prop where
+  /-- `ValidatorRowsMatchSpec`, with the row inputs of the model. -/
+  rowsContract : ∀ total current plan,
+    Spec.get_total_active_balance Spec.P (rustStateToSpec rustState) = .ok total →
+    Spec.get_current_epoch Spec.P (rustStateToSpec rustState) = .ok current →
+    Spec.lhDepositPlan (rustStateToSpec rustState) (planTotal total) current = .ok plan →
+    ValidatorRowsMatchSpec code.rowOperations Spec.P code.rowsToSpec
+      (modelRowInputs total plan.topups
+        (Spec.validatorsInConsolidations (rustStateToSpec rustState)))
+  depositContract : DepositWritesMatchSpec code.depositOperations oracle (fun sd =>
+    rustStateToSpec (code.depositReturn sd))
+    code.depositToSpec code.postponedDeposits
+  consolidationContract : ConsolidationAccessMatchesSpec code.consolidationOperations Spec.P
+    rustStateToSpec
+  /-- `IteratesLikeBTreeSet` of `get_validators_in_consolidations`. -/
+  validatorsInConsolidations : IteratesLikeBTreeSet
+    ((rustStateToSpec rustState).pending_consolidations.flatMap
+    fun c => [c.source_index, c.target_index])
+      ((code.validatorsInConsolidations rustState).val.map (·.val))
+  effectiveBalanceContract : EffectiveBalanceWritesMatchSpec code.effectiveBalanceOperations
+    rustStateToSpec
   /-- `StateRows` holds the rows of the state. Ending its borrow and writing the churn gives
   the state with the new rows and churn. -/
-  rowsBorrow : G.rowsView (G.rowsBorrow st) = Spec.rowsOf (view st)
-  rowsReturn : ∀ r ch, view (G.rowsReturn st r ch) =
-    (view st).withRowsChurn (absChurn ch) (G.rowsView r)
+  rowsBorrow : code.rowsToSpec (code.rowsBorrow rustState) = Spec.rowsOf (rustStateToSpec rustState)
+  rowsReturn : ∀ r ch, rustStateToSpec (code.rowsReturn rustState r ch) =
+    (rustStateToSpec rustState).withRowsChurn (exitChurnToSpec ch) (code.rowsToSpec r)
   /-- `StateDeposits` holds the state and the postponed deposits. -/
-  depositBorrow : ∀ t post, view (G.depositReturn (G.depositBorrow t post)) = view t ∧
-    G.postOf (G.depositBorrow t post) = post.map G.absDep
+  depositBorrow : ∀ t post, rustStateToSpec (code.depositReturn (code.depositBorrow t post)) =
+    rustStateToSpec t ∧
+    code.postponedDeposits (code.depositBorrow t post) = post.map code.depositToSpec
   /-- `ContextInputs`. -/
-  contextInputs : ∀ cur tab, Spec.get_current_epoch Spec.P (view st) = .ok cur →
-    Spec.get_total_active_balance Spec.P (view st) = .ok tab →
-    ContextInputsMatch (view st) cur tab (G.contextInputs st)
-  churn : absChurn (G.churn st) =
-    ((view st).earliest_exit_epoch, (view st).exit_balance_to_consume)
+  contextInputs : ∀ current total, Spec.get_current_epoch Spec.P (rustStateToSpec rustState) =
+    .ok current →
+    Spec.get_total_active_balance Spec.P (rustStateToSpec rustState) = .ok total →
+    ContextInputsMatch (rustStateToSpec rustState) current total (code.contextInputs rustState)
+  exitChurn : exitChurnToSpec (code.exitChurn rustState) =
+    ((rustStateToSpec rustState).earliest_exit_epoch,
+      (rustStateToSpec rustState).exit_balance_to_consume)
   /-- `PendingDepositsContext::new` hands over the plan of the model. -/
-  depositPlan : ∀ tab cur plan, Spec.get_total_active_balance Spec.P (view st) = .ok tab →
-    Spec.get_current_epoch Spec.P (view st) = .ok cur →
-    Spec.lhDepositPlan (view st) (planTab tab) cur = .ok plan →
-    (G.depositPlan st).next.val = plan.next_deposit_index ∧
-    (G.depositPlan st).dbtc.val = plan.deposit_balance_to_consume ∧
-    (G.depositPlan st).postponed.map G.absDep = plan.postponed ∧
-    (G.depositPlan st).news.val.map G.absDep = plan.new_validator_deposits
+  depositPlan : ∀ total current plan,
+    Spec.get_total_active_balance Spec.P (rustStateToSpec rustState) = .ok total →
+    Spec.get_current_epoch Spec.P (rustStateToSpec rustState) = .ok current →
+    Spec.lhDepositPlan (rustStateToSpec rustState) (planTotal total) current = .ok plan →
+    (code.depositPlan rustState).nextDepositIndex.val = plan.next_deposit_index ∧
+    (code.depositPlan rustState).depositBalanceToConsume.val = plan.deposit_balance_to_consume ∧
+    (code.depositPlan rustState).postponed.map code.depositToSpec = plan.postponed ∧
+    (code.depositPlan rustState).newValidators.val.map code.depositToSpec =
+      plan.new_validator_deposits
   /-- A state fact, not a fact about the Rust: the new validators of the epoch fit under
   `VALIDATOR_REGISTRY_LIMIT = 2^40`, where the milhouse validator list fails and the spec does
   not. It holds on every real chain (the registry is far below `2^40`). -/
-  depositRoom : ∀ tab cur plan, Spec.get_total_active_balance Spec.P (view st) = .ok tab →
-    Spec.get_current_epoch Spec.P (view st) = .ok cur →
-    Spec.lhDepositPlan (view st) (planTab tab) cur = .ok plan →
-    (view st).validators.length + plan.new_validator_deposits.length ≤ 2 ^ 40
+  depositRoom : ∀ total current plan,
+    Spec.get_total_active_balance Spec.P (rustStateToSpec rustState) = .ok total →
+    Spec.get_current_epoch Spec.P (rustStateToSpec rustState) = .ok current →
+    Spec.lhDepositPlan (rustStateToSpec rustState) (planTotal total) current = .ok plan →
+    (rustStateToSpec rustState).validators.length + plan.new_validator_deposits.length ≤ 2 ^ 40
   /-- `usize` has 64 bits. -/
   usize64 : Usize.max = U64.max
 
-/-- The trusted facts about the untranslated payments code `P`, with `st` the input of the single
+/-- The trusted facts about the untranslated payments code, with `rustState` the input of the single
 pass. -/
-structure PaymentsLinks (P : PaymentsGlue σ E) (view : σ → Spec.BeaconState) (st : σ) : Prop where
-  paymentContract : PaymentWritesContract P.payments P.wview P.pview
+structure UntranslatedBuilderPaymentsFacts
+    (paymentsCode : UntranslatedBuilderPayments RustState RustError)
+    (rustStateToSpec : RustState → Spec.BeaconState) (rustState : RustState) : Prop where
+  paymentContract : BuilderPaymentWritesMatchSpec paymentsCode.paymentOperations
+    paymentsCode.pendingWithdrawals paymentsCode.pendingPayments
   /-- `StateBuilderPayments` holds the two builder lists of the state, and writes only them. -/
-  paymentsBorrow : ∀ t, (P.pview (P.paymentsBorrow t)).map absPayment =
-      (view t).builder_pending_payments ∧
-    (P.wview (P.paymentsBorrow t)).map absWithdrawal = (view t).builder_pending_withdrawals
-  paymentsReturn : ∀ t sp, view (P.paymentsReturn t sp) = { view t with
-    builder_pending_withdrawals := (P.wview sp).map absWithdrawal
-    builder_pending_payments := (P.pview sp).map absPayment }
-  totalActiveBalance : ∀ tab, Spec.get_total_active_balance Spec.P (view st) = .ok tab →
-    (P.totalActiveBalance st).val = tab
-  slotsPerEpoch : P.slotsPerEpoch.val = Spec.P.SLOTS_PER_EPOCH
-  slotsPerEpochUsize : P.slotsPerEpochUsize.val = Spec.P.SLOTS_PER_EPOCH
+  paymentsBorrow : ∀ t, (paymentsCode.pendingPayments (paymentsCode.paymentsBorrow t)).map
+    paymentToSpec =
+      (rustStateToSpec t).builder_pending_payments ∧
+    (paymentsCode.pendingWithdrawals (paymentsCode.paymentsBorrow t)).map withdrawalToSpec =
+      (rustStateToSpec t).builder_pending_withdrawals
+  paymentsReturn : ∀ t sp, rustStateToSpec (paymentsCode.paymentsReturn t sp) =
+    { rustStateToSpec t with
+    builder_pending_withdrawals := (paymentsCode.pendingWithdrawals sp).map withdrawalToSpec
+    builder_pending_payments := (paymentsCode.pendingPayments sp).map paymentToSpec }
+  totalActiveBalance : ∀ total, Spec.get_total_active_balance Spec.P (rustStateToSpec rustState) =
+    .ok total →
+    (paymentsCode.totalActiveBalance rustState).val = total
+  slotsPerEpoch : paymentsCode.slotsPerEpoch.val = Spec.P.SLOTS_PER_EPOCH
+  slotsPerEpochUsize : paymentsCode.slotsPerEpochUsize.val = Spec.P.SLOTS_PER_EPOCH
   /-- The builder payment threshold, 6/10. -/
-  threshold : P.thresholdNumerator = 6#u64 ∧ P.thresholdDenominator = 10#u64
+  threshold : paymentsCode.thresholdNumerator = 6#u64 ∧ paymentsCode.thresholdDenominator = 10#u64
 
 /-- The steps after the loop return the state of the model `lhMidCore`. -/
-theorem afterLoop_spec (G : SinglePassGlue σ E) (o : Spec.Oracle) (view : σ → Spec.BeaconState)
-    (st : σ) (planTab : Spec.Gwei → Spec.Gwei) (hL : SinglePassLinks G o view st planTab)
-    (tab cur : Nat) (htab : Spec.get_total_active_balance Spec.P (view st) = .ok tab)
-    (hcur : Spec.get_current_epoch Spec.P (view st) = .ok cur) (plan : Spec.LhDepositPlan)
-    (hplan : Spec.lhDepositPlan (view st) (planTab tab) cur = .ok plan) (st1 : σ)
+theorem translatedStepsAfterLoop_spec (code : UntranslatedSinglePass RustState RustError)
+    (oracle : Spec.Oracle) (rustStateToSpec : RustState → Spec.BeaconState)
+    (rustState : RustState) (planTotal : Spec.Gwei → Spec.Gwei)
+    (hL : UntranslatedSinglePassFacts code oracle rustStateToSpec rustState planTotal)
+    (total current : Nat) (htab : Spec.get_total_active_balance Spec.P (rustStateToSpec rustState) =
+    .ok total)
+    (hcur : Spec.get_current_epoch Spec.P (rustStateToSpec rustState) = .ok current)
+    (plan : Spec.LhDepositPlan)
+    (hplan : Spec.lhDepositPlan (rustStateToSpec rustState) (planTotal total) current = .ok plan)
+    (rustState1 : RustState)
     (x : (Spec.Epoch × Spec.Gwei) × List Spec.Row)
-    (hv1 : view st1 = (view st).withRowsChurn x.1 x.2)
-    (hxlen : x.2.length = (view st).validators.length) (s6 : Spec.BeaconState)
-    (h : Spec.lhMidCore o (view st) plan ((view st).withRowsChurn x.1 x.2) = .ok s6) :
-    ∃ st4, afterLoop G st st1 = ok (some st4) ∧ view st4 = s6 := by
+    (hv1 : rustStateToSpec rustState1 = (rustStateToSpec rustState).withRowsChurn x.1 x.2)
+    (hxlen : x.2.length = (rustStateToSpec rustState).validators.length) (s6 : Spec.BeaconState)
+    (h : Spec.lhMidCore oracle (rustStateToSpec rustState) plan
+    ((rustStateToSpec rustState).withRowsChurn x.1 x.2) = .ok s6) :
+    ∃ rustState4, translatedStepsAfterLoop code rustState rustState1 = ok (some rustState4) ∧
+      rustStateToSpec rustState4 = s6 := by
   unfold Spec.lhMidCore at h
   obtain ⟨s4, h4, h⟩ := Spec.specM_bind_ok h
   obtain ⟨s5, h5, h6⟩ := Spec.specM_bind_ok h
-  unfold afterLoop
+  unfold translatedStepsAfterLoop
   -- The deposit writes.
-  obtain ⟨hnext, hdbtc, hpostp, hnews⟩ := hL.depositPlan tab cur plan htab hcur hplan
-  obtain ⟨hdv, hdp⟩ := hL.depositBorrow st1 (G.depositPlan st).postponed
-  have hdep := apply_deposit_writes_model G.deposits o (fun sd => view (G.depositReturn sd))
-    G.absDep G.postOf hL.depositContract (view st) (planTab tab) cur plan hplan
-    (G.depositBorrow st1 (G.depositPlan st).postponed)
-    (by simp only [hdv, hv1]; rfl) (G.depositPlan st).next (G.depositPlan st).dbtc
-    (G.depositPlan st).news hnext hdbtc (by rw [hdp, hpostp]) hnews
+  obtain ⟨hnext, hdbtc, hpostp, hnews⟩ := hL.depositPlan total current plan htab hcur hplan
+  obtain ⟨hdv, hdp⟩ := hL.depositBorrow rustState1 (code.depositPlan rustState).postponed
+  have hdep := apply_deposit_writes_model code.depositOperations oracle (fun sd =>
+    rustStateToSpec (code.depositReturn sd))
+    code.depositToSpec code.postponedDeposits hL.depositContract (rustStateToSpec rustState)
+      (planTotal total) current plan hplan
+    (code.depositBorrow rustState1 (code.depositPlan rustState).postponed)
+    (by simp only [hdv, hv1]; rfl) (code.depositPlan rustState).nextDepositIndex
+      (code.depositPlan rustState).depositBalanceToConsume
+    (code.depositPlan rustState).newValidators hnext hdbtc (by rw [hdp, hpostp]) hnews
     (by
       simp only [hdv, hv1, Spec.BeaconState.withRowsChurn, Spec.BeaconState.withRows,
         List.length_map, hxlen]
-      exact hL.depositRoom tab cur plan htab hcur hplan)
+      exact hL.depositRoom total current plan htab hcur hplan)
   obtain ⟨⟨rd, sd⟩, hrd, hdpost⟩ := spec_imp_exists hdep
   rw [hrd]
   simp only [bind_tc_ok, uncurry_apply_pair]
@@ -488,24 +538,26 @@ theorem afterLoop_spec (G : SinglePassGlue σ E) (o : Spec.Oracle) (view : σ �
       obtain ⟨e', he'⟩ := hdpost
       rw [h4] at he'
       cases he'
-  have hv2 : view (G.depositReturn sd) = s4 := by
+  have hv2 : rustStateToSpec (code.depositReturn sd) = s4 := by
     have := h4.symm.trans hdpost
     cases this; rfl
   simp only
   -- The pending consolidations.
-  have hW : Spec.BalLen (Spec.lhQueueWrite (view st) plan
-      ((view st).withRowsChurn x.1 x.2)) := by
+  have hW : Spec.BalLen (Spec.lhQueueWrite (rustStateToSpec rustState) plan
+      ((rustStateToSpec rustState).withRowsChurn x.1 x.2)) := by
     simp [Spec.BalLen, Spec.lhQueueWrite, Spec.BeaconState.withRowsChurn,
       Spec.BeaconState.withRows]
-  obtain ⟨⟨hpc4, -⟩, hlen4⟩ := Spec.lhNewValidators_keep o plan _ s4 h4 hW
-  have hbtree4 : BTreeSetIter (s4.pending_consolidations.flatMap
+  obtain ⟨⟨hpc4, -⟩, hlen4⟩ := Spec.lhNewValidators_keep oracle plan _ s4 h4 hW
+  have hbtree4 : IteratesLikeBTreeSet (s4.pending_consolidations.flatMap
       fun c => [c.source_index, c.target_index])
-      ((G.consolidationIndices st).val.map (·.val)) := by
-    rw [hpc4]; exact hL.btree
-  have hcons := process_on_table_spec G.consolidations Spec.P view hL.consolidationContract
-    hL.usize64 (G.depositReturn sd) (G.consolidationIndices st) (by rw [hv2]; exact hbtree4)
+      ((code.validatorsInConsolidations rustState).val.map (·.val)) := by
+    rw [hpc4]; exact hL.validatorsInConsolidations
+  have hcons := process_on_table_spec code.consolidationOperations Spec.P rustStateToSpec
+    hL.consolidationContract
+    hL.usize64 (code.depositReturn sd) (code.validatorsInConsolidations rustState)
+      (by rw [hv2]; exact hbtree4)
     (by rw [hv2]; exact hlen4)
-  obtain ⟨⟨rc, st3⟩, hrc, hcpost, -⟩ := spec_imp_exists hcons
+  obtain ⟨⟨rc, rustState3⟩, hrc, hcpost, -⟩ := spec_imp_exists hcons
   rw [hrc]
   simp only [bind_tc_ok, uncurry_apply_pair]
   rw [hv2] at hcpost
@@ -514,10 +566,11 @@ theorem afterLoop_spec (G : SinglePassGlue σ E) (o : Spec.Oracle) (view : σ �
   subst hrc1
   simp only
   -- The effective balance updates of the validators that consolidations name.
-  have hidx := btreeSetIter_consolidationIndices (view st) _ hL.btree
-  have heb := update_effective_balances_at_spec G.effectiveBalances view
-    hL.effectiveBalanceContract st3 (G.consolidationIndices st) _ hidx
-  obtain ⟨⟨re, st4⟩, hre, hepost⟩ := spec_imp_exists heb
+  have hidx := btreeSetIter_consolidationIndices (rustStateToSpec rustState) _
+    hL.validatorsInConsolidations
+  have heb := update_effective_balances_at_spec code.effectiveBalanceOperations rustStateToSpec
+    hL.effectiveBalanceContract rustState3 (code.validatorsInConsolidations rustState) _ hidx
+  obtain ⟨⟨re, rustState4⟩, hre, hepost⟩ := spec_imp_exists heb
   rw [hre]
   simp only [bind_tc_ok, uncurry_apply_pair]
   rw [hv3] at hepost
@@ -528,51 +581,63 @@ theorem afterLoop_spec (G : SinglePassGlue σ E) (o : Spec.Oracle) (view : σ �
       obtain ⟨e', he'⟩ := hepost
       rw [h6] at he'
       cases he'
-  refine ⟨st4, rfl, ?_⟩
+  refine ⟨rustState4, rfl, ?_⟩
   have := h6.symm.trans hepost
   cases this; rfl
 
 /-- The builder payments return the state of the spec `process_builder_pending_payments`. -/
-theorem payments_spec (P : PaymentsGlue σ E) (view : σ → Spec.BeaconState) (st : σ)
-    (hL : PaymentsLinks P view st) (tab : Nat)
-    (htab : Spec.get_total_active_balance Spec.P (view st) = .ok tab) (st4 : σ)
-    (hlen : (view st4).builder_pending_payments.length = 2 * Spec.P.SLOTS_PER_EPOCH)
+theorem translatedBuilderPayments_matches_model
+    (paymentsCode : UntranslatedBuilderPayments RustState RustError)
+    (rustStateToSpec : RustState → Spec.BeaconState) (rustState : RustState)
+    (hL : UntranslatedBuilderPaymentsFacts paymentsCode rustStateToSpec rustState) (total : Nat)
+    (htab : Spec.get_total_active_balance Spec.P (rustStateToSpec rustState) = .ok total)
+    (rustState4 : RustState)
+    (hlen : (rustStateToSpec rustState4).builder_pending_payments.length = 2 *
+    Spec.P.SLOTS_PER_EPOCH)
     (T : Spec.BeaconState)
-    (h : Spec.process_builder_pending_payments Spec.P tab (view st4) = .ok T) :
-    ∃ st', payments P st st4 = ok (some st') ∧ view st' = T := by
-  obtain ⟨hpb, hwb⟩ := hL.paymentsBorrow st4
-  have hplen : (P.pview (P.paymentsBorrow st4)).length = 2 * Spec.P.SLOTS_PER_EPOCH := by
-    rw [← List.length_map (f := absPayment), hpb, hlen]
-  obtain ⟨v, -, hvv⟩ := hL.paymentContract.payments (P.paymentsBorrow st4)
+    (h : Spec.process_builder_pending_payments Spec.P total (rustStateToSpec rustState4) = .ok T) :
+    ∃ rustState', translatedBuilderPayments paymentsCode rustState rustState4 = ok (some rustState')
+      ∧ rustStateToSpec rustState' = T := by
+  obtain ⟨hpb, hwb⟩ := hL.paymentsBorrow rustState4
+  have hplen : (paymentsCode.pendingPayments (paymentsCode.paymentsBorrow rustState4)).length = 2 *
+    Spec.P.SLOTS_PER_EPOCH := by
+    rw [← List.length_map (f := paymentToSpec), hpb, hlen]
+  obtain ⟨v, -, hvv⟩ := hL.paymentContract.payments (paymentsCode.paymentsBorrow rustState4)
   obtain ⟨hnum, hden⟩ := hL.threshold
-  have hpay := apply_builder_pending_payments_equiv Spec.P P.payments P.wview P.pview
-    hL.paymentContract (P.paymentsBorrow st4) (P.totalActiveBalance st) P.slotsPerEpoch
-    P.slotsPerEpochUsize hL.slotsPerEpoch hL.slotsPerEpochUsize hplen
+  have hpay := apply_builder_pending_payments_equiv Spec.P paymentsCode.paymentOperations
+    paymentsCode.pendingWithdrawals paymentsCode.pendingPayments
+    hL.paymentContract (paymentsCode.paymentsBorrow rustState4)
+      (paymentsCode.totalActiveBalance rustState) paymentsCode.slotsPerEpoch
+    paymentsCode.slotsPerEpochUsize hL.slotsPerEpoch hL.slotsPerEpochUsize hplen
     (Slice.from v.val v.property) (by rw [Slice.from_val]; exact hvv)
   rw [← hnum, ← hden] at hpay
   obtain ⟨⟨rp, sp⟩, hrp, hppost⟩ := spec_imp_exists hpay
-  unfold payments
+  unfold translatedBuilderPayments
   rw [hrp]
   simp only [bind_tc_ok, uncurry_apply_pair]
-  rw [hL.totalActiveBalance tab htab] at hppost
-  have hp0 : (view st4).builder_pending_payments =
-      (absState (P.wview (P.paymentsBorrow st4),
-        P.pview (P.paymentsBorrow st4))).builder_pending_payments := by
+  rw [hL.totalActiveBalance total htab] at hppost
+  have hp0 : (rustStateToSpec rustState4).builder_pending_payments =
+      (builderStateToSpec (paymentsCode.pendingWithdrawals (paymentsCode.paymentsBorrow rustState4),
+        paymentsCode.pendingPayments
+          (paymentsCode.paymentsBorrow rustState4))).builder_pending_payments := by
     rw [← hpb]; rfl
-  have hw0 : (view st4).builder_pending_withdrawals =
-      (absState (P.wview (P.paymentsBorrow st4),
-        P.pview (P.paymentsBorrow st4))).builder_pending_withdrawals := by
+  have hw0 : (rustStateToSpec rustState4).builder_pending_withdrawals =
+      (builderStateToSpec (paymentsCode.pendingWithdrawals (paymentsCode.paymentsBorrow rustState4),
+        paymentsCode.pendingPayments
+          (paymentsCode.paymentsBorrow rustState4))).builder_pending_withdrawals := by
     rw [← hwb]; rfl
   cases rp with
   | Err e =>
     exfalso
     obtain ⟨e', he'⟩ := hppost
-    have := Spec.process_builder_pending_payments_frame Spec.P tab _ (view st4) T hp0 hw0 h
+    have := Spec.process_builder_pending_payments_frame Spec.P total _ (rustStateToSpec rustState4)
+      T hp0 hw0 h
     rw [he'] at this
     cases this
   | Ok u =>
     refine ⟨_, rfl, ?_⟩
-    have := Spec.process_builder_pending_payments_frame Spec.P tab (view st4) _ _ hp0.symm
+    have := Spec.process_builder_pending_payments_frame Spec.P total (rustStateToSpec rustState4) _
+      _ hp0.symm
       hw0.symm hppost
     rw [h] at this
     cases this
@@ -580,34 +645,44 @@ theorem payments_spec (P : PaymentsGlue σ E) (view : σ → Spec.BeaconState) (
     rfl
 
 /-- The composed Gloas single pass returns the state of the model `lhSinglePass`: when the model
-returns `ok`, the Rust returns `Ok` with a state whose view is the model's. -/
-theorem singlePass_spec [Spec.CurrentPreset.Valid] (G : SinglePassGlue σ E) (P : PaymentsGlue σ E)
-    (o : Spec.Oracle) (view : σ → Spec.BeaconState) (st : σ) (hL : SinglePassLinks G o view st id)
-    (hPL : PaymentsLinks P view st) (hk : ConstantsMatch Spec.P G.registryConstants)
-    (hslot : (view st).slot < 2 ^ 64)
-    (hbpp : (view st).builder_pending_payments.length = 2 * Spec.P.SLOTS_PER_EPOCH)
-    (T : Spec.BeaconState) (hT : Spec.lhSinglePass o (view st) = .ok T) :
-    ∃ st', singlePass G P st = ok (some st') ∧ view st' = T := by
+returns `ok`, the Rust returns `Ok` with a state whose spec state is the model's. -/
+theorem translatedSinglePass_matches_model [Spec.CurrentPreset.Valid]
+    (code : UntranslatedSinglePass RustState RustError)
+    (paymentsCode : UntranslatedBuilderPayments RustState RustError)
+    (oracle : Spec.Oracle) (rustStateToSpec : RustState → Spec.BeaconState) (rustState : RustState)
+    (hL : UntranslatedSinglePassFacts code oracle rustStateToSpec rustState id)
+    (hPL : UntranslatedBuilderPaymentsFacts paymentsCode rustStateToSpec rustState)
+    (hk : RegistryConstantsMatchGloas Spec.P code.registryConstants)
+    (hslot : (rustStateToSpec rustState).slot < 2 ^ 64)
+    (hbpp : (rustStateToSpec rustState).builder_pending_payments.length = 2 *
+    Spec.P.SLOTS_PER_EPOCH)
+    (T : Spec.BeaconState) (hT : Spec.lhSinglePass oracle (rustStateToSpec rustState) = .ok T) :
+    ∃ rustState', translatedSinglePass code paymentsCode rustState = ok (some rustState') ∧
+      rustStateToSpec rustState' = T := by
   unfold Spec.lhSinglePass Spec.lhFullTailWith at hT
-  obtain ⟨cur, hcur, hT⟩ := Spec.specM_bind_ok hT
-  obtain ⟨tab, htab, hT⟩ := Spec.specM_bind_ok hT
+  obtain ⟨current, hcur, hT⟩ := Spec.specM_bind_ok hT
+  obtain ⟨total, htab, hT⟩ := Spec.specM_bind_ok hT
   obtain ⟨rctx, hr, hT⟩ := Spec.specM_bind_ok hT
   obtain ⟨⟨adj, per⟩, hpre, hT⟩ := Spec.specM_bind_ok hT
   obtain ⟨plan, hplan, hT⟩ := Spec.specM_bind_ok hT
   obtain ⟨⟨dn, up⟩, hh, hT⟩ := Spec.specM_bind_ok hT
   obtain ⟨x, hx, hT⟩ := Spec.specM_bind_ok hT
-  have hxlen : x.2.length = (view st).validators.length := by
+  have hxlen : x.2.length = (rustStateToSpec rustState).validators.length := by
     rw [(Spec.passM_rows _ _ _ _ hx).1, Spec.rowsOf_length]
   simp only [Spec.lhMid_eq] at hT
   obtain ⟨s6, h6, h7⟩ := Spec.specM_bind_ok hT
-  have htarget : cur + Spec.P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < Spec.UINT64_SIZE := by
+  have htarget : current + Spec.P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < Spec.UINT64_SIZE := by
     rw [Spec.get_current_epoch_ok_eq hcur]; exact Spec.P_slot_target_lt hslot
   -- The step context and the loop.
-  have hloop := single_pass_rows_model_inputs G.rows (view st) tab plan.topups
-    (Spec.consolidationIndices (view st)) G.rowsView (G.rowsBorrow st) hL.rowsBorrow
-    (hL.rowsContract tab cur plan htab hcur hplan) cur hcur rctx hr adj per hpre dn up hh htarget
-    (G.contextInputs st) (hL.contextInputs cur tab hcur htab) G.registryConstants hk
-    (G.churn st) hL.churn
+  have hloop := single_pass_rows_model_inputs code.rowOperations (rustStateToSpec rustState) total
+    plan.topups
+    (Spec.validatorsInConsolidations (rustStateToSpec rustState)) code.rowsToSpec
+      (code.rowsBorrow rustState) hL.rowsBorrow
+    (hL.rowsContract total current plan htab hcur hplan) current hcur rctx hr adj per hpre dn up hh
+      htarget
+    (code.contextInputs rustState) (hL.contextInputs current total hcur htab) code.registryConstants
+      hk
+    (code.exitChurn rustState) hL.exitChurn
   obtain ⟨r0, hr0, c, rfl, hc⟩ := spec_imp_exists hloop
   obtain ⟨⟨res, rows'⟩, hres, hpost⟩ := spec_imp_exists hc
   obtain ⟨ch, rfl⟩ : ∃ ch, res = .Ok ch := by
@@ -619,19 +694,23 @@ theorem singlePass_spec [Spec.CurrentPreset.Valid] (G : SinglePassGlue σ E) (P 
         have := hx.symm.trans hpost
         cases this
       | Rows e => exact absurd hpost id
-  have hxv : x = (absChurn ch, G.rowsView rows') := by
+  have hxv : x = (exitChurnToSpec ch, code.rowsToSpec rows') := by
     have := hx.symm.trans hpost
     cases this; rfl
   subst hxv
   -- The steps after the loop.
-  obtain ⟨st4, ha, hv4⟩ := afterLoop_spec G o view st id hL tab cur htab hcur plan hplan
-    (G.rowsReturn st rows' ch) _ (hL.rowsReturn rows' ch) (by rw [← hxlen]) s6 h6
+  obtain ⟨rustState4, ha, hv4⟩ :=
+    translatedStepsAfterLoop_spec code oracle rustStateToSpec rustState id hL total current htab
+    hcur plan hplan
+    (code.rowsReturn rustState rows' ch) _ (hL.rowsReturn rows' ch) (by rw [← hxlen]) s6 h6
   -- The builder payments.
-  have hk6 := Spec.lhMidCore_keep o (view st) plan _ s6 h6
-  obtain ⟨st', hp, hv'⟩ := payments_spec P view st hPL tab htab st4
+  have hk6 := Spec.lhMidCore_keep oracle (rustStateToSpec rustState) plan _ s6 h6
+  obtain ⟨rustState', hp, hv'⟩ :=
+    translatedBuilderPayments_matches_model paymentsCode rustStateToSpec rustState hPL total htab
+    rustState4
     (by rw [hv4, hk6.1, hbpp]) T (by rw [hv4]; exact h7)
-  refine ⟨st', ?_, hv'⟩
-  unfold singlePass singlePassCore
+  refine ⟨rustState', ?_, hv'⟩
+  unfold translatedSinglePass translatedSinglePassBeforePayments
   rw [hr0]
   simp only [bind_tc_ok]
   rw [hres]

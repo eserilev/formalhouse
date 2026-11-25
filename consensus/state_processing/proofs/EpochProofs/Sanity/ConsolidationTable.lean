@@ -13,8 +13,8 @@ consolidations reference, then writes the table balances back. `stepLoop_table` 
 table run is the full-registry run, seen through the table. `writeBack_table` shows that the
 write-back gives the full-registry balances.
 
-`consolidationIndices_eq_of_sorted` shows that a strictly increasing list with the members of
-the referenced indices is `consolidationIndices`. This is what the `BTreeSet` in
+`validatorsInConsolidations_eq_of_sorted` shows that a strictly increasing list with the members of
+the referenced indices is `validatorsInConsolidations`. This is what the `BTreeSet` in
 `single_pass.rs` gives.
 -/
 
@@ -374,12 +374,12 @@ decreasing_by
   omega
 
 /-- A strictly increasing list with the members of the referenced indices is
-`consolidationIndices`. -/
-theorem consolidationIndices_eq_of_sorted (s : BeaconState) (it : List Nat)
+`validatorsInConsolidations`. -/
+theorem validatorsInConsolidations_eq_of_sorted (s : BeaconState) (it : List Nat)
     (hsorted : it.Pairwise (· < ·))
     (hmem : ∀ x, x ∈ it ↔ ∃ c ∈ s.pending_consolidations, x = c.source_index ∨ x = c.target_index) :
-    it = consolidationIndices s := by
-  unfold consolidationIndices
+    it = validatorsInConsolidations s := by
+  unfold validatorsInConsolidations
   apply List.Perm.eq_of_pairwise (le := (· ≤ ·))
   · intro a b _ _ h1 h2; omega
   · exact hsorted.imp Nat.le_of_lt
@@ -393,19 +393,20 @@ theorem consolidationIndices_eq_of_sorted (s : BeaconState) (it : List Nat)
     rw [hmem, List.mem_eraseDups]
     simp [List.mem_flatMap, eq_comm]
 
-theorem consolidationIndices_nodup (s : BeaconState) : (consolidationIndices s).Nodup := by
-  unfold consolidationIndices
+theorem validatorsInConsolidations_nodup
+    (s : BeaconState) : (validatorsInConsolidations s).Nodup := by
+  unfold validatorsInConsolidations
   exact (List.mergeSort_perm _ _).nodup_iff.mpr (eraseDups_nodup _)
 
 theorem mem_consolidationIndices (s : BeaconState) (x : Nat) :
-    x ∈ consolidationIndices s ↔
+    x ∈ validatorsInConsolidations s ↔
       ∃ c ∈ s.pending_consolidations, x = c.source_index ∨ x = c.target_index := by
-  unfold consolidationIndices
+  unfold validatorsInConsolidations
   rw [(List.mergeSort_perm _ _).mem_iff, List.mem_eraseDups]
   simp [List.mem_flatMap, eq_comm]
 
 theorem pairsIn_consolidationIndices (s : BeaconState) :
-    PairsIn (consolidationIndices s)
+    PairsIn (validatorsInConsolidations s)
       (s.pending_consolidations.map fun c => (c.source_index, c.target_index)) := by
   intro p hp
   obtain ⟨c, hc, rfl⟩ := List.mem_map.mp hp
