@@ -14,14 +14,17 @@ namespace EpochProofs
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 open per_epoch_processing.justification
 
+/-- The Rust justification bits, read as model bits. -/
 def absJustificationBits (bits : JustificationBits) : Spec.LhJustificationBits :=
   { bit0 := bits.bit0, bit1 := bits.bit1, bit2 := bits.bit2, bit3 := bits.bit3 }
 
+/-- The Rust choice of the finalized checkpoint, read as the model choice. -/
 def absNewFinalized : NewFinalized → Spec.LhNewFinalized
   | .Unchanged => .unchanged
   | .OldPreviousJustified => .oldPreviousJustified
   | .OldCurrentJustified => .oldCurrentJustified
 
+/-- The Rust outcome of `weigh_justification`, read as the model outcome. -/
 def absJustificationOutcome (outcome : JustificationOutcome) : Spec.LhJustificationOutcome :=
   { justify_previous := outcome.justify_previous, justify_current := outcome.justify_current,
     bits := absJustificationBits outcome.bits, finalized := absNewFinalized outcome.finalized }
@@ -62,6 +65,7 @@ theorem safe_mul_cases (a b : U64) :
     refine ⟨c, by simp [lift, core.option.Option.ok_or], ?_⟩
     simp [Spec.uint64Mul, hfit, h.2.1, pure, Except.pure]
 
+/-- The translated finalization rule is the model rule, with the same errors. -/
 theorem finalize_step_equiv (enabled : Bool) (source_epoch offset current_epoch : U64)
     (choice finalized : NewFinalized) :
     ∃ r, finalize_step enabled source_epoch offset current_epoch choice finalized = ok r ∧
@@ -93,6 +97,7 @@ local macro "jsplit " t:term : tactic =>
   `(tactic| all_goals (try (by_cases h : $t <;> simp [h, UScalar.eq_equiv])))
 
 set_option maxHeartbeats 4000000 in
+/-- The translated `weigh_justification` is the model function, with the same errors. -/
 theorem weigh_justification_equiv (current_epoch old_previous_justified_epoch
     old_current_justified_epoch : U64) (bits : JustificationBits)
     (total_active_balance previous_target_balance current_target_balance : U64) :

@@ -16,6 +16,7 @@ namespace EpochProofs
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
+/-- The Rust trait that hashes for the shuffle. -/
 abbrev ShuffleHashInst (H : Type) := swap_or_not_shuffle.shuffle_hash.ShuffleHash H
 
 /-- The bytes of a Lighthouse byte list. -/

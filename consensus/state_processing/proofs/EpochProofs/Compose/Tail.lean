@@ -187,14 +187,18 @@ variable [Spec.PresetCfg]
 /-- The trusted facts about the untranslated code `G`. Each read reads the state it is given and
 each write writes the spec value, so each fact holds for every state `t`. -/
 structure TailLinks (G : TailGlue σ) (o : Spec.Oracle) (view : σ → Spec.BeaconState) : Prop where
+  /-- The slot, the epoch and the vector lengths are the spec values. -/
   slot : ∀ t, (G.slot t).val = (view t).slot
   eth1Period : G.eth1Period.val = Spec.LH_SLOTS_PER_ETH1_VOTING_PERIOD
+  /-- The eth1 votes reset. -/
   clearVotes : ∀ t, view (G.clearVotes t) = { view t with eth1_data_votes := [] }
   currentEpoch : ∀ t, (G.currentEpoch t).val = (view t).slot / Spec.P.SLOTS_PER_EPOCH
   slashingsLength : G.slashingsLength.val = Spec.P.EPOCHS_PER_SLASHINGS_VECTOR
+  /-- The slashings reset writes one entry. -/
   resetSlashing : ∀ t i l, Spec.listSet (view t).slashings i.val 0 = .ok l →
     ∃ t', G.resetSlashing t i = some t' ∧ view t' = { view t with slashings := l }
   mixesLength : G.mixesLength.val = Spec.P.EPOCHS_PER_HISTORICAL_VECTOR
+  /-- The RANDAO reset copies one mix. -/
   copyMix : ∀ t source target mix l, Spec.listGet (view t).randao_mixes source.val = .ok mix →
     Spec.listSet (view t).randao_mixes target.val mix = .ok l →
     ∃ t', G.copyMix t source target = some t' ∧ view t' = { view t with randao_mixes := l }
@@ -210,13 +214,17 @@ structure TailLinks (G : TailGlue σ) (o : Spec.Oracle) (view : σ → Spec.Beac
       historical_summaries := (view t).historical_summaries ++
         [{ block_summary_root := o.hash_tree_root_BlockRoots (view t).block_roots
            state_summary_root := o.hash_tree_root_StateRoots (view t).state_roots }] }
+  /-- The participation rotation is the spec step. -/
   rotate : ∀ t, view (G.rotate t) = Spec.process_participation_flag_updates (view t)
+  /-- The check of the sync committee period. -/
   syncDue : ∀ t b, Spec.syncDue Spec.P (view t) = .ok b → G.syncDue t = some b
+  /-- The next sync committee becomes the current one. -/
   writeCurrentSync : ∀ t, ∃ t', G.writeCurrentSync t = some t' ∧
     view t' = { view t with current_sync_committee := (view t).next_sync_committee }
   hash : HashLink G.hash o
   effectiveBalances : ∀ t, EBLink G.effectiveBalances t
     ((view t).validators.map (·.effective_balance))
+  /-- The candidates are the active validators of the next epoch. -/
   syncIndices : ∀ t, (G.syncIndices t).val.map (·.val) =
     Spec.get_active_validator_indices (view t) (G.syncEpoch t).val
   syncDomain : u8s G.syncDomain.val = Spec.DOMAIN_SYNC_COMMITTEE.toList

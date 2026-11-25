@@ -97,6 +97,7 @@ structure LocalValidator where
   effective_balance : Gwei
   deriving DecidableEq, Repr
 
+/-- Entry `i` of the table is a validator of the registry. -/
 def localExists (validators : List LocalValidator) (i : Nat) : Bool :=
   match validators[i]? with
   | some v => v.exists_

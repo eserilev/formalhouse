@@ -36,6 +36,7 @@ theorem target_weight_val : types.core.consts.altair.TIMELY_TARGET_WEIGHT.val = 
 theorem head_weight_val : types.core.consts.altair.TIMELY_HEAD_WEIGHT.val = 14 := by
   unfold types.core.consts.altair.TIMELY_HEAD_WEIGHT; rfl
 
+/-- The translated reward and penalty of one flag are the model values, with the same errors. -/
 theorem flag_delta_equiv (base_reward weight increments active_increments : U64)
     (is_participating is_head_flag in_leak : Bool) :
     per_epoch_processing.rewards_penalties.flag_delta base_reward weight is_participating
@@ -118,6 +119,7 @@ theorem flag_delta_equiv (base_reward weight increments active_increments : U64)
           core.result.Result.Insts.CoreOpsTry.branch, absResult, Bind.bind, Except.bind,
           Pure.pure, Except.pure]
 
+/-- The translated inactivity penalty is the model penalty, with the same errors. -/
 theorem inactivity_penalty_equiv (p : Spec.Preset)
     (effective_balance inactivity_score bias quotient : U64) (is_participating_target : Bool)
     (hbias : bias.val = p.INACTIVITY_SCORE_BIAS)
@@ -203,6 +205,8 @@ theorem safe_add_spec (a b : U64) :
   · simp [lift, h.2.1]; omega
 
 
+/-- The translated balance after rewards and penalties is the model balance, with the same errors.
+The model adds all rewards, then subtracts all penalties. -/
 theorem new_balance_after_rewards_equiv (p : Spec.Preset)
     (balance base_reward effective_balance inactivity_score source_increments target_increments
       head_increments active_increments bias quotient : U64)

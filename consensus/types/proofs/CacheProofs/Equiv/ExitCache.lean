@@ -6,14 +6,17 @@ namespace CacheProofs
 
 open Aeneas Aeneas.Std Result types
 
+/-- The exit cache after one more exit at epoch `e`. `none` when the count overflows. -/
 def recordStep (s : Nat × Nat) (e : Nat) : Option (Nat × Nat) :=
   if e = s.1 then (if s.2 + 1 ≤ 18446744073709551615 then some (s.1, s.2 + 1) else none)
   else if s.1 < e then some (e, 1) else some s
 
+/-- The Rust result of `record_exit`, read as numbers. -/
 def absRecord : core.result.Result (U64 × U64) safe_arith.ArithError → Option (Nat × Nat)
   | .Ok (m, c) => some (m.val, c.val)
   | .Err _ => none
 
+/-- The translated `record_exit` is `recordStep`. -/
 theorem record_exit_spec (m c e : U64) :
     ∃ r, state.exit_queue.record_exit m c e = ok r ∧
       absRecord r = recordStep (m.val, c.val) e.val := by
@@ -42,6 +45,7 @@ theorem record_exit_spec (m c e : U64) :
     · have hgt : ¬ e > m := by scalar_tac
       simp [heq, hgt, recordStep, absRecord, hne, hlt]
 
+/-- The largest element, or 0 for an empty list. -/
 def maxOr0 (L : List Nat) : Nat := L.foldl max 0
 
 /-- `(max_exit_epoch, max_exit_epoch_churn)` of a list of exit epochs. -/
@@ -105,6 +109,7 @@ theorem closedForm_perm {L L' : List Nat} (h : L.Perm L') : closedForm L = close
     exact h.foldl_eq' (fun x _ y _ z => by rw [max_assoc, max_assoc, max_comm x y]) 0
   simp [closedForm, hm, h.count_eq]
 
+/-- The epoch is not `FAR_FUTURE_EPOCH`. -/
 def nonFar (e : Nat) : Bool := e ≠ Spec.FAR_FUTURE_EPOCH
 
 /-- `ExitCache::new` from `exit_cache.rs`: skip `FAR_FUTURE_EPOCH`, then record each exit. -/
@@ -119,6 +124,7 @@ def lhBuildFrom (s : U64 × U64) :
       | .Ok s' => lhBuildFrom s' es
       | .Err err => ok (.Err err)
 
+/-- `ExitCache::new`, from an empty cache. -/
 def lhBuild (es : List U64) := lhBuildFrom (0#u64, 0#u64) es
 
 theorem lhBuildFrom_spec (es : List U64) :
@@ -171,10 +177,12 @@ theorem churn_at_eq (m c q : U64) :
     · have : ¬ q > m := by scalar_tac
       simp [h1, h1', h2, this]
 
+/-- The errors of the pre-Electra exit queue code. -/
 inductive LhExitError where
   | arith
   | invalidEpoch
 
+/-- The last step: one epoch later when the churn of the epoch reaches the limit. -/
 def lhFinish (q ch limit : Nat) : Except LhExitError Nat :=
   if limit ≤ ch then (if q + 1 ≤ 18446744073709551615 then .ok (q + 1) else .error .arith)
   else .ok q
@@ -187,6 +195,7 @@ def lhExitQueueEpoch (m c delayed limit : U64) : Result (Except LhExitError Nat)
   | none => ok (.error .invalidEpoch)
   | some ch => ok (lhFinish q.val ch.val limit.val)
 
+/-- The result of the exit queue code, read as a spec result. -/
 def absExit : Except LhExitError Nat → Spec.SpecM Nat
   | .ok q => .ok q
   | .error .arith => .error .overflow

@@ -18,9 +18,13 @@ namespace EpochProofs
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
+/-- The Rust `DepositView`: a pending deposit and the validator fields that the decision reads. -/
 abbrev LhDepositView := per_epoch_processing.pending_deposits.DepositView
+
+/-- The Rust `DepositConstants`. -/
 abbrev LhDepositConstants := per_epoch_processing.pending_deposits.DepositConstants
 
+/-- The Rust deposit constants have the preset values. -/
 structure DepositConstantsMatch (p : Spec.Preset) (c : LhDepositConstants) : Prop where
   far_future_epoch : c.far_future_epoch.val = Spec.FAR_FUTURE_EPOCH
   ejection_balance : c.ejection_balance.val = p.EJECTION_BALANCE
@@ -213,12 +217,15 @@ theorem deposits_loop_spec (p : Spec.Preset) (views : Slice LhDepositView)
       exact Spec.depositLoop_end p _ _ _ _ j.val (by simp [specViews]; omega) _ hstj
   · exact ⟨rfl, hi, hidx, hpp, hst⟩
 
+/-- The Rust outcome, read as the next index, the balance left to consume and the postponed flags.
+-/
 def absDeposits :
     core.result.Result per_epoch_processing.pending_deposits.DepositsOutcome
       safe_arith.ArithError → Spec.SpecM (Nat × Spec.Gwei × List Bool)
   | .Ok o => .ok (o.next_deposit_index.val, o.deposit_balance_to_consume.val, o.postponed.val)
   | .Err e => .error (absArithError e)
 
+/-- The translated `process_pending_deposits` makes the spec decisions, with the same errors. -/
 theorem process_pending_deposits_equiv (p : Spec.Preset) (views : Slice LhDepositView)
     (finalized_slot current_epoch next_epoch deposit_balance_to_consume churn : U64)
     (c : LhDepositConstants) (hc : DepositConstantsMatch p c) :

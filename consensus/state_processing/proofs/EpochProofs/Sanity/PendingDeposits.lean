@@ -25,6 +25,7 @@ structure DepositSpecView where
   is_withdrawn : Bool
   deriving DecidableEq, Repr
 
+/-- The variables of the spec loop over the pending deposits. -/
 structure DepositLoopState where
   processed_amount : Gwei
   next_deposit_index : Nat

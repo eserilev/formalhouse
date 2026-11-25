@@ -22,7 +22,10 @@ open Aeneas Aeneas.Std Aeneas.Std.WP Result types
 
 namespace CacheProofs.CommitteeCache
 
+/-- The Rust `ArithError`. -/
 abbrev ArithError := safe_arith.ArithError
+
+/-- The Rust `Result`. -/
 abbrev RResult := core.result.Result
 
 @[simp] theorem branch_ok {T E : Type} (v : T) :
@@ -102,15 +105,18 @@ namespace Spec
 export CacheProofs.Spec.CommitteeCache (Preset get_committee_count_per_slot uint64Div uint64Mul uint64Mod)
 end Spec
 
+/-- The spec error of a Rust `ArithError`. -/
 def absArithError : ArithError → CacheProofs.Spec.SpecError
   | .Overflow => .overflow
   | .DivisionByZero => .divisionByZero
 
+/-- A Rust `Result`, read as a spec result. `f` reads the value. -/
 def absResult {α β : Type} (f : α → β) : RResult α ArithError → CacheProofs.Spec.SpecM β
   | .Ok x => .ok (f x)
   | .Err e => .error (absArithError e)
 
 open state.committee_assignment in
+/-- The translated committee count is the spec count, with the same errors. -/
 theorem committee_count_per_slot_equiv (p : Spec.Preset)
     (active_count spe max_cps target : Usize)
     (hspe : spe.val = p.SLOTS_PER_EPOCH) (hmax : max_cps.val = p.MAX_COMMITTEES_PER_SLOT)

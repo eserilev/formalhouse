@@ -17,12 +17,17 @@ namespace EpochProofs
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
+/-- The Rust `ConsolidationView`: the positions of the source and the target. -/
 abbrev LhConsolidationView := per_epoch_processing.pending_consolidations.ConsolidationView
+
+/-- The Rust `LocalValidator`: the fields of one validator that the consolidations read. -/
 abbrev LhLocalValidator := per_epoch_processing.pending_consolidations.LocalValidator
 
+/-- A Rust `LocalValidator`, read as a model validator. -/
 def absLocal (v : LhLocalValidator) : Spec.LocalValidator :=
   ⟨v.exists, v.slashed, v.withdrawable_epoch.val, v.effective_balance.val⟩
 
+/-- The source and target positions as numbers. -/
 def absView (c : LhConsolidationView) : Nat × Nat := (c.source.val, c.target.val)
 
 theorem get_balance_eq (s : Slice U64) (i : Usize) :
@@ -71,6 +76,7 @@ theorem set_balance_eq (balances : alloc.vec.Vec U64) (i : Usize) (value : U64) 
     refine ⟨_, by ok_rfl, ?_⟩
     simp [Slice.set_opt, list_set_opt_none, List.set_eq_of_length_le (Nat.le_of_not_lt h)]
 
+/-- The spec error of a Rust `ConsolidationError`. -/
 def absConsolidationError :
     per_epoch_processing.pending_consolidations.ConsolidationError → Spec.SpecError
   | .UnknownValidator _ => .indexOutOfRange
@@ -253,6 +259,7 @@ theorem consolidations_loop_spec (consolidations : Slice LhConsolidationView)
       exact Spec.stepLoop_end _ _ _ j.val (by simp; omega) _ hstj
   · exact ⟨hi, hnext, hlen, hst⟩
 
+/-- The Rust result, read as the new balances and the number of consolidations done. -/
 def absConsolidations :
     core.result.Result (Usize × alloc.vec.Vec U64)
       per_epoch_processing.pending_consolidations.ConsolidationError →
@@ -260,6 +267,8 @@ def absConsolidations :
   | .Ok (n, b) => .ok (b.val.map (·.val), n.val)
   | .Err e => .error (absConsolidationError e)
 
+/-- The translated `process_pending_consolidations` is the loop of the spec step, with the same
+errors. -/
 theorem process_pending_consolidations_equiv (consolidations : Slice LhConsolidationView)
     (validators : Slice LhLocalValidator) (balances : alloc.vec.Vec U64) (next_epoch : U64)
     (hlen : balances.val.length = validators.val.length) :

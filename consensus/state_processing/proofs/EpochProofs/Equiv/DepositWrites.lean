@@ -140,6 +140,7 @@ end Spec
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
+/-- The Rust `DepositWritesError`. -/
 abbrev LhDWError (E : Type) := per_epoch_processing.deposit_writes.DepositWritesError E
 
 

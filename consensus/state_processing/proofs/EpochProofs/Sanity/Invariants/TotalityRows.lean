@@ -513,17 +513,21 @@ theorem passM_rel_bounded {A : Type} (f : A → Row → SpecM (A × Row)) (I : N
 
 /-! ## The four passes -/
 
+/-- The inactivity pass changes only the score, and adds at most 4. -/
 def PInact (a b : Row) : Prop :=
   b = { a with inactivity_score := b.inactivity_score } ∧
     @LE.le Nat _ b.inactivity_score (a.inactivity_score + 4)
 
+/-- The rewards pass changes only the balance, and adds at most 4 times the effective balance. -/
 def PBal (a b : Row) : Prop :=
   b = { a with balance := b.balance } ∧
     @LE.le Nat _ b.balance (a.balance + 4 * a.validator.effective_balance)
 
+/-- The registry pass changes only the registry fields of the validator. -/
 def PReg (a b : Row) : Prop :=
   ∃ f : RegistryFields, b = { a with validator := a.validator.withRegistryFields f }
 
+/-- The slashings pass changes only the balance, and does not increase it. -/
 def PSlash (a b : Row) : Prop :=
   b = { a with balance := b.balance } ∧ @LE.le Nat _ b.balance a.balance
 

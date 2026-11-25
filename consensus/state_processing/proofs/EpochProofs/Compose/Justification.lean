@@ -99,6 +99,7 @@ variable [Spec.PresetCfg]
 value, and the writes are the spec writes (`lhJustificationWrite`). The balances are cache reads. -/
 structure JustificationLinks (G : JustificationGlue σ) (view : σ → Spec.BeaconState) (st : σ) :
     Prop where
+  /-- The genesis check is the spec check. -/
   early : ∀ cur, Spec.get_current_epoch Spec.P (view st) = .ok cur →
     G.early st = decide (cur ≤ Spec.GENESIS_EPOCH + 1)
   currentEpoch : ∀ cur, Spec.get_current_epoch Spec.P (view st) = .ok cur →
@@ -107,8 +108,10 @@ structure JustificationLinks (G : JustificationGlue σ) (view : σ → Spec.Beac
     (G.previousJustifiedEpoch st).val = (view st).previous_justified_checkpoint.epoch
   currentJustifiedEpoch :
     (G.currentJustifiedEpoch st).val = (view st).current_justified_checkpoint.epoch
+  /-- The justification bits. -/
   bits : ∀ b0 b1 b2 b3, (view st).justification_bits = [b0, b1, b2, b3] →
     absJustificationBits (G.bits st) = ⟨b0, b1, b2, b3⟩
+  /-- The three balances are cache reads. -/
   totalActiveBalance : ∀ tab, Spec.get_total_active_balance Spec.P (view st) = .ok tab →
     (G.totalActiveBalance st).val = tab
   previousTargetBalance : ∀ e i x, Spec.get_previous_epoch Spec.P (view st) = .ok e →
@@ -119,6 +122,7 @@ structure JustificationLinks (G : JustificationGlue σ) (view : σ → Spec.Beac
     Spec.get_unslashed_participating_indices Spec.P (view st) Spec.TIMELY_TARGET_FLAG_INDEX e =
       .ok i → Spec.get_total_balance Spec.P (view st) i = .ok x →
     (G.currentTargetBalance st).val = x
+  /-- The writes are the spec writes. -/
   write : ∀ prev cur outcome t, Spec.get_previous_epoch Spec.P (view st) = .ok prev →
     Spec.get_current_epoch Spec.P (view st) = .ok cur →
     Spec.lhJustificationWrite Spec.P (view st) prev cur (absJustificationOutcome outcome) =

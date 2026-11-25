@@ -73,6 +73,7 @@ def registryStepExclusive (p : Preset) (total_active_balance current_epoch final
   else
     pure f
 
+/-- Lighthouse: a validator with enough balance becomes eligible for activation. -/
 def eligibilityStep (p : Preset) (current_epoch : Nat) (effective_balance : Gwei)
     (f : RegistryFields) : SpecM RegistryFields := do
   if f.activation_eligibility_epoch == FAR_FUTURE_EPOCH
@@ -81,6 +82,7 @@ def eligibilityStep (p : Preset) (current_epoch : Nat) (effective_balance : Gwei
   else
     pure f
 
+/-- Lighthouse: an active validator with too little balance starts its exit. -/
 def ejectionStep (p : Preset) (total_active_balance current_epoch : Nat)
     (effective_balance : Gwei) (f : RegistryFields) : SpecM RegistryFields := do
   if (f.activation_epoch ≤ current_epoch && current_epoch < f.exit_epoch)
@@ -89,6 +91,7 @@ def ejectionStep (p : Preset) (total_active_balance current_epoch : Nat)
   else
     pure f
 
+/-- Lighthouse: a validator whose eligibility is finalized gets its activation epoch. -/
 def activationStep (p : Preset) (current_epoch finalized_epoch : Nat) (f : RegistryFields) :
     SpecM RegistryFields := do
   if f.activation_eligibility_epoch ≤ finalized_epoch

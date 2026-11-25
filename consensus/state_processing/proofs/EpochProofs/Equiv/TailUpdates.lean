@@ -115,6 +115,7 @@ theorem decide_eq_zero (m : U64) : decide (m = 0#u64) = (m.val == 0) := by
   · have hv : m.val ≠ 0 := fun hv => h (by scalar_tac)
     simp [h, hv]
 
+/-- The translated check of the eth1 votes reset is the model check, with the same errors. -/
 theorem eth1_data_votes_reset_due_equiv (slot period : U64) :
     per_epoch_processing.tail_updates.eth1_data_votes_reset_due slot period ⦃ r =>
       absResult id r = Spec.lhEth1ResetDue slot.val period.val ⦄ := by
@@ -136,6 +137,7 @@ theorem eth1_data_votes_reset_due_equiv (slot period : U64) :
       simp only [WP.spec_ok, decide_eq_zero]
       rfl
 
+/-- The translated check of the historical summary is the model check, with the same errors. -/
 theorem historical_summary_due_equiv (next_epoch root epoch : U64) :
     per_epoch_processing.tail_updates.historical_summary_due next_epoch root epoch ⦃ r =>
       absResult id r = Spec.historicalSummaryDue next_epoch.val root.val epoch.val ⦄ := by
@@ -220,6 +222,7 @@ theorem epoch_vector_index_equiv (current_epoch epoch length : U64) (allow : Boo
       simp only [hu, hu', if_false]
       exact epoch_vector_index_rem epoch length
 
+/-- The translated slashings reset index is the model index, with the same errors. -/
 theorem slashings_reset_index_equiv (current_epoch length : U64) :
     per_epoch_processing.tail_updates.slashings_reset_index current_epoch length ⦃ r =>
       absResult (Option.map (·.val)) r =
@@ -235,6 +238,7 @@ theorem slashings_reset_index_equiv (current_epoch length : U64) :
     abs_ok h1
     exact epoch_vector_index_equiv current_epoch n length true
 
+/-- The translated RANDAO reset indices are the model indices, with the same errors. -/
 theorem randao_mixes_reset_indices_equiv (current_epoch length : U64) :
     per_epoch_processing.tail_updates.randao_mixes_reset_indices current_epoch length ⦃ r =>
       absResult (Option.map (fun x => (x.1.val, x.2.val))) r =

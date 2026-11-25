@@ -108,6 +108,7 @@ theorem saturating_sub_eq (a b : Nat) : Spec.saturating_sub a b = a - b := by
   · rename_i h
     rw [Nat.sub_self, Nat.sub_eq_zero_of_le (Nat.le_of_not_gt h)]
 
+/-- The translated balance after the slashing penalty is the model balance, with the same errors. -/
 theorem new_balance_after_slashing_equiv (p : Spec.Preset) (validator : Spec.Validator)
     (balance withdrawable_epoch effective_balance target adjusted penalty_per_increment
       total_active_balance increment : U64) (slashed : Bool)

@@ -20,8 +20,10 @@ open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 open state_processing.per_epoch_processing.single_pass_step (ValidatorRow ExitChurn StepContext RowInputs)
 
+/-- The Rust `RowsError`. -/
 abbrev LhRowsError (E : Type) := per_epoch_processing.registry_rows.RowsError E
 
+/-- The exit churn as numbers: the earliest exit epoch and the exit balance to consume. -/
 def absChurn (ch : ExitChurn) : Spec.Epoch × Spec.Gwei :=
   (ch.earliest_exit_epoch.val, ch.exit_balance_to_consume.val)
 

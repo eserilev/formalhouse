@@ -63,6 +63,7 @@ end Spec
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
+/-- The Rust `ListWritesError`. -/
 abbrev LhLWError (E : Type) := per_epoch_processing.list_writes.ListWritesError E
 
 /-! ## Builder pending payments -/

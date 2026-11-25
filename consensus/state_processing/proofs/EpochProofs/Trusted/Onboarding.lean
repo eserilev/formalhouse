@@ -31,6 +31,7 @@ namespace EpochProofs
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
+/-- The Rust trait `Onboarding`. -/
 abbrev LhOnboarding (S D B E : Type) := upgrade.builder_onboarding.Onboarding S D B E
 
 /-- The builder that `add_builder_to_registry` adds for a deposit. -/

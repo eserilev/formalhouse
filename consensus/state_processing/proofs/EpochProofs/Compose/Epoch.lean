@@ -62,14 +62,20 @@ variable [Spec.PresetCfg]
 the single pass and the shuffle sizes are stated at the states where the Rust makes these reads. -/
 structure EpochLinks (G : EpochGlue σ E) (o : Spec.Oracle) (view : σ → Spec.BeaconState)
     (st : σ) : Prop where
+  /-- Justification and finalization. -/
   justification : JustificationLinks G.justification view st
+  /-- The single pass and the builder payments, at the state after justification. -/
   singlePass : ∀ st1, EpochProofs.Compose.justification G.justification st = ok (some st1) →
     SinglePassLinks G.singlePass o view st1 id ∧ PaymentsLinks G.payments view st1
   /-- `registry_constants` for Gloas. -/
   registryConstants : ConstantsMatch Spec.P G.singlePass.registryConstants
+  /-- The proposer lookahead. -/
   lookahead : LookaheadLinks G.lookahead o view
+  /-- The proposer candidates are the active, unslashed validators. -/
   proposerIndices : GloasProposerIndices G.lookahead view
+  /-- The PTC window. -/
   ptc : PtcLinks G.lookahead G.ptc o view
+  /-- The resets, the historical summaries, the participation rotation and the sync committees. -/
   tail : TailLinks G.tail o view
   /-- At most `2^24` validators enter each of the three shuffles of the epoch. -/
   lookaheadN1 : ∀ st1 st2, EpochProofs.Compose.justification G.justification st = ok (some st1) →

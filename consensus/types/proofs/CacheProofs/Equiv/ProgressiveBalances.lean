@@ -25,7 +25,10 @@ namespace CacheProofs.PB
 open Aeneas Aeneas.Std Result types
 open state.participation_totals state.balance
 
+/-- The Rust `Balance`. -/
 abbrev Bal := state.balance.Balance
+
+/-- The Rust error of the participation totals. -/
 abbrev KErr := state.participation_totals.Error
 
 /-- The `(raw, minimum)` pair of each `Balance`. -/
@@ -390,6 +393,7 @@ def flagSum : List Spec.Validator → List Nat → Nat → Nat → Nat
   | v :: vs, p :: ps, e, f => (if contrib v p e f then v.effective_balance else 0) + flagSum vs ps e f
   | _, _, _, _ => 0
 
+/-- What one validator adds to the total of flag `f` in epoch `e`. -/
 def wOf (v : Spec.Validator) (p : Nat) (e f : Nat) : Nat :=
   if contrib v p e f then v.effective_balance else 0
 
@@ -483,16 +487,19 @@ theorem has_flag_add_flag (p f g : Nat) :
 
 /-! ## The spec computes `max EFFECTIVE_BALANCE_INCREMENT flagSum` -/
 
+/-- Validator `i` exists and is active in epoch `e`. -/
 def activeAt (vs : List Spec.Validator) (e i : Nat) : Bool :=
   match vs[i]? with
   | some v => Spec.is_active_validator v e
   | none => false
 
+/-- Validator `i` exists and is slashed. -/
 def slashedAt (vs : List Spec.Validator) (i : Nat) : Bool :=
   match vs[i]? with
   | some v => v.slashed
   | none => false
 
+/-- The effective balance of validator `i`, or 0. -/
 def ebAt (vs : List Spec.Validator) (i : Nat) : Nat :=
   match vs[i]? with
   | some v => v.effective_balance
@@ -558,6 +565,7 @@ theorem mapM_balances (vs : List Spec.Validator) (L : List Nat) (hL : ∀ i ∈ 
     simp only [Spec.getAt, List.getElem?_eq_getElem hi]
     simp [ebAt, hi]
 
+/-- The spec counts validator `i` in the total of flag `f` in epoch `e`. -/
 def specPred (vs : List Spec.Validator) (ps : List Nat) (e f : Nat) (i : Nat) : Bool :=
   !slashedAt vs i && (Spec.has_flag (ps.getD i 0) f && activeAt vs e i)
 
@@ -702,6 +710,7 @@ def PreviousCoherent (incr : Nat) (s : Spec.BeaconState) (c : LhCache) : Prop :=
   ab c.previous_epoch_cache.val =
     tri (flagSum s.validators s.previous_epoch_participation (Spec.get_previous_epoch s)) incr
 
+/-- The cache holds the correct flag totals for the current and the previous epoch. -/
 def Coherent (incr : Nat) (s : Spec.BeaconState) (c : LhCache) : Prop :=
   CurrentCoherent incr s c ∧ PreviousCoherent incr s c
 
@@ -1146,6 +1155,7 @@ structure LhValidator where
   activation_epoch : U64
   exit_epoch : U64
 
+/-- A Lighthouse validator, read as a spec validator. -/
 def LhValidator.toSpec (v : LhValidator) : Spec.Validator :=
   ⟨v.effective_balance.val, v.slashed, v.activation_epoch.val, v.exit_epoch.val⟩
 
@@ -1160,6 +1170,7 @@ structure LhState where
   previous_epoch_participation : List U8
   current_epoch_participation : List U8
 
+/-- A Lighthouse state, read as a spec state. -/
 def LhState.toSpec (s : LhState) : Spec.BeaconState :=
   ⟨s.current_epoch, s.validators.map LhValidator.toSpec,
    s.previous_epoch_participation.map (·.val), s.current_epoch_participation.map (·.val)⟩

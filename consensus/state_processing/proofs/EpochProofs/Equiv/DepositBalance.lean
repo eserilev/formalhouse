@@ -15,6 +15,7 @@ namespace EpochProofs
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
+/-- The translated maximum effective balance is the model value. -/
 theorem max_effective_balance_electra_equiv (is_compounding : Bool) (a b : U64) :
     types.validator.deposit_balance.max_effective_balance_electra is_compounding a b ⦃ r =>
       r.val = Spec.lhMaxEffectiveBalanceElectra is_compounding a.val b.val ⦄ := by
@@ -22,6 +23,7 @@ theorem max_effective_balance_electra_equiv (is_compounding : Bool) (a b : U64) 
     Spec.lhMaxEffectiveBalanceElectra
   by_cases hc : is_compounding <;> simp [hc]
 
+/-- The translated effective balance of a deposit is the model value. -/
 theorem deposit_effective_balance_equiv (amount increment m : U64) :
     types.validator.deposit_balance.deposit_effective_balance amount increment m ⦃ r =>
       r.val = Spec.lhDepositEffectiveBalance amount.val increment.val m.val ⦄ := by

@@ -38,6 +38,7 @@ def couldBeAt (epoch : Nat) (validator : Validator) : Bool :=
   decide (validator.activation_epoch = FAR_FUTURE_EPOCH)
     && decide (validator.activation_eligibility_epoch < epoch)
 
+/-- The translated check is `couldBeAt`. It never fails. -/
 theorem could_be_eligible_for_activation_at_equiv (validator : Validator)
     (activation_eligibility_epoch activation_epoch epoch far_future_epoch : U64)
     (helig : activation_eligibility_epoch.val = validator.activation_eligibility_epoch)
@@ -55,6 +56,7 @@ theorem could_be_eligible_for_activation_at_equiv (validator : Validator)
   · have h' : ¬ activation_epoch = far_future_epoch := fun e => h (he.mp e)
     simp [h', h]
 
+/-- The translated check is the spec check. It never fails. -/
 theorem is_eligible_for_activation_equiv (validator : Validator)
     (activation_eligibility_epoch activation_epoch finalized_epoch far_future_epoch : U64)
     (helig : activation_eligibility_epoch.val = validator.activation_eligibility_epoch)
@@ -99,6 +101,7 @@ abbrev Key := Nat × Nat
 /-- Strict tuple order. -/
 def keyLt (a b : Key) : Prop := a.1 < b.1 ∨ (a.1 = b.1 ∧ a.2 < b.2)
 
+/-- The queue key of a validator: its activation eligibility epoch and its index. -/
 def key (p : Validator × Nat) : Key := (p.1.activation_eligibility_epoch, p.2)
 
 theorem tupleLe_iff (a b : Key) : tupleLe a b = true ↔ keyLt a b ∨ a = b := by

@@ -75,6 +75,7 @@ theorem masked_swap_eq (s : Slice Usize) (i j : Usize) (b : U8) (hb : b.val ≤ 
   · rfl
   · simp
 
+/-- The Rust buffer that the shuffle hashes. -/
 abbrev Buf := swap_or_not_shuffle.shuffle_list.Buf
 
 /-- The bytes of an array, as numbers. -/
@@ -139,6 +140,7 @@ theorem mix_in_position_spec (b : Buf) (x : Usize) :
     i5_post, i2_post, Nat.shiftRight_eq_div_pow]
   rfl
 
+/-- The Rust trait that hashes for the shuffle. -/
 abbrev HashInst (H : Type) := swap_or_not_shuffle.shuffle_hash.ShuffleHash H
 
 /-- `inst.hash` computes `sha256` on every byte slice and does not fail. -/

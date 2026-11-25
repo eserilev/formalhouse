@@ -20,9 +20,13 @@ namespace EpochProofs
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
+/-- The Rust `RegistryFields`. -/
 abbrev LhRegistryFields := per_epoch_processing.registry_update.RegistryFields
+
+/-- The Rust `RegistryConstants`. -/
 abbrev LhRegistryConstants := per_epoch_processing.registry_update.RegistryConstants
 
+/-- The Rust registry fields, read as model fields. -/
 def absRegistry (f : LhRegistryFields) : Spec.RegistryFields :=
   { activation_eligibility_epoch := f.activation_eligibility_epoch.val
     activation_epoch := f.activation_epoch.val
@@ -89,6 +93,7 @@ theorem safe_rem_spec (a b : U64) :
   · simp [lift, h]
   · simp [lift, h.2.1, h.1]
 
+/-- The translated function is the spec function, with the same errors. -/
 theorem compute_activation_exit_epoch_equiv (p : Spec.Preset) (epoch lookahead : U64)
     (hlookahead : lookahead.val = p.MAX_SEED_LOOKAHEAD) :
     per_epoch_processing.registry_update.compute_activation_exit_epoch epoch lookahead ⦃ r =>
@@ -127,6 +132,7 @@ theorem compute_activation_exit_epoch_equiv (p : Spec.Preset) (epoch lookahead :
   simp [Spec.compute_activation_exit_epoch, Spec.uint64Add, Spec.UINT64_SIZE, hfit, hfit2, hw,
     absResult, except_ok_bind, Pure.pure, Except.pure]
 
+/-- The translated churn limit is the spec `get_exit_churn_limit`, with the same errors. -/
 theorem exit_churn_limit_equiv (p : Spec.Preset) (total_active_balance : U64)
     (c : LhRegistryConstants) (hc : ConstantsMatch p c) :
     per_epoch_processing.registry_update.exit_churn_limit total_active_balance c ⦃ r =>
@@ -408,6 +414,7 @@ theorem compute_exit_epoch_and_update_churn_equiv_churn (p : Spec.Preset)
           Spec.uint64Sub, 
           hmax, hgt, hv3, hle3]
 
+/-- The translated eligibility step is the model step, with the same errors. -/
 theorem eligibility_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
     (effective_balance current_epoch : U64) (c : LhRegistryConstants) (hc : ConstantsMatchBase p c) :
     per_epoch_processing.registry_update.eligibility_step fields effective_balance current_epoch c
@@ -455,6 +462,7 @@ theorem eligibility_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
       
       ]
 
+/-- The translated activation step is the model step, with the same errors. -/
 theorem activation_step_equiv (p : Spec.Preset) (fields : LhRegistryFields)
     (current_epoch finalized_epoch : U64) (c : LhRegistryConstants) (hc : ConstantsMatchBase p c) :
     per_epoch_processing.registry_update.activation_step fields current_epoch finalized_epoch c

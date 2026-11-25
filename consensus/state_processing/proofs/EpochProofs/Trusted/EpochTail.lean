@@ -44,6 +44,7 @@ namespace EpochProofs
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
+/-- The Rust trait `DepositWrites`. -/
 abbrev LhDepositWrites (S D E : Type) := per_epoch_processing.deposit_writes.DepositWrites S D E
 
 /-- Trusted: what the `DepositWrites` implementation in `single_pass.rs` does. `view` gives the
@@ -87,6 +88,7 @@ structure DepositWritesContract [EpochProofs.Spec.PresetCfg] {S D E : Type} (ins
     (∀ e, Spec.ebUpdateAt (view s) i.val = .error e →
       ∃ (e' : E) (s' : S), inst.update_effective_balance s i = ok (.Err e', s'))
 
+/-- The Rust trait `BuilderPaymentWrites`. -/
 abbrev LhPaymentWrites (S E : Type) := per_epoch_processing.list_writes.BuilderPaymentWrites S E
 
 /-- Trusted: what the `BuilderPaymentWrites` implementation in `single_pass.rs` does. `wview` and
@@ -104,6 +106,7 @@ structure PaymentWritesContract {S E : Type} (inst : LhPaymentWrites S E)
     v.val.length = (pview s).length →
     ∃ s', inst.set_payments s v = ok (.Ok (), s') ∧ pview s' = v.val ∧ wview s' = wview s
 
+/-- The Rust trait `WindowWrites`. -/
 abbrev LhWindowWrites (W T E : Type) := per_epoch_processing.list_writes.WindowWrites W T E
 
 /-- Trusted: what a `WindowWrites` implementation in `single_pass.rs` does. `view` gives the list
@@ -118,6 +121,7 @@ structure WindowContract {W T E α : Type} (inst : LhWindowWrites W T E) (view :
   commit : ∀ (w : W), (view w).length = N →
     ∃ w', inst.commit w = ok (.Ok (), w') ∧ committed w' = view w
 
+/-- The Rust trait `EffectiveBalanceWrites`. -/
 abbrev LhEffectiveBalanceWrites (S E : Type) :=
   per_epoch_processing.list_writes.EffectiveBalanceWrites S E
 

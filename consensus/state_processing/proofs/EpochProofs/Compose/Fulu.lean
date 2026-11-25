@@ -278,14 +278,20 @@ def epochFulu (G : EpochGlueFulu σ E) (st : σ) : Result (Option σ) := do
 /-- The trusted facts about the untranslated code `G` with input `st`, as `EpochLinks`. -/
 structure EpochLinksFulu (G : EpochGlueFulu σ E) (o : Spec.Oracle)
     (view : σ → Spec.BeaconState) (st : σ) : Prop where
+  /-- Justification and finalization. -/
   justification : JustificationLinks G.justification view st
+  /-- The single pass, at the state after justification. -/
   singlePass : ∀ st1, EpochProofs.Compose.justification G.justification st = ok (some st1) →
     SinglePassLinks G.singlePass o view st1 Spec.fuluTabM
   /-- `registry_constants` for Fulu. -/
   registryConstants : ConstantsMatchBase Spec.P G.singlePass.registryConstants
+  /-- The churn constants of Fulu. -/
   registryConstantsFulu : FuluChurnMatch Spec.P Spec.FC G.singlePass.registryConstants
+  /-- The proposer lookahead. -/
   lookahead : LookaheadLinks G.lookahead o view
+  /-- The proposer candidates are the active validators. -/
   proposerIndices : FuluProposerIndices G.lookahead view
+  /-- The resets, the historical summaries, the participation rotation and the sync committees. -/
   tail : TailLinks G.tail o view
   /-- At most `2^24` proposer candidates enter the shuffle, and each Electra proposer loop ends. -/
   lookaheadN1 : ∀ st1 st2, EpochProofs.Compose.justification G.justification st = ok (some st1) →

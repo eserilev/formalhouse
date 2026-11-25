@@ -370,8 +370,8 @@ def payments (P : PaymentsGlue σ E) (st st4 : σ) : Result (Option σ) := do
   | .Ok _ => ok (some (P.paymentsReturn st4 sp))
 
 /-- The Gloas `process_epoch_single_pass` up to the builder payments, as the calls of the
-translated functions in `Generated.lean` joined by the untranslated code. `none`: the Rust returns an
-error. -/
+translated functions in `Generated.lean` joined by the untranslated code. `none`: the Rust
+returns an error. -/
 def singlePass (G : SinglePassGlue σ E) (P : PaymentsGlue σ E) (st : σ) : Result (Option σ) := do
   let r ← singlePassCore G st
   match r with

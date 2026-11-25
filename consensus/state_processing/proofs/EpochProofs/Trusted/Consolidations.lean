@@ -29,9 +29,11 @@ namespace EpochProofs
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
+/-- The Rust trait `ConsolidationState`. -/
 abbrev LhConsolidationState (S E : Type) :=
   per_epoch_processing.pending_consolidations.ConsolidationState S E
 
+/-- The Rust `PendingPair`: the source and the target of a pending consolidation. -/
 abbrev LhPendingPair := per_epoch_processing.pending_consolidations.PendingPair
 
 /-- The spec next epoch of a state. -/

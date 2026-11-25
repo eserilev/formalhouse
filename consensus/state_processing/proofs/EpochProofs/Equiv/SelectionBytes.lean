@@ -281,6 +281,7 @@ theorem hash_with_u64_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracl
     rw [← e, h2]
   simp only [Array.to_slice, Slice.from_val, this, hb1, u8s_append, hbytes]
 
+/-- The translated `compute_seed` hashes the domain, the epoch and the RANDAO mix. -/
 theorem compute_seed_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle)
     (hH : HashLink inst o) (domain : Array U8 4#usize) (epoch : U64) (mix : Array U8 32#usize) :
     types.state.balance_weighted_selection.compute_seed inst domain epoch mix ⦃ d =>

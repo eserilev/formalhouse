@@ -148,6 +148,7 @@ theorem integer_sqrt_loop_spec (n x y : U64) (hn : 1 ≤ n.val) (hn' : n.val ≤
       simp only [this, dif_neg, not_false_eq_true]
   · exact ⟨hx, hy, hb, rfl⟩
 
+/-- The translated square root is the square root. It never fails. -/
 theorem integer_sqrt_spec (n : U64) :
     ∃ r, state.base_rewards.integer_sqrt n = ok r ∧ r.val = Nat.sqrt n.val := by
   unfold state.base_rewards.integer_sqrt
@@ -557,6 +558,7 @@ theorem get_total_active_balance_eq (cfg : Config) (vs : List Validator) (epoch 
   rw [sumUint64, sumUint64_eq bs 0 (by rw [hsum]; simpa [activeSum] using h)]
   simp [hsum, activeSum]
 
+/-- The translated floor is the maximum of the increment and the total. It never fails. -/
 theorem floor_total_active_balance_spec (total inc : U64) :
     ∃ r, state.total_active_balance.floor_total_active_balance total inc = ok r ∧
       r.val = max inc.val total.val := by
@@ -786,7 +788,11 @@ theorem base_rewards_loop_spec (inc factor bpe : U64) (phase0 : Bool) (sq brpi m
 
 /-- The total after the floor, its square root and the altair base reward per increment. -/
 def flooredTotal (inc total : Nat) : Nat := max inc total
+
+/-- The square root of the total after the floor. -/
 def sqrtTotal (inc total : Nat) : Nat := Nat.sqrt (flooredTotal inc total)
+
+/-- The Altair base reward for each increment. -/
 def perIncrement (inc factor total : Nat) : Nat := inc * factor / sqrtTotal inc total
 
 /-- Build: `base_rewards` (the body of `PreEpochCache::into_epoch_cache`) returns one entry for

@@ -77,6 +77,8 @@ theorem branch_ok {T E : Type} (v : T) :
       ok (core.ops.control_flow.ControlFlow.Continue v) :=
   rfl
 
+/-- The translated effective balance update of one validator is the model update, with the same
+errors. -/
 theorem new_effective_balance_equiv (p : Spec.Preset) (validator : Spec.Validator)
     (balance effective_balance limit downward upward increment : U64)
     (heffective : effective_balance.val = validator.effective_balance)

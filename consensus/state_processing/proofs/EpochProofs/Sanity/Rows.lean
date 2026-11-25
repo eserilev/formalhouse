@@ -10,6 +10,7 @@ a state into rows, and `withRows` writes rows back. Each per-validator pass of t
 
 namespace EpochProofs.Spec
 
+/-- The entries of the per-validator lists for one validator. -/
 structure Row where
   validator : Validator
   balance : Gwei
@@ -26,6 +27,7 @@ def RowsOk (state : BeaconState) : Prop :=
   ∧ state.previous_epoch_participation.length = state.validators.length
   ∧ state.current_epoch_participation.length = state.validators.length
 
+/-- The rows of a state, one for each validator. -/
 def rowsOf (state : BeaconState) : List Row :=
   state.validators.zipIdx.map fun (v, i) =>
     { validator := v

@@ -25,6 +25,7 @@ open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
 open state_processing.per_epoch_processing.single_pass_step (ValidatorRow ExitChurn StepContext RowInputs)
 
+/-- The Rust trait `RegistryRows`. -/
 abbrev LhRegistryRows (R E : Type) := per_epoch_processing.registry_rows.RegistryRows R E
 
 /-- Row `r` after `single_pass_step` wrote the Lighthouse row `lr'`. -/
@@ -60,7 +61,9 @@ def rowsResult {E : Type} :
 spec rows that an implementation value holds, and `inputsOf` gives the spec inputs of a row. -/
 structure RowsContract {R E : Type} (inst : LhRegistryRows R E) (p : Spec.Preset)
     (view : R → List Spec.Row) (inputsOf : Spec.Row → Spec.LhRowInputs) : Prop where
+  /-- One row for each validator. -/
   row_count : ∀ s, ∃ n : Usize, inst.row_count s = ok n ∧ n.val = (view s).length
+  /-- Row `i` gets the result of `single_pass_step`. No other row changes. -/
   apply_step : ∀ (s : R) (i : Usize) (ch : ExitChurn) (c : StepContext)
     (k : per_epoch_processing.registry_update.RegistryConstants) (r : Spec.Row),
     (view s)[i.val]? = some r →

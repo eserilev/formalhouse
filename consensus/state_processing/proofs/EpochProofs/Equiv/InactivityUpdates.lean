@@ -16,6 +16,7 @@ namespace EpochProofs
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
+/-- The translated inactivity score of one validator is the model score, with the same errors. -/
 theorem new_inactivity_score_equiv (p : Spec.Preset) (score bias recovery_rate : U64)
     (is_eligible is_participating is_in_leak : Bool)
     (hbias : bias.val = p.INACTIVITY_SCORE_BIAS)

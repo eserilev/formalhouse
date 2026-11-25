@@ -16,7 +16,10 @@ namespace EpochProofs
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
+/-- The Rust `BuilderPendingWithdrawal`. -/
 abbrev LhWithdrawal := types.builder.builder_pending_withdrawal.BuilderPendingWithdrawal
+
+/-- The Rust `BuilderPendingPayment`. -/
 abbrev LhPayment := types.builder.builder_pending_payment.BuilderPendingPayment
 
 theorem usize_saturating_add_one (i : Usize) (h : i.val < Usize.max) :
@@ -214,6 +217,8 @@ theorem loop2_spec (spe : Usize) (base : List LhPayment)
       rw [hu, hjeq]
   · exact ⟨hi, hacc⟩
 
+/-- The translated function never fails. It returns the withdrawals of the payments that reach the
+threshold, drops the first epoch of payments, and appends an epoch of default payments. -/
 theorem process_builder_pending_payments_spec (payments : Slice LhPayment) (spe : Usize)
     (quorum : U64) :
     per_epoch_processing.builder_pending_payments.process_builder_pending_payments
@@ -232,14 +237,17 @@ theorem process_builder_pending_payments_spec (payments : Slice LhPayment) (spe 
   case hacc => simp [hu]
   exact ⟨hw, hu1⟩
 
+/-- The spec error of a Rust `ArithError`. -/
 def absArithError : safe_arith.ArithError → Spec.SpecError
   | .Overflow => .overflow
   | .DivisionByZero => .divisionByZero
 
+/-- A Rust `Result`, read as a spec result. `f` reads the value. -/
 def absResult {α β : Type} (f : α → β) : core.result.Result α safe_arith.ArithError → Spec.SpecM β
   | .Ok x => .ok (f x)
   | .Err e => .error (absArithError e)
 
+/-- The Rust builder payment threshold is the spec threshold, with the same errors. -/
 theorem quorum_equiv (p : Spec.Preset) (total_active_balance slots_per_epoch : U64)
     (hslots : slots_per_epoch.val = p.SLOTS_PER_EPOCH) :
     per_epoch_processing.builder_pending_payments.get_builder_payment_quorum_threshold
@@ -289,14 +297,17 @@ theorem quorum_equiv (p : Spec.Preset) (total_active_balance slots_per_epoch : U
           absResult]
         rfl
 
+/-- A Rust address, read as a spec address. -/
 def absAddress (a : alloy_primitives.bits.address.Address) : Spec.ExecutionAddress :=
   ⟨(a.val.map fun b => UInt8.ofNat b.val).toArray, by simp⟩
 
+/-- A Rust withdrawal, read as a spec withdrawal. -/
 def absWithdrawal (w : LhWithdrawal) : Spec.BuilderPendingWithdrawal :=
   { fee_recipient := absAddress w.fee_recipient
     amount := w.amount.val
     builder_index := w.builder_index.val }
 
+/-- A Rust payment, read as a spec payment. -/
 def absPayment (p : LhPayment) : Spec.BuilderPendingPayment :=
   { weight := p.weight.val
     withdrawal := absWithdrawal p.withdrawal
@@ -329,6 +340,8 @@ def lighthouseBuilderPendingPayments (total_active_balance slots_per_epoch : U64
       payments spe quorum
     ok (.Ok (withdrawals ++ res.1.val, res.2.val))
 
+/-- The spec state that holds the given builder withdrawals and payments. Its other fields have
+their default values. -/
 def absState (x : List LhWithdrawal × List LhPayment) : Spec.BeaconState :=
   { builder_pending_payments := x.2.map absPayment
     builder_pending_withdrawals := x.1.map absWithdrawal }

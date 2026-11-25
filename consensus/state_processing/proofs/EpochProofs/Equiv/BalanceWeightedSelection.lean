@@ -19,6 +19,7 @@ namespace EpochProofs
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
+/-- The Rust trait that gives the effective balance of a validator. -/
 abbrev EBInst (B : Type) := types.state.balance_weighted_selection.EffectiveBalances B
 
 /-- `inst.effective_balance balances i` reads the effective balance `ebs[i]`. -/

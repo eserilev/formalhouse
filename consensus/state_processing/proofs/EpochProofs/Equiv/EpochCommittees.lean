@@ -59,6 +59,7 @@ theorem compute_seed_eq {H : Type} (inst : ShuffleHashInst H) (p : Spec.Preset)
   intro d hd
   rw [hd, hdomain, hmix m hm, ← hsm]
 
+/-- The Rust `SelectionConstants`. -/
 abbrev LhSelectionConstants := per_epoch_processing.epoch_committees.SelectionConstants
 
 /-- The selection constants of Lighthouse are the preset values. -/
@@ -347,6 +348,7 @@ theorem shift_loop1_spec (props : Slice Usize) (shifted : alloc.vec.Vec U64) (ba
       rw [hsh, this, List.take_length]
   · exact ⟨by simp, by simp [hbase]⟩
 
+/-- The translated shift drops the first epoch of the lookahead and appends the new proposers. -/
 theorem shift_lookahead_spec (look : Slice U64) (spe : Usize) (props : Slice Usize)
     (hspe : spe.val ≤ look.val.length) (hp : props.val.length = spe.val) :
     per_epoch_processing.epoch_committees.shift_lookahead look spe props ⦃ r =>

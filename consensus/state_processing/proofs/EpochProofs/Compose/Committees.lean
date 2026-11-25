@@ -75,6 +75,7 @@ structure LookaheadGlue (σ : Type) where
   /-- The reads: the lookahead, the proposer candidates, the lookahead epoch
   (`current_epoch + min_seed_lookahead + 1`), its mix and start slot, `selection_constants`. -/
   lookahead : σ → Slice U64
+  /-- The validators that the proposer selection draws from. -/
   proposerIndices : σ → Slice Usize
   proposerDomain : Array U8 4#usize
   epoch : σ → U64
@@ -146,6 +147,7 @@ structure LookaheadLinks (L : LookaheadGlue σ) (o : Spec.Oracle)
   hash : HashLink L.hash o
   effectiveBalances : ∀ t, EBLink L.effectiveBalances t
     ((view t).validators.map (·.effective_balance))
+  /-- The reads of the lookahead, the domain and the constants are the spec values. -/
   lookahead : ∀ t, (L.lookahead t).val.map (·.val) = (view t).proposer_lookahead
   proposerDomain : u8s L.proposerDomain.val = Spec.DOMAIN_BEACON_PROPOSER.toList
   /-- The lookahead epoch is the current epoch plus `MIN_SEED_LOOKAHEAD` plus one. -/
@@ -153,6 +155,7 @@ structure LookaheadLinks (L : LookaheadGlue σ) (o : Spec.Oracle)
     (L.epoch t).val = ce + Spec.P.MIN_SEED_LOOKAHEAD + 1
   /-- `get_seed_mix` reads the mix that the spec `get_seed` reads. -/
   mix : ∀ t, SeedMixLink Spec.P (view t) (L.epoch t).val (L.mix t)
+  /-- The first slot of the lookahead epoch. -/
   startSlot : ∀ t n, Spec.compute_start_slot_at_epoch Spec.P (L.epoch t).val = .ok n →
     (L.startSlot t).val = n
   constants : ∀ t, SelectionConstantsMatch Spec.P (L.constants t)
@@ -177,6 +180,7 @@ structure PtcLinks (L : LookaheadGlue σ) (G : PtcGlue σ E) (o : Spec.Oracle)
   committees : ∀ t k (hk : k < (G.committees t).val.length) l,
     Spec.ptcIndices Spec.P o (view t) (L.epoch t).val ((L.startSlot t).val + k) = .ok l →
       ((G.committees t).val[k]).val.map (·.val) = l
+  /-- One list of committee members for each slot of the epoch. -/
   committeesLength : ∀ t, (G.committees t).val.length = Spec.P.SLOTS_PER_EPOCH
   ptcDomain : u8s G.ptcDomain.val = Spec.DOMAIN_PTC_ATTESTER.toList
   ptcSize : G.ptcSize.val = Spec.P.PTC_SIZE
@@ -187,6 +191,7 @@ structure PtcLinks (L : LookaheadGlue σ) (G : PtcGlue σ E) (o : Spec.Oracle)
     (fun t => (natsOf t).length = Spec.P.PTC_SIZE)
     ((Spec.P.MIN_SEED_LOOKAHEAD + 2) * Spec.P.SLOTS_PER_EPOCH)
   windowBorrow : ∀ t, G.wview (G.windowBorrow t) = (view t).ptc_window
+  /-- The end of the borrow writes the committed window, and only it. -/
   windowReturn : ∀ t w, view (G.windowReturn t w) = { view t with ptc_window := G.committed w }
 
 theorem slots_lt_2_32 [Spec.PresetCfg.Bounds] : Spec.P.SLOTS_PER_EPOCH < 2 ^ 32 := by
