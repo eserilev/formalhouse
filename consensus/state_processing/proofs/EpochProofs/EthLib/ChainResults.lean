@@ -221,8 +221,8 @@ theorem balanceFloor_of_slot (presetMatches : PresetMatchesEthLib preset config)
   rw [bands.1] at down
   omega
 
-/-- At the epoch input, the balance of each validator that is not withdrawable is at least `1/256` of
-its effective balance. -/
+/-- At the epoch input, the balance of each validator that is not withdrawable is at least `1/256`
+of its effective balance. -/
 theorem RunToEpochInput.effectiveBalance_le (presetMatches : PresetMatchesEthLib preset config)
     (maxEffectiveBalance : MaxEffectiveBalanceIsActivationBalance preset) (fulu : .fusaka ≤ fork)
     (run : RunToEpochInput config checks start input) (registry : input.RegistryWithinLimit)
