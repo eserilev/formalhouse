@@ -36,19 +36,21 @@ Pull requests and Workflows.
 - Index of all proofs: issue #44. Tracking issues: #32 slashing protection, #33 epoch
   processing, #34 Lean spec, #35 caches.
 - The main results for epoch processing are `lighthouse_model_gloas_epoch_eq_ethlib` and
-  `lighthouse_model_fulu_epoch_eq_ethlib` (`EpochProofs/Results.lean`, with their assumptions
-  in `EpochProofs/Assumptions.lean`), each for mainnet and minimal (`ResultsOnPresets.lean`). On every epoch input of a reachable run, Lighthouse's epoch processing returns Ok and
-  gives the same state as [EthLib](https://github.com/ethereum/EthLib), an independent Lean spec.
+  `lighthouse_model_fulu_epoch_eq_ethlib`, with the same theorems for the translated Rust
+  (`lighthouse_rust_*`). They are in `EpochProofs/Results.lean` (`ResultsOnPresets.lean` for mainnet
+  and minimal), and their assumptions in `EpochProofs/Assumptions.lean`. At every epoch input of a
+  run, Lighthouse's epoch processing succeeds and gives the same state as
+  [EthLib](https://github.com/ethereum/EthLib), an independent Lean spec.
 
 ## Trusted base
 
-The full list, with counts, is the "Trusted base" section of
+The full list is in "What is assumed, and why it is true" in
 `consensus/state_processing/proofs/README.md`. In short:
 
 - The Lean kernel, Charon and Aeneas.
 - Rust contracts: the milhouse implementations of the traits that the translated code calls,
-  for example `RowsContract` for the single-pass loop.
-- Glue facts: Rust expressions that Aeneas does not translate, each linked to the model.
-- Cache build facts, spec preconditions, supply and time bounds, probability facts and the
-  registry room that the proofs against EthLib need.
-- The hash function and BLS, given as an Oracle.
+  for example `ValidatorRowsMatchSpec` for the single-pass loop.
+- Rust expressions that Aeneas does not translate, each with a fact that links it to the model.
+- Where the caches came from, spec preconditions, supply and time bounds, facts about hash values and
+  the registry room that the comparison with EthLib needs.
+- The hash function and BLS, given as an Oracle. The theorems against EthLib use the functions of EthLib.

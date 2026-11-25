@@ -357,9 +357,6 @@ theorem get_block_root_congr [CurrentPreset] (t s : BeaconState) (e : Epoch) (h1
   unfold get_block_root get_block_root_at_slot
   rw [h1, h2]
 
-/-- The justification bits have their `BitVector[4]` length. -/
-def BL4 (st : BeaconState) : Prop := st.justification_bits.length = 4
-
 theorem fin_block {P : BeaconState → Prop} (b : Bool) (cp k E : Nat) (hcp : cp + k < 2 ^ 64)
     (A B : BeaconState) (hA : P A) (hB : P B) :
     OkWith (if b = true then (do
@@ -412,19 +409,22 @@ theorem weigh_total [CurrentPreset] [CurrentPreset.Valid] (s : BeaconState) (tab
     have hpc2 : s.previous_justified_checkpoint.epoch + 2 < 2 ^ 64 := tot_lt63_add hcp.1 (by decide)
     have hcc2 : s.current_justified_checkpoint.epoch + 2 < 2 ^ 64 := tot_lt63_add hcp.2 (by decide)
     have hcc1 : s.current_justified_checkpoint.epoch + 1 < 2 ^ 64 := tot_lt63_add hcp.2 (by decide)
-    refine OkWith.bind (P := BL4) ?_ (fun st2 h2 => ?_)
+    refine OkWith.bind (P := fun st => st.justification_bits.length = 4) ?_ (fun st2 h2 => ?_)
     · rw [tot_mul (tot_lt62_mul hcb (by decide)), tot_bind_ok,
         tot_mul (tot_lt62_mul htab (by decide)), tot_bind_ok]
       split
       · obtain ⟨r, hr⟩ := get_block_root_total s (s.slot / P.SLOTS_PER_EPOCH) hc1 hc2 hslot hbr
         rw [get_block_root_congr st1 s _ hs1 hbr1, hr, tot_bind_ok,
           tot_set _ (by rw [hl1]; decide), tot_bind_ok]
-        exact OkWith.pure (by simp [BL4, hl1])
+        exact OkWith.pure (by simp [hl1])
       · exact OkWith.pure hl1
-    · refine OkWith.bind (fin_block (P := BL4) _ _ _ _ hpc _ _ h2 h2) (fun st3 h3 => ?_)
-      refine OkWith.bind (fin_block (P := BL4) _ _ _ _ hpc2 _ _ h3 h3) (fun st4 h4 => ?_)
-      refine OkWith.bind (fin_block (P := BL4) _ _ _ _ hcc2 _ _ h4 h4) (fun st5 h5 => ?_)
-      exact fin_block (P := BL4) _ _ _ _ hcc1 _ _ h5 h5
+    · refine OkWith.bind (fin_block
+        (P := fun st => st.justification_bits.length = 4) _ _ _ _ hpc _ _ h2 h2) (fun st3 h3 => ?_)
+      refine OkWith.bind (fin_block
+        (P := fun st => st.justification_bits.length = 4) _ _ _ _ hpc2 _ _ h3 h3) (fun st4 h4 => ?_)
+      refine OkWith.bind (fin_block
+        (P := fun st => st.justification_bits.length = 4) _ _ _ _ hcc2 _ _ h4 h4) (fun st5 h5 => ?_)
+      exact fin_block (P := fun st => st.justification_bits.length = 4) _ _ _ _ hcc1 _ _ h5 h5
 
 theorem tot_sum_filter_le {α : Type} (P : α → Bool) (f : α → Nat) (l : List α) :
     ((l.filter P).map f).sum ≤ (l.map f).sum := by
@@ -463,7 +463,8 @@ theorem process_justification_and_finalization_total [CurrentPreset] [CurrentPre
     (hcp : s.previous_justified_checkpoint.epoch < 2 ^ 63 ∧
       s.current_justified_checkpoint.epoch < 2 ^ 63)
     (hsup : totalEffectiveBalance s < 2 ^ 60) :
-    OkWith (process_justification_and_finalization P s) BL4 := by
+    OkWith (process_justification_and_finalization P s) (fun st => st.justification_bits.length =
+      4) := by
   unfold process_justification_and_finalization
   rw [tot_current_epoch, tot_bind_ok]
   split

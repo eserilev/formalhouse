@@ -459,12 +459,12 @@ theorem ptc_committees_match_spec (p : Spec.Preset) (cp : CacheProofs.Spec.Commi
     (start : Nat) (hstart : Spec.compute_start_slot_at_epoch p epoch = .ok start)
     (committees : Slice (alloc.vec.Vec Usize))
     (hclen : committees.val.length = p.SLOTS_PER_EPOCH)
-    (hglue : CommitteesReadFromCache shuffling cps spe epoch start committees) :
+    (hread : CommitteesReadFromCache shuffling cps spe epoch start committees) :
     ∀ k (hk : k < committees.val.length) l,
       Spec.ptcIndices p o state epoch (start + k) = .ok l →
         (committees.val[k]).val.map (·.val) = l := by
   intro k hk l hl
-  obtain ⟨slot, cs, hslotv, hcslen, hck, hcs⟩ := hglue k hk
+  obtain ⟨slot, cs, hslotv, hcslen, hck, hcs⟩ := hread k hk
   rw [ptcIndices_of_cache p cp hp o state epoch seed hseed shuffling hbuilt.shuffling_spec cps
     spe hbuilt.count_spec hspe hn hn24 hfit start k hstart (hclen ▸ hk) slot hslotv cs hcslen
     hcs] at hl
@@ -499,7 +499,7 @@ theorem lighthouse_ptc_window_from_cache {H B : Type} (inst : ShuffleHash H)
     (hn24 : (Spec.get_active_validator_indices state epoch.val).length ≤ 2 ^ 24)
     (hfit : (Spec.get_active_validator_indices state epoch.val).length * (cps.val * spe.val) ≤
       Usize.max)
-    (hglue : CommitteesReadFromCache shuffling cps spe epoch.val start_slot.val committees)
+    (hread : CommitteesReadFromCache shuffling cps spe epoch.val start_slot.val committees)
     (hn24c : ∀ k (hk : k < committees.val.length), (committees.val[k]).val.length ≤ 2 ^ 24)
     (ptc_size : Usize) (hptc : ptc_size.val = p.PTC_SIZE) (c : LighthouseSelectionConstants)
     (hc : SelectionConstantsMatch p c) (hus : Usize.max = U64.max)
@@ -512,7 +512,7 @@ theorem lighthouse_ptc_window_from_cache {H B : Type} (inst : ShuffleHash H)
     hepoch mix hmix start_slot hstart
     (ptc_committees_match_spec p cp hp o state epoch.val seed hseed shuffling cps spe hbuilt hspe hn
       hn24
-      hfit start_slot.val hstart committees hclen hglue)
+      hfit start_slot.val hstart committees hclen hread)
     hn24c ptc_size hptc c hc hp.slots_pos hus state' hspec
 
 end EpochProofs.CacheReads

@@ -22,8 +22,8 @@ for `ExitCache`. Aeneas translates these modules. Each cache gets three kinds of
 - Read agreement: a cache query equals the spec computation. If the spec succeeds, Lighthouse
   does not return an error.
 
-Glue code that Aeneas does not translate is modelled by hand in Lean. These models are named
-`lh*` and are part of the trusted base.
+Lean models of code that Aeneas does not translate are written by hand. Their names start
+with `lighthouse`, and they are part of the trusted base.
 
 ## Building
 
@@ -62,22 +62,22 @@ Reference: the exit queue epoch in phase0 `initiate_validator_exit` (`Spec/ExitC
 
 ```lean
 theorem build_eq (es : List U64) (hlen : es.length ≤ 18446744073709551615) :
-    ∃ s, lhBuild es = ok (.Ok s) ∧
-      (s.1.val, s.2.val) = closedForm ((es.map (·.val)).filter nonFar)
+    ∃ s, lighthouseBuild es = ok (.Ok s) ∧
+      (s.1.val, s.2.val) = largestExitEpochAndCount ((es.map (·.val)).filter nonFar)
 
 theorem exit_queue_epoch_equiv (es : List U64) (delayed limit : U64)
     (hdelayed : delayed.val < Spec.FAR_FUTURE_EPOCH)
     (hlen : es.length ≤ 18446744073709551615) :
-    ∃ s, lhBuild es = ok (.Ok s) ∧
-      (do let r ← lhExitQueueEpoch s.1 s.2 delayed limit; ok (absExit r)) =
+    ∃ s, lighthouseBuild es = ok (.Ok s) ∧
+      (do let r ← lighthouseExitQueueEpoch s.1 s.2 delayed limit; ok (exitResultToSpec r)) =
         ok (Spec.exitQueueEpoch (es.map (·.val)) delayed.val limit.val)
 
 theorem build_set_record (es : List U64) (i : Nat) (e : U64) (hi : i < es.length)
     (hfar : es[i].val = Spec.FAR_FUTURE_EPOCH) (he : e.val ≠ Spec.FAR_FUTURE_EPOCH)
     (hlen : es.length ≤ 18446744073709551615) :
-    ∃ s r s', lhBuild es = ok (.Ok s) ∧
+    ∃ s r s', lighthouseBuild es = ok (.Ok s) ∧
       state.exit_queue.record_exit s.1 s.2 e = ok (.Ok r) ∧
-      lhBuild (es.set i e) = ok (.Ok s') ∧ r.1.val = s'.1.val ∧ r.2.val = s'.2.val
+      lighthouseBuild (es.set i e) = ok (.Ok s') ∧ r.1.val = s'.1.val ∧ r.2.val = s'.2.val
 ```
 
 `es` is the `exit_epoch` of each validator, in order.
@@ -92,7 +92,7 @@ theorem build_set_record (es : List U64) (i : Nat) (e : U64) (hi : i < es.length
 
 Trusted base:
 
-- `lhBuild` models `ExitCache::new`. `lhExitQueueEpoch` models the pre-Electra branch of
+- `lighthouseBuild` models `ExitCache::new`. `lighthouseExitQueueEpoch` models the pre-Electra branch of
   `initiate_validator_exit` and the same code in `single_pass.rs`.
 - `delayed` equals `compute_activation_exit_epoch(get_current_epoch(state))` and is below
   `FAR_FUTURE_EPOCH`. `limit` equals `get_validator_churn_limit(state)`.
@@ -131,7 +131,7 @@ Between the build and the read:
 - No activation epoch changes. Exits and slashings write only exit fields.
 - Finality changes. The queue does not depend on it.
 
-`Frame finalized_epoch vb vr` states these facts. `vb` is the validator list that the builder
+`QueueInputsUnchanged finalized_epoch vb vr` states these facts. `vb` is the validator list that the builder
 sees. `vr` is the list at the read.
 
 ### The theorems
@@ -148,35 +148,35 @@ theorem is_eligible_for_activation_equiv ... :
 
 -- Build: both builders give the sorted keys of the validators with
 -- could_be_eligible_for_activation_at(epoch).
-theorem lhBuild_eq_queueSummary (epoch : Nat) (validators : List Validator) :
-    lhBuild epoch validators = queueSummary epoch validators
+theorem lighthouseBuild_eq_queueSummary (epoch : Nat) (validators : List Validator) :
+    lighthouseBuild epoch validators = queueSummary epoch validators
 
 -- Why the cache works.
 theorem couldBeAt_of_is_eligible_for_activation (hfin : finalized_epoch < epoch)
     (h : is_eligible_for_activation finalized_epoch validator = true) :
     couldBeAt epoch validator = true
-theorem over_approximation (hframe : Frame finalized_epoch vb vr) (hfin : finalized_epoch < epoch)
+theorem over_approximation (hframe : QueueInputsUnchanged finalized_epoch vb vr) (hfin : finalized_epoch < epoch)
     (hr : vr[i]? = some r) (hel : is_eligible_for_activation finalized_epoch r = true) :
     ∃ b, vb[i]? = some b ∧ couldBeAt epoch b = true ∧
       b.activation_eligibility_epoch = r.activation_eligibility_epoch
 
 -- Read agreement, phase0 to Deneb.
-theorem lhSelect_eq_dequeued (hframe : Frame finalized_epoch vb vr)
+theorem lighthouseSelect_eq_dequeued (hframe : QueueInputsUnchanged finalized_epoch vb vr)
     (hfin : finalized_epoch < epoch) (hepoch : epoch ≤ FAR_FUTURE_EPOCH) :
-    lhSelect (lhBuild epoch vb) finalized_epoch churn_limit =
+    lighthouseSelect (lighthouseBuild epoch vb) finalized_epoch churn_limit =
       dequeued finalized_epoch churn_limit vr
-theorem mem_lhSelect_iff ... : i ∈ lhSelect (lhBuild epoch vb) .. ↔ i ∈ dequeued ..
+theorem mem_lighthouseSelect_iff ... : i ∈ lighthouseSelect (lighthouseBuild epoch vb) .. ↔ i ∈ dequeued ..
 
 -- Read agreement, Electra: three `if`s in Lighthouse equal `if`/`elif` in the spec.
-theorem lhRegistryUpdatePostElectra_eq (hfin : finalized_epoch ≤ current_epoch)
+theorem lighthouseRegistryUpdatePostElectra_eq (hfin : finalized_epoch ≤ current_epoch)
     (hcur : current_epoch < FAR_FUTURE_EPOCH)
     (hbal : EJECTION_BALANCE < MIN_ACTIVATION_BALANCE) :
-    lhRegistryUpdatePostElectra .. validator = process_registry_update_electra .. validator
+    lighthouseRegistryUpdatePostElectra .. validator = process_registry_update_electra .. validator
 
 -- Discharge of the hypotheses from the spec.
 theorem process_activation_eligibility_frame (hfin : finalized_epoch ≤ current_epoch)
     (h : process_activation_eligibility MAX_EFFECTIVE_BALANCE current_epoch vs = .ok vs') :
-    vs'.length = vs.length ∧ ∀ i b r, .. -- the Frame facts for the eligibility loop
+    vs'.length = vs.length ∧ ∀ i b r, .. -- the QueueInputsUnchanged facts for the eligibility loop
 theorem process_finalizations_lt (hfin : finalized_epoch < current_epoch)
     (h : process_finalizations bits pj cj current_epoch finalized_epoch = .ok f) :
     f < current_epoch
@@ -206,17 +206,17 @@ The reference omits `initiate_validator_exit`. It writes only `exit_epoch` and
 ### Trusted base
 
 - Charon and Aeneas. No Charon flags beyond `--include safe_arith`.
-- `BTreeSet<(Epoch, usize)>` is a sorted list without duplicates. `lhInsert` models `insert`.
+- `BTreeSet<(Epoch, usize)>` is a sorted list without duplicates. `lighthouseInsert` models `insert`.
   Iteration is in list order. The tuple order is lexicographic, as `tupleLe`.
-- `lhBuild` models the loops in `initialize_epoch_cache` and
-  `process_single_registry_update_pre_electra`. `lhSelect` models
+- `lighthouseBuild` models the loops in `initialize_epoch_cache` and
+  `process_single_registry_update_pre_electra`. `lighthouseSelect` models
   `get_validators_eligible_for_activation` before `collect`. The `collect` into
   `BTreeSet<usize>` keeps the members. Single-pass uses `contains`, and `registry_updates.rs`
   sets the same activation epoch for each member, so order does not matter.
-- `lhRegistryUpdatePostElectra` models `process_single_registry_update_post_electra`.
+- `lighthouseRegistryUpdatePostElectra` models `process_single_registry_update_post_electra`.
   `Validator::is_eligible_for_activation_queue` and `Validator::is_active_at` equal the spec
   functions.
-- `Frame` holds between the build and the read. Block processing before Electra appends
+- `QueueInputsUnchanged` holds between the build and the read. Block processing before Electra appends
   validators with `FAR_FUTURE_EPOCH` eligibility and does not write `activation_epoch` or
   `activation_eligibility_epoch` of existing validators.
 - Lighthouse's justification and finalization equals the spec. `finalized_epoch` is the epoch
@@ -225,7 +225,7 @@ The reference omits `initiate_validator_exit`. It writes only `exit_epoch` and
   `get_validator_churn_limit` (before Deneb).
 - Mainnet and minimal presets have `EJECTION_BALANCE < MIN_ACTIVATION_BALANCE`.
 
-### Coherence notes
+### Notes
 
 - `process_epoch_single_pass` with `effective_balance_updates` and without `registry_updates`
   stores an empty queue for the next epoch (`single_pass.rs:480-486`). Only
@@ -267,9 +267,9 @@ Total active balance:
 |---|---|---|
 | `update_effective_balance_spec` | Preservation | If `total = activeSum act ebs`, `i ≤ len`, the flag is `act i` and `total + eb` fits, the update returns `Ok(true)` and keeps `total' = activeSum act ebs'`. A push appends, a late update replaces. |
 | `update_effective_balance_out_of_bounds` | Error | If `i > len`, the update returns `Ok(false)` (`ValidatorIndexOutOfBounds`) and changes nothing. |
-| `lhRun_spec`, `lhRun_build` | Build | The `single_pass.rs` sequence of calls from an empty cache does not fail, and gives `total = activeSum act ebs`. |
+| `lighthouseRun_spec`, `lighthouseRun_build` | Build | The `single_pass.rs` sequence of calls from an empty cache does not fail, and gives `total = activeSum act ebs`. |
 | `single_pass_total_active_balance` | Read | If the calls give the effective balances of `vs`, then `floor_total_active_balance(total)` equals the spec `get_total_active_balance` of the state with validators `vs` at the next epoch. |
-| `total_active_balance_equiv` | Read | The same, for any coherent `(ebs, total)`. |
+| `total_active_balance_equiv` | Read | The same, for any correct `(ebs, total)`. |
 | `compute_total_active_balance_slow_equiv` | Build | The `BeaconState` total active balance cache equals the spec `get_total_active_balance`, and its loop does not overflow if the spec sum does not. |
 
 Base rewards:
@@ -316,9 +316,9 @@ v1.7.0-beta.4. The state has only the fields that these functions read.
 
 - Charon, Aeneas and the Aeneas Lean library. Its `sorry` warnings are not reachable from
   these theorems.
-- `lhRun` models the glue in `single_pass.rs`: one `update_effective_balance` call per event,
+- `lighthouseRun` models the untranslated code in `single_pass.rs`: one `update_effective_balance` call per event,
   in order, and `?` stops at the first error.
-- `lhSlowSum` models the loop of `compute_total_active_balance_slow`.
+- `lighthouseSlowSum` models the loop of `compute_total_active_balance_slow`.
 - `single_pass.rs` makes calls that satisfy `ValidCalls`:
   - The main loop calls `update_effective_balance` once for each index `0..n`, in order. The
     dummy update for a validator in a consolidation counts as this call.
@@ -345,7 +345,7 @@ v1.7.0-beta.4. The state has only the fields that these functions read.
   `initialize_epoch_cache` total comes from the `BeaconState` cache, which is covered by
   `compute_total_active_balance_slow_equiv`.
 - `EpochCache::check_validity`, the `CacheNotInitialized` check and the error mapping from the
-  pure function errors to `EpochCacheError` are glue.
+  pure function errors to `EpochCacheError` are untranslated code.
 
 ### Which indices the STF reads
 
@@ -379,51 +379,51 @@ Files:
 
 ### The theorems
 
-`flagSum vs ps e f` is the raw total: the sum of `effective_balance` over the validators that
-are active in `e`, not slashed, and have flag `f` in `ps`. `Coherent incr s c` says that for
-each flag below 3, the current cache holds `(flagSum .. current_epoch_participation ..
-current_epoch f, incr)` and the previous cache holds `(flagSum .. previous_epoch_participation
-.. get_previous_epoch(s) f, incr)`. `CurrentCoherent` is the first half.
+`unslashedFlagBalance vs ps e f` is the raw total: the sum of `effective_balance` over the validators that
+are active in `e`, not slashed, and have flag `f` in `ps`. `ProgressiveBalancesCacheCorrect incr s c` says that for
+each flag below 3, the current cache holds `(unslashedFlagBalance .. current_epoch_participation ..
+current_epoch f, incr)` and the previous cache holds `(unslashedFlagBalance .. previous_epoch_participation
+.. get_previous_epoch(s) f, incr)`. `CurrentEpochTotalsCorrect` is the first half.
 
 Each theorem says that Lighthouse returns `Ok`, so it does not return an error, and that the
-result is coherent.
+result is correct.
 
 | Theorem | Statement |
 |---|---|
-| `build_coherent` | `initialize_progressive_balances_cache` gives a coherent cache if each total fits in a `u64`. |
-| `attestation_coherent` | After `set_participation_flag` for a new flag, `on_new_attestation` gives a coherent cache. |
-| `slashing_coherent` | After `set_slashed`, `on_slashing` gives a coherent cache. It never fails. |
-| `effective_balance_change_coherent` | After `set_effective_balance`, `on_effective_balance_change` keeps the current cache coherent and does not change the previous cache. |
-| `epoch_transition_coherent` | From `CurrentCoherent` alone, `on_epoch_transition` gives a cache that is coherent with `next_epoch_participation(s)`. |
-| `registry_change_coherent` | A change to validators that keeps each effective balance, slashed flag and activity in both epochs keeps the cache coherent with no hook. |
-| `add_validator_coherent` | A new validator with empty participation keeps the cache coherent with no hook. |
+| `build_correct` | `initialize_progressive_balances_cache` gives a correct cache if each total fits in a `u64`. |
+| `attestation_correct` | After `set_participation_flag` for a new flag, `on_new_attestation` gives a correct cache. |
+| `slashing_correct` | After `set_slashed`, `on_slashing` gives a correct cache. It never fails. |
+| `effective_balance_change_correct` | After `set_effective_balance`, `on_effective_balance_change` keeps the current cache correct and does not change the previous cache. |
+| `epoch_transition_correct` | From `CurrentEpochTotalsCorrect` alone, `on_epoch_transition` gives a cache that is correct with `next_epoch_participation(s)`. |
+| `registry_change_correct` | A change to validators that keeps each effective balance, slashed flag and activity in both epochs keeps the cache correct with no hook. |
+| `add_validator_correct` | A new validator with empty participation keeps the cache correct with no hook. |
 | `read_current_eq_spec` | `current_epoch_flag_attesting_balance(f)` returns `get_total_balance(state, get_unslashed_participating_indices(state, f, get_current_epoch(state)))`. |
 | `read_previous_eq_spec` | The same for the previous epoch, after the genesis epoch. |
-| `spec_total_eq` | The spec computation equals `max(EFFECTIVE_BALANCE_INCREMENT, flagSum)`. |
+| `spec_total_eq` | The spec computation equals `max(EFFECTIVE_BALANCE_INCREMENT, unslashedFlagBalance)`. |
 
 ```lean
-theorem attestation_coherent (incr : Nat) (s s' : Spec.BeaconState) (c : LhCache)
+theorem attestation_correct (incr : Nat) (s s' : Spec.BeaconState) (c : LighthouseProgressiveBalancesCache)
     (e j : Nat) (f : Usize) (is_slashed : Bool) (eb : U64) (v : Spec.Validator) (p : Nat)
-    (hc : Coherent incr s c) (hspec : Spec.set_participation_flag s e j f.val = .ok s')
+    (hc : ProgressiveBalancesCacheCorrect incr s c) (hspec : Spec.set_participation_flag s e j f.val = .ok s')
     (he : e = Spec.get_previous_epoch s ∨ e = Spec.get_current_epoch s)
     (hepoch : s.current_epoch ≤ U64.max)
-    (hv : s.validators[j]? = some v) (hp : (partAt s e)[j]? = some p)
+    (hv : s.validators[j]? = some v) (hp : (participationAt s e)[j]? = some p)
     (hnew : Spec.has_flag p f.val = false) (hactive : Spec.is_active_validator v e = true)
     (hf : f.val < 3) (hslashed : is_slashed = v.slashed) (heb : eb.val = v.effective_balance)
-    (hfit : flagSum s'.validators (partAt s' e) e f.val ≤ U64.max) :
-    ∃ c', lhOnNewAttestation c e is_slashed f eb = ok (.Ok c') ∧ Coherent incr s' c'
+    (hfit : unslashedFlagBalance s'.validators (participationAt s' e) e f.val ≤ U64.max) :
+    ∃ c', lighthouseOnNewAttestation c e is_slashed f eb = ok (.Ok c') ∧ ProgressiveBalancesCacheCorrect incr s' c'
 
-theorem epoch_transition_coherent (incr : U64) (s : Spec.BeaconState) (c : LhCache)
-    (hc : CurrentCoherent incr.val s c) (hepoch : s.current_epoch + 1 ≤ U64.max) :
-    ∃ c', lhOnEpochTransition c incr = ok (.Ok c') ∧
-      Coherent incr.val (Spec.next_epoch_participation s) c'
+theorem epoch_transition_correct (incr : U64) (s : Spec.BeaconState) (c : LighthouseProgressiveBalancesCache)
+    (hc : CurrentEpochTotalsCorrect incr.val s c) (hepoch : s.current_epoch + 1 ≤ U64.max) :
+    ∃ c', lighthouseOnEpochTransition c incr = ok (.Ok c') ∧
+      ProgressiveBalancesCacheCorrect incr.val (Spec.next_epoch_participation s) c'
 
-theorem read_current_eq_spec (incr : Nat) (s : Spec.BeaconState) (c : LhCache) (f : Usize)
-    (hc : CurrentCoherent incr s c) (hf : f.val < 3)
+theorem read_current_eq_spec (incr : Nat) (s : Spec.BeaconState) (c : LighthouseProgressiveBalancesCache) (f : Usize)
+    (hc : CurrentEpochTotalsCorrect incr s c) (hf : f.val < 3)
     (hlen : s.current_epoch_participation.length = s.validators.length)
-    (hfit : max incr (flagSum s.validators s.current_epoch_participation s.current_epoch f.val)
+    (hfit : max incr (unslashedFlagBalance s.validators s.current_epoch_participation s.current_epoch f.val)
       < Spec.UINT64_SIZE) :
-    ∃ x : U64, lhCurrentEpochFlagAttestingBalance c f = ok (.Ok x) ∧
+    ∃ x : U64, lighthouseCurrentEpochFlagBalance c f = ok (.Ok x) ∧
       (Spec.get_unslashed_participating_indices s f.val (Spec.get_current_epoch s) >>=
         Spec.get_total_balance incr s) = .ok x.val
 ```
@@ -435,8 +435,8 @@ The other statements are in the Lean file.
 `process_effective_balance_updates` changes effective balances. So the previous epoch total of
 the spec changes too, and the previous cache is stale until the end of epoch processing.
 `process_participation_flag_updates` then drops the previous epoch. `on_epoch_transition`
-replaces the previous cache with the current cache. `epoch_transition_coherent` needs only
-`CurrentCoherent`, so the stale previous cache has no effect. No code reads the previous cache
+replaces the previous cache with the current cache. `epoch_transition_correct` needs only
+`CurrentEpochTotalsCorrect`, so the stale previous cache has no effect. No code reads the previous cache
 between the effective balance updates and the transition: `RewardsAndPenaltiesContext` and
 justification read it before, and `process_epoch` clones the cache for the summary before.
 
@@ -452,12 +452,12 @@ functions are the same in v1.7.0-beta.4.
 ### Trusted base
 
 - Charon, Aeneas and the Aeneas Lean library.
-- The hand models of the glue: `lhInitialize` and `lhInitLoop`
-  (`initialize_progressive_balances_cache`), `lhNewTotals` (`EpochTotalBalances::new`),
-  `lhOnNewAttestation`, `lhOnSlashing`, `lhOnEffectiveBalanceChange`, `lhOnEpochTransition`,
-  `lhCurrentEpochFlagAttestingBalance`, `lhPreviousEpochFlagAttestingBalance`,
-  `lhIsActiveAt` (`Validator::is_active_at`) and `lhPreviousEpoch`
-  (`BeaconState::previous_epoch`). `LhCache` is `Inner`. The models use `Nat` epochs with an
+- The hand models of the untranslated code: `lighthouseInitialize` and `lighthouseInitLoop`
+  (`initialize_progressive_balances_cache`), `lighthouseNewTotals` (`EpochTotalBalances::new`),
+  `lighthouseOnNewAttestation`, `lighthouseOnSlashing`, `lighthouseOnEffectiveBalanceChange`, `lighthouseOnEpochTransition`,
+  `lighthouseCurrentEpochFlagBalance`, `lighthousePreviousEpochFlagBalance`,
+  `lighthouseIsActiveAt` (`Validator::is_active_at`) and `lighthousePreviousEpoch`
+  (`BeaconState::previous_epoch`). `LighthouseProgressiveBalancesCache` is `Inner`. The models use `Nat` epochs with an
   explicit `u64` overflow check.
 - The `From<progressive_balances::Error> for BeaconStateError` impl maps each variant to the
   old variant.
@@ -483,7 +483,7 @@ functions are the same in v1.7.0-beta.4.
   hook), `slash_validator.rs` (with the hook), `process_operations.rs` (with the hook),
   `effective_balance_updates.rs` (phase0 only), `genesis.rs` and `upgrade/altair.rs` (before
   `initialize`), `upgrade/electra.rs` (validators that are not active), and new validators
-  (`add_validator_coherent`).
+  (`add_validator_correct`).
 
 ### Genesis epoch
 
@@ -508,19 +508,19 @@ theorem committee_count_per_slot_equiv (p : Spec.Preset) (active_count spe max_c
     (hspe : spe.val = p.SLOTS_PER_EPOCH) (hmax : max_cps.val = p.MAX_COMMITTEES_PER_SLOT)
     (htarget : target.val = p.TARGET_COMMITTEE_SIZE) :
     committee_count_per_slot active_count spe max_cps target ⦃ r =>
-      absResult (·.val) r = Spec.get_committee_count_per_slot p active_count.val ⦄
+      resultToSpec (·.val) r = Spec.get_committee_count_per_slot p active_count.val ⦄
 
 -- Read: `get_beacon_committee` returns `Some`, and the committee is the spec committee.
 theorem get_beacon_committee_equiv (p : Preset) (sha256 : List Nat → List Nat)
     (indices seed : List Nat) (shuffling : Slice Usize)
-    (hshuf : IsShuffling p sha256 indices seed (shuffling.val.map (·.val)))
+    (hshuf : MatchesSpecShuffling p sha256 indices seed (shuffling.val.map (·.val)))
     (committees_per_slot slots_per_epoch slot index : Usize)
     (hcps : get_committee_count_per_slot p indices.length = .ok committees_per_slot.val)
     (hspe : slots_per_epoch.val = p.SLOTS_PER_EPOCH) (hspe0 : 0 < slots_per_epoch.val)
     (hindex : index.val < committees_per_slot.val) (hn : 0 < indices.length)
     (hfit : indices.length * (committees_per_slot.val * slots_per_epoch.val) ≤ Usize.max) :
     ∃ committee,
-      lhGetBeaconCommittee (some (slot.val / slots_per_epoch.val)) shuffling committees_per_slot
+      lighthouseGetBeaconCommittee (some (slot.val / slots_per_epoch.val)) shuffling committees_per_slot
         slots_per_epoch slot index = ok (some committee) ∧
       get_beacon_committee p sha256 indices seed slot.val index.val = .ok (committee.map (·.val))
 
@@ -531,12 +531,12 @@ theorem shuffled_position_inverse (shuffling : Slice Usize) (validator_count : U
     ∃ positions, shuffling_positions shuffling validator_count = ok (.Ok positions) ∧
       positions.val.length = validator_count.val ∧
       (∀ i (h : i < shuffling.val.length),
-        lhShuffledPosition positions.val shuffling.val[i].val = some i) ∧
-      (∀ v, v ∉ shuffling.val.map (·.val) → lhShuffledPosition positions.val v = none)
+        lighthouseShuffledPosition positions.val shuffling.val[i].val = some i) ∧
+      (∀ v, v ∉ shuffling.val.map (·.val) → lighthouseShuffledPosition positions.val v = none)
 
 -- Read: `get_attestation_duties` agrees with `get_committee_assignment`.
 theorem get_attestation_duties_equiv ... :
-    ∃ duty, lhGetAttestationDuties position (Slice.len shuffling) committees_per_slot
+    ∃ duty, lighthouseGetAttestationDuties position (Slice.len shuffling) committees_per_slot
         slots_per_epoch epoch = ok (.Ok duty) ∧
       match duty with
       | none => get_committee_assignment p sha256 indices seed current_epoch epoch v = .ok none
@@ -553,26 +553,26 @@ theorem get_attestation_duties_equiv ... :
 ```lean
 -- Build: the pure function shuffle (backwards `shuffle_list_with`) gives the spec shuffling.
 theorem shuffling_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → List Nat)
-    (hH : HashLink inst sha256) (hsha : ∀ l, (sha256 l).length = 32)
+    (hH : HashMatches inst sha256) (hsha : ∀ l, (sha256 l).length = 32)
     (p : Spec.CommitteeCache.Preset) (seed : Slice U8) (hseed : seed.val.length = 32)
     (indices : alloc.vec.Vec Usize) (rounds : U8) (hR : p.SHUFFLE_ROUND_COUNT = rounds.val)
     (hn : 0 < indices.val.length) (hn24 : indices.val.length ≤ 16777216)
     (hr : 0 < rounds.val) :
     state.committee_assignment.shuffling inst indices rounds seed ⦃ out =>
-      ∃ v, out = some v ∧ CommitteeCache.IsShuffling p sha256 (indices.val.map (·.val))
+      ∃ v, out = some v ∧ CommitteeCache.MatchesSpecShuffling p sha256 (indices.val.map (·.val))
         (seed.val.map (·.val)) (v.val.map (·.val)) ⦄
 ```
 
-`shuffling_spec` discharges the `IsShuffling` hypothesis of the other theorems. The hash is
+`shuffling_spec` discharges the `MatchesSpecShuffling` hypothesis of the other theorems. The hash is
 abstract. `shuffle_list_with` is generic over the trait `ShuffleHash`, so Aeneas translates it
-with the hash as a parameter `inst`. `HashLink inst sha256` says that `inst.hash` computes
+with the hash as a parameter `inst`. `HashMatches inst sha256` says that `inst.hash` computes
 `sha256` and does not fail. The theorem holds for every such pair. It uses no axiom for the hash.
 
 `shuffle_list_with_spec` states the result in Lighthouse terms: entry `x` of the output is
-entry `csiFold x` of the input. `compute_shuffled_permutation_eq` proves that the spec gives the
-same `csiFold`.
+entry `shuffledIndexAfterRounds x` of the input. `compute_shuffled_permutation_eq` proves that the spec gives the
+same `shuffledIndexAfterRounds`.
 
-`IsShuffling p sha256 indices seed shuffling` says that entry `i` of `shuffling` is
+`MatchesSpecShuffling p sha256 indices seed shuffling` says that entry `i` of `shuffling` is
 `indices[compute_shuffled_index(i, len(indices), seed)]`. `sha256` is a parameter, so the
 theorems hold for every hash function.
 
@@ -593,7 +593,7 @@ directly.
 - The seed has 32 bytes, there are at most `2^24` active validators, and
   `SHUFFLE_ROUND_COUNT` is in `1..=255`. For other inputs the pure function returns `None` or panics, as
   before.
-- The glue models `lhGetBeaconCommittee`, `lhShuffledPosition` and `lhGetAttestationDuties`.
+- The models of the untranslated code `lighthouseGetBeaconCommittee`, `lighthouseShuffledPosition` and `lighthouseGetAttestationDuties`.
   They model `get_beacon_committee`, `shuffled_position`, `get_attestation_duties` and
   `convert_to_slot_and_index` in `committee_cache.rs`.
 - `u64 as usize` and `Slot::as_usize` do not truncate (64-bit target).
@@ -603,7 +603,7 @@ directly.
   `(epoch + 1) * SLOTS_PER_EPOCH < 2^64`.
 - The cache holds the inputs that the theorems assume:
   - `shuffling` is the output of the pure function `shuffling` on `get_active_validator_indices` and
-    `get_seed` for `initialized_epoch`. Then `shuffling_spec` gives `IsShuffling`. The proofs do
+    `get_seed` for `initialized_epoch`. Then `shuffling_spec` gives `MatchesSpecShuffling`. The proofs do
     not cover `get_active_validator_indices` and `get_seed`.
   - The shuffling has no duplicates (`hnodup`). The active indices are distinct and the shuffle
     is a permutation. The proofs do not prove that the shuffle is a permutation.
@@ -624,32 +624,32 @@ also runs when `consensus/swap_or_not_shuffle/src/shuffle_list.rs` changes.
 ## PubkeyCache
 
 Rust: `../src/state/pubkey_index.rs`. `PubkeyCache::insert` calls `pubkey_index::insert`.
-Proofs: `Spec/PubkeyCache.lean`, `Equiv/PubkeyCache.lean`. The epoch bridge is
-`consensus/state_processing/proofs/EpochProofs/CachePubkey.lean`.
+Proofs: `Spec/PubkeyCache.lean`, `Equiv/PubkeyCache.lean`. The proof for the epoch is
+`consensus/state_processing/proofs/EpochProofs/CacheReads/PubkeyCache.lean`.
 
 ### Theorems
 
 - `insert_spec`: the insert never fails. It adds the key at the next index, or returns `None`
   and leaves the map unchanged.
-- `insert_coherent`, `insertAll_coherent`, `update_coherent`: inserting keys in index order
-  keeps the cache equal to `indexView`, the last index of each key.
-- `insertAll_ok`: the loop of `update_pubkey_cache` finishes when the length fits in `usize`.
-- `get_coherent_of_nodup`: with unique keys, a get returns the spec's
+- `insert_correct`, `insertPubkeys_correct`, `update_correct`: inserting keys in index order
+  keeps the cache equal to `indexOfPubkey`, the last index of each key.
+- `insertPubkeys_ok`: the loop of `update_pubkey_cache` finishes when the length fits in `usize`.
+- `get_correct_of_nodup`: with unique keys, a get returns the spec's
   `validator_pubkeys.index(pubkey)`, or `None` for a key that is not a validator.
-- Epoch bridge `pubkey_cache_deposit_lookup`: the cache lookup in the pending deposits step
+- In the epoch proofs, `pubkey_cache_lookup_correct`: the cache lookup in the pending deposits step
   equals the spec lookup that the epoch model uses.
 
 ### Trusted base
 
-- `rpds::HashTrieMap` obeys `IndexMapLaws`: a get reads the view, and an insert changes the
+- `rpds::HashTrieMap` obeys `BehavesAsFiniteMap`: a get reads the view, and an insert changes the
   view at one key.
 - The loop in `BeaconState::update_pubkey_cache` calls `insert` at the current length for each
-  validator after the cached ones. `insertAll` models it.
+  validator after the cached ones. `insertPubkeys` models it.
 - At the start of the epoch the cache holds the first `len` validator pubkeys. This holds
   where Lighthouse builds the cache and in `rebase_caches_on`, which copies the cache of a
   state with the same first validators. The proofs do not cover these call sites.
 
-### Coherence notes
+### Notes
 
 - An insert of a key that is already present overwrites its index, so the cache returns the
   last index. The spec returns the first. They agree because no two validators share a pubkey
