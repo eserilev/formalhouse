@@ -13,7 +13,7 @@ validator indices.
 namespace EpochProofs.Spec
 
 /-- The steps of `lhFullTailG` after the pass, for a plan and the result of the pass. -/
-def lhAfterPassG [PresetCfg] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s : BeaconState)
+def lhAfterPassG [CurrentPreset] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s : BeaconState)
     (plan : LhDepositPlan) (x : (Epoch × Gwei) × List Row) : SpecM BeaconState := do
   let s1 ← process_eth1_data_reset P (s.withRowsChurn x.1 x.2)
   let s2 := { s1 with
@@ -27,12 +27,12 @@ def lhAfterPassG [PresetCfg] (o : Oracle) (K : BeaconState → SpecM BeaconState
   K s6
 
 /-- The steps of `lhFullTail` after the pass. -/
-def lhAfterPass [PresetCfg] (o : Oracle) (s : BeaconState) (total_active_balance : Gwei)
+def lhAfterPass [CurrentPreset] (o : Oracle) (s : BeaconState) (total_active_balance : Gwei)
     (plan : LhDepositPlan) (x : (Epoch × Gwei) × List Row) : SpecM BeaconState :=
   lhAfterPassG o (gloasFin o total_active_balance) s plan x
 
 /-- `lhFullTailG` once the context values are known. -/
-theorem lhFullTailG_eq [PresetCfg] (o : Oracle) (rt : Gwei → Gwei)
+theorem lhFullTailG_eq [CurrentPreset] (o : Oracle) (rt : Gwei → Gwei)
     (fin : Gwei → BeaconState → SpecM BeaconState) (s1 : BeaconState) (current_epoch : Epoch)
     (total_active_balance : Gwei) (rctx : RewardsContext) (adjusted per : Gwei)
     (downward upward : Uint64)
@@ -55,7 +55,7 @@ theorem lhFullTailG_eq [PresetCfg] (o : Oracle) (rt : Gwei → Gwei)
   rfl
 
 /-- The deposit decisions of the plan. -/
-def planDec [PresetCfg] (s : BeaconState) (total_active_balance : Gwei) (current_epoch : Epoch) :
+def planDec [CurrentPreset] (s : BeaconState) (total_active_balance : Gwei) (current_epoch : Epoch) :
     SpecM (Nat × Gwei × List Bool) := do
   let finalized_slot ←
     compute_start_slot_at_epoch P s.finalized_checkpoint.epoch
@@ -81,7 +81,7 @@ def planOf (s : BeaconState) (dec : Nat × Gwei × List Bool) (sums : List Gwei)
     newDeposits (s.validators.map (·.pubkey)) (handledOfDec s dec)⟩
 
 /-- `lhDepositPlan` is the decisions, then the top-up sums. -/
-theorem lhDepositPlan_eq [PresetCfg] (s : BeaconState) (total_active_balance : Gwei)
+theorem lhDepositPlan_eq [CurrentPreset] (s : BeaconState) (total_active_balance : Gwei)
     (current_epoch : Epoch) :
     lhDepositPlan s total_active_balance current_epoch =
       (planDec s total_active_balance current_epoch >>= fun dec =>
@@ -111,7 +111,7 @@ theorem lhDepositPlan_eq [PresetCfg] (s : BeaconState) (total_active_balance : G
         | ok sums => rfl
 
 /-- The steps of `tailNF` after the top-up sums. -/
-def nfAfterG [PresetCfg] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 S4 : BeaconState)
+def nfAfterG [CurrentPreset] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 S4 : BeaconState)
     (dec : Nat × Gwei × List Bool) (sums : List Gwei) : SpecM BeaconState := do
   let handled := handledOfDec s1 dec
   let pubkeys := s1.validators.map (·.pubkey)
@@ -129,7 +129,7 @@ def nfAfterG [PresetCfg] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s
   K t8
 
 /-- `tailNFG` is the decisions, the top-up sums, then `nfAfterG`. -/
-theorem tailNFG_eq [PresetCfg] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 S4 : BeaconState)
+theorem tailNFG_eq [CurrentPreset] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 S4 : BeaconState)
     (total_active_balance : Gwei) (current_epoch : Epoch) :
     tailNFG o K s1 S4 total_active_balance current_epoch =
       (planDec s1 total_active_balance current_epoch >>= fun dec =>
@@ -159,7 +159,7 @@ theorem sameResultOrBothFail_bind_swap {α β γ : Type} (x : SpecM α) (y : Spe
   cases x <;> cases y <;> simp [bind, Except.bind]
 
 /-- `lhRowStep` keeps the row key. -/
-theorem lhRowStep_rowKey [PresetCfg] (ctx : LhStepContext) (base : Gwei) (churn : Epoch × Gwei) (r : Row)
+theorem lhRowStep_rowKey [CurrentPreset] (ctx : LhStepContext) (base : Gwei) (churn : Epoch × Gwei) (r : Row)
     (x : (Epoch × Gwei) × Row) (h : lhRowStep P ctx base churn r = .ok x) :
     rowKey x.2 = rowKey r := by
   unfold lhRowStep at h
@@ -172,7 +172,7 @@ theorem lhRowStep_rowKey [PresetCfg] (ctx : LhStepContext) (base : Gwei) (churn 
 /-! ## After the pass -/
 
 /-- The steps of `lhAfterPass` from the state after the pass. -/
-def lhRest [PresetCfg] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s : BeaconState)
+def lhRest [CurrentPreset] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s : BeaconState)
     (plan : LhDepositPlan) (T : BeaconState) : SpecM BeaconState := do
   let s1 ← process_eth1_data_reset P T
   let s2 := { s1 with
@@ -187,7 +187,7 @@ def lhRest [PresetCfg] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s :
 
 /-- The steps of `nfAfterG` from the state after the updates of the validators that are not
 named. -/
-def nfRest [PresetCfg] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 : BeaconState)
+def nfRest [CurrentPreset] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 : BeaconState)
     (dec : Nat × Gwei × List Bool) (t2 : BeaconState) : SpecM BeaconState := do
   let handled := handledOfDec s1 dec
   let n := s1.validators.length
@@ -202,7 +202,7 @@ def nfRest [PresetCfg] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 
   K t8
 
 /-- With a state of `n` validators, the two rests are equal. -/
-theorem lhRest_eq_nfRest [PresetCfg] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 : BeaconState)
+theorem lhRest_eq_nfRest [CurrentPreset] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 : BeaconState)
     (dec : Nat × Gwei × List Bool) (sums : List Gwei) (T : BeaconState)
     (hT : T.validators.length = s1.validators.length) :
     lhRest o K s1 (planOf s1 dec sums) T = nfRest o K s1 dec T := by
@@ -227,7 +227,7 @@ theorem increaseFold_validators (td : Nat → Gwei) :
     rw [increaseFold_validators td l T1 T' h, increaseAt_validators h1]
 
 /-- A fold of effective balance updates keeps the number of validators. -/
-theorem ebFold_length [PresetCfg] :
+theorem ebFold_length [CurrentPreset] :
     ∀ (l : List Nat) (T T' : BeaconState),
       l.foldlM ebUpdateAt T = .ok T' → T'.validators.length = T.validators.length
   | [], T, T', h => by cases h; rfl
@@ -241,9 +241,9 @@ theorem ebFold_length [PresetCfg] :
 
 /-- After the first pass, the second pass and the rest of `lhFullTailG` give the same `ok`
 results as `nfAfterG`. -/
-theorem lhAfter_pass2_nf [PresetCfg] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 : BeaconState)
+theorem lhAfter_pass2_nf [CurrentPreset] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 : BeaconState)
     (downward upward : Uint64)
-    (hthr : hysteresisThresholds P = .ok (downward, upward)) (hrows : RowsOk s1)
+    (hthr : hysteresisThresholds P = .ok (downward, upward)) (hrows : ListLengthsMatch s1)
     (dec : Nat × Gwei × List Bool) (sums : List Gwei) (x : (Epoch × Gwei) × List Row)
     (hkey : x.2.map rowKey = (rowsOf s1).map rowKey) :
     SameResultOrBothFail (passM (fun _ r => (fun r' => ((), r')) <$> lhRowStep2 downward upward
@@ -254,7 +254,7 @@ theorem lhAfter_pass2_nf [PresetCfg] (o : Oracle) (K : BeaconState → SpecM Bea
   let td := fun i => sums.getD i 0
   let nm := fun i => decide (i ∈ consolidationIndices s1)
   have hrowsS4 : rowsOf S4 = x.2 := rowsOf_withRows s1 x.2 hkey
-  have hokS4 : RowsOk S4 := rowsOk_withRows_of_key s1 x.2 hrows hkey
+  have hokS4 : ListLengthsMatch S4 := rowsOk_withRows_of_key s1 x.2 hrows hkey
   have hlen2 : x.2.length = s1.validators.length := by
     rw [← rowsOf_length, ← List.length_map (f := rowKey), hkey, List.length_map]
   have hlen : S4.validators.length = s1.validators.length := by
@@ -289,7 +289,7 @@ theorem lhAfter_pass2_nf [PresetCfg] (o : Oracle) (K : BeaconState → SpecM Bea
   rw [List.length_map, hyl, rowsOf_length, hlen]
 
 /-- `lhFullTailG` gives the same `ok` results as the first pass followed by `tailNFG`. -/
-theorem lhFullTailG_nf [PresetCfg] (o : Oracle) (rt : Gwei → Gwei)
+theorem lhFullTailG_nf [CurrentPreset] (o : Oracle) (rt : Gwei → Gwei)
     (fin : Gwei → BeaconState → SpecM BeaconState) (s1 : BeaconState) (current_epoch : Epoch)
     (total_active_balance : Gwei) (rctx : RewardsContext) (adjusted per : Gwei)
     (downward upward : Uint64)
@@ -299,7 +299,7 @@ theorem lhFullTailG_nf [PresetCfg] (o : Oracle) (rt : Gwei → Gwei)
     (hpre : slashingsPreamble P total_active_balance s1.slashings =
       .ok (adjusted, per))
     (hthr : hysteresisThresholds P = .ok (downward, upward))
-    (hrows : RowsOk s1) :
+    (hrows : ListLengthsMatch s1) :
     SameResultOrBothFail (lhFullTailG o rt fin s1)
       (do
         let x ← passM (fun c r => lhRowStep P
@@ -333,7 +333,7 @@ theorem lhFullTailG_nf [PresetCfg] (o : Oracle) (rt : Gwei → Gwei)
     (passM_rowKey _ (fun c r y h => lhRowStep_rowKey ctx _ c r y h) c0 (rowsOf s1) x hx)
 
 /-- `lhFullTail` gives the same `ok` results as the first pass followed by `tailNF`. -/
-theorem lhFullTail_nf [PresetCfg] (o : Oracle) (s1 : BeaconState) (current_epoch : Epoch)
+theorem lhFullTail_nf [CurrentPreset] (o : Oracle) (s1 : BeaconState) (current_epoch : Epoch)
     (total_active_balance : Gwei) (rctx : RewardsContext) (adjusted per : Gwei)
     (downward upward : Uint64)
     (hcur : get_current_epoch P s1 = .ok current_epoch)
@@ -342,7 +342,7 @@ theorem lhFullTail_nf [PresetCfg] (o : Oracle) (s1 : BeaconState) (current_epoch
     (hpre : slashingsPreamble P total_active_balance s1.slashings =
       .ok (adjusted, per))
     (hthr : hysteresisThresholds P = .ok (downward, upward))
-    (hrows : RowsOk s1) :
+    (hrows : ListLengthsMatch s1) :
     SameResultOrBothFail (lhFullTail o s1)
       (do
         let x ← passM (fun c r => lhRowStep P

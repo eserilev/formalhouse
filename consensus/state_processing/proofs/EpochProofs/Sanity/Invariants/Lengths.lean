@@ -5,9 +5,9 @@ import EpochProofs.Sanity.EffectiveBalanceInvariant
 /-!
 # The row lengths invariant
 
-`RowsOk` says that `balances`, `inactivity_scores` and both participation lists have one entry
+`ListLengthsMatch` says that `balances`, `inactivity_scores` and both participation lists have one entry
 per validator. Most steps keep each of these five lengths: that is `LenStep`. Two epoch steps
-add or reset rows, and they keep `RowsOk` directly. So `state_transition` keeps `RowsOk`.
+add or reset rows, and they keep `ListLengthsMatch` directly. So `state_transition` keeps `ListLengthsMatch`.
 -/
 
 namespace EpochProofs.Spec
@@ -28,8 +28,8 @@ theorem LenStep.trans {s1 s2 s3 : BeaconState} (h12 : LenStep s1 s2) (h23 : LenS
   ⟨h23.1.trans h12.1, h23.2.1.trans h12.2.1, h23.2.2.1.trans h12.2.2.1,
     h23.2.2.2.1.trans h12.2.2.2.1, h23.2.2.2.2.trans h12.2.2.2.2⟩
 
-/-- `LenStep` keeps `RowsOk`. -/
-theorem LenStep.rowsOk {s s' : BeaconState} (h : LenStep s s') (hs : RowsOk s) : RowsOk s' := by
+/-- `LenStep` keeps `ListLengthsMatch`. -/
+theorem LenStep.rowsOk {s s' : BeaconState} (h : LenStep s s') (hs : ListLengthsMatch s) : ListLengthsMatch s' := by
   obtain ⟨h1, h2, h3, h4, h5⟩ := h
   obtain ⟨r1, r2, r3, r4⟩ := hs
   exact ⟨by omega, by omega, by omega, by omega⟩
@@ -692,11 +692,11 @@ theorem set_or_append_list_len_eq {α : Type} {l l' : List α} {a : α}
   subst h
   exact List.length_append
 
-/-- With `RowsOk`, `add_validator_to_registry` appends one row to each list. -/
-theorem add_validator_to_registry_rowsOk (p : Preset) (s s' : BeaconState) (pubkey : BLSPubkey)
+/-- With `ListLengthsMatch`, `add_validator_to_registry` appends one row to each list. -/
+theorem add_validator_to_registry_listLengthsMatch (p : Preset) (s s' : BeaconState) (pubkey : BLSPubkey)
     (withdrawal_credentials : Bytes32) (amount : Gwei)
     (h : add_validator_to_registry p s pubkey withdrawal_credentials amount = .ok s')
-    (hs : RowsOk s) : RowsOk s' := by
+    (hs : ListLengthsMatch s) : ListLengthsMatch s' := by
   obtain ⟨r1, r2, r3, r4⟩ := hs
   unfold add_validator_to_registry get_index_for_new_validator at h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
@@ -718,23 +718,23 @@ theorem add_validator_to_registry_rowsOk (p : Preset) (s s' : BeaconState) (pubk
   have e5 := set_or_append_list_len_eq h5
   refine ⟨?_, ?_, ?_, ?_⟩ <;> simp only <;> omega
 
-/-- `apply_pending_deposit` keeps `RowsOk`. -/
-theorem apply_pending_deposit_rowsOk (p : Preset) (o : Oracle) (s s' : BeaconState)
+/-- `apply_pending_deposit` keeps `ListLengthsMatch`. -/
+theorem apply_pending_deposit_listLengthsMatch (p : Preset) (o : Oracle) (s s' : BeaconState)
     (deposit : PendingDeposit) (h : apply_pending_deposit p o s deposit = .ok s')
-    (hs : RowsOk s) : RowsOk s' := by
+    (hs : ListLengthsMatch s) : ListLengthsMatch s' := by
   unfold apply_pending_deposit at h
   len_split h
   all_goals first
-    | exact add_validator_to_registry_rowsOk p s s' _ _ _ h hs
+    | exact add_validator_to_registry_listLengthsMatch p s s' _ _ _ h hs
     | (cases h
        refine LenStep.rowsOk ?_ hs
        len_close)
 
-/-- `process_pending_deposits` with `apply_pending_deposit` keeps `RowsOk`. -/
-theorem process_pending_deposits_rowsOk (p : Preset) (o : Oracle)
+/-- `process_pending_deposits` with `apply_pending_deposit` keeps `ListLengthsMatch`. -/
+theorem process_pending_deposits_listLengthsMatch (p : Preset) (o : Oracle)
     (total_active_balance : Gwei) (s s' : BeaconState)
     (h : process_pending_deposits p total_active_balance (apply_pending_deposit p o) s = .ok s')
-    (hs : RowsOk s) : RowsOk s' := by
+    (hs : ListLengthsMatch s) : ListLengthsMatch s' := by
   unfold process_pending_deposits at h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
@@ -744,7 +744,7 @@ theorem process_pending_deposits_rowsOk (p : Preset) (o : Oracle)
   obtain ⟨⟨_, _, _, _, st⟩, hr, h⟩ := specM_bind_ok h
   have hP := forIn_ok_invariant
     (fun r : Prod Uint64 (Prod Uint64 (Prod (List PendingDeposit) (Prod Bool BeaconState))) =>
-      RowsOk r.2.2.2.2) _ ?_ _ _ _ hs hr
+      ListLengthsMatch r.2.2.2.2) _ ?_ _ _ _ hs hr
   · simp only [bind, Except.bind, pure, Except.pure] at h
     repeat' split at h
     all_goals first
@@ -757,17 +757,17 @@ theorem process_pending_deposits_rowsOk (p : Preset) (o : Oracle)
       | contradiction
       | (cases hb; exact hst)
       | (cases hb
-         exact apply_pending_deposit_rowsOk p o _ _ _ ‹apply_pending_deposit _ _ _ _ = _› hst)
+         exact apply_pending_deposit_listLengthsMatch p o _ _ _ ‹apply_pending_deposit _ _ _ _ = _› hst)
 
-/-- `process_participation_flag_updates` keeps `RowsOk`. -/
-theorem process_participation_flag_updates_rowsOk (s : BeaconState) (hs : RowsOk s) :
-    RowsOk (process_participation_flag_updates s) := by
+/-- `process_participation_flag_updates` keeps `ListLengthsMatch`. -/
+theorem process_participation_flag_updates_listLengthsMatch (s : BeaconState) (hs : ListLengthsMatch s) :
+    ListLengthsMatch (process_participation_flag_updates s) := by
   obtain ⟨r1, r2, r3, r4⟩ := hs
   exact ⟨r1, r2, r4, List.length_replicate⟩
 
-/-- `process_epoch` keeps `RowsOk`. -/
-theorem process_epoch_rowsOk (p : Preset) (o : Oracle) (s s' : BeaconState)
-    (h : process_epoch p o s = .ok s') (hs : RowsOk s) : RowsOk s' := by
+/-- `process_epoch` keeps `ListLengthsMatch`. -/
+theorem process_epoch_listLengthsMatch (p : Preset) (o : Oracle) (s s' : BeaconState)
+    (h : process_epoch p o s = .ok s') (hs : ListLengthsMatch s) : ListLengthsMatch s' := by
   unfold process_epoch at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
   obtain ⟨s2, h2, h⟩ := specM_bind_ok h
@@ -789,43 +789,43 @@ theorem process_epoch_rowsOk (p : Preset) (o : Oracle) (s s' : BeaconState)
   obtain ⟨s13, h13, h⟩ := specM_bind_ok h
   obtain ⟨s14, h14, h⟩ := specM_bind_ok h
   obtain ⟨s15, h15, h⟩ := specM_bind_ok h
-  have e6 : RowsOk s6 :=
+  have e6 : ListLengthsMatch s6 :=
     ((process_justification_and_finalization_len p _ _ h1).trans
     ((process_inactivity_updates_len p _ _ h2).trans
     ((process_rewards_and_penalties_len p _ _ _ h3).trans
     ((process_registry_updates_len p _ _ _ h4).trans
     ((process_slashings_len p _ _ _ h5).trans
     (process_eth1_data_reset_len p _ _ h6)))))).rowsOk hs
-  have e7 := process_pending_deposits_rowsOk p o _ _ _ h7 e6
-  have e13 : RowsOk s13 :=
+  have e7 := process_pending_deposits_listLengthsMatch p o _ _ _ h7 e6
+  have e13 : ListLengthsMatch s13 :=
     ((process_pending_consolidations_len p _ _ h8).trans
     ((process_builder_pending_payments_len p _ _ _ h9).trans
     ((process_effective_balance_updates_len p _ _ h10).trans
     ((process_slashings_reset_len p _ _ h11).trans
     ((process_randao_mixes_reset_len p _ _ h12).trans
     (process_historical_summaries_update_len p o _ _ h13)))))).rowsOk e7
-  have e := process_participation_flag_updates_rowsOk _ e13
+  have e := process_participation_flag_updates_listLengthsMatch _ e13
   obtain ⟨_, _, rfl⟩ := process_sync_committee_updates_shape p o _ _ h14
   obtain ⟨_, rfl⟩ := process_proposer_lookahead_shape p o _ _ h15
   obtain ⟨_, rfl⟩ := process_ptc_window_shape p o _ _ h
   exact e
 
-/-- `process_slots` with the real `process_epoch` keeps `RowsOk`. -/
-theorem process_slots_rowsOk (p : Preset) (o : Oracle) (s s' : BeaconState) (slot : Slot)
-    (h : process_slots p o (process_epoch p o) s slot = .ok s') (hs : RowsOk s) :
-    RowsOk s' :=
-  process_slots_invariant p o (process_epoch p o) RowsOk
+/-- `process_slots` with the real `process_epoch` keeps `ListLengthsMatch`. -/
+theorem process_slots_listLengthsMatch (p : Preset) (o : Oracle) (s s' : BeaconState) (slot : Slot)
+    (h : process_slots p o (process_epoch p o) s slot = .ok s') (hs : ListLengthsMatch s) :
+    ListLengthsMatch s' :=
+  process_slots_invariant p o (process_epoch p o) ListLengthsMatch
     (fun _ _ h hP => (process_slot_len p o _ _ h).rowsOk hP)
-    (fun _ _ h hP => process_epoch_rowsOk p o _ _ h hP)
+    (fun _ _ h hP => process_epoch_listLengthsMatch p o _ _ h hP)
     (fun _ _ hP => hP) s s' slot hs h
 
-/-- `state_transition` keeps `RowsOk`. -/
-theorem state_transition_rowsOk (p : Preset) (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+/-- `state_transition` keeps `ListLengthsMatch`. -/
+theorem state_transition_listLengthsMatch (p : Preset) (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (s s' : BeaconState) (signed_block : SignedBeaconBlock)
-    (validate_result : Bool) (hs : RowsOk s)
+    (validate_result : Bool) (hs : ListLengthsMatch s)
     (h : state_transition p o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
       validate_result = .ok s') :
-    RowsOk s' := by
+    ListLengthsMatch s' := by
   unfold state_transition at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
@@ -834,6 +834,6 @@ theorem state_transition_rowsOk (p : Preset) (o : Oracle) (max_blobs_per_block :
     | (cases h
        exact (process_block_len p o max_blobs_per_block GLOAS_FORK_EPOCH _ _ _
          ‹process_block _ _ _ _ _ _ = _›).rowsOk
-         (process_slots_rowsOk p o _ _ _ ‹process_slots _ _ _ _ _ = _› hs))
+         (process_slots_listLengthsMatch p o _ _ _ ‹process_slots _ _ _ _ _ = _› hs))
 
 end EpochProofs.Spec

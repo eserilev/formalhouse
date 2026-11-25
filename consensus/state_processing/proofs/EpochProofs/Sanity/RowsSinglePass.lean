@@ -52,8 +52,8 @@ theorem passM_rowKey {A : Type} (f : A → Row → SpecM (A × Row))
 theorem withRows_withRows (state : BeaconState) (rows rows' : List Row) :
     (state.withRows rows).withRows rows' = state.withRows rows' := rfl
 
-theorem rowsOk_withRows_of_key (state : BeaconState) (rows : List Row) (hrows : RowsOk state)
-    (hkey : rows.map rowKey = (rowsOf state).map rowKey) : RowsOk (state.withRows rows) := by
+theorem rowsOk_withRows_of_key (state : BeaconState) (rows : List Row) (hrows : ListLengthsMatch state)
+    (hkey : rows.map rowKey = (rowsOf state).map rowKey) : ListLengthsMatch (state.withRows rows) := by
   apply rowsOk_withRows state rows hrows
   rw [← rowsOf_length, ← List.length_map (f := rowKey), hkey, List.length_map]
 
@@ -98,10 +98,10 @@ def fourPasses (p : Preset) (total_active_balance : Gwei) (previous_epoch : Epoc
   pure (state.withRowsChurn y3.1 y4.2)
 
 /-- The four separate passes, with the registry pass reading `registry_total` for the churn and
-the other passes reading `total_active_balance`. Fulu uses `registry_total = fuluTab`. -/
+the other passes reading `total_active_balance`. Fulu uses `registry_total = fuluTotalActiveBalance`. -/
 theorem spec_passes_eq_rows_tab (p : Preset) (total_active_balance registry_total : Gwei)
     (state : BeaconState)
-    (hrows : RowsOk state) (current_epoch previous_epoch : Epoch) (in_leak : Bool)
+    (hrows : ListLengthsMatch state) (current_epoch previous_epoch : Epoch) (in_leak : Bool)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hgenesis : current_epoch ≠ GENESIS_EPOCH)
     (hprevious : get_previous_epoch p state = .ok previous_epoch)
@@ -156,7 +156,7 @@ theorem spec_passes_eq_rows_tab (p : Preset) (total_active_balance registry_tota
       rw [registryRowStep_preserves p registry_total current_epoch
         state.finalized_checkpoint.epoch activation_epoch a r x h]; rfl) _ _ y3 hy3, hk2]
   have hR3 : rowsOf (state.withRowsChurn y3.1 y3.2) = y3.2 := rowsOf_withRows state y3.2 hk3
-  have hok3 : RowsOk (state.withRowsChurn y3.1 y3.2) := rowsOk_withRows_of_key state y3.2 hrows hk3
+  have hok3 : ListLengthsMatch (state.withRowsChurn y3.1 y3.2) := rowsOk_withRows_of_key state y3.2 hrows hk3
   have h4 := process_slashings_rows_sameResultOrBothFail p total_active_balance
     (state.withRowsChurn y3.1 y3.2) current_epoch hcurrent htarget adjusted per hpre hok3
   rw [hR3] at h4
@@ -166,7 +166,7 @@ theorem spec_passes_eq_rows_tab (p : Preset) (total_active_balance registry_tota
     y3.2 <;> rfl
 
 theorem spec_passes_eq_rows (p : Preset) (total_active_balance : Gwei) (state : BeaconState)
-    (hrows : RowsOk state) (current_epoch previous_epoch : Epoch) (in_leak : Bool)
+    (hrows : ListLengthsMatch state) (current_epoch previous_epoch : Epoch) (in_leak : Bool)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hgenesis : current_epoch ≠ GENESIS_EPOCH)
     (hprevious : get_previous_epoch p state = .ok previous_epoch)
@@ -219,7 +219,7 @@ theorem fourPasses_eq_single_pass (p : Preset) (total_active_balance : Gwei) (pr
 pass reads `registry_total`. -/
 theorem separate_passes_eq_single_pass_tab (p : Preset) (total_active_balance registry_total : Gwei)
     (state : BeaconState)
-    (hrows : RowsOk state) (current_epoch previous_epoch : Epoch) (in_leak : Bool)
+    (hrows : ListLengthsMatch state) (current_epoch previous_epoch : Epoch) (in_leak : Bool)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hgenesis : current_epoch ≠ GENESIS_EPOCH)
     (hprevious : get_previous_epoch p state = .ok previous_epoch)
@@ -249,7 +249,7 @@ theorem separate_passes_eq_single_pass_tab (p : Preset) (total_active_balance re
 
 /-- The spec's four passes give the same `ok` results as one pass of `singlePassStep`. -/
 theorem separate_passes_eq_single_pass (p : Preset) (total_active_balance : Gwei) (state : BeaconState)
-    (hrows : RowsOk state) (current_epoch previous_epoch : Epoch) (in_leak : Bool)
+    (hrows : ListLengthsMatch state) (current_epoch previous_epoch : Epoch) (in_leak : Bool)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hgenesis : current_epoch ≠ GENESIS_EPOCH)
     (hprevious : get_previous_epoch p state = .ok previous_epoch)

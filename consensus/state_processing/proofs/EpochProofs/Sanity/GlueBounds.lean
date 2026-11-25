@@ -112,17 +112,17 @@ theorem filter_sum_le (l : List Nat) (q : Nat → Bool) : (l.filter q).sum ≤ l
 
 /-- Site 1440: the deposits of one validator sum to less than `2^61`, so the per-validator sum
 does not overflow. -/
-theorem glue_validator_deposit_sum [PresetCfg] (t : BeaconState) (hb : PhysicalLimits t) (q : Nat → Bool) :
+theorem glue_validator_deposit_sum [CurrentPreset] (t : BeaconState) (hb : SupplyAndTimeLimits t) (q : Nat → Bool) :
     ((t.pending_deposits.map (·.amount)).filter q).sum < 2 ^ 61 := by
   have key : ∀ a l c : Nat, a + l + c < 2 ^ 61 → l < 2 ^ 61 := by intros; omega
-  exact Nat.lt_of_le_of_lt (filter_sum_le _ q) (key _ _ _ hb.funds)
+  exact Nat.lt_of_le_of_lt (filter_sum_le _ q) (key _ _ _ hb.balancesAndDepositsBounded)
 
 /-- Site 163: the exit cache counts exits per epoch. Each count is at most the number of
 validators, which is below `2^40`. -/
-theorem glue_exit_count [PresetCfg] (t : BeaconState) (hb : PhysicalLimits t) (q : Validator → Bool) :
+theorem glue_exit_count [CurrentPreset] (t : BeaconState) (hb : SupplyAndTimeLimits t) (q : Validator → Bool) :
     (t.validators.filter q).length < 2 ^ 64 := by
   have h1 := List.length_filter_le q t.validators
-  have h2 := hb.count
+  have h2 := hb.validatorCountBounded
   have : (2 : Nat) ^ 40 < 2 ^ 64 := by decide
   omega
 

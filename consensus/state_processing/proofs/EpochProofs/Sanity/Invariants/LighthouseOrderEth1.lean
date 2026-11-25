@@ -20,7 +20,7 @@ def VotesBlind (F : BeaconState → SpecM BeaconState) : Prop :=
   ∀ t, F (clearVotes t) = clearVotes <$> F t
 
 /-- `F` keeps the slot and the historical summaries. -/
-def SlotKeep (F : BeaconState → SpecM BeaconState) : Prop :=
+def KeepsSlot (F : BeaconState → SpecM BeaconState) : Prop :=
   ∀ t t', F t = .ok t' → t'.slot = t.slot ∧ t'.historical_summaries = t.historical_summaries
 
 theorem votesBlind_bind {F G : BeaconState → SpecM BeaconState} (hF : VotesBlind F)
@@ -32,8 +32,8 @@ theorem votesBlind_bind {F G : BeaconState → SpecM BeaconState} (hF : VotesBli
   | error e => rfl
   | ok u => exact hG u
 
-theorem slotKeep_bind {F G : BeaconState → SpecM BeaconState} (hF : SlotKeep F)
-    (hG : SlotKeep G) : SlotKeep (fun t => F t >>= G) := by
+theorem slotKeep_bind {F G : BeaconState → SpecM BeaconState} (hF : KeepsSlot F)
+    (hG : KeepsSlot G) : KeepsSlot (fun t => F t >>= G) := by
   intro t t' h
   obtain ⟨u, hu, h⟩ := specM_bind_ok h
   obtain ⟨h1, h2⟩ := hG u t' h
@@ -55,8 +55,8 @@ theorem votesBlind_foldlM {α : Type} (f : BeaconState → α → SpecM BeaconSt
     | ok u => exact votesBlind_foldlM f hf xs u
 
 theorem slotKeep_foldlM {α : Type} (f : BeaconState → α → SpecM BeaconState)
-    (hf : ∀ x, SlotKeep (fun t => f t x)) :
-    ∀ (l : List α), SlotKeep (fun t => l.foldlM f t)
+    (hf : ∀ x, KeepsSlot (fun t => f t x)) :
+    ∀ (l : List α), KeepsSlot (fun t => l.foldlM f t)
   | [], t, t', h => by cases h; exact ⟨rfl, rfl⟩
   | x :: xs, t, t', h => by
     obtain ⟨u, hu, h⟩ := specM_bind_ok h
@@ -66,7 +66,7 @@ theorem slotKeep_foldlM {α : Type} (f : BeaconState → α → SpecM BeaconStat
 
 /-! ## The steps between the two positions -/
 
-theorem add_validator_votesBlind [PresetCfg] (t : BeaconState) (pubkey : BLSPubkey)
+theorem add_validator_votesBlind [CurrentPreset] (t : BeaconState) (pubkey : BLSPubkey)
     (withdrawal_credentials : Bytes32) (amount : Gwei) :
     add_validator_to_registry P (clearVotes t) pubkey withdrawal_credentials amount =
       clearVotes <$> add_validator_to_registry P t pubkey withdrawal_credentials
@@ -79,7 +79,7 @@ theorem add_validator_votesBlind [PresetCfg] (t : BeaconState) (pubkey : BLSPubk
     | (rename_i h; cases h; rfl)
     | (rename_i h; cases h)
 
-theorem add_validator_slot [PresetCfg] (t t' : BeaconState) (pubkey : BLSPubkey)
+theorem add_validator_slot [CurrentPreset] (t t' : BeaconState) (pubkey : BLSPubkey)
     (withdrawal_credentials : Bytes32) (amount : Gwei)
     (h : add_validator_to_registry P t pubkey withdrawal_credentials amount =
       .ok t') : t'.slot = t.slot ∧ t'.historical_summaries = t.historical_summaries := by
@@ -90,7 +90,7 @@ theorem add_validator_slot [PresetCfg] (t t' : BeaconState) (pubkey : BLSPubkey)
   cases h
   exact ⟨rfl, rfl⟩
 
-theorem apply_votesBlind [PresetCfg] (o : Oracle) (d : PendingDeposit) :
+theorem apply_votesBlind [CurrentPreset] (o : Oracle) (d : PendingDeposit) :
     VotesBlind (fun t => apply_pending_deposit P o t d) := by
   intro t
   simp only
@@ -107,8 +107,8 @@ theorem apply_votesBlind [PresetCfg] (o : Oracle) (d : PendingDeposit) :
     | error err => rfl
     | ok bs => rfl
 
-theorem apply_slotKeep [PresetCfg] (o : Oracle) (d : PendingDeposit) :
-    SlotKeep (fun t => apply_pending_deposit P o t d) := by
+theorem apply_slotKeep [CurrentPreset] (o : Oracle) (d : PendingDeposit) :
+    KeepsSlot (fun t => apply_pending_deposit P o t d) := by
   intro t t' h
   simp only at h
   unfold apply_pending_deposit at h
@@ -126,7 +126,7 @@ theorem apply_slotKeep [PresetCfg] (o : Oracle) (d : PendingDeposit) :
       subst h
       exact ⟨rfl, rfl⟩
 
-theorem ebUpdateAt_votesBlind [PresetCfg] (i : Nat) : VotesBlind (fun t => ebUpdateAt t i) := by
+theorem ebUpdateAt_votesBlind [CurrentPreset] (i : Nat) : VotesBlind (fun t => ebUpdateAt t i) := by
   intro t
   simp only
   cases hv : t.validators[i]? with
@@ -147,13 +147,13 @@ theorem ebUpdateAt_votesBlind [PresetCfg] (i : Nat) : VotesBlind (fun t => ebUpd
         rw [setEB_some (s := clearVotes t) e hv, setEB_some e hv]
         rfl
 
-theorem ebUpdateAt_slotKeep [PresetCfg] (i : Nat) : SlotKeep (fun t => ebUpdateAt t i) := by
+theorem ebUpdateAt_slotKeep [CurrentPreset] (i : Nat) : KeepsSlot (fun t => ebUpdateAt t i) := by
   intro t t' h
   obtain ⟨_, _, _, _, _, _, rfl⟩ := (ebUpdateAt_ok t t' i).mp h
   unfold setEB
   split <;> exact ⟨rfl, rfl⟩
 
-theorem payments_votesBlind [PresetCfg] (tab : Gwei) :
+theorem payments_votesBlind [CurrentPreset] (tab : Gwei) :
     VotesBlind (process_builder_pending_payments P tab) := by
   intro t
   unfold process_builder_pending_payments clearVotes
@@ -161,8 +161,8 @@ theorem payments_votesBlind [PresetCfg] (tab : Gwei) :
   repeat' split
   all_goals rfl
 
-theorem payments_slotKeep [PresetCfg] (tab : Gwei) :
-    SlotKeep (process_builder_pending_payments P tab) := by
+theorem payments_slotKeep [CurrentPreset] (tab : Gwei) :
+    KeepsSlot (process_builder_pending_payments P tab) := by
   intro t t' h
   unfold process_builder_pending_payments at h
   simp only [bind, Except.bind, pure, Except.pure] at h
@@ -171,7 +171,7 @@ theorem payments_slotKeep [PresetCfg] (tab : Gwei) :
     | contradiction
     | (cases h; exact ⟨rfl, rfl⟩)
 
-theorem consolidations_votesBlind [PresetCfg] :
+theorem consolidations_votesBlind [CurrentPreset] :
     VotesBlind (process_pending_consolidations P) := by
   intro t
   unfold process_pending_consolidations
@@ -204,7 +204,7 @@ theorem consolidations_votesBlind [PresetCfg] :
       · intro _ _ _ _ _ _
         trivial
 
-theorem consolidations_slotKeep [PresetCfg] : SlotKeep (process_pending_consolidations P) := by
+theorem consolidations_slotKeep [CurrentPreset] : KeepsSlot (process_pending_consolidations P) := by
   intro t t' h
   unfold process_pending_consolidations at h
   obtain ⟨_, -, h⟩ := specM_bind_ok h

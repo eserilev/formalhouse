@@ -248,7 +248,7 @@ theorem sync_participant_reward_mul_le (p : Preset) (total_active_balance : Gwei
 /-- `participant_reward * (SLOTS_PER_EPOCH * SYNC_COMMITTEE_SIZE / 2) ≤
 integer_squareroot(total_active_balance) + 2`. On mainnet the factor is 8192. The bound holds for
 every total active balance. -/
-theorem sync_participant_reward_mainnet [PresetCfg] [PresetCfg.Ok] (total_active_balance : Gwei) :
+theorem sync_participant_reward_mainnet [CurrentPreset] [CurrentPreset.Valid] (total_active_balance : Gwei) :
     sync_participant_reward P total_active_balance *
         (P.SLOTS_PER_EPOCH * P.SYNC_COMMITTEE_SIZE / 2) ≤
       integer_squareroot total_active_balance + 2 := by
@@ -423,7 +423,7 @@ theorem process_sync_aggregate_balance_bound_size (p : Preset) (o : Oracle)
 `syncPenaltyCount × (integer_squareroot(total_active_balance) + 2) / K` with
 `K = SLOTS_PER_EPOCH * SYNC_COMMITTEE_SIZE / 2` (8192 on mainnet). With 34M ETH staked on
 mainnet, that is about 22,500 Gwei for each seat. -/
-theorem process_sync_aggregate_balance_bound_mainnet [PresetCfg] [PresetCfg.Ok] (o : Oracle)
+theorem process_sync_aggregate_balance_bound_mainnet [CurrentPreset] [CurrentPreset.Valid] (o : Oracle)
     (state state' : BeaconState) (sync_aggregate : SyncAggregate)
     (h : process_sync_aggregate P o state sync_aggregate = .ok state') :
     ∃ total_active_balance : Gwei,

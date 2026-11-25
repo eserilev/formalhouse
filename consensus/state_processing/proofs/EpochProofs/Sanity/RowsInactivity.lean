@@ -171,7 +171,7 @@ theorem listGet_rows_validator {state : BeaconState} {r : Row} (h : r ∈ rowsOf
   simp [listGet, hi, pure, Except.pure]
 
 /-- `state.previous_epoch_participation[r.index]` is the flags of the row. -/
-theorem listGet_rows_previous {state : BeaconState} (hrows : RowsOk state) {r : Row}
+theorem listGet_rows_previous {state : BeaconState} (hrows : ListLengthsMatch state) {r : Row}
     (h : r ∈ rowsOf state) :
     listGet state.previous_epoch_participation r.index = .ok r.previous_participation := by
   obtain ⟨i, hi, rfl⟩ := mem_rowsOf h
@@ -181,7 +181,7 @@ theorem listGet_rows_previous {state : BeaconState} (hrows : RowsOk state) {r : 
 /-- The target participants at the previous epoch, in terms of rows. After genesis the
 previous epoch is not the current epoch, so the spec reads `previous_epoch_participation`. -/
 theorem get_unslashed_participating_indices_rows (p : Preset) (state : BeaconState)
-    (hrows : RowsOk state) (current_epoch previous_epoch : Epoch)
+    (hrows : ListLengthsMatch state) (current_epoch previous_epoch : Epoch)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hprevious : get_previous_epoch p state = .ok previous_epoch)
     (hne : (previous_epoch == current_epoch) = false) :
@@ -344,7 +344,7 @@ theorem passM_error {R : Type} (f : Unit → R → SpecM (Unit × R)) :
 /-- After genesis, `process_inactivity_updates` is a pass of `inactivityRowStep` over the
 rows. -/
 theorem process_inactivity_updates_rows (p : Preset) (state : BeaconState)
-    (current_epoch previous_epoch : Epoch) (in_leak : Bool) (hrows : RowsOk state)
+    (current_epoch previous_epoch : Epoch) (in_leak : Bool) (hrows : ListLengthsMatch state)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hgenesis : current_epoch ≠ GENESIS_EPOCH)
     (hprevious : get_previous_epoch p state = .ok previous_epoch)

@@ -24,25 +24,25 @@ on mainnet and minimal. -/
 def LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT : Nat := 16777216
 
 /-- `E::SlotsPerEth1VotingPeriod`: `EPOCHS_PER_ETH1_VOTING_PERIOD * SLOTS_PER_EPOCH`. -/
-def LH_SLOTS_PER_ETH1_VOTING_PERIOD [PresetCfg] : Nat :=
+def LH_SLOTS_PER_ETH1_VOTING_PERIOD [CurrentPreset] : Nat :=
   P.EPOCHS_PER_ETH1_VOTING_PERIOD * P.SLOTS_PER_EPOCH
 
 /-- `process_eth1_data_reset` in `resets.rs`. -/
-def lhEth1DataReset [PresetCfg] (s : BeaconState) : SpecM BeaconState := do
+def lhEth1DataReset [CurrentPreset] (s : BeaconState) : SpecM BeaconState := do
   if ← lhEth1ResetDue s.slot LH_SLOTS_PER_ETH1_VOTING_PERIOD then
     pure { s with eth1_data_votes := [] }
   else
     pure s
 
 /-- `process_slashings_reset` in `resets.rs`. `state.current_epoch()` is `slot / SLOTS_PER_EPOCH`. -/
-def lhSlashingsReset [PresetCfg] (s : BeaconState) : SpecM BeaconState := do
+def lhSlashingsReset [CurrentPreset] (s : BeaconState) : SpecM BeaconState := do
   match ← slashingsResetIndex (s.slot / P.SLOTS_PER_EPOCH)
       P.EPOCHS_PER_SLASHINGS_VECTOR with
   | none => throw .indexOutOfRange
   | some i => pure { s with slashings := ← listSet s.slashings i 0 }
 
 /-- `process_randao_mixes_reset` in `resets.rs`. -/
-def lhRandaoMixesReset [PresetCfg] (s : BeaconState) : SpecM BeaconState := do
+def lhRandaoMixesReset [CurrentPreset] (s : BeaconState) : SpecM BeaconState := do
   match ← randaoMixesResetIndices (s.slot / P.SLOTS_PER_EPOCH)
       P.EPOCHS_PER_HISTORICAL_VECTOR with
   | none => throw .indexOutOfRange
@@ -52,7 +52,7 @@ def lhRandaoMixesReset [PresetCfg] (s : BeaconState) : SpecM BeaconState := do
 
 /-- `process_historical_summaries_update` in `historical_summaries_update.rs`. The push fails
 when the list holds `LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT` items. -/
-def lhHistoricalSummariesUpdate [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
+def lhHistoricalSummariesUpdate [CurrentPreset] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
   let next_epoch ← uint64Add (s.slot / P.SLOTS_PER_EPOCH) 1
   if ← historicalSummaryDue next_epoch P.SLOTS_PER_HISTORICAL_ROOT
       P.SLOTS_PER_EPOCH then
@@ -67,7 +67,7 @@ def lhHistoricalSummariesUpdate [PresetCfg] (o : Oracle) (s : BeaconState) : Spe
     pure s
 
 /-- `get_current_epoch` is `slot / SLOTS_PER_EPOCH`. -/
-theorem get_current_epoch_mainnet [PresetCfg] [PresetCfg.Ok] (s : BeaconState) :
+theorem get_current_epoch_mainnet [CurrentPreset] [CurrentPreset.Valid] (s : BeaconState) :
     get_current_epoch P s = .ok (s.slot / P.SLOTS_PER_EPOCH) := by
   simp [get_current_epoch, compute_epoch_at_slot, uint64Div, Nat.ne_of_gt P_slots_pos, pure,
     Except.pure]
@@ -87,7 +87,7 @@ theorem eth1_due_iff (n S E : Nat) (hS : 0 < S) (hl : (n + 1) % S = 0) :
     simp [h, this]
 
 /-- At the last slot of an epoch, the Lighthouse eth1 reset is the spec eth1 reset. -/
-theorem lhEth1DataReset_eq [PresetCfg] [PresetCfg.Ok] (s : BeaconState)
+theorem lhEth1DataReset_eq [CurrentPreset] [CurrentPreset.Valid] (s : BeaconState)
     (hslot : s.slot + 1 < 2 ^ 64) (hlast : (s.slot + 1) % P.SLOTS_PER_EPOCH = 0) :
     lhEth1DataReset s = process_eth1_data_reset P s := by
   obtain ⟨S, hS⟩ : ∃ S : Nat, P.SLOTS_PER_EPOCH = S := ⟨_, rfl⟩
@@ -108,7 +108,7 @@ theorem lhEth1DataReset_eq [PresetCfg] [PresetCfg.Ok] (s : BeaconState)
   rw [hdue]
 
 /-- Away from `u64` overflow, the Lighthouse slashings reset is the spec slashings reset. -/
-theorem lhSlashingsReset_eq [PresetCfg] [PresetCfg.Ok] (s : BeaconState)
+theorem lhSlashingsReset_eq [CurrentPreset] [CurrentPreset.Valid] (s : BeaconState)
     (hfit : s.slot / P.SLOTS_PER_EPOCH + 1 +
       P.EPOCHS_PER_SLASHINGS_VECTOR < 2 ^ 64) :
     lhSlashingsReset s = process_slashings_reset P s := by
@@ -125,7 +125,7 @@ theorem lhSlashingsReset_eq [PresetCfg] [PresetCfg.Ok] (s : BeaconState)
     if_false, pure, Except.pure, Bind.bind, Except.bind, hlt, hle]
 
 /-- Away from `u64` overflow, the Lighthouse randao reset is the spec randao reset. -/
-theorem lhRandaoMixesReset_eq [PresetCfg] [PresetCfg.Ok] (s : BeaconState)
+theorem lhRandaoMixesReset_eq [CurrentPreset] [CurrentPreset.Valid] (s : BeaconState)
     (hfit : s.slot / P.SLOTS_PER_EPOCH + 1 +
       P.EPOCHS_PER_HISTORICAL_VECTOR < 2 ^ 64) :
     lhRandaoMixesReset s = process_randao_mixes_reset P s := by
@@ -147,7 +147,7 @@ theorem lhRandaoMixesReset_eq [PresetCfg] [PresetCfg.Ok] (s : BeaconState)
 
 /-- Below the Lighthouse list limit, the Lighthouse historical summaries update is the spec
 update. -/
-theorem lhHistoricalSummariesUpdate_eq [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState)
+theorem lhHistoricalSummariesUpdate_eq [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState)
     (hroom : s.historical_summaries.length < LIGHTHOUSE_HISTORICAL_ROOTS_LIMIT) :
     lhHistoricalSummariesUpdate o s = process_historical_summaries_update P o s := by
   simp only [lhHistoricalSummariesUpdate, process_historical_summaries_update,

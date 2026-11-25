@@ -7,14 +7,14 @@ import EpochProofs.Sanity.Invariants.WithdrawableEpochs
 This file is `ExitEpochs.lean`, `WithdrawableEpochs.lean` and the block part of `ExitDelay.lean`
 for the Fulu functions:
 
-- `ExitEpochsU64`: every exit epoch is at most `FAR_FUTURE_EPOCH`.
-- `WithdrawableU64`: every withdrawable epoch is at most `FAR_FUTURE_EPOCH`.
-- `ExitDelay`: a withdrawable epoch is at least `MIN_VALIDATOR_WITHDRAWABILITY_DELAY` after the
+- `ExitEpochsAreUint64`: every exit epoch is at most `FAR_FUTURE_EPOCH`.
+- `WithdrawableEpochsFitUint64`: every withdrawable epoch is at most `FAR_FUTURE_EPOCH`.
+- `ExitToWithdrawableDelay`: a withdrawable epoch is at least `MIN_VALIDATOR_WITHDRAWABILITY_DELAY` after the
   exit epoch. Each Fulu operation that neither slashes nor withdraws is an `OpStep`.
 
 A new exit epoch or withdrawable epoch comes from `uint64Add`, so it is a `u64` value. The
 Fulu `initiate_validator_exit` and `compute_exit_epoch_and_update_churn` are the Gloas functions
-at `fuluTab` (`FuluCompat`), so the Gloas lemmas about them apply. The Electra consolidation
+at `fuluTotalActiveBalance` (`FuluCompat`), so the Gloas lemmas about them apply. The Electra consolidation
 churn gets its own lemmas.
 -/
 
@@ -56,15 +56,15 @@ local macro "peel_ok" h:ident : tactic => `(tactic| repeat' first
 
 /-! ## The last step of a Fulu consolidation -/
 
-/-- The last step of a Fulu consolidation keeps `ExitEpochsU64`. -/
+/-- The last step of a Fulu consolidation keeps `ExitEpochsAreUint64`. -/
 theorem consolidation_exit_fulu_exitEpochsU64 {p : Preset} {f : FuluConfig} {tab : Gwei}
     {s : BeaconState} {x i : Nat} {v' : Validator} {r : Epoch × BeaconState} {w : Uint64}
     {l : List Validator}
     (hr : compute_consolidation_epoch_and_update_churn_fulu p f tab s x = .ok r)
     (hw : uint64Add r.1 p.MIN_VALIDATOR_WITHDRAWABILITY_DELAY = .ok w)
     (hl : listSet r.2.validators i v' = .ok l) (hv' : v'.exit_epoch = r.1)
-    (pc : List PendingConsolidation) (hs : ExitEpochsU64 s) :
-    ExitEpochsU64 { r.2 with validators := l, pending_consolidations := pc } := by
+    (pc : List PendingConsolidation) (hs : ExitEpochsAreUint64 s) :
+    ExitEpochsAreUint64 { r.2 with validators := l, pending_consolidations := pc } := by
   obtain ⟨e, s1⟩ := r
   obtain ⟨-, -, -, hvs, -, -⟩ :=
     compute_consolidation_epoch_and_update_churn_fulu_bound p f tab s s1 x e hr
@@ -74,15 +74,15 @@ theorem consolidation_exit_fulu_exitEpochsU64 {p : Preset} {f : FuluConfig} {tab
   rw [(ExitsSanity.listSet_ok hl).2] at hu
   exact exitEpochsU64_set hs (hv' ▸ exit_le_far hw) u hu
 
-/-- The last step of a Fulu consolidation keeps `WithdrawableU64`. -/
+/-- The last step of a Fulu consolidation keeps `WithdrawableEpochsFitUint64`. -/
 theorem consolidation_exit_fulu_withdrawableU64 {p : Preset} {f : FuluConfig} {tab : Gwei}
     {s : BeaconState} {x i : Nat} {v' : Validator} {r : Epoch × BeaconState} {w : Uint64}
     {l : List Validator}
     (hr : compute_consolidation_epoch_and_update_churn_fulu p f tab s x = .ok r)
     (hw : uint64Add r.1 p.MIN_VALIDATOR_WITHDRAWABILITY_DELAY = .ok w)
     (hl : listSet r.2.validators i v' = .ok l) (hv' : v'.withdrawable_epoch = w)
-    (pc : List PendingConsolidation) (hs : WithdrawableU64 s) :
-    WithdrawableU64 { r.2 with validators := l, pending_consolidations := pc } := by
+    (pc : List PendingConsolidation) (hs : WithdrawableEpochsFitUint64 s) :
+    WithdrawableEpochsFitUint64 { r.2 with validators := l, pending_consolidations := pc } := by
   obtain ⟨e, s1⟩ := r
   obtain ⟨-, -, -, hvs, -, -⟩ :=
     compute_consolidation_epoch_and_update_churn_fulu_bound p f tab s s1 x e hr
@@ -132,10 +132,10 @@ theorem consolidation_exit_fulu_slashedKeep {p : Preset} {f : FuluConfig} {tab :
 
 /-! ## Exit epochs are `u64` values -/
 
-/-- The Fulu `slash_validator` keeps `ExitEpochsU64`. -/
+/-- The Fulu `slash_validator` keeps `ExitEpochsAreUint64`. -/
 theorem slash_validator_fulu_exitEpochsU64 (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
     (s s' : BeaconState) (i : ValidatorIndex) (w : Option ValidatorIndex)
-    (h : slash_validator_fulu p f s i w = .ok s') (hs : ExitEpochsU64 s) : ExitEpochsU64 s' := by
+    (h : slash_validator_fulu p f s i w = .ok s') (hs : ExitEpochsAreUint64 s) : ExitEpochsAreUint64 s' := by
   unfold slash_validator_fulu at h
   simp only [initiate_validator_exit_fulu_eq p f hc] at h
   obtain ⟨epoch, -, h⟩ := specM_bind_ok h
@@ -179,11 +179,11 @@ theorem process_attester_slashing_fulu_keeps (p : Preset) (o : Oracle) (f : Fulu
   · cases hstep
     exact hr
 
-/-- The Fulu `process_withdrawal_request` keeps `ExitEpochsU64`. -/
+/-- The Fulu `process_withdrawal_request` keeps `ExitEpochsAreUint64`. -/
 theorem process_withdrawal_request_fulu_exitEpochsU64 (p : Preset) (f : FuluConfig)
     (hc : FuluCompat p f) (s s' : BeaconState) (withdrawal_request : WithdrawalRequest)
     (h : process_withdrawal_request_fulu p f s withdrawal_request = .ok s')
-    (hs : ExitEpochsU64 s) : ExitEpochsU64 s' := by
+    (hs : ExitEpochsAreUint64 s) : ExitEpochsAreUint64 s' := by
   unfold process_withdrawal_request_fulu at h
   simp only [initiate_validator_exit_fulu_eq p f hc,
     compute_exit_epoch_and_update_churn_fulu_eq p f hc] at h
@@ -198,13 +198,13 @@ theorem process_withdrawal_request_fulu_exitEpochsU64 (p : Preset) (f : FuluConf
     | (cases h
        obtain ⟨-, -, -, hv, -, -⟩ := compute_exit_epoch_and_update_churn_bound p _ s _ _ _
          ‹compute_exit_epoch_and_update_churn _ _ _ _ = .ok _›
-       exact ExitEpochsU64.of_validators_eq hv hs)
+       exact ExitEpochsAreUint64.of_validators_eq hv hs)
 
-/-- The Fulu `process_consolidation_request` keeps `ExitEpochsU64`. -/
+/-- The Fulu `process_consolidation_request` keeps `ExitEpochsAreUint64`. -/
 theorem process_consolidation_request_fulu_exitEpochsU64 (p : Preset) (f : FuluConfig)
     (s s' : BeaconState) (consolidation_request : ConsolidationRequest)
     (h : process_consolidation_request_fulu p f s consolidation_request = .ok s')
-    (hs : ExitEpochsU64 s) : ExitEpochsU64 s' := by
+    (hs : ExitEpochsAreUint64 s) : ExitEpochsAreUint64 s' := by
   unfold process_consolidation_request_fulu at h
   peel_ok h
   all_goals first
@@ -215,25 +215,25 @@ theorem process_consolidation_request_fulu_exitEpochsU64 (p : Preset) (f : FuluC
          ‹compute_consolidation_epoch_and_update_churn_fulu _ _ _ _ _ = .ok _›
          ‹uint64Add _ _ = .ok _› ‹listSet _ _ _ = .ok _› rfl _ hs)
 
-/-- The Fulu `process_operations` keeps `ExitEpochsU64`. -/
+/-- The Fulu `process_operations` keeps `ExitEpochsAreUint64`. -/
 theorem process_operations_fulu_exitEpochsU64 (p : Preset) (o : Oracle) (f : FuluConfig)
     (hc : FuluCompat p f) (s s' : BeaconState) (body : FuluBeaconBlockBody)
-    (h : process_operations_fulu p o f s body = .ok s') (hs : ExitEpochsU64 s) :
-    ExitEpochsU64 s' :=
-  process_operations_fulu_inv p o f ExitEpochsU64
+    (h : process_operations_fulu p o f s body = .ok s') (hs : ExitEpochsAreUint64 s) :
+    ExitEpochsAreUint64 s' :=
+  process_operations_fulu_inv p o f ExitEpochsAreUint64
     (fun _ _ _ h' hs => by
       obtain ⟨_, _, -, -, -, hsl⟩ := process_proposer_slashing_fulu_ok p o f _ _ _ h'
       exact slash_validator_fulu_exitEpochsU64 p f hc _ _ _ none hsl hs)
-    (fun _ _ _ h' hs => process_attester_slashing_fulu_keeps p o f ExitEpochsU64
+    (fun _ _ _ h' hs => process_attester_slashing_fulu_keeps p o f ExitEpochsAreUint64
       (fun _ _ _ h'' hs' => slash_validator_fulu_exitEpochsU64 p f hc _ _ _ none h'' hs')
       _ _ _ h' hs)
-    (fun _ _ _ h' hs => ExitEpochsU64.of_validators_eq
+    (fun _ _ _ h' hs => ExitEpochsAreUint64.of_validators_eq
       (process_attestation_fulu_effects p o _ _ _ h').2.2.2.2 hs)
     (fun _ _ _ h' hs => by
       obtain ⟨tab, -, -, -, -, -, -, hi⟩ := process_voluntary_exit_fulu_initiate p o f hc _ _ _ h'
       exact initiate_validator_exit_exitEpochsU64 hi hs)
     (fun _ _ _ h' hs => process_bls_to_execution_change_exitEpochsU64 p o _ _ _ h' hs)
-    (fun _ _ _ h' hs => ExitEpochsU64.of_validators_eq (by cases h'; rfl) hs)
+    (fun _ _ _ h' hs => ExitEpochsAreUint64.of_validators_eq (by cases h'; rfl) hs)
     (fun _ _ _ h' hs => process_withdrawal_request_fulu_exitEpochsU64 p f hc _ _ _ h' hs)
     (fun _ _ _ h' hs => process_consolidation_request_fulu_exitEpochsU64 p f _ _ _ h' hs)
     s s' body h hs
@@ -258,7 +258,7 @@ theorem process_block_fulu_validators_inv (p : Preset) (o : Oracle) (fo : FuluOr
 
 /-- The Fulu `process_epoch` keeps every property of the validators that the registry update,
 the pending deposits and the effective balance update keep. -/
-theorem process_epoch_fulu_validators_inv [PresetCfg] (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+theorem process_epoch_fulu_validators_inv [CurrentPreset] (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
     (o : Oracle) (P : BeaconState → Prop)
     (hv : ∀ s s', s'.validators = s.validators → P s → P s')
     (hReg : ∀ tab a b, process_registry_updates p tab a = .ok b → P a → P b)
@@ -290,7 +290,7 @@ theorem process_epoch_fulu_validators_inv [PresetCfg] (p : Preset) (f : FuluConf
 
 /-- `state_transition_fulu` keeps every property of the validators that the Fulu operations and
 the three epoch steps keep. -/
-theorem state_transition_fulu_validators_inv [PresetCfg] (p : Preset) (o : Oracle) (fo : FuluOracle)
+theorem state_transition_fulu_validators_inv [CurrentPreset] (p : Preset) (o : Oracle) (fo : FuluOracle)
     (f : FuluConfig) (hc : FuluCompat p f) (c : FuluBlockConfig) (P : BeaconState → Prop)
     (hv : ∀ s s', s'.validators = s.validators → P s → P s')
     (hO : ∀ a b body, process_operations_fulu p o f a body = .ok b → P a → P b)
@@ -310,15 +310,15 @@ theorem state_transition_fulu_validators_inv [PresetCfg] (p : Preset) (o : Oracl
     (fun _ _ _ h' hs => process_block_fulu_validators_inv p o fo f c P hv hO _ _ _ h' hs)
     fs fs' signed_block validate_result hs h
 
-/-- `state_transition_fulu` keeps `ExitEpochsU64`. -/
-theorem state_transition_fulu_exitEpochsU64 [PresetCfg] (p : Preset) (o : Oracle) (fo : FuluOracle)
+/-- `state_transition_fulu` keeps `ExitEpochsAreUint64`. -/
+theorem state_transition_fulu_exitEpochsU64 [CurrentPreset] (p : Preset) (o : Oracle) (fo : FuluOracle)
     (f : FuluConfig) (hc : FuluCompat p f) (c : FuluBlockConfig) (fs fs' : FuluState)
     (signed_block : FuluSignedBeaconBlock) (validate_result : Bool)
-    (hs : ExitEpochsU64 fs.state)
+    (hs : ExitEpochsAreUint64 fs.state)
     (h : state_transition_fulu p o fo f c fs signed_block validate_result = .ok fs') :
-    ExitEpochsU64 fs'.state :=
-  state_transition_fulu_validators_inv p o fo f hc c ExitEpochsU64
-    (fun _ _ hv hs => ExitEpochsU64.of_validators_eq hv hs)
+    ExitEpochsAreUint64 fs'.state :=
+  state_transition_fulu_validators_inv p o fo f hc c ExitEpochsAreUint64
+    (fun _ _ hv hs => ExitEpochsAreUint64.of_validators_eq hv hs)
     (fun _ _ _ h' hs => process_operations_fulu_exitEpochsU64 p o f hc _ _ _ h' hs)
     (fun _ _ _ h' hs => process_registry_updates_exitEpochsU64 p _ _ _ h' hs)
     (fun _ _ _ h' hs => process_pending_deposits_exitEpochsU64 p o _ _ _ h' hs)
@@ -327,11 +327,11 @@ theorem state_transition_fulu_exitEpochsU64 [PresetCfg] (p : Preset) (o : Oracle
 
 /-! ## Withdrawable epochs are `u64` values -/
 
-/-- The Fulu `slash_validator` keeps `WithdrawableU64`. -/
+/-- The Fulu `slash_validator` keeps `WithdrawableEpochsFitUint64`. -/
 theorem slash_validator_fulu_withdrawableU64 (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
     (s s' : BeaconState) (i : ValidatorIndex) (w : Option ValidatorIndex)
-    (h : slash_validator_fulu p f s i w = .ok s') (hs : WithdrawableU64 s) :
-    WithdrawableU64 s' := by
+    (h : slash_validator_fulu p f s i w = .ok s') (hs : WithdrawableEpochsFitUint64 s) :
+    WithdrawableEpochsFitUint64 s' := by
   unfold slash_validator_fulu at h
   simp only [initiate_validator_exit_fulu_eq p f hc] at h
   obtain ⟨epoch, -, h⟩ := specM_bind_ok h
@@ -352,11 +352,11 @@ theorem slash_validator_fulu_withdrawableU64 (p : Preset) (f : FuluConfig) (hc :
     | contradiction
     | (cases h; exact hfinal)
 
-/-- The Fulu `process_withdrawal_request` keeps `WithdrawableU64`. -/
+/-- The Fulu `process_withdrawal_request` keeps `WithdrawableEpochsFitUint64`. -/
 theorem process_withdrawal_request_fulu_withdrawableU64 (p : Preset) (f : FuluConfig)
     (hc : FuluCompat p f) (s s' : BeaconState) (withdrawal_request : WithdrawalRequest)
     (h : process_withdrawal_request_fulu p f s withdrawal_request = .ok s')
-    (hs : WithdrawableU64 s) : WithdrawableU64 s' := by
+    (hs : WithdrawableEpochsFitUint64 s) : WithdrawableEpochsFitUint64 s' := by
   unfold process_withdrawal_request_fulu at h
   simp only [initiate_validator_exit_fulu_eq p f hc,
     compute_exit_epoch_and_update_churn_fulu_eq p f hc] at h
@@ -371,13 +371,13 @@ theorem process_withdrawal_request_fulu_withdrawableU64 (p : Preset) (f : FuluCo
     | (cases h
        obtain ⟨-, -, -, hv, -, -⟩ := compute_exit_epoch_and_update_churn_bound p _ s _ _ _
          ‹compute_exit_epoch_and_update_churn _ _ _ _ = .ok _›
-       exact WithdrawableU64.of_validators_eq hv hs)
+       exact WithdrawableEpochsFitUint64.of_validators_eq hv hs)
 
-/-- The Fulu `process_consolidation_request` keeps `WithdrawableU64`. -/
+/-- The Fulu `process_consolidation_request` keeps `WithdrawableEpochsFitUint64`. -/
 theorem process_consolidation_request_fulu_withdrawableU64 (p : Preset) (f : FuluConfig)
     (s s' : BeaconState) (consolidation_request : ConsolidationRequest)
     (h : process_consolidation_request_fulu p f s consolidation_request = .ok s')
-    (hs : WithdrawableU64 s) : WithdrawableU64 s' := by
+    (hs : WithdrawableEpochsFitUint64 s) : WithdrawableEpochsFitUint64 s' := by
   unfold process_consolidation_request_fulu at h
   peel_ok h
   all_goals first
@@ -389,38 +389,38 @@ theorem process_consolidation_request_fulu_withdrawableU64 (p : Preset) (f : Ful
          ?_ ‹listSet _ _ _ = .ok _› rfl _ hs
        assumption)
 
-/-- The Fulu `process_operations` keeps `WithdrawableU64`. -/
+/-- The Fulu `process_operations` keeps `WithdrawableEpochsFitUint64`. -/
 theorem process_operations_fulu_withdrawableU64 (p : Preset) (o : Oracle) (f : FuluConfig)
     (hc : FuluCompat p f) (s s' : BeaconState) (body : FuluBeaconBlockBody)
-    (h : process_operations_fulu p o f s body = .ok s') (hs : WithdrawableU64 s) :
-    WithdrawableU64 s' :=
-  process_operations_fulu_inv p o f WithdrawableU64
+    (h : process_operations_fulu p o f s body = .ok s') (hs : WithdrawableEpochsFitUint64 s) :
+    WithdrawableEpochsFitUint64 s' :=
+  process_operations_fulu_inv p o f WithdrawableEpochsFitUint64
     (fun _ _ _ h' hs => by
       obtain ⟨_, _, -, -, -, hsl⟩ := process_proposer_slashing_fulu_ok p o f _ _ _ h'
       exact slash_validator_fulu_withdrawableU64 p f hc _ _ _ none hsl hs)
-    (fun _ _ _ h' hs => process_attester_slashing_fulu_keeps p o f WithdrawableU64
+    (fun _ _ _ h' hs => process_attester_slashing_fulu_keeps p o f WithdrawableEpochsFitUint64
       (fun _ _ _ h'' hs' => slash_validator_fulu_withdrawableU64 p f hc _ _ _ none h'' hs')
       _ _ _ h' hs)
-    (fun _ _ _ h' hs => WithdrawableU64.of_validators_eq
+    (fun _ _ _ h' hs => WithdrawableEpochsFitUint64.of_validators_eq
       (process_attestation_fulu_effects p o _ _ _ h').2.2.2.2 hs)
     (fun _ _ _ h' hs => by
       obtain ⟨tab, -, -, -, -, -, -, hi⟩ := process_voluntary_exit_fulu_initiate p o f hc _ _ _ h'
       exact initiate_validator_exit_withdrawableU64 hi hs)
     (fun _ _ _ h' hs => process_bls_to_execution_change_withdrawableU64 p o _ _ _ h' hs)
-    (fun _ _ _ h' hs => WithdrawableU64.of_validators_eq (by cases h'; rfl) hs)
+    (fun _ _ _ h' hs => WithdrawableEpochsFitUint64.of_validators_eq (by cases h'; rfl) hs)
     (fun _ _ _ h' hs => process_withdrawal_request_fulu_withdrawableU64 p f hc _ _ _ h' hs)
     (fun _ _ _ h' hs => process_consolidation_request_fulu_withdrawableU64 p f _ _ _ h' hs)
     s s' body h hs
 
-/-- `state_transition_fulu` keeps `WithdrawableU64`. -/
-theorem state_transition_fulu_withdrawableU64 [PresetCfg] (p : Preset) (o : Oracle) (fo : FuluOracle)
+/-- `state_transition_fulu` keeps `WithdrawableEpochsFitUint64`. -/
+theorem state_transition_fulu_withdrawableU64 [CurrentPreset] (p : Preset) (o : Oracle) (fo : FuluOracle)
     (f : FuluConfig) (hc : FuluCompat p f) (c : FuluBlockConfig) (fs fs' : FuluState)
     (signed_block : FuluSignedBeaconBlock) (validate_result : Bool)
-    (hs : WithdrawableU64 fs.state)
+    (hs : WithdrawableEpochsFitUint64 fs.state)
     (h : state_transition_fulu p o fo f c fs signed_block validate_result = .ok fs') :
-    WithdrawableU64 fs'.state :=
-  state_transition_fulu_validators_inv p o fo f hc c WithdrawableU64
-    (fun _ _ hv hs => WithdrawableU64.of_validators_eq hv hs)
+    WithdrawableEpochsFitUint64 fs'.state :=
+  state_transition_fulu_validators_inv p o fo f hc c WithdrawableEpochsFitUint64
+    (fun _ _ hv hs => WithdrawableEpochsFitUint64.of_validators_eq hv hs)
     (fun _ _ _ h' hs => process_operations_fulu_withdrawableU64 p o f hc _ _ _ h' hs)
     (fun _ _ _ h' hs => process_registry_updates_withdrawableU64 p _ _ _ h' hs)
     (fun _ _ _ h' hs => process_pending_deposits_withdrawableU64 p o _ _ _ h' hs)
@@ -548,14 +548,14 @@ theorem process_consolidation_request_fulu_opStep (p : Preset) (f : FuluConfig)
     (process_consolidation_request_fulu_exitShape p f s s' consolidation_request h)
     (process_consolidation_request_fulu_slashedKeep p f s s' consolidation_request h)
 
-/-- The Fulu `process_proposer_slashing` keeps `ExitDelay`. -/
+/-- The Fulu `process_proposer_slashing` keeps `ExitToWithdrawableDelay`. -/
 theorem process_proposer_slashing_fulu_exitDelay (p : Preset) (o : Oracle) (f : FuluConfig)
     (hc : FuluCompat p f) (s s' : BeaconState) (ps : ProposerSlashing)
-    (h : process_proposer_slashing_fulu p o f s ps = .ok s') (hs : ExitDelay p s) :
-    ExitDelay p s' := by
+    (h : process_proposer_slashing_fulu p o f s ps = .ok s') (hs : ExitToWithdrawableDelay p s) :
+    ExitToWithdrawableDelay p s' := by
   obtain ⟨-, -, -, -, hother, ⟨v, v', hv, hv', -, -, hch⟩, -⟩ :=
     process_proposer_slashing_fulu_effects p o f hc s s' ps h
-  refine ExitDelay.of_pointwise (fun j u' hu' => ?_) hs
+  refine ExitToWithdrawableDelay.of_pointwise (fun j u' hu' => ?_) hs
   by_cases hj : j = ps.signed_header_1.message.proposer_index
   · subst hj
     rw [hv'] at hu'
@@ -563,19 +563,19 @@ theorem process_proposer_slashing_fulu_exitDelay (p : Preset) (o : Oracle) (f : 
     exact ⟨v, hv, hch.exitDelay⟩
   · exact ⟨u', (hother j hj).symm.trans hu', id⟩
 
-/-- The Fulu `process_attester_slashing` keeps `ExitDelay`. -/
+/-- The Fulu `process_attester_slashing` keeps `ExitToWithdrawableDelay`. -/
 theorem process_attester_slashing_fulu_exitDelay (p : Preset) (o : Oracle) (f : FuluConfig)
     (hc : FuluCompat p f) (s s' : BeaconState) (as : AttesterSlashing)
-    (h : process_attester_slashing_fulu p o f s as = .ok s') (hs : ExitDelay p s) :
-    ExitDelay p s' := by
+    (h : process_attester_slashing_fulu p o f s as = .ok s') (hs : ExitToWithdrawableDelay p s) :
+    ExitToWithdrawableDelay p s' := by
   obtain ⟨heff, hf⟩ := process_attester_slashing_fulu_ok p o f hc s s' as h
   exact hf.exitDelay heff.2.1 hs
 
-/-- The Fulu `process_operations` keeps `ExitDelay`. -/
+/-- The Fulu `process_operations` keeps `ExitToWithdrawableDelay`. -/
 theorem process_operations_fulu_exitDelay (p : Preset) (o : Oracle) (f : FuluConfig)
     (hc : FuluCompat p f) (s s' : BeaconState) (body : FuluBeaconBlockBody)
-    (h : process_operations_fulu p o f s body = .ok s') (hs : ExitDelay p s) : ExitDelay p s' :=
-  process_operations_fulu_inv p o f (ExitDelay p)
+    (h : process_operations_fulu p o f s body = .ok s') (hs : ExitToWithdrawableDelay p s) : ExitToWithdrawableDelay p s' :=
+  process_operations_fulu_inv p o f (ExitToWithdrawableDelay p)
     (fun _ _ _ h' hs => process_proposer_slashing_fulu_exitDelay p o f hc _ _ _ h' hs)
     (fun _ _ _ h' hs => process_attester_slashing_fulu_exitDelay p o f hc _ _ _ h' hs)
     (fun _ _ _ h' hs => (process_attestation_fulu_opStep p o _ _ _ h').exitDelay hs)
@@ -586,15 +586,15 @@ theorem process_operations_fulu_exitDelay (p : Preset) (o : Oracle) (f : FuluCon
     (fun _ _ _ h' hs => (process_consolidation_request_fulu_opStep p f _ _ _ h').exitDelay hs)
     s s' body h hs
 
-/-- `state_transition_fulu` keeps `ExitDelay`. -/
-theorem state_transition_fulu_exitDelay [PresetCfg] (p : Preset) (o : Oracle) (fo : FuluOracle)
+/-- `state_transition_fulu` keeps `ExitToWithdrawableDelay`. -/
+theorem state_transition_fulu_exitDelay [CurrentPreset] (p : Preset) (o : Oracle) (fo : FuluOracle)
     (f : FuluConfig) (hc : FuluCompat p f) (c : FuluBlockConfig) (fs fs' : FuluState)
     (signed_block : FuluSignedBeaconBlock) (validate_result : Bool)
-    (hs : ExitDelay p fs.state)
+    (hs : ExitToWithdrawableDelay p fs.state)
     (h : state_transition_fulu p o fo f c fs signed_block validate_result = .ok fs') :
-    ExitDelay p fs'.state :=
-  state_transition_fulu_validators_inv p o fo f hc c (ExitDelay p)
-    (fun _ _ hv hs => ExitDelay.of_validators_eq hv hs)
+    ExitToWithdrawableDelay p fs'.state :=
+  state_transition_fulu_validators_inv p o fo f hc c (ExitToWithdrawableDelay p)
+    (fun _ _ hv hs => ExitToWithdrawableDelay.of_validators_eq hv hs)
     (fun _ _ _ h' hs => process_operations_fulu_exitDelay p o f hc _ _ _ h' hs)
     (fun _ _ _ h' hs => process_registry_updates_exitDelay p _ _ _ h' hs)
     (fun _ _ _ h' hs => process_pending_deposits_exitDelay p o _ _ _ h' hs)

@@ -12,9 +12,9 @@ import EpochProofs.Sanity.Block.SyncAggregate
 # The state transition keeps the FFG invariant
 
 Each epoch step after `process_justification_and_finalization` keeps the slot and the
-checkpoints. So `process_epoch` keeps the slot and turns `FfgInvariant` into
-`FfgInvariantAfter`. Each block step keeps the slot and the checkpoints. So `state_transition`
-keeps `FfgInvariant`.
+checkpoints. So `process_epoch` keeps the slot and turns `CheckpointsInOrder` into
+`CheckpointsInOrderAfterJustification`. Each block step keeps the slot and the checkpoints. So `state_transition`
+keeps `CheckpointsInOrder`.
 -/
 
 namespace EpochProofs.Spec
@@ -289,10 +289,10 @@ theorem process_epoch_slot (p : Preset) (o : Oracle) (s s' : BeaconState)
   obtain ⟨s1, h1, hs⟩ := process_epoch_split p o s s' h
   exact hs.1.trans (process_justification_and_finalization_frame p s s1 h1).2
 
-/-- `process_epoch` turns `FfgInvariant` into `FfgInvariantAfter` and keeps the slot. -/
+/-- `process_epoch` turns `CheckpointsInOrder` into `CheckpointsInOrderAfterJustification` and keeps the slot. -/
 theorem process_epoch_ffg (p : Preset) (o : Oracle) (s s' : BeaconState)
-    (h : process_epoch p o s = .ok s') (hinv : FfgInvariant p s) :
-    FfgInvariantAfter p s' ∧ s'.slot = s.slot := by
+    (h : process_epoch p o s = .ok s') (hinv : CheckpointsInOrder p s) :
+    CheckpointsInOrderAfterJustification p s' ∧ s'.slot = s.slot := by
   obtain ⟨s1, h1, hs⟩ := process_epoch_split p o s s' h
   exact ⟨(process_justification_and_finalization_ffg p s s1 h1 hinv).1.of_checkpointsStable hs,
     process_epoch_slot p o s s' h⟩
@@ -303,10 +303,10 @@ theorem process_slots_process_epoch_slot (p : Preset) (o : Oracle) (s s' : Beaco
     s'.slot = slot :=
   process_slots_slot p o (process_epoch p o) (process_epoch_slot p o) s s' slot h
 
-/-- `process_slots` with the real `process_epoch` keeps `FfgInvariant`. -/
+/-- `process_slots` with the real `process_epoch` keeps `CheckpointsInOrder`. -/
 theorem process_slots_process_epoch_ffg (p : Preset) (o : Oracle) (s s' : BeaconState)
-    (slot : Slot) (hinv : FfgInvariant p s)
-    (h : process_slots p o (process_epoch p o) s slot = .ok s') : FfgInvariant p s' :=
+    (slot : Slot) (hinv : CheckpointsInOrder p s)
+    (h : process_slots p o (process_epoch p o) s slot = .ok s') : CheckpointsInOrder p s' :=
   process_slots_ffg p o (process_epoch p o) (fun s s' hs hP => process_epoch_ffg p o s s' hs hP)
     s s' slot hinv h
 
@@ -388,13 +388,13 @@ theorem process_block_checkpointsStable (p : Preset) (o : Oracle)
 
 /-! ## `state_transition` -/
 
-/-- `state_transition` keeps `FfgInvariant`. -/
+/-- `state_transition` keeps `CheckpointsInOrder`. -/
 theorem state_transition_ffg (p : Preset) (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (s s' : BeaconState) (signed_block : SignedBeaconBlock)
-    (validate_result : Bool) (hinv : FfgInvariant p s)
+    (validate_result : Bool) (hinv : CheckpointsInOrder p s)
     (h : state_transition p o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
       validate_result = .ok s') :
-    FfgInvariant p s' := by
+    CheckpointsInOrder p s' := by
   unfold state_transition at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h

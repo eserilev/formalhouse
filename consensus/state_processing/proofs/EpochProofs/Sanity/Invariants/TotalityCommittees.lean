@@ -13,7 +13,7 @@ kinds of facts about the state that the three steps read:
 
 - `CommitteeStepFacts`: the registry limit, `effective_balance ≤ MAX_EFFECTIVE_BALANCE_ELECTRA`, the two
   vector lengths and valid public keys. These are invariants of reachable states.
-- `CommitteeStepPreconds`: preconditions of the pyspec itself. Without them the pyspec raises.
+- `CommitteeStepPreconditions`: preconditions of the pyspec itself. Without them the pyspec raises.
 
 Error sources and why they do not fire:
 - The shuffle (`compute_shuffled_permutation`): `0 < n ≤ 2^40` and `SHUFFLE_ROUND_COUNT ≤ 256`
@@ -23,7 +23,7 @@ Error sources and why they do not fire:
 - `compute_balance_weighted_selection`: `assert total > 0` needs a candidate.
   `effective_balance * (2^16 - 1)` fits a `Uint64` because the effective balance is at most
   `2048 ETH`. The counter `i` is a `Uint64`, so the loop must accept its candidates within `2^64`
-  passes (`SelFin`). That depends on the hash values.
+  passes (`SelectionEnds`). That depends on the hash values.
 - `eth_aggregate_pubkeys` asserts `KeyValidate` on each key.
 - The two `len(...) - SLOTS_PER_EPOCH` need the SSZ vector lengths.
 
@@ -36,31 +36,31 @@ namespace EpochProofs.Spec
 
 
 /-- The random bytes of pass `i`. -/
-def bwsBytes (o : Oracle) (seed : Bytes32) (i : Nat) : Bytes32 :=
+def selectionBytes (o : Oracle) (seed : Bytes32) (i : Nat) : Bytes32 :=
   o.hash (seed.toList ++ uint_to_bytes 8 (i / 16))
 
 /-- The candidate position of pass `i`. -/
-def bwsNext (p : Preset) (o : Oracle) (seed : Bytes32) (total : Nat) (shuffle : Bool) (i : Nat) :
+def selectionCandidate (p : Preset) (o : Oracle) (seed : Bytes32) (total : Nat) (shuffle : Bool) (i : Nat) :
     Nat :=
-  if shuffle then csiFold o seed.toList total p.SHUFFLE_ROUND_COUNT (i % total) else i % total
+  if shuffle then shuffledIndexAfterRounds o seed.toList total p.SHUFFLE_ROUND_COUNT (i % total) else i % total
 
 /-- Pass `i` accepts its candidate. -/
-def bwsAccept (p : Preset) (o : Oracle) (seed : Bytes32) (ebs : List Gwei) (shuffle : Bool)
+def selectionAccepts (p : Preset) (o : Oracle) (seed : Bytes32) (ebs : List Gwei) (shuffle : Bool)
     (i : Nat) : Bool :=
-  decide (ebs.getD (bwsNext p o seed ebs.length shuffle i) 0 * (2 ^ 16 - 1) ≥
+  decide (ebs.getD (selectionCandidate p o seed ebs.length shuffle i) 0 * (2 ^ 16 - 1) ≥
     p.MAX_EFFECTIVE_BALANCE_ELECTRA *
-      leNat (((bwsBytes o seed i).toList.drop (i % 16 * 2)).take 2))
+      littleEndianValue (((selectionBytes o seed i).toList.drop (i % 16 * 2)).take 2))
 
-theorem leNat_take2_lt (l : List UInt8) : leNat (l.take 2) < 2 ^ 16 := by
-  have h := leNat_lt (l.take 2)
+theorem littleEndianValue_take2_lt (l : List UInt8) : littleEndianValue (l.take 2) < 2 ^ 16 := by
+  have h := littleEndianValue_lt (l.take 2)
   have hl : (l.take 2).length ≤ 2 := by simp
   have : 256 ^ (l.take 2).length ≤ 256 ^ 2 := Nat.pow_le_pow_right (by decide) hl
   omega
 
 theorem bytes_to_uint64_take2 (l : List UInt8) :
-    bytes_to_uint64 (l.take 2) = .ok (leNat (l.take 2)) := by
-  have h := leNat_take2_lt l
-  simp only [bytes_to_uint64, leNat] at h ⊢
+    bytes_to_uint64 (l.take 2) = .ok (littleEndianValue (l.take 2)) := by
+  have h := littleEndianValue_take2_lt l
+  simp only [bytes_to_uint64, littleEndianValue] at h ⊢
   rw [if_pos (by unfold UINT64_SIZE; omega)]
   rfl
 
@@ -71,49 +71,49 @@ theorem bws_step (p : Preset) (o : Oracle) (indices : List ValidatorIndex) (seed
     (hn40 : ebs.length ≤ 2 ^ 40) (hR : p.SHUFFLE_ROUND_COUNT ≤ 256)
     (heb : ∀ e ∈ ebs, e ≤ p.MAX_EFFECTIVE_BALANCE_ELECTRA)
     (hmax : p.MAX_EFFECTIVE_BALANCE_ELECTRA ≤ 2 ^ 41)
-    (hi : i + 1 < 2 ^ 64) (hrb : i % 16 ≠ 0 → rb = bwsBytes o seed i) :
+    (hi : i + 1 < 2 ^ 64) (hrb : i % 16 ≠ 0 → rb = selectionBytes o seed i) :
     compute_balance_weighted_selection_loop p o indices seed size shuffle ebs.length ebs
         (fuel + 1) selected i rb =
       compute_balance_weighted_selection_loop p o indices seed size shuffle ebs.length ebs fuel
-        (if bwsAccept p o seed ebs shuffle i then
-          selected ++ [indices.getD (bwsNext p o seed ebs.length shuffle i) 0] else selected)
-        (i + 1) (bwsBytes o seed i) := by
+        (if selectionAccepts p o seed ebs shuffle i then
+          selected ++ [indices.getD (selectionCandidate p o seed ebs.length shuffle i) 0] else selected)
+        (i + 1) (selectionBytes o seed i) := by
   have htot0 : ebs.length ≠ 0 := Nat.pos_iff_ne_zero.mp htot
   have hrb' : (if i % 16 * 2 == 0 then o.hash (seed.toList ++ uint_to_bytes 8 (i / 16)) else rb) =
-      bwsBytes o seed i := by
+      selectionBytes o seed i := by
     by_cases h : i % 16 = 0
-    · simp [h, bwsBytes]
-    · rw [hrb h]; simp [bwsBytes]; try omega
+    · simp [h, selectionBytes]
+    · rw [hrb h]; simp [selectionBytes]; try omega
   have hnext : i % ebs.length < ebs.length := Nat.mod_lt _ htot
-  have hcsi : bwsNext p o seed ebs.length shuffle i < ebs.length := by
-    unfold bwsNext; split
-    · exact csiFold_lt o seed.toList ebs.length p.SHUFFLE_ROUND_COUNT _ htot hnext
+  have hcsi : selectionCandidate p o seed ebs.length shuffle i < ebs.length := by
+    unfold selectionCandidate; split
+    · exact shuffledIndexAfterRounds_lt o seed.toList ebs.length p.SHUFFLE_ROUND_COUNT _ htot hnext
     · exact hnext
   rw [compute_balance_weighted_selection_loop, if_pos hsel]
   simp only [tot_mod (show (16:Nat) ≠ 0 by decide), tot_mul (show i % 16 * 2 < 2 ^ 64 by omega),
     tot_mod htot0, tot_bind_ok, hrb']
-  have key : ∀ k, k < ebs.length → bwsNext p o seed ebs.length shuffle i = k →
+  have key : ∀ k, k < ebs.length → selectionCandidate p o seed ebs.length shuffle i = k →
       (do
         let __do_lift ← listGet ebs k
         let weight ← uint64Mul __do_lift (2 ^ 16 - 1)
         let random_value ← bytes_to_uint64
-          (List.take 2 (List.drop (i % 16 * 2) (Vector.toList (bwsBytes o seed i))))
+          (List.take 2 (List.drop (i % 16 * 2) (Vector.toList (selectionBytes o seed i))))
         let threshold ← uint64Mul p.MAX_EFFECTIVE_BALANCE_ELECTRA random_value
         if weight ≥ threshold then do
             let __do_lift ← listGet indices k
             let y ← pure (selected ++ [__do_lift])
             let i_1 ← uint64Add i 1
             compute_balance_weighted_selection_loop p o indices seed size shuffle ebs.length ebs
-              fuel y i_1 (bwsBytes o seed i)
+              fuel y i_1 (selectionBytes o seed i)
           else do
             let y ← pure selected
             let i_1 ← uint64Add i 1
             compute_balance_weighted_selection_loop p o indices seed size shuffle ebs.length ebs
-              fuel y i_1 (bwsBytes o seed i) : SpecM (List ValidatorIndex)) =
+              fuel y i_1 (selectionBytes o seed i) : SpecM (List ValidatorIndex)) =
       compute_balance_weighted_selection_loop p o indices seed size shuffle ebs.length ebs fuel
-        (if bwsAccept p o seed ebs shuffle i then
-          selected ++ [indices.getD (bwsNext p o seed ebs.length shuffle i) 0] else selected)
-        (i + 1) (bwsBytes o seed i) := by
+        (if selectionAccepts p o seed ebs shuffle i then
+          selected ++ [indices.getD (selectionCandidate p o seed ebs.length shuffle i) 0] else selected)
+        (i + 1) (selectionBytes o seed i) := by
     intro k hk hkdef
     have hki : k < indices.length := hlen ▸ hk
     have heb1 : ebs[k] * (2 ^ 16 - 1) < 2 ^ 64 := by
@@ -121,25 +121,25 @@ theorem bws_step (p : Preset) (o : Oracle) (indices : List ValidatorIndex) (seed
       calc ebs[k] * (2 ^ 16 - 1) ≤ 2 ^ 41 * (2 ^ 16 - 1) := Nat.mul_le_mul_right _ h2
         _ < 2 ^ 64 := by decide
     have hthr : p.MAX_EFFECTIVE_BALANCE_ELECTRA *
-        leNat (List.take 2 (List.drop (i % 16 * 2) (bwsBytes o seed i).toList)) < 2 ^ 64 := by
-      have h1 := leNat_take2_lt (List.drop (i % 16 * 2) (bwsBytes o seed i).toList)
-      calc _ ≤ 2 ^ 41 * leNat (List.take 2 (List.drop (i % 16 * 2) (bwsBytes o seed i).toList)) :=
+        littleEndianValue (List.take 2 (List.drop (i % 16 * 2) (selectionBytes o seed i).toList)) < 2 ^ 64 := by
+      have h1 := littleEndianValue_take2_lt (List.drop (i % 16 * 2) (selectionBytes o seed i).toList)
+      calc _ ≤ 2 ^ 41 * littleEndianValue (List.take 2 (List.drop (i % 16 * 2) (selectionBytes o seed i).toList)) :=
             Nat.mul_le_mul_right _ hmax
         _ < 2 ^ 41 * 2 ^ 16 := Nat.mul_lt_mul_of_pos_left h1 (by decide)
         _ < 2 ^ 64 := by decide
-    have hacc : bwsAccept p o seed ebs shuffle i =
+    have hacc : selectionAccepts p o seed ebs shuffle i =
         decide (ebs[k] * (2 ^ 16 - 1) ≥ p.MAX_EFFECTIVE_BALANCE_ELECTRA *
-          leNat (List.take 2 (List.drop (i % 16 * 2) (bwsBytes o seed i).toList))) := by
-      simp only [bwsAccept, hkdef, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hk,
+          littleEndianValue (List.take 2 (List.drop (i % 16 * 2) (selectionBytes o seed i).toList))) := by
+      simp only [selectionAccepts, hkdef, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hk,
         Option.getD_some]
-    have hgetI : indices.getD (bwsNext p o seed ebs.length shuffle i) 0 = indices[k] := by
+    have hgetI : indices.getD (selectionCandidate p o seed ebs.length shuffle i) 0 = indices[k] := by
       simp only [hkdef, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hki,
         Option.getD_some]
     rw [hacc, hgetI]
     simp only [tot_get hk, tot_bind_ok, tot_mul heb1, bytes_to_uint64_take2, tot_mul hthr,
       tot_add hi]
     by_cases hc : ebs[k] * (2 ^ 16 - 1) ≥ p.MAX_EFFECTIVE_BALANCE_ELECTRA *
-        leNat (List.take 2 (List.drop (i % 16 * 2) (bwsBytes o seed i).toList))
+        littleEndianValue (List.take 2 (List.drop (i % 16 * 2) (selectionBytes o seed i).toList))
     · simp only [hc, if_true, decide_true, tot_get hki, tot_bind_ok]; rfl
     · simp only [hc, if_false, decide_false, Bool.false_eq_true]; rfl
   cases shuffle with
@@ -152,26 +152,26 @@ theorem bws_step (p : Preset) (o : Oracle) (indices : List ValidatorIndex) (seed
     exact key _ hcsi rfl
 
 /-- The number of accepting passes among the first `m`. -/
-def bwsCount (p : Preset) (o : Oracle) (seed : Bytes32) (ebs : List Gwei) (shuffle : Bool)
+def selectionAcceptedCount (p : Preset) (o : Oracle) (seed : Bytes32) (ebs : List Gwei) (shuffle : Bool)
     (m : Nat) : Nat :=
-  ((List.range m).filter (bwsAccept p o seed ebs shuffle)).length
+  ((List.range m).filter (selectionAccepts p o seed ebs shuffle)).length
 
-theorem bwsCount_succ (p : Preset) (o : Oracle) (seed : Bytes32) (ebs : List Gwei)
+theorem selectionAcceptedCount_succ (p : Preset) (o : Oracle) (seed : Bytes32) (ebs : List Gwei)
     (shuffle : Bool) (i : Nat) :
-    bwsCount p o seed ebs shuffle (i + 1) =
-      bwsCount p o seed ebs shuffle i + if bwsAccept p o seed ebs shuffle i then 1 else 0 := by
-  unfold bwsCount
+    selectionAcceptedCount p o seed ebs shuffle (i + 1) =
+      selectionAcceptedCount p o seed ebs shuffle i + if selectionAccepts p o seed ebs shuffle i then 1 else 0 := by
+  unfold selectionAcceptedCount
   rw [List.range_succ, List.filter_append, List.length_append]
   split <;> simp [*]
 
-theorem bwsCount_mono (p : Preset) (o : Oracle) (seed : Bytes32) (ebs : List Gwei)
+theorem selectionAcceptedCount_mono (p : Preset) (o : Oracle) (seed : Bytes32) (ebs : List Gwei)
     (shuffle : Bool) {i j : Nat} (h : i ≤ j) :
-    bwsCount p o seed ebs shuffle i ≤ bwsCount p o seed ebs shuffle j := by
+    selectionAcceptedCount p o seed ebs shuffle i ≤ selectionAcceptedCount p o seed ebs shuffle j := by
   induction j with
   | zero => rw [Nat.le_zero.mp h]
   | succ j ih =>
     rcases Nat.lt_or_eq_of_le h with h | h
-    · rw [bwsCount_succ]; exact Nat.le_trans (ih (Nat.lt_succ_iff.mp h)) (Nat.le_add_right _ _)
+    · rw [selectionAcceptedCount_succ]; exact Nat.le_trans (ih (Nat.lt_succ_iff.mp h)) (Nat.le_add_right _ _)
     · rw [h]
 
 theorem bws_loop_total (p : Preset) (o : Oracle) (indices : List ValidatorIndex) (seed : Bytes32)
@@ -180,10 +180,10 @@ theorem bws_loop_total (p : Preset) (o : Oracle) (indices : List ValidatorIndex)
     (hn40 : ebs.length ≤ 2 ^ 40) (hR : p.SHUFFLE_ROUND_COUNT ≤ 256)
     (heb : ∀ e ∈ ebs, e ≤ p.MAX_EFFECTIVE_BALANCE_ELECTRA)
     (hmax : p.MAX_EFFECTIVE_BALANCE_ELECTRA ≤ 2 ^ 41)
-    (m : Nat) (hm : m < 2 ^ 64) (hfin : size ≤ bwsCount p o seed ebs shuffle m) :
+    (m : Nat) (hm : m < 2 ^ 64) (hfin : size ≤ selectionAcceptedCount p o seed ebs shuffle m) :
     ∀ k i selected rb, i + k = m →
-      selected.length = bwsCount p o seed ebs shuffle i →
-      (i % 16 ≠ 0 → rb = bwsBytes o seed i) →
+      selected.length = selectionAcceptedCount p o seed ebs shuffle i →
+      (i % 16 ≠ 0 → rb = selectionBytes o seed i) →
       (∀ x ∈ selected, x ∈ indices) →
       ∃ r, compute_balance_weighted_selection_loop p o indices seed size shuffle ebs.length ebs
           (2 ^ 64 - i) selected i rb = .ok r ∧ size ≤ r.length ∧ ∀ x ∈ r, x ∈ indices := by
@@ -203,9 +203,9 @@ theorem bws_loop_total (p : Preset) (o : Oracle) (indices : List ValidatorIndex)
     · rw [hfuel, bws_step p o indices seed size shuffle ebs _ selected i rb hs hlen htot hn40 hR heb
         hmax (by omega) hrb]
       apply ih (i + 1) _ _ (by omega)
-      · rw [bwsCount_succ]; split <;> simp_all
+      · rw [selectionAcceptedCount_succ]; split <;> simp_all
       · intro h16
-        simp only [bwsBytes]
+        simp only [selectionBytes]
         congr 3
         omega
       · intro x hx
@@ -213,10 +213,10 @@ theorem bws_loop_total (p : Preset) (o : Oracle) (indices : List ValidatorIndex)
         · rcases List.mem_append.mp hx with h | h
           · exact hsub x h
           · rw [List.mem_singleton.mp h]
-            have hk : bwsNext p o seed ebs.length shuffle i < indices.length := by
+            have hk : selectionCandidate p o seed ebs.length shuffle i < indices.length := by
               rw [← hlen]
-              unfold bwsNext; split
-              · exact csiFold_lt _ _ _ _ _ htot (Nat.mod_lt _ htot)
+              unfold selectionCandidate; split
+              · exact shuffledIndexAfterRounds_lt _ _ _ _ _ htot (Nat.mod_lt _ htot)
               · exact Nat.mod_lt _ htot
             simp only [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hk, Option.getD_some]
             exact List.getElem_mem hk
@@ -234,14 +234,14 @@ theorem tot_mapM {α β : Type} (f : α → SpecM β) (g : α → β) (l : List 
     rfl
 
 /-- The effective balances of `indices`, as `compute_balance_weighted_selection` reads them. -/
-def ebsOf (s : BeaconState) (indices : List ValidatorIndex) : List Gwei :=
+def effectiveBalancesOf (s : BeaconState) (indices : List ValidatorIndex) : List Gwei :=
   indices.map fun j => (s.validators[j]?.map (·.effective_balance)).getD 0
 
 /-- The selection loop accepts `size` candidates within `2^64` passes, so the `Uint64` counter
 `i` does not overflow. This is a fact about the hash values, not about the state. -/
-def SelFin (p : Preset) (o : Oracle) (s : BeaconState) (indices : List ValidatorIndex)
+def SelectionEnds (p : Preset) (o : Oracle) (s : BeaconState) (indices : List ValidatorIndex)
     (seed : Bytes32) (size : Nat) (shuffle : Bool) : Prop :=
-  ∃ m, m < 2 ^ 64 ∧ size ≤ bwsCount p o seed (ebsOf s indices) shuffle m
+  ∃ m, m < 2 ^ 64 ∧ size ≤ selectionAcceptedCount p o seed (effectiveBalancesOf s indices) shuffle m
 
 theorem compute_balance_weighted_selection_total (p : Preset) (o : Oracle) (s : BeaconState)
     (indices : List ValidatorIndex) (seed : Bytes32) (size : Nat) (shuffle : Bool)
@@ -249,24 +249,24 @@ theorem compute_balance_weighted_selection_total (p : Preset) (o : Oracle) (s : 
     (heb : ∀ v ∈ s.validators, v.effective_balance ≤ p.MAX_EFFECTIVE_BALANCE_ELECTRA)
     (hn40 : indices.length ≤ 2 ^ 40) (hR : p.SHUFFLE_ROUND_COUNT ≤ 256)
     (hmax : p.MAX_EFFECTIVE_BALANCE_ELECTRA ≤ 2 ^ 41)
-    (hfin : SelFin p o s indices seed size shuffle) :
+    (hfin : SelectionEnds p o s indices seed size shuffle) :
     ∃ r, compute_balance_weighted_selection p o s indices seed size shuffle = .ok r ∧
       size ≤ r.length ∧ ∀ x ∈ r, x ∈ indices := by
   obtain ⟨m, hm, hc⟩ := hfin
   have hpos : 0 < indices.length := List.length_pos_iff.mpr hne
   have hmap : indices.mapM (fun index => do
       pure (← listGet s.validators index).effective_balance : ValidatorIndex → SpecM Gwei) =
-      .ok (ebsOf s indices) := by
+      .ok (effectiveBalancesOf s indices) := by
     apply tot_mapM
     intro j hj
     have hjl := hin j hj
     simp only [tot_get hjl, tot_bind_ok, List.getElem?_eq_getElem hjl, Option.map_some,
       Option.getD_some]
     rfl
-  have hlen : (ebsOf s indices).length = indices.length := by simp [ebsOf]
-  have hebs : ∀ e ∈ ebsOf s indices, e ≤ p.MAX_EFFECTIVE_BALANCE_ELECTRA := by
+  have hlen : (effectiveBalancesOf s indices).length = indices.length := by simp [effectiveBalancesOf]
+  have hebs : ∀ e ∈ effectiveBalancesOf s indices, e ≤ p.MAX_EFFECTIVE_BALANCE_ELECTRA := by
     intro e he
-    simp only [ebsOf, List.mem_map] at he
+    simp only [effectiveBalancesOf, List.mem_map] at he
     obtain ⟨j, hj, rfl⟩ := he
     have hjl := hin j hj
     simp only [List.getElem?_eq_getElem hjl, Option.map_some, Option.getD_some]
@@ -275,14 +275,14 @@ theorem compute_balance_weighted_selection_total (p : Preset) (o : Oracle) (s : 
   rw [if_neg (by omega)]
   simp only [pure_bind]
   rw [hmap, tot_bind_ok, ← hlen]
-  have := bws_loop_total p o indices seed size shuffle (ebsOf s indices) hlen (by omega)
-    (by omega) hR hebs hmax m hm hc m 0 [] Bytes32.zero (by omega) (by simp [bwsCount])
+  have := bws_loop_total p o indices seed size shuffle (effectiveBalancesOf s indices) hlen (by omega)
+    (by omega) hR hebs hmax m hm hc m 0 [] Bytes32.zero (by omega) (by simp [selectionAcceptedCount])
     (by simp) (by simp)
   simpa [UINT64_SIZE] using this
 
 /-! ## Seeds and committees -/
 
-theorem get_seed_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (epoch : Nat)
+theorem get_seed_total [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) (epoch : Nat)
     (dt : DomainType) (he : epoch + P.EPOCHS_PER_HISTORICAL_VECTOR < 2 ^ 64)
     (hr : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR) :
     ∃ r, get_seed P o s epoch dt = .ok r := by
@@ -299,7 +299,7 @@ theorem get_seed_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState)
   rw [tot_get hlt]
   exact ⟨_, rfl⟩
 
-theorem get_committee_count_per_slot_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds]
+theorem get_committee_count_per_slot_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds]
     (s : BeaconState) (epoch : Epoch) :
     get_committee_count_per_slot P s epoch =
       .ok (max 1 (min P.MAX_COMMITTEES_PER_SLOT
@@ -309,7 +309,7 @@ theorem get_committee_count_per_slot_total [PresetCfg] [PresetCfg.Ok] [PresetCfg
   simp only [tot_div P_slots_ne, tot_bind_ok, tot_div P_target_ne]
   rfl
 
-theorem compute_committee_total [PresetCfg] [PresetCfg.Bounds] (o : Oracle) (indices : List ValidatorIndex) (seed : Bytes32)
+theorem compute_committee_total [CurrentPreset] [CurrentPreset.Bounds] (o : Oracle) (indices : List ValidatorIndex) (seed : Bytes32)
     (index count : Nat) (hic : index < count) (hc : count ≤ 2048)
     (hn40 : indices.length ≤ 2 ^ 40) :
     ∃ r, compute_committee P o indices seed index count = .ok r ∧
@@ -333,11 +333,11 @@ theorem compute_committee_total [PresetCfg] [PresetCfg.Bounds] (o : Oracle) (ind
     intro i hi
     rw [List.mem_range'] at hi
     omega
-  rw [tot_mapM _ (fun i => indices[csiFold o seed.toList indices.length
+  rw [tot_mapM _ (fun i => indices[shuffledIndexAfterRounds o seed.toList indices.length
       (P).SHUFFLE_ROUND_COUNT i]!) _ (by
     intro i hi
     have hil := hrng i hi
-    have hcl := csiFold_lt o seed.toList indices.length (P).SHUFFLE_ROUND_COUNT i
+    have hcl := shuffledIndexAfterRounds_lt o seed.toList indices.length (P).SHUFFLE_ROUND_COUNT i
       (by omega) hil
     rw [compute_shuffled_index_eq _ _ _ _ _ hil hn40 hR, tot_bind_ok, tot_get hcl,
       getElem!_pos indices _ hcl])]
@@ -346,7 +346,7 @@ theorem compute_committee_total [PresetCfg] [PresetCfg.Bounds] (o : Oracle) (ind
   simp only [List.mem_map] at hx
   obtain ⟨i, hi, rfl⟩ := hx
   have hil := hrng i hi
-  have hcl := csiFold_lt o seed.toList indices.length (P).SHUFFLE_ROUND_COUNT i
+  have hcl := shuffledIndexAfterRounds_lt o seed.toList indices.length (P).SHUFFLE_ROUND_COUNT i
     (by omega) hil
   rw [getElem!_pos indices _ hcl]
   exact List.getElem_mem hcl
@@ -389,20 +389,20 @@ theorem sum_range_diff (F : Nat → Nat) (hF : ∀ i, F i ≤ F (i + 1)) (C : Na
     omega
 
 /-- The committee count per slot. -/
-def cpsOf [PresetCfg] (s : BeaconState) (epoch : Nat) : Nat :=
+def cpsOf [CurrentPreset] (s : BeaconState) (epoch : Nat) : Nat :=
   max 1 (min P.MAX_COMMITTEES_PER_SLOT
     ((get_active_validator_indices s epoch).length / P.SLOTS_PER_EPOCH / P.TARGET_COMMITTEE_SIZE))
 
-theorem cpsOf_pos [PresetCfg] (s : BeaconState) (epoch : Nat) : 0 < cpsOf s epoch := by
+theorem cpsOf_pos [CurrentPreset] (s : BeaconState) (epoch : Nat) : 0 < cpsOf s epoch := by
   unfold cpsOf; exact Nat.lt_of_lt_of_le (by decide) (Nat.le_max_left _ _)
 
-theorem cpsOf_le [PresetCfg] [PresetCfg.Bounds] (s : BeaconState) (epoch : Nat) :
+theorem cpsOf_le [CurrentPreset] [CurrentPreset.Bounds] (s : BeaconState) (epoch : Nat) :
     cpsOf s epoch ≤ 64 := by
   have h := P_max_committees_le (b := inferInstance)
   unfold cpsOf
   exact Nat.max_le.mpr ⟨by decide, Nat.le_trans (Nat.min_le_left _ _) h⟩
 
-theorem get_beacon_committee_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : Oracle)
+theorem get_beacon_committee_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (o : Oracle)
     (s : BeaconState) (slot i : Nat)
     (hi : i < cpsOf s (slot / P.SLOTS_PER_EPOCH))
     (hslot : slot / P.SLOTS_PER_EPOCH + P.EPOCHS_PER_HISTORICAL_VECTOR < 2 ^ 64)
@@ -449,7 +449,7 @@ theorem mul_div_cps (n k C S : Nat) (hC : 0 < C) : n * (k * C) / (C * S) = n * k
   rw [← Nat.mul_assoc, Nat.mul_comm C S]
   exact Nat.mul_div_mul_right _ _ hC
 
-theorem ptcIndices_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : Oracle)
+theorem ptcIndices_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (o : Oracle)
     (s : BeaconState) (slot : Nat)
     (hslot : slot / P.SLOTS_PER_EPOCH + P.EPOCHS_PER_HISTORICAL_VECTOR < 2 ^ 64)
     (hr : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
@@ -515,7 +515,7 @@ theorem active_len_le (s : BeaconState) (e : Nat) :
   rw [List.length_map]
   exact (List.length_filter_le _ _).trans (by simp)
 
-theorem compute_ptc_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : Oracle)
+theorem compute_ptc_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (o : Oracle)
     (s : BeaconState) (slot : Nat)
     (hslot : slot / P.SLOTS_PER_EPOCH + P.EPOCHS_PER_HISTORICAL_VECTOR < 2 ^ 64)
     (hr : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
@@ -523,7 +523,7 @@ theorem compute_ptc_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : Ora
     (heb : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000)
     (h32 : P.SLOTS_PER_EPOCH ≤ (get_active_validator_indices s (slot / P.SLOTS_PER_EPOCH)).length)
     (hfin : ∀ l, ptcIndices P o s (slot / P.SLOTS_PER_EPOCH) slot = .ok l →
-      ∀ seed, SelFin P o s l seed P.PTC_SIZE false) :
+      ∀ seed, SelectionEnds P o s l seed P.PTC_SIZE false) :
     ∃ r, compute_ptc P o s slot = .ok r := by
   have hn := (active_len_le s (slot / P.SLOTS_PER_EPOCH)).trans hn40
   obtain ⟨seed, hseed⟩ := get_seed_total o s (slot / P.SLOTS_PER_EPOCH) DOMAIN_PTC_ATTESTER
@@ -564,7 +564,7 @@ theorem tot_filterM {α : Type} (f : α → SpecM Bool) (g : α → Bool) (l : L
   simp; rfl
 
 /-- The proposer candidates of `epoch`: active and not slashed. -/
-def unslashedActive (s : BeaconState) (e : Nat) : List ValidatorIndex :=
+def activeUnslashedIndices (s : BeaconState) (e : Nat) : List ValidatorIndex :=
   (get_active_validator_indices s e).filter fun i =>
     !((s.validators[i]?.map (·.slashed)).getD true)
 
@@ -572,48 +572,48 @@ def unslashedActive (s : BeaconState) (e : Nat) : List ValidatorIndex :=
 
 /-- State facts that the three committee steps read. Each one holds on reachable states: the
 slot bound and the RANDAO length are in `CommFrame`, the registry limit is
-`VALIDATOR_REGISTRY_LIMIT`, `effective_balance ≤ MAX_EFFECTIVE_BALANCE_ELECTRA` is `EBOk`, the
+`VALIDATOR_REGISTRY_LIMIT`, `effective_balance ≤ MAX_EFFECTIVE_BALANCE_ELECTRA` is `EffectiveBalancesValid`, the
 two vector lengths are SSZ lengths, and a deposit adds a validator only after its signature
 checks, which validates the key. -/
-structure CommFacts [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
+structure CommFacts [CurrentPreset] (o : Oracle) (s : BeaconState) : Prop where
   slot : s.slot + 8192 < 2 ^ 64
   randao : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR
-  regLen : s.validators.length ≤ 2 ^ 40
-  ebMax : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000
+  registryBelowLimit : s.validators.length ≤ 2 ^ 40
+  effectiveBalancesBelowMax : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000
   lookahead : s.proposer_lookahead.length = 2 * P.SLOTS_PER_EPOCH
   ptcLen : s.ptc_window.length = 3 * P.SLOTS_PER_EPOCH
   keys : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true
 
 /-- Preconditions of the pyspec itself. Without them the pyspec raises.
 
-- `syncActive`: some validator is active at the next epoch (the sync committee selection asserts
+- `syncCommitteeHasCandidate`: some validator is active at the next epoch (the sync committee selection asserts
   `total > 0`).
-- `proposers`: some active validator at `current + 2` is not slashed (the proposer
+- `proposerHasCandidate`: some active validator at `current + 2` is not slashed (the proposer
   selection asserts `total > 0`).
-- `ptc32`: at least `SLOTS_PER_EPOCH` validators are active at `current + 2`. With fewer,
+- `enoughActiveForPtc`: at least `SLOTS_PER_EPOCH` validators are active at `current + 2`. With fewer,
   the first slot of that epoch has no committee members, and `compute_ptc` asserts `total > 0`.
-- `selSync`, `selProp`, `selPtc`: each selection accepts its candidates within `2^64`
+- `syncSelectionEnds`, `proposerSelectionEnds`, `ptcSelectionEnds`: each selection accepts its candidates within `2^64`
   passes, so the `Uint64` counter does not overflow. This depends on the hash values. With
   effective balances of at least `16 ETH` each pass accepts with probability at least `1/128`. -/
-structure CommitteeStepPreconds [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
-  syncActive : get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 1) ≠ []
-  proposers : unslashedActive s (s.slot / P.SLOTS_PER_EPOCH + 2) ≠ []
-  ptc32 : P.SLOTS_PER_EPOCH ≤ (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 2)).length
-  selSync : ∀ seed, SelFin P o s (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 1))
+structure CommitteeStepPreconditions [CurrentPreset] (o : Oracle) (s : BeaconState) : Prop where
+  syncCommitteeHasCandidate : get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 1) ≠ []
+  proposerHasCandidate : activeUnslashedIndices s (s.slot / P.SLOTS_PER_EPOCH + 2) ≠ []
+  enoughActiveForPtc : P.SLOTS_PER_EPOCH ≤ (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 2)).length
+  syncSelectionEnds : ∀ seed, SelectionEnds P o s (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 1))
     seed P.SYNC_COMMITTEE_SIZE true
-  selProp : ∀ seed, SelFin P o s (unslashedActive s (s.slot / P.SLOTS_PER_EPOCH + 2)) seed 1 true
-  selPtc : ∀ slot, slot / P.SLOTS_PER_EPOCH = s.slot / P.SLOTS_PER_EPOCH + 2 → ∀ l,
+  proposerSelectionEnds : ∀ seed, SelectionEnds P o s (activeUnslashedIndices s (s.slot / P.SLOTS_PER_EPOCH + 2)) seed 1 true
+  ptcSelectionEnds : ∀ slot, slot / P.SLOTS_PER_EPOCH = s.slot / P.SLOTS_PER_EPOCH + 2 → ∀ l,
     ptcIndices P o s (slot / P.SLOTS_PER_EPOCH) slot = .ok l →
-      ∀ seed, SelFin P o s l seed P.PTC_SIZE false
+      ∀ seed, SelectionEnds P o s l seed P.PTC_SIZE false
 
-theorem get_next_sync_committee_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : Oracle)
+theorem get_next_sync_committee_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (o : Oracle)
     (s : BeaconState)
     (hslot : s.slot + 8192 < 2 ^ 64) (hr : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
     (hreg : s.validators.length ≤ 2 ^ 40)
     (heb : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000)
     (hkeys : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true)
     (hsa : get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 1) ≠ [])
-    (hsel : ∀ seed, SelFin P o s (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 1))
+    (hsel : ∀ seed, SelectionEnds P o s (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 1))
       seed P.SYNC_COMMITTEE_SIZE true) :
     ∃ c, get_next_sync_committee P o s = .ok c := by
   have he : s.slot / P.SLOTS_PER_EPOCH + 1 + P.EPOCHS_PER_HISTORICAL_VECTOR < 2 ^ 64 :=
@@ -667,19 +667,19 @@ theorem tot_mapM_ex {α β : Type} (f : α → SpecM β) (l : List α)
     rw [List.mapM_cons, hy, tot_bind_ok, hys, tot_bind_ok]
     exact ⟨_, rfl⟩
 
-theorem get_beacon_proposer_indices_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds]
+theorem get_beacon_proposer_indices_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds]
     (o : Oracle) (s : BeaconState) (e : Nat)
     (he : e + P.EPOCHS_PER_HISTORICAL_VECTOR < 2 ^ 64)
     (hstart : e * P.SLOTS_PER_EPOCH + P.SLOTS_PER_EPOCH < 2 ^ 64)
     (hr : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
     (hreg : s.validators.length ≤ 2 ^ 40)
     (heb : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000)
-    (hne : unslashedActive s e ≠ [])
-    (hsel : ∀ seed, SelFin P o s (unslashedActive s e) seed 1 true) :
+    (hne : activeUnslashedIndices s e ≠ [])
+    (hsel : ∀ seed, SelectionEnds P o s (activeUnslashedIndices s e) seed 1 true) :
     ∃ r, get_beacon_proposer_indices P o s e = .ok r := by
   have hfil : (get_active_validator_indices s e).filterM (fun index => do
       pure !(← listGet s.validators index).slashed : ValidatorIndex → SpecM Bool) =
-      .ok (unslashedActive s e) := by
+      .ok (activeUnslashedIndices s e) := by
     apply tot_filterM
     intro j hj
     have hjl := active_lt s e j hj
@@ -687,9 +687,9 @@ theorem get_beacon_proposer_indices_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.
       Option.getD_some]
     rfl
   obtain ⟨seed, hseed⟩ := get_seed_total o s e DOMAIN_BEACON_PROPOSER he hr
-  have hul : ∀ j ∈ unslashedActive s e, j < s.validators.length := fun j hj =>
+  have hul : ∀ j ∈ activeUnslashedIndices s e, j < s.validators.length := fun j hj =>
     active_lt s e j (List.mem_of_mem_filter hj)
-  have hulen : (unslashedActive s e).length ≤ 2 ^ 40 :=
+  have hulen : (activeUnslashedIndices s e).length ≤ 2 ^ 40 :=
     ((List.length_filter_le _ _).trans (active_len_le s e)).trans hreg
   unfold get_beacon_proposer_indices compute_proposer_indices compute_start_slot_at_epoch
   rw [hfil, tot_bind_ok, hseed, tot_bind_ok]
@@ -706,19 +706,19 @@ theorem get_beacon_proposer_indices_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.
   apply tot_mapM_ex
   intro sd _
   obtain ⟨r, hr1, hr2, -⟩ := compute_balance_weighted_selection_total P o s
-    (unslashedActive s e) sd 1 true hne hul heb hulen P_shuffle_le (by rw [P_maxeb]; decide)
+    (activeUnslashedIndices s e) sd 1 true hne hul heb hulen P_shuffle_le (by rw [P_maxeb]; decide)
     (hsel sd)
   rw [hr1, tot_bind_ok, tot_get (show 0 < r.length by omega)]
   exact ⟨_, rfl⟩
 
-theorem process_proposer_lookahead_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds]
+theorem process_proposer_lookahead_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds]
     (o : Oracle) (s : BeaconState)
     (hslot : s.slot + 8192 < 2 ^ 64) (hr : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
     (hreg : s.validators.length ≤ 2 ^ 40)
     (heb : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000)
     (hlen : s.proposer_lookahead.length = 2 * P.SLOTS_PER_EPOCH)
-    (hne : unslashedActive s (s.slot / P.SLOTS_PER_EPOCH + 2) ≠ [])
-    (hsel : ∀ seed, SelFin P o s (unslashedActive s (s.slot / P.SLOTS_PER_EPOCH + 2)) seed 1 true) :
+    (hne : activeUnslashedIndices s (s.slot / P.SLOTS_PER_EPOCH + 2) ≠ [])
+    (hsel : ∀ seed, SelectionEnds P o s (activeUnslashedIndices s (s.slot / P.SLOTS_PER_EPOCH + 2)) seed 1 true) :
     OkWith (process_proposer_lookahead P o s) (fun s' =>
       s'.slot = s.slot ∧ s'.validators = s.validators ∧ s'.randao_mixes = s.randao_mixes ∧
         s'.ptc_window = s.ptc_window) := by
@@ -742,7 +742,7 @@ theorem process_proposer_lookahead_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.B
     rw [Nat.add_assoc], hr1, tot_bind_ok]
   exact OkWith.pure ⟨rfl, rfl, rfl, rfl⟩
 
-theorem ptcIndices_congr [PresetCfg] (o : Oracle) {s1 s2 : BeaconState} (hv : s1.validators = s2.validators)
+theorem ptcIndices_congr [CurrentPreset] (o : Oracle) {s1 s2 : BeaconState} (hv : s1.validators = s2.validators)
     (hr : s1.randao_mixes = s2.randao_mixes) :
     ptcIndices P o s1 = ptcIndices P o s2 := by
   funext e slot
@@ -753,7 +753,7 @@ theorem ptcIndices_congr [PresetCfg] (o : Oracle) {s1 s2 : BeaconState} (hv : s1
 theorem slot_div_window {a j S : Nat} (hS : 0 < S) (hj : j < S) : (a * S + j) / S = a := by
   rw [Nat.add_comm, Nat.add_mul_div_right _ _ hS, Nat.div_eq_of_lt hj, Nat.zero_add]
 
-theorem process_ptc_window_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : Oracle)
+theorem process_ptc_window_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (o : Oracle)
     (s : BeaconState)
     (hslot : s.slot + 8192 < 2 ^ 64) (hr : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
     (hreg : s.validators.length ≤ 2 ^ 40)
@@ -763,7 +763,7 @@ theorem process_ptc_window_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (
       (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 2)).length)
     (hfin : ∀ slot, slot / P.SLOTS_PER_EPOCH = s.slot / P.SLOTS_PER_EPOCH + 2 → ∀ l,
       ptcIndices P o s (slot / P.SLOTS_PER_EPOCH) slot = .ok l →
-        ∀ seed, SelFin P o s l seed P.PTC_SIZE false) :
+        ∀ seed, SelectionEnds P o s l seed P.PTC_SIZE false) :
     OkWith (process_ptc_window P o s) (fun _ => True) := by
   have ha1 : s.slot / P.SLOTS_PER_EPOCH + 1 < 2 ^ 64 :=
     Nat.lt_of_le_of_lt (Nat.le_add_right _ _) (P_ep_bound hslot 1 (by decide))
@@ -800,51 +800,51 @@ theorem process_ptc_window_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (
     (3 * P.SLOTS_PER_EPOCH - (3 * P.SLOTS_PER_EPOCH - P.SLOTS_PER_EPOCH)) by omega), tot_bind_ok]
   exact OkWith.pure trivial
 
-theorem unslashedActive_congr {s1 s2 : BeaconState} (hv : s1.validators = s2.validators) :
-    unslashedActive s1 = unslashedActive s2 := by
+theorem activeUnslashedIndices_congr {s1 s2 : BeaconState} (hv : s1.validators = s2.validators) :
+    activeUnslashedIndices s1 = activeUnslashedIndices s2 := by
   funext e
-  simp only [unslashedActive, get_active_validator_indices_congr hv, hv]
+  simp only [activeUnslashedIndices, get_active_validator_indices_congr hv, hv]
 
-theorem ebsOf_congr {s1 s2 : BeaconState} (hv : s1.validators = s2.validators) :
-    ebsOf s1 = ebsOf s2 := by
+theorem effectiveBalancesOf_congr {s1 s2 : BeaconState} (hv : s1.validators = s2.validators) :
+    effectiveBalancesOf s1 = effectiveBalancesOf s2 := by
   funext l
-  simp only [ebsOf, hv]
+  simp only [effectiveBalancesOf, hv]
 
-theorem CommitteeStepPreconds.congr [PresetCfg] {o : Oracle} {s1 s2 : BeaconState} (hs : s1.slot = s2.slot)
+theorem CommitteeStepPreconditions.congr [CurrentPreset] {o : Oracle} {s1 s2 : BeaconState} (hs : s1.slot = s2.slot)
     (hv : s1.validators = s2.validators) (hr : s1.randao_mixes = s2.randao_mixes)
-    (h : CommitteeStepPreconds o s2) : CommitteeStepPreconds o s1 := by
+    (h : CommitteeStepPreconditions o s2) : CommitteeStepPreconditions o s1 := by
   obtain ⟨h1, h2, h3, h4, h5, h6⟩ := h
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [get_active_validator_indices_congr hv, hs]; exact h1
-  · rw [unslashedActive_congr hv, hs]; exact h2
+  · rw [activeUnslashedIndices_congr hv, hs]; exact h2
   · rw [get_active_validator_indices_congr hv, hs]; exact h3
   · intro seed
-    simp only [SelFin, ebsOf_congr hv, get_active_validator_indices_congr hv, hs]
+    simp only [SelectionEnds, effectiveBalancesOf_congr hv, get_active_validator_indices_congr hv, hs]
     exact h4 seed
   · intro seed
-    simp only [SelFin, ebsOf_congr hv, unslashedActive_congr hv, hs]
+    simp only [SelectionEnds, effectiveBalancesOf_congr hv, activeUnslashedIndices_congr hv, hs]
     exact h5 seed
   · intro slot hslot l hl seed
     rw [hs] at hslot
     rw [ptcIndices_congr o hv hr] at hl
-    simp only [SelFin, ebsOf_congr hv]
+    simp only [SelectionEnds, effectiveBalancesOf_congr hv]
     exact h6 slot hslot l hl seed
 
-theorem CommFacts.congr [PresetCfg] {o : Oracle} {s1 s2 : BeaconState} (hs : s1.slot = s2.slot)
+theorem CommFacts.congr [CurrentPreset] {o : Oracle} {s1 s2 : BeaconState} (hs : s1.slot = s2.slot)
     (hv : s1.validators = s2.validators) (hr : s1.randao_mixes = s2.randao_mixes)
     (hl : s1.proposer_lookahead = s2.proposer_lookahead) (hw : s1.ptc_window = s2.ptc_window)
     (h : CommFacts o s2) : CommFacts o s1 := by
   obtain ⟨h1, h2, h3, h4, h5, h6, h7⟩ := h
   exact ⟨hs ▸ h1, hr ▸ h2, hv ▸ h3, hv ▸ h4, hl ▸ h5, hw ▸ h6, hv ▸ h7⟩
 
-theorem process_sync_committee_updates_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds]
+theorem process_sync_committee_updates_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds]
     (o : Oracle) (s : BeaconState)
     (hslot : s.slot + 8192 < 2 ^ 64) (hr : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
     (hreg : s.validators.length ≤ 2 ^ 40)
     (heb : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000)
     (hkeys : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true)
     (hsa : get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 1) ≠ [])
-    (hsel : ∀ seed, SelFin P o s (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 1))
+    (hsel : ∀ seed, SelectionEnds P o s (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 1))
       seed P.SYNC_COMMITTEE_SIZE true) :
     OkWith (process_sync_committee_updates P o s) (fun s' =>
       s'.slot = s.slot ∧ s'.validators = s.validators ∧ s'.randao_mixes = s.randao_mixes ∧
@@ -864,23 +864,23 @@ theorem process_sync_committee_updates_total [PresetCfg] [PresetCfg.Ok] [PresetC
 
 /-- The sync committee, proposer lookahead and PTC window steps succeed from the state facts and
 the pyspec preconditions. -/
-theorem committee_steps_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : Oracle) (s : BeaconState) (hf : CommFacts o s)
-    (hp : CommitteeStepPreconds o s) :
+theorem committee_steps_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (o : Oracle) (s : BeaconState) (hf : CommFacts o s)
+    (hp : CommitteeStepPreconditions o s) :
     OkWith (do
       let s ← process_sync_committee_updates P o s
       let s ← process_proposer_lookahead P o s
       process_ptc_window P o s) (fun _ => True) := by
   obtain ⟨s1, h1, e1s, e1v, e1r, e1l, e1w⟩ := process_sync_committee_updates_total o s hf.slot
-    hf.randao hf.regLen hf.ebMax hf.keys hp.syncActive hp.selSync
+    hf.randao hf.registryBelowLimit hf.effectiveBalancesBelowMax hf.keys hp.syncCommitteeHasCandidate hp.syncSelectionEnds
   have hf1 := CommFacts.congr e1s e1v e1r e1l e1w hf
-  have hp1 := CommitteeStepPreconds.congr e1s e1v e1r hp
+  have hp1 := CommitteeStepPreconditions.congr e1s e1v e1r hp
   rw [h1, tot_bind_ok]
   obtain ⟨s2, h2, e2s, e2v, e2r, e2w⟩ := process_proposer_lookahead_total o s1 hf1.slot hf1.randao
-    hf1.regLen hf1.ebMax hf1.lookahead hp1.proposers hp1.selProp
+    hf1.registryBelowLimit hf1.effectiveBalancesBelowMax hf1.lookahead hp1.proposerHasCandidate hp1.proposerSelectionEnds
   rw [h2, tot_bind_ok]
-  have hp2 := CommitteeStepPreconds.congr e2s e2v e2r hp1
-  exact process_ptc_window_total o s2 (e2s ▸ hf1.slot) (e2r ▸ hf1.randao) (e2v ▸ hf1.regLen)
-    (e2v ▸ hf1.ebMax) (e2w ▸ hf1.ptcLen) hp2.ptc32 hp2.selPtc
+  have hp2 := CommitteeStepPreconditions.congr e2s e2v e2r hp1
+  exact process_ptc_window_total o s2 (e2s ▸ hf1.slot) (e2r ▸ hf1.randao) (e2v ▸ hf1.registryBelowLimit)
+    (e2v ▸ hf1.effectiveBalancesBelowMax) (e2w ▸ hf1.ptcLen) hp2.enoughActiveForPtc hp2.ptcSelectionEnds
 
 /-! ## Fewer than `SLOTS_PER_EPOCH` active validators halt the PTC window -/
 
@@ -892,7 +892,7 @@ theorem mapM_range'_head_error {α : Type} (f : Nat → SpecM α) (a n : Nat) (h
 
 /-- With fewer than `SLOTS_PER_EPOCH` active validators at the epoch of `slot`, the first slot of
 that epoch has no beacon committee members, so `compute_ptc` raises at `assert total > 0`. -/
-theorem compute_ptc_first_slot_error [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : Oracle)
+theorem compute_ptc_first_slot_error [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (o : Oracle)
     (s : BeaconState) (a : Nat)
     (ha : a + P.EPOCHS_PER_HISTORICAL_VECTOR < 2 ^ 64)
     (hr : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
@@ -922,7 +922,7 @@ theorem compute_ptc_first_slot_error [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bound
 
 /-- The pyspec `process_ptc_window` raises when fewer than `SLOTS_PER_EPOCH` validators are active
 at `current + 2`. This is a pyspec halt: no state passes this epoch boundary. -/
-theorem process_ptc_window_few_active_error [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds]
+theorem process_ptc_window_few_active_error [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds]
     (o : Oracle) (s : BeaconState)
     (hslot : s.slot + 8192 < 2 ^ 64) (hr : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
     (hreg : s.validators.length ≤ 2 ^ 40) (hlen : s.ptc_window.length = 3 * P.SLOTS_PER_EPOCH)
@@ -954,39 +954,39 @@ theorem process_ptc_window_few_active_error [PresetCfg] [PresetCfg.Ok] [PresetCf
 
 /-- The state facts that the three committee steps read beyond `CommFrame`. Each one is an
 invariant of reachable states: the registry limit is `VALIDATOR_REGISTRY_LIMIT`, the effective
-balance bound is `EBOk`, the two lengths are SSZ vector lengths, and a deposit adds a validator
+balance bound is `EffectiveBalancesValid`, the two lengths are SSZ vector lengths, and a deposit adds a validator
 only after its signature checks, which validates the key. -/
-structure CommitteeStepFacts [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
-  regLen : s.validators.length ≤ 2 ^ 40
-  ebMax : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000
-  lookahead : s.proposer_lookahead.length = 2 * P.SLOTS_PER_EPOCH
-  ptcLen : s.ptc_window.length = 3 * P.SLOTS_PER_EPOCH
-  keys : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true
+structure CommitteeStepFacts [CurrentPreset] (o : Oracle) (s : BeaconState) : Prop where
+  registryBelowLimit : s.validators.length ≤ 2 ^ 40
+  effectiveBalancesBelowMax : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000
+  proposerLookaheadLength : s.proposer_lookahead.length = 2 * P.SLOTS_PER_EPOCH
+  ptcWindowLength : s.ptc_window.length = 3 * P.SLOTS_PER_EPOCH
+  pubkeysValid : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true
 
 /-- The part of `CommitteeStepFacts` that is not yet carried from the epoch input: the registry
 limit `2^40` and valid public keys. The effective balance cap is carried
-(`epochToCommittees_effective_balances`), and the two lengths hold on every EthLib state. -/
-structure SelectionStateFacts (o : Oracle) (s : BeaconState) : Prop where
-  regLen : s.validators.length ≤ 2 ^ 40
-  keys : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true
+(`epochBeforeCommitteeSteps_effective_balances`), and the two lengths hold on every EthLib state. -/
+structure RegistryAllowsSelection (o : Oracle) (s : BeaconState) : Prop where
+  registryBelowLimit : s.validators.length ≤ 2 ^ 40
+  pubkeysValid : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true
 
 /-- The committee conditions at the epoch input `t`: the state conditions and the pyspec
 preconditions hold at the state that the epoch passes to the committee steps
-(`epochToCommittees`). That state is a function of `t`, so this is one fact about one state.
+(`epochBeforeCommitteeSteps`). That state is a function of `t`, so this is one fact about one state.
 
 An earlier version stated them at every state `s` with `CommFrame t s`. `CommFrame` fixes only
 the slot, the list lengths and the RANDAO length, so it admits `t` with every validator list
-emptied, where `syncActive` fails: that hypothesis was false for every `t`. -/
-def AtCommitteeStepState [PresetCfg] (o : Oracle) (t : BeaconState) : Prop :=
-  ∀ s, epochToCommittees P o t = .ok s → CommitteeStepFacts o s ∧ CommitteeStepPreconds o s
+emptied, where `syncCommitteeHasCandidate` fails: that hypothesis was false for every `t`. -/
+def AtCommitteeStepState [CurrentPreset] (o : Oracle) (t : BeaconState) : Prop :=
+  ∀ s, epochBeforeCommitteeSteps P o t = .ok s → CommitteeStepFacts o s ∧ CommitteeStepPreconditions o s
 
-/-- The committee steps succeed on the state that `epochToCommittees` returns, from the state
+/-- The committee steps succeed on the state that `epochBeforeCommitteeSteps` returns, from the state
 conditions and the pyspec preconditions there. -/
-theorem committeesOk_of [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : Oracle) (t : BeaconState) (hslot : t.slot + 8192 < 2 ^ 64)
+theorem committeesOk_of [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (o : Oracle) (t : BeaconState) (hslot : t.slot + 8192 < 2 ^ 64)
     (h : AtCommitteeStepState o t) : CommitteesOk o t := by
   intro s hs hf
   obtain ⟨hc, hp⟩ := h s hs
   exact committee_steps_total o s
-    ⟨hf.slot ▸ hslot, hf.randao, hc.regLen, hc.ebMax, hc.lookahead, hc.ptcLen, hc.keys⟩ hp
+    ⟨hf.slot ▸ hslot, hf.randao, hc.registryBelowLimit, hc.effectiveBalancesBelowMax, hc.proposerLookaheadLength, hc.ptcWindowLength, hc.pubkeysValid⟩ hp
 
 end EpochProofs.Spec

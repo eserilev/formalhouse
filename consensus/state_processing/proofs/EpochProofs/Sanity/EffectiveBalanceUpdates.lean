@@ -108,7 +108,7 @@ theorem process_effective_balance_updates_eq (p : Preset) (state : BeaconState) 
                   · rfl
 
 /-- Mainnet thresholds: 0.25 ETH down, 1.25 ETH up. -/
-theorem hysteresisThresholds_mainnet [PresetCfg] :
+theorem hysteresisThresholds_mainnet [CurrentPreset] :
     hysteresisThresholds P = .ok (250000000, 1250000000) := by
   rw [show hysteresisThresholds P = hysteresisThresholds Preset.mainnet from rfl]; rfl
 

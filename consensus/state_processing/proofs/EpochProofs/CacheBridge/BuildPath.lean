@@ -11,7 +11,7 @@ already built and builds only a missing one. So the epoch reads a cache that an 
 the run built. This file carries the build facts from that earlier state to the epoch input.
 
 - Epoch cache: the cache key is the epoch and its decision root. Inside one epoch, every block
-  keeps the effective balances and the activity at the epoch (`ActiveAgree`, from
+  keeps the effective balances and the activity at the epoch (`SameActiveBalances`, from
   `state_transition_epochInv`). So the active sum that the cache holds stays equal to the sum of
   the epoch input (`epoch_cache_total_carry`).
 - Pubkey cache: the validator pubkeys only grow at the end (`PkPrefix`). So a cache that holds the
@@ -26,9 +26,9 @@ the run built. This file carries the build facts from that earlier state to the 
 
 namespace EpochProofs.Spec
 
-/-- `ActiveAgree` is symmetric. -/
-theorem ActiveAgree.symm {E : Epoch} {s t : BeaconState} (h : ActiveAgree E s t) :
-    ActiveAgree E t s := by
+/-- `SameActiveBalances` is symmetric. -/
+theorem SameActiveBalances.symm {E : Epoch} {s t : BeaconState} (h : SameActiveBalances E s t) :
+    SameActiveBalances E t s := by
   refine ⟨h.1.symm, fun i v v' hv hv' => ?_⟩
   obtain ⟨he, ha⟩ := h.2 i v' v hv' hv
   exact ⟨he.symm, ha.symm⟩
@@ -110,7 +110,7 @@ theorem process_pending_deposits_pkPrefix (p : Preset) (o : Oracle)
            ‹apply_pending_deposit _ _ _ _ = _›))
 
 /-- `process_epoch` keeps a pubkey prefix. -/
-theorem process_epoch_pkPrefix [PresetCfg] (p : Preset) (o : Oracle) (s s' : BeaconState)
+theorem process_epoch_pkPrefix [CurrentPreset] (p : Preset) (o : Oracle) (s s' : BeaconState)
     (h : process_epoch p o s = .ok s') : PkPrefix s s' := by
   unfold process_epoch at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
@@ -154,12 +154,12 @@ theorem process_epoch_pkPrefix [PresetCfg] (p : Preset) (o : Oracle) (s s' : Bea
   exact d6.pkPrefix.trans (d7.trans d15.pkPrefix)
 
 /-- `process_slot` keeps the pubkeys. -/
-theorem process_slot_pkPrefix [PresetCfg] (p : Preset) (o : Oracle) (s s' : BeaconState)
+theorem process_slot_pkPrefix [CurrentPreset] (p : Preset) (o : Oracle) (s s' : BeaconState)
     (h : process_slot p o s = .ok s') : PkPrefix s s' :=
   (PkSame.of_eq (process_slot_frame p o _ _ h).1.1).pkPrefix
 
 /-- `process_slots` with the real `process_epoch` keeps a pubkey prefix. -/
-theorem process_slots_pkPrefix [PresetCfg] (p : Preset) (o : Oracle) (s s' : BeaconState) (slot : Slot)
+theorem process_slots_pkPrefix [CurrentPreset] (p : Preset) (o : Oracle) (s s' : BeaconState) (slot : Slot)
     (h : process_slots p o (process_epoch p o) s slot = .ok s') : PkPrefix s s' :=
   process_slots_invariant p o (process_epoch p o) (PkPrefix s)
     (fun _ _ ht hP => hP.trans (process_slot_pkPrefix p o _ _ ht))
@@ -167,7 +167,7 @@ theorem process_slots_pkPrefix [PresetCfg] (p : Preset) (o : Oracle) (s s' : Bea
     (fun _ _ hP => hP) s s' slot (PkPrefix.refl s) h
 
 /-- `state_transition` keeps a pubkey prefix. -/
-theorem state_transition_pkPrefix [PresetCfg] (p : Preset) (o : Oracle)
+theorem state_transition_pkPrefix [CurrentPreset] (p : Preset) (o : Oracle)
     (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch) (s s' : BeaconState)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (h : state_transition p o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
@@ -184,16 +184,16 @@ theorem state_transition_pkPrefix [PresetCfg] (p : Preset) (o : Oracle)
            ‹process_block _ _ _ _ _ _ = _›).pkPrefix)
 
 /-- Every state of a reachable Gloas run has the start pubkeys as a prefix. -/
-theorem Reachable.pkPrefix [PresetCfg] {o : Oracle} {max_blobs_per_block : Epoch → Uint64}
+theorem ReachableByBlocks.pkPrefix [CurrentPreset] {o : Oracle} {max_blobs_per_block : Epoch → Uint64}
     {GLOAS_FORK_EPOCH : Epoch} {init s : BeaconState}
-    (hr : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s) : PkPrefix init s := by
+    (hr : ReachableByBlocks o max_blobs_per_block GLOAS_FORK_EPOCH init s) : PkPrefix init s := by
   induction hr with
   | init => exact PkPrefix.refl _
   | step _ _ _ _ _ ht ih => exact ih.trans (state_transition_pkPrefix _ o _ _ _ _ _ _ ht)
 
 /-- The Gloas slot loop keeps a pubkey prefix. -/
-theorem SlotReachG.pkPrefix [PresetCfg] {o : Oracle} {s t : BeaconState} {slot : Slot}
-    (hr : SlotReachG o s slot t) : PkPrefix s t := by
+theorem ReachableBySlotsBefore.pkPrefix [CurrentPreset] {o : Oracle} {s t : BeaconState} {slot : Slot}
+    (hr : ReachableBySlotsBefore o s slot t) : PkPrefix s t := by
   induction hr with
   | refl => exact PkPrefix.refl _
   | skip _ _ ht _ ih =>
@@ -209,7 +209,7 @@ namespace EpochProofs.CacheBridge
 open EpochProofs.Spec
 open CacheProofs.PB (activeAt ebAt)
 
-theorem activeAt_pb_congr {E : Nat} {s t : BeaconState} (h : ActiveAgree E s t) (i : Nat) :
+theorem activeAt_pb_congr {E : Nat} {s t : BeaconState} (h : SameActiveBalances E s t) (i : Nat) :
     activeAt (t.validators.map pbValidator) E i = activeAt (s.validators.map pbValidator) E i ∧
       ebAt (t.validators.map pbValidator) i = ebAt (s.validators.map pbValidator) i := by
   simp only [activeAt, ebAt, List.getElem?_map]
@@ -236,7 +236,7 @@ theorem activeAt_pb_congr {E : Nat} {s t : BeaconState} (h : ActiveAgree E s t) 
 
 /-- The active sum that the epoch cache model computes is the same for two states that agree on
 the effective balances and on the activity at epoch `E`. -/
-theorem activeSum_congr {E : Nat} {s t : BeaconState} (h : ActiveAgree E s t) :
+theorem activeSum_congr {E : Nat} {s t : BeaconState} (h : SameActiveBalances E s t) :
     CacheProofs.EpochCache.activeSum
         (CacheProofs.EpochCache.activeAt (t.validators.map ecValidator) E)
         (t.validators.map (·.effective_balance)) =
@@ -258,7 +258,7 @@ theorem epoch_cache_total_carry {E : Nat} {b t : BeaconState} (total : Nat)
     (hb : total = CacheProofs.EpochCache.activeSum
       (CacheProofs.EpochCache.activeAt (b.validators.map ecValidator) E)
       (b.validators.map (·.effective_balance)))
-    (h : ActiveAgree E b t) :
+    (h : SameActiveBalances E b t) :
     total = CacheProofs.EpochCache.activeSum
       (CacheProofs.EpochCache.activeAt (t.validators.map ecValidator) E)
       (t.validators.map (·.effective_balance)) := by
@@ -266,8 +266,8 @@ theorem epoch_cache_total_carry {E : Nat} {b t : BeaconState} (total : Nat)
 
 /-- Two states of the blocks of epoch `E` on mainnet agree on the effective balances and on the
 activity at `E`. `EpochInv` is what `state_transition_epochInv` keeps for each block. -/
-theorem activeAgree_of_epochInv [PresetCfg] {s0 r b t : BeaconState} {E nb nt : Nat}
-    (hb : EpochInv s0 r E nb b) (ht : EpochInv s0 r E nt t) : ActiveAgree E b t :=
+theorem activeAgree_of_epochInv [CurrentPreset] {s0 r b t : BeaconState} {E nb nt : Nat}
+    (hb : EpochInv s0 r E nb b) (ht : EpochInv s0 r E nt t) : SameActiveBalances E b t :=
   hb.2.2.2.1.symm.trans ht.2.2.2.1
 
 open Aeneas Aeneas.Std Result CacheProofs in

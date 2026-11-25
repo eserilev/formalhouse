@@ -5,10 +5,10 @@ import EpochProofs.Sanity.Invariants.ExitEpochs
 /-!
 # Withdrawable epochs are `u64` values
 
-`WithdrawableU64` says that every withdrawable epoch is at most `FAR_FUTURE_EPOCH`. Each write
+`WithdrawableEpochsFitUint64` says that every withdrawable epoch is at most `FAR_FUTURE_EPOCH`. Each write
 of a withdrawable epoch is `FAR_FUTURE_EPOCH` for a new validator, or the result of a
 `uint64Add`: the exit epoch plus the delay, or the maximum of the old value and
-`epoch + EPOCHS_PER_SLASHINGS_VECTOR`. With `ExitDelay`, it gives `WithdrawableValid`: a
+`epoch + EPOCHS_PER_SLASHINGS_VECTOR`. With `ExitToWithdrawableDelay`, it gives `NoWithdrawableEpochWithoutExit`: a
 validator with no exit epoch has no withdrawable epoch.
 -/
 
@@ -38,17 +38,17 @@ local macro "peel_ok'" h:ident : tactic => `(tactic| repeat' first
 /-! ## Withdrawable epochs are `u64` values -/
 
 /-- Every withdrawable epoch is at most `FAR_FUTURE_EPOCH`, so it is a `u64` value. -/
-def WithdrawableU64 (s : BeaconState) : Prop :=
+def WithdrawableEpochsFitUint64 (s : BeaconState) : Prop :=
   ∀ v ∈ s.validators, v.withdrawable_epoch ≤ FAR_FUTURE_EPOCH
 
-/-- Same validators keep `WithdrawableU64`. -/
-theorem WithdrawableU64.of_validators_eq {s s' : BeaconState} (hv : s'.validators = s.validators)
-    (hs : WithdrawableU64 s) : WithdrawableU64 s' := by
+/-- Same validators keep `WithdrawableEpochsFitUint64`. -/
+theorem WithdrawableEpochsFitUint64.of_validators_eq {s s' : BeaconState} (hv : s'.validators = s.validators)
+    (hs : WithdrawableEpochsFitUint64 s) : WithdrawableEpochsFitUint64 s' := by
   intro v h
   rw [hv] at h
   exact hs v h
 
-/-- A list write keeps `WithdrawableU64` if the new value has a `u64` withdrawable epoch. -/
+/-- A list write keeps `WithdrawableEpochsFitUint64` if the new value has a `u64` withdrawable epoch. -/
 theorem withdrawableU64_set {l : List Validator} {i : Nat} {v' : Validator}
     (hl : ∀ v ∈ l, v.withdrawable_epoch ≤ FAR_FUTURE_EPOCH)
     (hv' : v'.withdrawable_epoch ≤ FAR_FUTURE_EPOCH) :
@@ -68,11 +68,11 @@ private theorem wd_le_far {a b w : Nat} (hw : uint64Add a b = .ok w) : w ≤ FAR
     omega
   · cases hw
 
-/-- `initiate_validator_exit` keeps `WithdrawableU64`. The new withdrawable epoch is computed
+/-- `initiate_validator_exit` keeps `WithdrawableEpochsFitUint64`. The new withdrawable epoch is computed
 with `uint64Add`. -/
 theorem initiate_validator_exit_withdrawableU64 {p : Preset} {tab : Gwei} {s s' : BeaconState}
-    {index : Nat} (h : initiate_validator_exit p tab s index = .ok s') (hs : WithdrawableU64 s) :
-    WithdrawableU64 s' := by
+    {index : Nat} (h : initiate_validator_exit p tab s index = .ok s') (hs : WithdrawableEpochsFitUint64 s) :
+    WithdrawableEpochsFitUint64 s' := by
   unfold initiate_validator_exit at h
   obtain ⟨v, hv, h⟩ := specM_bind_ok h
   by_cases hfar : v.exit_epoch = FAR_FUTURE_EPOCH
@@ -89,11 +89,11 @@ theorem initiate_validator_exit_withdrawableU64 {p : Preset} {tab : Gwei} {s s' 
     subst h
     exact hs
 
-/-- `slash_validator` keeps `WithdrawableU64`. The new withdrawable epoch is the maximum of the
+/-- `slash_validator` keeps `WithdrawableEpochsFitUint64`. The new withdrawable epoch is the maximum of the
 old one and a `uint64Add` result. -/
 theorem slash_validator_withdrawableU64 (p : Preset) (s s' : BeaconState) (i : ValidatorIndex)
-    (w : Option ValidatorIndex) (h : slash_validator p s i w = .ok s') (hs : WithdrawableU64 s) :
-    WithdrawableU64 s' := by
+    (w : Option ValidatorIndex) (h : slash_validator p s i w = .ok s') (hs : WithdrawableEpochsFitUint64 s) :
+    WithdrawableEpochsFitUint64 s' := by
   unfold slash_validator at h
   obtain ⟨epoch, -, h⟩ := specM_bind_ok h
   obtain ⟨v0, hv0, h⟩ := specM_bind_ok h
@@ -113,24 +113,24 @@ theorem slash_validator_withdrawableU64 (p : Preset) (s s' : BeaconState) (i : V
     | contradiction
     | (cases h; exact hfinal)
 
-/-- `process_proposer_slashing` keeps `WithdrawableU64`. -/
+/-- `process_proposer_slashing` keeps `WithdrawableEpochsFitUint64`. -/
 theorem process_proposer_slashing_withdrawableU64 (p : Preset) (o : Oracle) (s s' : BeaconState)
     (ps : ProposerSlashing) (h : process_proposer_slashing p o s ps = .ok s')
-    (hs : WithdrawableU64 s) : WithdrawableU64 s' := by
+    (hs : WithdrawableEpochsFitUint64 s) : WithdrawableEpochsFitUint64 s' := by
   obtain ⟨-, -, payments, -, -, -, hsl⟩ := process_proposer_slashing_ok p o s s' ps h
   exact slash_validator_withdrawableU64 p _ s' _ none hsl hs
 
-/-- `process_attester_slashing` keeps `WithdrawableU64`. -/
+/-- `process_attester_slashing` keeps `WithdrawableEpochsFitUint64`. -/
 theorem process_attester_slashing_withdrawableU64 (p : Preset) (o : Oracle) (s s' : BeaconState)
     (as : AttesterSlashing) (h : process_attester_slashing p o s as = .ok s')
-    (hs : WithdrawableU64 s) : WithdrawableU64 s' := by
+    (hs : WithdrawableEpochsFitUint64 s) : WithdrawableEpochsFitUint64 s' := by
   unfold process_attester_slashing at h
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   repeat' split at h
   all_goals first | (cases h; done) | skip
   cases h
   refine SlashingsSanity.forIn_invariant
-    (fun r : Prod Bool BeaconState => WithdrawableU64 r.snd) _ ?_ _
+    (fun r : Prod Bool BeaconState => WithdrawableEpochsFitUint64 r.snd) _ ?_ _
     (⟨false, s⟩ : Prod Bool BeaconState) _ hs ‹forIn _ _ _ = _›
   intro index r step hr hstep
   obtain ⟨_, -, hstep⟩ := specM_bind_ok hstep
@@ -142,18 +142,18 @@ theorem process_attester_slashing_withdrawableU64 (p : Preset) (o : Oracle) (s s
   · cases hstep
     exact hr
 
-/-- `process_voluntary_exit` keeps `WithdrawableU64`. -/
+/-- `process_voluntary_exit` keeps `WithdrawableEpochsFitUint64`. -/
 theorem process_voluntary_exit_withdrawableU64 (p : Preset) (o : Oracle) (s s' : BeaconState)
     (e : SignedVoluntaryExit) (h : process_voluntary_exit p o s e = .ok s')
-    (hs : WithdrawableU64 s) : WithdrawableU64 s' := by
+    (hs : WithdrawableEpochsFitUint64 s) : WithdrawableEpochsFitUint64 s' := by
   obtain ⟨tab, -, -, -, -, -, -, hi⟩ := process_voluntary_exit_initiate p o s s' e h
   exact initiate_validator_exit_withdrawableU64 hi hs
 
-/-- `process_bls_to_execution_change` keeps `WithdrawableU64`. -/
+/-- `process_bls_to_execution_change` keeps `WithdrawableEpochsFitUint64`. -/
 theorem process_bls_to_execution_change_withdrawableU64 (p : Preset) (o : Oracle)
     (s s' : BeaconState) (c : SignedBLSToExecutionChange)
-    (h : process_bls_to_execution_change p o s c = .ok s') (hs : WithdrawableU64 s) :
-    WithdrawableU64 s' := by
+    (h : process_bls_to_execution_change p o s c = .ok s') (hs : WithdrawableEpochsFitUint64 s) :
+    WithdrawableEpochsFitUint64 s' := by
   obtain ⟨-, -, -, -, hlen, hpt⟩ := process_bls_to_execution_change_effects p o s s' c h
   intro u hu
   obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem hu
@@ -163,11 +163,11 @@ theorem process_bls_to_execution_change_withdrawableU64 (p : Preset) (o : Oracle
   rw [Option.some.inj h']
   exact hs s.validators[j] (List.getElem_mem hj')
 
-/-- `process_withdrawal_request` keeps `WithdrawableU64`. -/
+/-- `process_withdrawal_request` keeps `WithdrawableEpochsFitUint64`. -/
 theorem process_withdrawal_request_withdrawableU64 (p : Preset) (s s' : BeaconState)
     (withdrawal_request : WithdrawalRequest)
-    (h : process_withdrawal_request p s withdrawal_request = .ok s') (hs : WithdrawableU64 s) :
-    WithdrawableU64 s' := by
+    (h : process_withdrawal_request p s withdrawal_request = .ok s') (hs : WithdrawableEpochsFitUint64 s) :
+    WithdrawableEpochsFitUint64 s' := by
   unfold process_withdrawal_request at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
@@ -180,12 +180,12 @@ theorem process_withdrawal_request_withdrawableU64 (p : Preset) (s s' : BeaconSt
     | (cases h
        obtain ⟨-, -, -, hv, -, -⟩ := compute_exit_epoch_and_update_churn_bound p _ s _ _ _
          ‹compute_exit_epoch_and_update_churn _ _ _ _ = .ok _›
-       exact WithdrawableU64.of_validators_eq hv hs)
+       exact WithdrawableEpochsFitUint64.of_validators_eq hv hs)
 
-/-- `switch_to_compounding_validator` keeps `WithdrawableU64`. -/
+/-- `switch_to_compounding_validator` keeps `WithdrawableEpochsFitUint64`. -/
 theorem switch_to_compounding_validator_withdrawableU64 {p : Preset} {s s' : BeaconState}
     {index : Nat} (h : switch_to_compounding_validator p s index = .ok s')
-    (hs : WithdrawableU64 s) : WithdrawableU64 s' := by
+    (hs : WithdrawableEpochsFitUint64 s) : WithdrawableEpochsFitUint64 s' := by
   unfold switch_to_compounding_validator at h
   obtain ⟨v, hv, h⟩ := specM_bind_ok h
   obtain ⟨l, hl, h⟩ := specM_bind_ok h
@@ -196,14 +196,14 @@ theorem switch_to_compounding_validator_withdrawableU64 {p : Preset} {s s' : Bea
   refine withdrawableU64_set hs ?_ u hu
   exact hs v (List.mem_of_getElem? (listGet_ok hv).2)
 
-/-- The last step of a consolidation keeps `WithdrawableU64`. -/
+/-- The last step of a consolidation keeps `WithdrawableEpochsFitUint64`. -/
 private theorem consolidation_exit_withdrawableU64 {p : Preset} {tab : Gwei} {s : BeaconState}
     {x i : Nat} {v' : Validator} {r : Epoch × BeaconState} {w : Uint64} {l : List Validator}
     (hr : compute_consolidation_epoch_and_update_churn p tab s x = .ok r)
     (hw : uint64Add r.1 p.MIN_VALIDATOR_WITHDRAWABILITY_DELAY = .ok w)
     (hl : listSet r.2.validators i v' = .ok l) (hv' : v'.withdrawable_epoch = w)
-    (pc : List PendingConsolidation) (hs : WithdrawableU64 s) :
-    WithdrawableU64 { r.2 with validators := l, pending_consolidations := pc } := by
+    (pc : List PendingConsolidation) (hs : WithdrawableEpochsFitUint64 s) :
+    WithdrawableEpochsFitUint64 { r.2 with validators := l, pending_consolidations := pc } := by
   obtain ⟨e, s1⟩ := r
   obtain ⟨-, -, -, hvs, -, -⟩ :=
     compute_consolidation_epoch_and_update_churn_bound p tab s s1 x e hr
@@ -213,11 +213,11 @@ private theorem consolidation_exit_withdrawableU64 {p : Preset} {tab : Gwei} {s 
   rw [(ExitsSanity.listSet_ok hl).2] at hu
   exact withdrawableU64_set hs (hv' ▸ wd_le_far hw) u hu
 
-/-- `process_consolidation_request` keeps `WithdrawableU64`. -/
+/-- `process_consolidation_request` keeps `WithdrawableEpochsFitUint64`. -/
 theorem process_consolidation_request_withdrawableU64 (p : Preset) (s s' : BeaconState)
     (consolidation_request : ConsolidationRequest)
     (h : process_consolidation_request p s consolidation_request = .ok s')
-    (hs : WithdrawableU64 s) : WithdrawableU64 s' := by
+    (hs : WithdrawableEpochsFitUint64 s) : WithdrawableEpochsFitUint64 s' := by
   unfold process_consolidation_request at h
   peel_ok h
   all_goals first
@@ -244,59 +244,59 @@ local macro "loop_body_p" e:term : tactic => `(tactic| (
   cases hbody
   exact $e h1 hst))
 
-/-- `apply_parent_execution_payload` keeps `WithdrawableU64`. -/
+/-- `apply_parent_execution_payload` keeps `WithdrawableEpochsFitUint64`. -/
 theorem apply_parent_execution_payload_withdrawableU64 (p : Preset) (o : Oracle)
     (s s' : BeaconState) (requests : ExecutionRequests)
-    (h : apply_parent_execution_payload p o s requests = .ok s') (hs : WithdrawableU64 s) :
-    WithdrawableU64 s' := by
+    (h : apply_parent_execution_payload p o s requests = .ok s') (hs : WithdrawableEpochsFitUint64 s) :
+    WithdrawableEpochsFitUint64 s' := by
   unfold apply_parent_execution_payload at h
   peel_ok' h
   all_goals first
     | (cases h
-       have h1 := request_loop_keeps WithdrawableU64
+       have h1 := request_loop_keeps WithdrawableEpochsFitUint64
          (by assumption : forIn requests.deposits _ _ = Except.ok _)
-         (by loop_body_p (fun h hst => WithdrawableU64.of_validators_eq (by cases h; rfl) hst))
+         (by loop_body_p (fun h hst => WithdrawableEpochsFitUint64.of_validators_eq (by cases h; rfl) hst))
          (by first
-           | exact WithdrawableU64.of_validators_eq
+           | exact WithdrawableEpochsFitUint64.of_validators_eq
                (settle_builder_payment_frame _ _ _ ‹settle_builder_payment _ _ = Except.ok _›).1.1 hs
            | exact fun v hv => hs v hv)
-       have h2 := request_loop_keeps WithdrawableU64
+       have h2 := request_loop_keeps WithdrawableEpochsFitUint64
          (by assumption : forIn requests.withdrawals _ _ = Except.ok _)
          (by loop_body_p process_withdrawal_request_withdrawableU64 _ _ _ _) h1
-       have h3 := request_loop_keeps WithdrawableU64
+       have h3 := request_loop_keeps WithdrawableEpochsFitUint64
          (by assumption : forIn requests.consolidations _ _ = Except.ok _)
          (by loop_body_p process_consolidation_request_withdrawableU64 _ _ _ _) h2
-       have h4 := request_loop_keeps WithdrawableU64
+       have h4 := request_loop_keeps WithdrawableEpochsFitUint64
          (by assumption : forIn requests.builder_deposits _ _ = Except.ok _)
-         (by loop_body_p (fun h hst => WithdrawableU64.of_validators_eq
+         (by loop_body_p (fun h hst => WithdrawableEpochsFitUint64.of_validators_eq
            (process_builder_deposit_request_frame _ _ _ _ _ h).1.1 hst)) h3
-       have h5 := request_loop_keeps WithdrawableU64
+       have h5 := request_loop_keeps WithdrawableEpochsFitUint64
          (by assumption : forIn requests.builder_exits _ _ = Except.ok _)
-         (by loop_body_p (fun h hst => WithdrawableU64.of_validators_eq
+         (by loop_body_p (fun h hst => WithdrawableEpochsFitUint64.of_validators_eq
            (process_builder_exit_request_frame _ _ _ _ h).1.1 hst)) h4
        exact fun v hv => h5 v hv)
 
-/-- `process_parent_execution_payload` keeps `WithdrawableU64`. -/
+/-- `process_parent_execution_payload` keeps `WithdrawableEpochsFitUint64`. -/
 theorem process_parent_execution_payload_withdrawableU64 (p : Preset) (o : Oracle)
     (s s' : BeaconState) (block : BeaconBlock)
-    (h : process_parent_execution_payload p o s block = .ok s') (hs : WithdrawableU64 s) :
-    WithdrawableU64 s' := by
+    (h : process_parent_execution_payload p o s block = .ok s') (hs : WithdrawableEpochsFitUint64 s) :
+    WithdrawableEpochsFitUint64 s' := by
   unfold process_parent_execution_payload at h
   peel_ok' h
   all_goals first
     | (cases h; exact hs)
     | exact apply_parent_execution_payload_withdrawableU64 p o _ _ _ h hs
 
-/-- `process_operations` keeps `WithdrawableU64`. -/
+/-- `process_operations` keeps `WithdrawableEpochsFitUint64`. -/
 theorem process_operations_withdrawableU64 (p : Preset) (o : Oracle) (GLOAS_FORK_EPOCH : Epoch)
     (s s' : BeaconState) (body : BeaconBlockBody) (parent_slot : Slot)
     (h : process_operations p o GLOAS_FORK_EPOCH s body parent_slot = .ok s')
-    (hs : WithdrawableU64 s) : WithdrawableU64 s' := by
+    (hs : WithdrawableEpochsFitUint64 s) : WithdrawableEpochsFitUint64 s' := by
   have fold : ∀ {α : Type} (f : BeaconState → α → SpecM BeaconState),
-      (∀ st a st', f st a = .ok st' → WithdrawableU64 st → WithdrawableU64 st') →
+      (∀ st a st', f st a = .ok st' → WithdrawableEpochsFitUint64 st → WithdrawableEpochsFitUint64 st') →
       ∀ (l : List α) (st st' : BeaconState), l.foldlM f st = .ok st' →
-        WithdrawableU64 st → WithdrawableU64 st' := fun f hf =>
-    foldlM_rel (fun a b => WithdrawableU64 a → WithdrawableU64 b) (fun _ h => h)
+        WithdrawableEpochsFitUint64 st → WithdrawableEpochsFitUint64 st' := fun f hf =>
+    foldlM_rel (fun a b => WithdrawableEpochsFitUint64 a → WithdrawableEpochsFitUint64 b) (fun _ h => h)
       (fun _ _ _ h12 h23 h => h23 (h12 h)) f hf
   unfold process_operations at h
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
@@ -307,21 +307,21 @@ theorem process_operations_withdrawableU64 (p : Preset) (o : Oracle) (GLOAS_FORK
     _ _ _ h1 hs
   have e2 := fold _ (fun st a st' hst => process_attester_slashing_withdrawableU64 p o st st' a hst)
     _ _ _ h2 e1
-  have e3 := fold _ (fun st a st' hst => WithdrawableU64.of_validators_eq
+  have e3 := fold _ (fun st a st' hst => WithdrawableEpochsFitUint64.of_validators_eq
     (process_attestation_validators p o st st' a parent_slot hst)) _ _ _ h3 e2
   have e4 := fold _ (fun st a st' hst => process_voluntary_exit_withdrawableU64 p o st st' a hst)
     _ _ _ h4 e3
   have e5 := fold _ (fun st a st' hst =>
     process_bls_to_execution_change_withdrawableU64 p o st st' a hst) _ _ _ h5 e4
-  exact fold _ (fun st a st' hst => WithdrawableU64.of_validators_eq
+  exact fold _ (fun st a st' hst => WithdrawableEpochsFitUint64.of_validators_eq
     (by rw [process_payload_attestation_eq p o GLOAS_FORK_EPOCH st st' a hst])) _ _ _ h e5
 
-/-- `process_block` keeps `WithdrawableU64`. -/
+/-- `process_block` keeps `WithdrawableEpochsFitUint64`. -/
 theorem process_block_withdrawableU64 (p : Preset) (o : Oracle)
     (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch) (s s' : BeaconState)
     (block : BeaconBlock)
     (h : process_block p o max_blobs_per_block GLOAS_FORK_EPOCH s block = .ok s')
-    (hs : WithdrawableU64 s) : WithdrawableU64 s' := by
+    (hs : WithdrawableEpochsFitUint64 s) : WithdrawableEpochsFitUint64 s' := by
   unfold process_block at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
   obtain ⟨s2, h2, h⟩ := specM_bind_ok h
@@ -331,26 +331,26 @@ theorem process_block_withdrawableU64 (p : Preset) (o : Oracle)
   obtain ⟨s6, h6, h⟩ := specM_bind_ok h
   obtain ⟨s7, h7, h⟩ := specM_bind_ok h
   have e1 := process_parent_execution_payload_withdrawableU64 p o _ _ block h1 hs
-  have e2 := WithdrawableU64.of_validators_eq (process_block_header_frame p o _ _ block h2).1.1 e1
-  have e3 := WithdrawableU64.of_validators_eq (process_withdrawals_core p _ _ h3).1 e2
-  have e4 := WithdrawableU64.of_validators_eq
+  have e2 := WithdrawableEpochsFitUint64.of_validators_eq (process_block_header_frame p o _ _ block h2).1.1 e1
+  have e3 := WithdrawableEpochsFitUint64.of_validators_eq (process_withdrawals_core p _ _ h3).1 e2
+  have e4 := WithdrawableEpochsFitUint64.of_validators_eq
     (process_execution_payload_bid_frame p o _ _ _ _ h4).1.1 e3
-  have e5 := WithdrawableU64.of_validators_eq (process_randao_frame p o _ _ _ h5).1.1 e4
-  have e6 := WithdrawableU64.of_validators_eq (process_eth1_data_frame p _ _ _ h6).1.1 e5
+  have e5 := WithdrawableEpochsFitUint64.of_validators_eq (process_randao_frame p o _ _ _ h5).1.1 e4
+  have e6 := WithdrawableEpochsFitUint64.of_validators_eq (process_eth1_data_frame p _ _ _ h6).1.1 e5
   have e7 := process_operations_withdrawableU64 p o GLOAS_FORK_EPOCH _ _ _ _ h7 e6
   obtain ⟨hfr, -⟩ := process_sync_aggregate_frame p o _ _ _ h
-  exact WithdrawableU64.of_validators_eq (by rw [hfr]) e7
+  exact WithdrawableEpochsFitUint64.of_validators_eq (by rw [hfr]) e7
 
-/-- `process_registry_updates` keeps `WithdrawableU64`. -/
+/-- `process_registry_updates` keeps `WithdrawableEpochsFitUint64`. -/
 theorem process_registry_updates_withdrawableU64 (p : Preset) (total_active_balance : Gwei)
     (s s' : BeaconState) (h : process_registry_updates p total_active_balance s = .ok s')
-    (hs : WithdrawableU64 s) : WithdrawableU64 s' := by
+    (hs : WithdrawableEpochsFitUint64 s) : WithdrawableEpochsFitUint64 s' := by
   unfold process_registry_updates at h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨r, hr, h⟩ := specM_bind_ok h
   cases h
-  refine SlashingsSanity.forIn_invariant WithdrawableU64 _ ?_ _ s _ hs hr
+  refine SlashingsSanity.forIn_invariant WithdrawableEpochsFitUint64 _ ?_ _ s _ hs hr
   intro index st r hst hb
   simp only [bind, Except.bind, pure, Except.pure] at hb
   repeat' split at hb
@@ -369,13 +369,13 @@ theorem process_registry_updates_withdrawableU64 (p : Preset) (total_active_bala
        have := hst _ (List.mem_of_getElem? hg)
        exact this)
 
-/-- `apply_pending_deposit` keeps `WithdrawableU64`. A new validator has no withdrawable epoch
+/-- `apply_pending_deposit` keeps `WithdrawableEpochsFitUint64`. A new validator has no withdrawable epoch
 yet. -/
 theorem apply_pending_deposit_withdrawableU64 (p : Preset) (o : Oracle) (s s' : BeaconState)
     (deposit : PendingDeposit) (h : apply_pending_deposit p o s deposit = .ok s')
-    (hs : WithdrawableU64 s) : WithdrawableU64 s' := by
+    (hs : WithdrawableEpochsFitUint64 s) : WithdrawableEpochsFitUint64 s' := by
   have hadd : ∀ (pk : BLSPubkey) (wc : Bytes32) (amount : Gwei) (t : BeaconState),
-      add_validator_to_registry p s pk wc amount = .ok t → WithdrawableU64 t := by
+      add_validator_to_registry p s pk wc amount = .ok t → WithdrawableEpochsFitUint64 t := by
     intro pk wc amount t ht
     unfold add_validator_to_registry at ht
     obtain ⟨v, hv, ht⟩ := specM_bind_ok ht
@@ -400,11 +400,11 @@ theorem apply_pending_deposit_withdrawableU64 (p : Preset) (o : Oracle) (s s' : 
     | (cases h; exact hs)
     | exact hadd _ _ _ _ h
 
-/-- `process_pending_deposits` with `apply_pending_deposit` keeps `WithdrawableU64`. -/
+/-- `process_pending_deposits` with `apply_pending_deposit` keeps `WithdrawableEpochsFitUint64`. -/
 theorem process_pending_deposits_withdrawableU64 (p : Preset) (o : Oracle)
     (total_active_balance : Gwei) (s s' : BeaconState)
     (h : process_pending_deposits p total_active_balance (apply_pending_deposit p o) s = .ok s')
-    (hs : WithdrawableU64 s) : WithdrawableU64 s' := by
+    (hs : WithdrawableEpochsFitUint64 s) : WithdrawableEpochsFitUint64 s' := by
   unfold process_pending_deposits at h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
@@ -414,7 +414,7 @@ theorem process_pending_deposits_withdrawableU64 (p : Preset) (o : Oracle)
   obtain ⟨⟨_, _, _, _, st⟩, hr, h⟩ := specM_bind_ok h
   have hP := SlashingsSanity.forIn_invariant
     (fun r : Prod Uint64 (Prod Uint64 (Prod (List PendingDeposit) (Prod Bool BeaconState))) =>
-      WithdrawableU64 r.2.2.2.2) _ ?_ _ _ _ hs hr
+      WithdrawableEpochsFitUint64 r.2.2.2.2) _ ?_ _ _ _ hs hr
   · simp only [bind, Except.bind, pure, Except.pure] at h
     repeat' split at h
     all_goals first
@@ -430,11 +430,11 @@ theorem process_pending_deposits_withdrawableU64 (p : Preset) (o : Oracle)
          exact apply_pending_deposit_withdrawableU64 p o _ _ _
            ‹apply_pending_deposit _ _ _ _ = _› hst)
 
-/-- `process_effective_balance_updates` keeps `WithdrawableU64`. It writes only effective
+/-- `process_effective_balance_updates` keeps `WithdrawableEpochsFitUint64`. It writes only effective
 balances. -/
 theorem process_effective_balance_updates_withdrawableU64 (p : Preset) (s s' : BeaconState)
-    (h : process_effective_balance_updates p s = .ok s') (hs : WithdrawableU64 s) :
-    WithdrawableU64 s' := by
+    (h : process_effective_balance_updates p s = .ok s') (hs : WithdrawableEpochsFitUint64 s) :
+    WithdrawableEpochsFitUint64 s' := by
   rw [process_effective_balance_updates_eq] at h
   cases hm : s.validators.zipIdx.mapM (effectiveBalanceStep p s.balances) with
   | error e => simp [hm, Except.map] at h
@@ -459,9 +459,9 @@ theorem process_effective_balance_updates_withdrawableU64 (p : Preset) (s s' : B
     rw [hkeep]
     exact hs _ (List.getElem_mem hv)
 
-/-- `process_epoch` keeps `WithdrawableU64`. -/
-theorem process_epoch_withdrawableU64 [PresetCfg] (p : Preset) (o : Oracle) (s s' : BeaconState)
-    (h : process_epoch p o s = .ok s') (hs : WithdrawableU64 s) : WithdrawableU64 s' := by
+/-- `process_epoch` keeps `WithdrawableEpochsFitUint64`. -/
+theorem process_epoch_withdrawableU64 [CurrentPreset] (p : Preset) (o : Oracle) (s s' : BeaconState)
+    (h : process_epoch p o s = .ok s') (hs : WithdrawableEpochsFitUint64 s) : WithdrawableEpochsFitUint64 s' := by
   unfold process_epoch at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
   obtain ⟨s2, h2, h⟩ := specM_bind_ok h
@@ -483,47 +483,47 @@ theorem process_epoch_withdrawableU64 [PresetCfg] (p : Preset) (o : Oracle) (s s
   obtain ⟨s13, h13, h⟩ := specM_bind_ok h
   obtain ⟨s14, h14, h⟩ := specM_bind_ok h
   obtain ⟨s15, h15, h⟩ := specM_bind_ok h
-  have d1 := WithdrawableU64.of_validators_eq
+  have d1 := WithdrawableEpochsFitUint64.of_validators_eq
     (process_justification_and_finalization_frame p s s1 h1).1.1 hs
-  have d2 := WithdrawableU64.of_validators_eq (process_inactivity_updates_validators p _ _ h2) d1
-  have d3 := WithdrawableU64.of_validators_eq
+  have d2 := WithdrawableEpochsFitUint64.of_validators_eq (process_inactivity_updates_validators p _ _ h2) d1
+  have d3 := WithdrawableEpochsFitUint64.of_validators_eq
     (process_rewards_and_penalties_validators p _ _ _ h3) d2
   have d4 := process_registry_updates_withdrawableU64 p _ _ _ h4 d3
-  have d5 := WithdrawableU64.of_validators_eq (process_slashings_validators p _ _ _ h5) d4
-  have d6 := WithdrawableU64.of_validators_eq (process_eth1_data_reset_frame p _ _ h6).1.1 d5
+  have d5 := WithdrawableEpochsFitUint64.of_validators_eq (process_slashings_validators p _ _ _ h5) d4
+  have d6 := WithdrawableEpochsFitUint64.of_validators_eq (process_eth1_data_reset_frame p _ _ h6).1.1 d5
   have d7 := process_pending_deposits_withdrawableU64 p o _ _ _ h7 d6
-  have d8 := WithdrawableU64.of_validators_eq
+  have d8 := WithdrawableEpochsFitUint64.of_validators_eq
     (process_pending_consolidations_validators p _ _ h8) d7
-  have d9 := WithdrawableU64.of_validators_eq
+  have d9 := WithdrawableEpochsFitUint64.of_validators_eq
     (process_builder_pending_payments_validators p _ _ _ h9) d8
   have d10 := process_effective_balance_updates_withdrawableU64 p _ _ h10 d9
-  have d11 := WithdrawableU64.of_validators_eq (process_slashings_reset_frame p _ _ h11).1.1 d10
-  have d12 := WithdrawableU64.of_validators_eq (process_randao_mixes_reset_frame p _ _ h12).1.1 d11
-  have d13 := WithdrawableU64.of_validators_eq
+  have d11 := WithdrawableEpochsFitUint64.of_validators_eq (process_slashings_reset_frame p _ _ h11).1.1 d10
+  have d12 := WithdrawableEpochsFitUint64.of_validators_eq (process_randao_mixes_reset_frame p _ _ h12).1.1 d11
+  have d13 := WithdrawableEpochsFitUint64.of_validators_eq
     (process_historical_summaries_update_frame p o _ _ h13).1.1 d12
-  have d14 := WithdrawableU64.of_validators_eq
+  have d14 := WithdrawableEpochsFitUint64.of_validators_eq
     (process_sync_committee_updates_frame p o _ _ h14).1.1 d13
-  have d15 := WithdrawableU64.of_validators_eq
+  have d15 := WithdrawableEpochsFitUint64.of_validators_eq
     (process_proposer_lookahead_frame p o _ _ h15).1.1 d14
-  exact WithdrawableU64.of_validators_eq (process_ptc_window_frame p o _ _ h).1.1 d15
+  exact WithdrawableEpochsFitUint64.of_validators_eq (process_ptc_window_frame p o _ _ h).1.1 d15
 
 
-/-- `process_slots` with the real `process_epoch` keeps `WithdrawableU64`. -/
-theorem process_slots_withdrawableU64 [PresetCfg] (p : Preset) (o : Oracle) (s s' : BeaconState)
+/-- `process_slots` with the real `process_epoch` keeps `WithdrawableEpochsFitUint64`. -/
+theorem process_slots_withdrawableU64 [CurrentPreset] (p : Preset) (o : Oracle) (s s' : BeaconState)
     (slot : Slot) (h : process_slots p o (process_epoch p o) s slot = .ok s')
-    (hs : WithdrawableU64 s) : WithdrawableU64 s' :=
-  process_slots_invariant p o (process_epoch p o) WithdrawableU64
-    (fun _ _ ht hP => WithdrawableU64.of_validators_eq (process_slot_frame p o _ _ ht).1.1 hP)
+    (hs : WithdrawableEpochsFitUint64 s) : WithdrawableEpochsFitUint64 s' :=
+  process_slots_invariant p o (process_epoch p o) WithdrawableEpochsFitUint64
+    (fun _ _ ht hP => WithdrawableEpochsFitUint64.of_validators_eq (process_slot_frame p o _ _ ht).1.1 hP)
     (fun _ _ ht hP => process_epoch_withdrawableU64 p o _ _ ht hP)
     (fun _ _ hP => hP) s s' slot hs h
 
-/-- `state_transition` keeps `WithdrawableU64`. -/
-theorem state_transition_withdrawableU64 [PresetCfg] (p : Preset) (o : Oracle)
+/-- `state_transition` keeps `WithdrawableEpochsFitUint64`. -/
+theorem state_transition_withdrawableU64 [CurrentPreset] (p : Preset) (o : Oracle)
     (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch) (s s' : BeaconState)
-    (signed_block : SignedBeaconBlock) (validate_result : Bool) (hs : WithdrawableU64 s)
+    (signed_block : SignedBeaconBlock) (validate_result : Bool) (hs : WithdrawableEpochsFitUint64 s)
     (h : state_transition p o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
       validate_result = .ok s') :
-    WithdrawableU64 s' := by
+    WithdrawableEpochsFitUint64 s' := by
   unfold state_transition at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
@@ -537,13 +537,13 @@ theorem state_transition_withdrawableU64 [PresetCfg] (p : Preset) (o : Oracle)
 /-! ## A validator with no exit epoch has no withdrawable epoch -/
 
 /-- Each validator with no exit epoch has no withdrawable epoch. -/
-def WithdrawableValid (s : BeaconState) : Prop :=
+def NoWithdrawableEpochWithoutExit (s : BeaconState) : Prop :=
   ∀ v ∈ s.validators, v.exit_epoch = FAR_FUTURE_EPOCH → v.withdrawable_epoch = FAR_FUTURE_EPOCH
 
-/-- `ExitDelay` and `WithdrawableU64` give `WithdrawableValid`. A validator with no exit epoch
+/-- `ExitToWithdrawableDelay` and `WithdrawableEpochsFitUint64` give `NoWithdrawableEpochWithoutExit`. A validator with no exit epoch
 has its withdrawable epoch at least `FAR_FUTURE_EPOCH`, and at most `FAR_FUTURE_EPOCH`. -/
-theorem withdrawableValid_of {p : Preset} {s : BeaconState} (hd : ExitDelay p s)
-    (hw : WithdrawableU64 s) : WithdrawableValid s := by
+theorem withdrawableValid_of {p : Preset} {s : BeaconState} (hd : ExitToWithdrawableDelay p s)
+    (hw : WithdrawableEpochsFitUint64 s) : NoWithdrawableEpochWithoutExit s := by
   intro v hv hx
   have h1 := hw v hv
   rcases hd v hv with h2 | h2

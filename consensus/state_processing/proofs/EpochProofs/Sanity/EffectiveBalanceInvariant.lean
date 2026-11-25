@@ -12,16 +12,16 @@ balance`. `EffectiveBalanceFloor` states this for the whole state.
 namespace EpochProofs.Spec
 
 /-- The two maximum effective balances are multiples of the increment. -/
-def PresetIncrementOk (p : Preset) : Prop :=
+def PresetIncrementValid (p : Preset) : Prop :=
   p.MIN_ACTIVATION_BALANCE % p.EFFECTIVE_BALANCE_INCREMENT = 0
   ∧ p.MAX_EFFECTIVE_BALANCE_ELECTRA % p.EFFECTIVE_BALANCE_INCREMENT = 0
 
-/-- Mainnet holds `PresetIncrementOk`. -/
-theorem presetIncrementOk_mainnet [PresetCfg] : PresetIncrementOk P :=
+/-- Mainnet holds `PresetIncrementValid`. -/
+theorem presetIncrementOk_mainnet [CurrentPreset] : PresetIncrementValid P :=
   ⟨(by prfl), (by prfl)⟩
 
 /-- `get_max_effective_balance` is a multiple of the increment. -/
-theorem get_max_effective_balance_mod (p : Preset) (hp : PresetIncrementOk p)
+theorem get_max_effective_balance_mod (p : Preset) (hp : PresetIncrementValid p)
     (validator : Validator) :
     get_max_effective_balance p validator % p.EFFECTIVE_BALANCE_INCREMENT = 0 := by
   unfold get_max_effective_balance
@@ -67,10 +67,10 @@ theorem newEffectiveBalance_cases (p : Preset) (downward upward : Uint64)
   · simp [uint64Add, h1, h2, h3, h4, bind, Except.bind, pure, Except.pure] at h
     exact Or.inl ⟨h.symm, Nat.le_of_not_lt h2⟩
 
-/-- Bounds on one new effective balance. The capped branch needs `PresetIncrementOk` for the
+/-- Bounds on one new effective balance. The capped branch needs `PresetIncrementValid` for the
 multiple. The unchanged branch needs the old effective balance to be a multiple. The other two
 bounds need no hypothesis. -/
-theorem newEffectiveBalance_bounds (p : Preset) (hp : PresetIncrementOk p)
+theorem newEffectiveBalance_bounds (p : Preset) (hp : PresetIncrementValid p)
     (downward upward : Uint64) (validator : Validator) (balance effective_balance : Gwei)
     (h : newEffectiveBalance p downward upward validator balance = .ok effective_balance)
     (hmod : validator.effective_balance % p.EFFECTIVE_BALANCE_INCREMENT = 0) :
@@ -111,7 +111,7 @@ theorem le_mul_of_three_mul_le {a b : Nat} (h : 3 * a ≤ 4 * b) : a ≤ 256 * b
 
 /-- On mainnet, a new effective balance is at most `4/3` of the balance, and so at most 256
 times the balance. -/
-theorem newEffectiveBalance_mainnet_floor [PresetCfg] (validator : Validator)
+theorem newEffectiveBalance_mainnet_floor [CurrentPreset] (validator : Validator)
     (balance effective_balance : Gwei)
     (h : newEffectiveBalance P 250000000 1250000000 validator balance =
       .ok effective_balance)
@@ -170,8 +170,8 @@ theorem effectiveBalanceStep_ok (p : Preset) (balances : List Gwei) (downward up
 
 /-- After `process_effective_balance_updates`, each effective balance is a multiple of the
 increment and at most `balance + downward`. Balances do not change. A successful run reads a
-balance for each validator, so no `RowsOk` hypothesis is necessary. -/
-theorem process_effective_balance_updates_bounds (p : Preset) (hp : PresetIncrementOk p)
+balance for each validator, so no `ListLengthsMatch` hypothesis is necessary. -/
+theorem process_effective_balance_updates_bounds (p : Preset) (hp : PresetIncrementValid p)
     (downward upward : Uint64) (hthresholds : hysteresisThresholds p = .ok (downward, upward))
     (state state' : BeaconState) (h : process_effective_balance_updates p state = .ok state')
     (hmod : ∀ v ∈ state.validators, v.effective_balance % p.EFFECTIVE_BALANCE_INCREMENT = 0) :
@@ -231,7 +231,7 @@ theorem EffectiveBalanceFloor.le_mul (p : Preset) (state : BeaconState)
 
 /-- `process_effective_balance_updates` establishes `EffectiveBalanceFloor`, if the downward
 threshold is at most a quarter of the increment. -/
-theorem process_effective_balance_updates_floor (p : Preset) (hp : PresetIncrementOk p)
+theorem process_effective_balance_updates_floor (p : Preset) (hp : PresetIncrementValid p)
     (downward upward : Uint64) (hthresholds : hysteresisThresholds p = .ok (downward, upward))
     (hdown : 4 * downward ≤ p.EFFECTIVE_BALANCE_INCREMENT)
     (state state' : BeaconState) (h : process_effective_balance_updates p state = .ok state')
@@ -244,7 +244,7 @@ theorem process_effective_balance_updates_floor (p : Preset) (hp : PresetIncreme
   exact ⟨hm, three_mul_le_of_floor _ downward _ _ hm hle hdown⟩
 
 /-- On mainnet, `process_effective_balance_updates` establishes `EffectiveBalanceFloor`. -/
-theorem process_effective_balance_updates_floor_mainnet [PresetCfg] (state state' : BeaconState)
+theorem process_effective_balance_updates_floor_mainnet [CurrentPreset] (state state' : BeaconState)
     (h : process_effective_balance_updates P state = .ok state')
     (hmod : ∀ v ∈ state.validators,
       v.effective_balance % P.EFFECTIVE_BALANCE_INCREMENT = 0) :

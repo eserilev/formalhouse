@@ -43,7 +43,7 @@ theorem setEB_eq_with (s : BeaconState) (i : Nat) (e : Gwei) :
   · exact ⟨s.validators, rfl⟩
 
 /-- The new effective balance of one validator on mainnet. -/
-def ebNew [PresetCfg] (v : Validator) (b : Gwei) : SpecM Gwei := do
+def ebNew [CurrentPreset] (v : Validator) (b : Gwei) : SpecM Gwei := do
   let (downward, upward) ← hysteresisThresholds P
   newEffectiveBalance P downward upward v b
 
@@ -58,7 +58,7 @@ theorem listGet_of_none {α : Type} {l : List α} {i : Nat} (h : l[i]? = none) :
   simp only [listGet, h, throw, throwThe, MonadExceptOf.throw]
 
 /-- `ebUpdateAt` when the validator and the balance exist. -/
-theorem ebUpdateAt_some [PresetCfg] {s : BeaconState} {i : Nat} {v : Validator} {b : Gwei}
+theorem ebUpdateAt_some [CurrentPreset] {s : BeaconState} {i : Nat} {v : Validator} {b : Gwei}
     (hv : s.validators[i]? = some v) (hb : s.balances[i]? = some b) :
     ebUpdateAt s i = (setEB s i ·) <$> ebNew v b := by
   have hlt : i < s.validators.length := (List.getElem?_eq_some_iff.mp hv).1
@@ -83,14 +83,14 @@ theorem ebUpdateAt_some [PresetCfg] {s : BeaconState} {i : Nat} {v : Validator} 
       rfl
 
 /-- `ebUpdateAt` fails without the validator. -/
-theorem ebUpdateAt_of_none_v [PresetCfg] {s : BeaconState} {i : Nat} (hv : s.validators[i]? = none) :
+theorem ebUpdateAt_of_none_v [CurrentPreset] {s : BeaconState} {i : Nat} (hv : s.validators[i]? = none) :
     ebUpdateAt s i = .error .indexOutOfRange := by
   unfold ebUpdateAt
   rw [listGet_of_none hv]
   rfl
 
 /-- `ebUpdateAt` fails without the balance. -/
-theorem ebUpdateAt_of_none_b [PresetCfg] {s : BeaconState} {i : Nat} {v : Validator}
+theorem ebUpdateAt_of_none_b [CurrentPreset] {s : BeaconState} {i : Nat} {v : Validator}
     (hv : s.validators[i]? = some v) (hb : s.balances[i]? = none) :
     ebUpdateAt s i = .error .indexOutOfRange := by
   unfold ebUpdateAt
@@ -99,7 +99,7 @@ theorem ebUpdateAt_of_none_b [PresetCfg] {s : BeaconState} {i : Nat} {v : Valida
 
 /-- `ebUpdateAt` succeeds exactly when the validator and the balance exist and the new effective
 balance computes. Then it is `setEB`. -/
-theorem ebUpdateAt_ok [PresetCfg] (s s' : BeaconState) (i : Nat) :
+theorem ebUpdateAt_ok [CurrentPreset] (s s' : BeaconState) (i : Nat) :
     ebUpdateAt s i = .ok s' ↔ ∃ v b e, s.validators[i]? = some v ∧ s.balances[i]? = some b ∧
       ebNew v b = .ok e ∧ s' = setEB s i e := by
   cases hv : s.validators[i]? with
@@ -129,7 +129,7 @@ theorem ebUpdateAt_ok [PresetCfg] (s s' : BeaconState) (i : Nat) :
 
 /-- An update of validator `i` commutes with a step `F` that commutes with `setEB` at `i` and
 keeps validator `i` and its balance. -/
-theorem ebUpdateAt_commute [PresetCfg] (F : BeaconState → SpecM BeaconState) (i : Nat)
+theorem ebUpdateAt_commute [CurrentPreset] (F : BeaconState → SpecM BeaconState) (i : Nat)
     (P : BeaconState → Prop)
     (hF1 : ∀ t e, P t → F (setEB t i e) = (fun t' => setEB t' i e) <$> F t)
     (hF2 : ∀ t t', P t → F t = .ok t' →
@@ -162,7 +162,7 @@ theorem ebUpdateAt_commute [PresetCfg] (F : BeaconState → SpecM BeaconState) (
     rfl
 
 /-- Updates of a list of validators commute with a step that commutes with each of them. -/
-theorem ebFold_commute [PresetCfg] (F : BeaconState → SpecM BeaconState) (P : BeaconState → Prop)
+theorem ebFold_commute [CurrentPreset] (F : BeaconState → SpecM BeaconState) (P : BeaconState → Prop)
     (l : List Nat) (hP : ∀ i ∈ l, ∀ t e, P t → P (setEB t i e))
     (hF1 : ∀ i ∈ l, ∀ t e, P t → F (setEB t i e) = (fun t' => setEB t' i e) <$> F t)
     (hF2 : ∀ i ∈ l, ∀ t t', P t → F t = .ok t' →
@@ -217,7 +217,7 @@ theorem setEB_blind (F : BeaconState → SpecM BeaconState) (i : Nat)
       rw [setEB_some e (by rw [h]; exact hv), h]
 
 /-- `process_builder_pending_payments` passes `validators` through. -/
-theorem payments_blind [PresetCfg] (tab : Gwei) (t : BeaconState) (vs : List Validator) :
+theorem payments_blind [CurrentPreset] (tab : Gwei) (t : BeaconState) (vs : List Validator) :
     process_builder_pending_payments P tab { t with validators := vs } =
       (fun t' => { t' with validators := vs }) <$>
         process_builder_pending_payments P tab t := by
@@ -228,7 +228,7 @@ theorem payments_blind [PresetCfg] (tab : Gwei) (t : BeaconState) (vs : List Val
 
 
 /-- `process_builder_pending_payments` keeps `validators` and `balances`. -/
-theorem payments_frame [PresetCfg] (tab : Gwei) (t t' : BeaconState)
+theorem payments_frame [CurrentPreset] (tab : Gwei) (t t' : BeaconState)
     (h : process_builder_pending_payments P tab t = .ok t') :
     t'.validators = t.validators ∧ t'.balances = t.balances := by
   unfold process_builder_pending_payments at h
@@ -239,13 +239,13 @@ theorem payments_frame [PresetCfg] (tab : Gwei) (t t' : BeaconState)
     | (cases h; exact ⟨rfl, rfl⟩)
 
 /-- Instance a: `process_builder_pending_payments` commutes with `setEB`. -/
-theorem payments_hF1 [PresetCfg] (tab : Gwei) (i : Nat) (t : BeaconState) (e : Gwei) :
+theorem payments_hF1 [CurrentPreset] (tab : Gwei) (i : Nat) (t : BeaconState) (e : Gwei) :
     process_builder_pending_payments P tab (setEB t i e) =
       (fun t' => setEB t' i e) <$> process_builder_pending_payments P tab t :=
   setEB_blind _ i (payments_blind tab) (fun t t' h => (payments_frame tab t t' h).1) t e
 
 /-- Instance a: `process_builder_pending_payments` keeps validator `i` and its balance. -/
-theorem payments_hF2 [PresetCfg] (tab : Gwei) (i : Nat) (t t' : BeaconState)
+theorem payments_hF2 [CurrentPreset] (tab : Gwei) (i : Nat) (t t' : BeaconState)
     (h : process_builder_pending_payments P tab t = .ok t') :
     t'.validators[i]? = t.validators[i]? ∧ t'.balances[i]? = t.balances[i]? := by
   obtain ⟨hv, hb⟩ := payments_frame tab t t' h
@@ -253,7 +253,7 @@ theorem payments_hF2 [PresetCfg] (tab : Gwei) (i : Nat) (t t' : BeaconState)
   exact ⟨rfl, rfl⟩
 
 /-- `process_eth1_data_reset` passes `validators` through. -/
-theorem eth1_blind [PresetCfg] (t : BeaconState) (vs : List Validator) :
+theorem eth1_blind [CurrentPreset] (t : BeaconState) (vs : List Validator) :
     process_eth1_data_reset P { t with validators := vs } =
       (fun t' => { t' with validators := vs }) <$> process_eth1_data_reset P t := by
   unfold process_eth1_data_reset
@@ -268,7 +268,7 @@ theorem eth1_blind [PresetCfg] (t : BeaconState) (vs : List Validator) :
     | (rename_i h; cases h)
 
 /-- `process_eth1_data_reset` keeps `validators` and `balances`. -/
-theorem eth1_frame [PresetCfg] (t t' : BeaconState) (h : process_eth1_data_reset P t = .ok t') :
+theorem eth1_frame [CurrentPreset] (t t' : BeaconState) (h : process_eth1_data_reset P t = .ok t') :
     t'.validators = t.validators ∧ t'.balances = t.balances := by
   unfold process_eth1_data_reset at h
   simp only [bind, Except.bind, pure, Except.pure] at h
@@ -278,13 +278,13 @@ theorem eth1_frame [PresetCfg] (t t' : BeaconState) (h : process_eth1_data_reset
     | (cases h; exact ⟨rfl, rfl⟩)
 
 /-- Instance b: `process_eth1_data_reset` commutes with `setEB`. -/
-theorem eth1_hF1 [PresetCfg] (i : Nat) (t : BeaconState) (e : Gwei) :
+theorem eth1_hF1 [CurrentPreset] (i : Nat) (t : BeaconState) (e : Gwei) :
     process_eth1_data_reset P (setEB t i e) =
       (fun t' => setEB t' i e) <$> process_eth1_data_reset P t :=
   setEB_blind _ i eth1_blind (fun t t' h => (eth1_frame t t' h).1) t e
 
 /-- Instance b: `process_eth1_data_reset` keeps validator `i` and its balance. -/
-theorem eth1_hF2 [PresetCfg] (i : Nat) (t t' : BeaconState)
+theorem eth1_hF2 [CurrentPreset] (i : Nat) (t t' : BeaconState)
     (h : process_eth1_data_reset P t = .ok t') :
     t'.validators[i]? = t.validators[i]? ∧ t'.balances[i]? = t.balances[i]? := by
   obtain ⟨hv, hb⟩ := eth1_frame t t' h
@@ -378,7 +378,7 @@ theorem setEB_comm (t : BeaconState) {i j : Nat} (e e' : Gwei) (hij : i ≠ j) :
       simp only [List.set_comm _ _ hij]
 
 /-- Instance g: an update at `j` commutes with `setEB` at `i ≠ j`. -/
-theorem ebUpdateAt_hF1 [PresetCfg] (j i : Nat) (hij : i ≠ j) (t : BeaconState) (e : Gwei) :
+theorem ebUpdateAt_hF1 [CurrentPreset] (j i : Nat) (hij : i ≠ j) (t : BeaconState) (e : Gwei) :
     ebUpdateAt (setEB t i e) j = (fun t' => setEB t' i e) <$> ebUpdateAt t j := by
   have hv' := setEB_get_ne t e (Ne.symm hij)
   have hb' := setEB_balances t i e
@@ -401,14 +401,14 @@ theorem ebUpdateAt_hF1 [PresetCfg] (j i : Nat) (hij : i ≠ j) (t : BeaconState)
         rw [setEB_comm t e e' hij]
 
 /-- Instance g: an update at `j` keeps validator `i ≠ j` and its balance. -/
-theorem ebUpdateAt_hF2 [PresetCfg] (j i : Nat) (hij : i ≠ j) (t t' : BeaconState)
+theorem ebUpdateAt_hF2 [CurrentPreset] (j i : Nat) (hij : i ≠ j) (t t' : BeaconState)
     (h : ebUpdateAt t j = .ok t') :
     t'.validators[i]? = t.validators[i]? ∧ t'.balances[i]? = t.balances[i]? := by
   obtain ⟨_, _, e, -, -, -, rfl⟩ := (ebUpdateAt_ok t t' j).mp h
   exact ⟨setEB_get_ne t e hij, by rw [setEB_balances]⟩
 
 /-- Two updates at different indices commute. -/
-theorem ebUpdateAt_swap [PresetCfg] (s : BeaconState) (i j : Nat) :
+theorem ebUpdateAt_swap [CurrentPreset] (s : BeaconState) (i j : Nat) :
     SameResultOrBothFail (ebUpdateAt s i >>= fun t => ebUpdateAt t j)
       (ebUpdateAt s j >>= fun t => ebUpdateAt t i) := by
   by_cases hij : i = j
@@ -419,7 +419,7 @@ theorem ebUpdateAt_swap [PresetCfg] (s : BeaconState) (i j : Nat) :
       s trivial
 
 /-- Updates over two permuted lists give the same `ok` results. -/
-theorem ebFold_perm [PresetCfg] {l l' : List Nat} (h : l.Perm l') (s : BeaconState) :
+theorem ebFold_perm [CurrentPreset] {l l' : List Nat} (h : l.Perm l') (s : BeaconState) :
     SameResultOrBothFail (l.foldlM ebUpdateAt s) (l'.foldlM ebUpdateAt s) := by
   induction h generalizing s with
   | nil => exact SameResultOrBothFail.refl _
@@ -437,7 +437,7 @@ theorem ebFold_perm [PresetCfg] {l l' : List Nat} (h : l.Perm l') (s : BeaconSta
 /-! ## All updates as one update per index -/
 
 /-- One spec loop step when the balance exists. -/
-theorem effectiveBalanceStep_some [PresetCfg] {bals : List Gwei} {k : Nat} {b : Gwei} (v : Validator)
+theorem effectiveBalanceStep_some [CurrentPreset] {bals : List Gwei} {k : Nat} {b : Gwei} (v : Validator)
     (hb : bals[k]? = some b) :
     effectiveBalanceStep P bals (v, k) =
       (fun e => { v with effective_balance := e }) <$> ebNew v b := by
@@ -453,7 +453,7 @@ theorem effectiveBalanceStep_some [PresetCfg] {bals : List Gwei} {k : Nat} {b : 
     cases newEffectiveBalance P d u v b <;> rfl
 
 /-- One spec loop step fails without the balance. -/
-theorem effectiveBalanceStep_none [PresetCfg] {bals : List Gwei} {k : Nat} (v : Validator)
+theorem effectiveBalanceStep_none [CurrentPreset] {bals : List Gwei} {k : Nat} (v : Validator)
     (hb : bals[k]? = none) :
     effectiveBalanceStep P bals (v, k) = .error .indexOutOfRange := by
   unfold effectiveBalanceStep
@@ -461,7 +461,7 @@ theorem effectiveBalanceStep_none [PresetCfg] {bals : List Gwei} {k : Nat} (v : 
   rfl
 
 /-- The updates of the indices from `done.length` on equal the spec loop over the rest. -/
-theorem ebFold_range_eq [PresetCfg] (s : BeaconState) :
+theorem ebFold_range_eq [CurrentPreset] (s : BeaconState) :
     ∀ (vs done : List Validator),
       (List.range' done.length vs.length).foldlM ebUpdateAt
           { s with validators := done ++ vs } =
@@ -497,7 +497,7 @@ theorem ebFold_range_eq [PresetCfg] (s : BeaconState) :
         · simp [Except.map, bind, Except.bind, pure, Except.pure, Functor.map]
 
 /-- The update of all validators equals one update per index, in index order. -/
-theorem process_effective_balance_updates_fold [PresetCfg] (s : BeaconState) :
+theorem process_effective_balance_updates_fold [CurrentPreset] (s : BeaconState) :
     SameResultOrBothFail (process_effective_balance_updates P s)
       ((List.range s.validators.length).foldlM ebUpdateAt s) := by
   apply SameResultOrBothFail.of_eq
@@ -548,7 +548,7 @@ theorem map_bind_eq {β γ : Type} {φ : β → β} {g : γ → γ} {k1 k2 : β 
 
 /-- `process_pending_consolidations` passes `validators` through when the new list agrees at
 each source index. -/
-theorem consolidations_blind [PresetCfg] (t : BeaconState) (vs : List Validator)
+theorem consolidations_blind [CurrentPreset] (t : BeaconState) (vs : List Validator)
     (hvs : ∀ c ∈ t.pending_consolidations, vs[c.source_index]? = t.validators[c.source_index]?) :
     process_pending_consolidations P { t with validators := vs } =
       (fun t' => { t' with validators := vs }) <$>
@@ -633,7 +633,7 @@ theorem decrease_balance_other {bs bs' : List Gwei} {j : Nat} {a : Gwei}
 
 /-- `process_pending_consolidations` keeps `validators`, and the balance of a validator that no
 consolidation names. -/
-theorem consolidations_frame [PresetCfg] (t t' : BeaconState)
+theorem consolidations_frame [CurrentPreset] (t t' : BeaconState)
     (h : process_pending_consolidations P t = .ok t') :
     t'.validators = t.validators ∧ ∀ i, i ∉ consolidationIndices t →
       t'.balances[i]? = t.balances[i]? := by
@@ -672,7 +672,7 @@ theorem consolidationIndices_setEB (t : BeaconState) (i : Nat) (e : Gwei) :
 
 /-- Instance f: `process_pending_consolidations` commutes with `setEB` at a validator that no
 consolidation names. -/
-theorem consolidations_hF1 [PresetCfg] (i : Nat) (t : BeaconState) (e : Gwei)
+theorem consolidations_hF1 [CurrentPreset] (i : Nat) (t : BeaconState) (e : Gwei)
     (hi : i ∉ consolidationIndices t) :
     process_pending_consolidations P (setEB t i e) =
       (fun t' => setEB t' i e) <$> process_pending_consolidations P t := by
@@ -696,7 +696,7 @@ theorem consolidations_hF1 [PresetCfg] (i : Nat) (t : BeaconState) (e : Gwei)
 
 /-- Instance f: `process_pending_consolidations` keeps a validator that no consolidation names,
 and its balance. -/
-theorem consolidations_hF2 [PresetCfg] (i : Nat) (t t' : BeaconState) (hi : i ∉ consolidationIndices t)
+theorem consolidations_hF2 [CurrentPreset] (i : Nat) (t t' : BeaconState) (hi : i ∉ consolidationIndices t)
     (h : process_pending_consolidations P t = .ok t') :
     t'.validators[i]? = t.validators[i]? ∧ t'.balances[i]? = t.balances[i]? := by
   obtain ⟨hv, hb⟩ := consolidations_frame t t' h
@@ -728,7 +728,7 @@ theorem set_or_append_list_len {α : Type} (l : List α) (a : α) :
 
 /-- `add_validator_to_registry` on another `validators` list of the same length appends the same
 validator to that list. -/
-theorem add_validator_blind [PresetCfg] (t : BeaconState) (vs : List Validator)
+theorem add_validator_blind [CurrentPreset] (t : BeaconState) (vs : List Validator)
     (hlen : vs.length = t.validators.length) (pubkey : BLSPubkey)
     (withdrawal_credentials : Bytes32) (amount : Gwei) :
     add_validator_to_registry P { t with validators := vs } pubkey
@@ -748,7 +748,7 @@ theorem add_validator_blind [PresetCfg] (t : BeaconState) (vs : List Validator)
 
 /-- `apply_pending_deposit` on another `validators` list with the same pubkeys acts on that list
 the same way. -/
-theorem apply_blind [PresetCfg] (o : Oracle) (d : PendingDeposit) (t : BeaconState) (vs : List Validator)
+theorem apply_blind [CurrentPreset] (o : Oracle) (d : PendingDeposit) (t : BeaconState) (vs : List Validator)
     (hpk : vs.map (·.pubkey) = t.validators.map (·.pubkey)) :
     apply_pending_deposit P o { t with validators := vs } d =
       (fun t' => { t' with validators := vs ++ t'.validators.drop t.validators.length }) <$>
@@ -769,7 +769,7 @@ theorem apply_blind [PresetCfg] (o : Oracle) (d : PendingDeposit) (t : BeaconSta
 
 /-- `add_validator_to_registry` appends to `validators` and keeps the balances of the existing
 validators. -/
-theorem add_validator_frame [PresetCfg] (t t' : BeaconState) (pubkey : BLSPubkey)
+theorem add_validator_frame [CurrentPreset] (t t' : BeaconState) (pubkey : BLSPubkey)
     (withdrawal_credentials : Bytes32) (amount : Gwei)
     (h : add_validator_to_registry P t pubkey withdrawal_credentials amount =
       .ok t') :
@@ -798,7 +798,7 @@ theorem add_validator_frame [PresetCfg] (t t' : BeaconState) (pubkey : BLSPubkey
 
 /-- `apply_pending_deposit` appends to `validators`, and keeps the balance of an existing
 validator with another pubkey. -/
-theorem apply_frame [PresetCfg] (o : Oracle) (d : PendingDeposit) (t t' : BeaconState)
+theorem apply_frame [CurrentPreset] (o : Oracle) (d : PendingDeposit) (t t' : BeaconState)
     (h : apply_pending_deposit P o t d = .ok t') :
     (∃ ys, t'.validators = t.validators ++ ys) ∧
       ∀ i, i < t.validators.length → (∀ v, t.validators[i]? = some v → v.pubkey ≠ d.pubkey) →
@@ -841,7 +841,7 @@ theorem ApplyOther.setEB {i : Nat} {d : PendingDeposit} {t : BeaconState} (e : G
 
 /-- Instance e: `apply_pending_deposit` commutes with `setEB` at a validator with another
 pubkey. -/
-theorem apply_hF1 [PresetCfg] (o : Oracle) (d : PendingDeposit) (i : Nat) (t : BeaconState) (e : Gwei)
+theorem apply_hF1 [CurrentPreset] (o : Oracle) (d : PendingDeposit) (i : Nat) (t : BeaconState) (e : Gwei)
     (hP : ApplyOther i d t) :
     apply_pending_deposit P o (setEB t i e) d =
       (fun t' => setEB t' i e) <$> apply_pending_deposit P o t d := by
@@ -868,7 +868,7 @@ theorem apply_hF1 [PresetCfg] (o : Oracle) (d : PendingDeposit) (i : Nat) (t : B
 
 /-- Instance e: `apply_pending_deposit` keeps a validator with another pubkey and its
 balance. -/
-theorem apply_hF2 [PresetCfg] (o : Oracle) (d : PendingDeposit) (i : Nat) (t t' : BeaconState)
+theorem apply_hF2 [CurrentPreset] (o : Oracle) (d : PendingDeposit) (i : Nat) (t t' : BeaconState)
     (hP : ApplyOther i d t) (h : apply_pending_deposit P o t d = .ok t') :
     t'.validators[i]? = t.validators[i]? ∧ t'.balances[i]? = t.balances[i]? := by
   obtain ⟨⟨ys, hys⟩, hb⟩ := apply_frame o d t t' h

@@ -8,23 +8,23 @@ import EpochProofs.Spec.FuluCfg
 Fulu reads `get_activation_exit_churn_limit` for exits and for pending deposits. On mainnet and
 on minimal, the Fulu quotient is twice the Gloas quotient, and the Fulu cap is the Gloas
 activation cap. So the Fulu churn of `total_active_balance` is the Gloas churn of
-`fuluTab p f total_active_balance = min (total_active_balance / 2) (cap * quotient)`, for the
+`fuluTotalActiveBalance p f total_active_balance = min (total_active_balance / 2) (cap * quotient)`, for the
 exit churn (`get_exit_churn_limit`, no cap) and for the activation churn
 (`get_activation_churn_limit`).
 
 - `fulu_exit_churn_eq`, `fulu_activation_churn_eq`: the two churn equalities.
 - `process_registry_updates_fulu_eq`: Fulu `process_registry_updates` is the Gloas function at
-  `fuluTab`.
+  `fuluTotalActiveBalance`.
 - `process_pending_deposits_fulu_tab_eq`: Fulu `process_pending_deposits` is the Gloas function
-  at `fuluTab`, with the same preset.
+  at `fuluTotalActiveBalance`, with the same preset.
 
 The Gloas functions read `total_active_balance` only through the churn. So the Gloas proofs
-apply to Fulu with `fuluTab` in place of the total, and the same preset.
+apply to Fulu with `fuluTotalActiveBalance` in place of the total, and the same preset.
 -/
 
 namespace EpochProofs.Spec
 
-/-- The relations between the Fulu config and the Gloas preset that `fuluTab` needs. They hold
+/-- The relations between the Fulu config and the Gloas preset that `fuluTotalActiveBalance` needs. They hold
 on mainnet and on minimal (`fuluCompat`, `fuluCompat_minimal`). -/
 structure FuluCompat (p : Preset) (f : FuluConfig) : Prop where
   quotient : f.CHURN_LIMIT_QUOTIENT = 2 * p.CHURN_LIMIT_QUOTIENT_GLOAS
@@ -34,20 +34,20 @@ structure FuluCompat (p : Preset) (f : FuluConfig) : Prop where
   increment_pos : 0 < p.EFFECTIVE_BALANCE_INCREMENT
   cap_le : f.MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT ≤ p.MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS
 
-theorem fuluCompat_mainnet : FuluCompat (Preset.ofVar PresetVar.mainnet) FuluConfig.mainnet :=
+theorem fuluCompat_mainnet : FuluCompat (Preset.ofValues PresetValues.mainnet) FuluConfig.mainnet :=
   ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩
 
 /-- The Fulu config and the preset agree, for the configs of the generic proofs. -/
-class FuluCfg.Ok [PresetCfg] [FuluCfg] : Prop where
+class CurrentFuluConfig.Valid [CurrentPreset] [CurrentFuluConfig] : Prop where
   compat : FuluCompat P FC
 
-theorem fuluCompat [PresetCfg] [FuluCfg] [FuluCfg.Ok] : FuluCompat P FC := FuluCfg.Ok.compat
+theorem fuluCompat [CurrentPreset] [CurrentFuluConfig] [CurrentFuluConfig.Valid] : FuluCompat P FC := CurrentFuluConfig.Valid.compat
 
 theorem fuluCompat_minimal : FuluCompat Preset.minimal FuluConfig.minimal :=
   ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩
 
 /-- The total whose Gloas churn is the Fulu churn of `total_active_balance`. -/
-def fuluTab (p : Preset) (f : FuluConfig) (total_active_balance : Gwei) : Gwei :=
+def fuluTotalActiveBalance (p : Preset) (f : FuluConfig) (total_active_balance : Gwei) : Gwei :=
   min (total_active_balance / 2) (f.MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT *
     p.CHURN_LIMIT_QUOTIENT_GLOAS)
 
@@ -80,14 +80,14 @@ theorem min_min_of_le (c g x : Nat) (h : c ≤ g) : min g (min c x) = min c x :=
 
 /-- The Nat value of both churns. -/
 theorem fulu_churn_value (p : Preset) (f : FuluConfig) (hc : FuluCompat p f) (tab : Nat) :
-    let w := max p.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA (fuluTab p f tab / p.CHURN_LIMIT_QUOTIENT_GLOAS)
+    let w := max p.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA (fuluTotalActiveBalance p f tab / p.CHURN_LIMIT_QUOTIENT_GLOAS)
     let v := max p.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA (tab / f.CHURN_LIMIT_QUOTIENT)
     w - w % p.EFFECTIVE_BALANCE_INCREMENT =
       min f.MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT (v - v % p.EFFECTIVE_BALANCE_INCREMENT) := by
   intro w v
-  have hdiv : fuluTab p f tab / p.CHURN_LIMIT_QUOTIENT_GLOAS =
+  have hdiv : fuluTotalActiveBalance p f tab / p.CHURN_LIMIT_QUOTIENT_GLOAS =
       min (tab / f.CHURN_LIMIT_QUOTIENT) f.MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT := by
-    unfold fuluTab
+    unfold fuluTotalActiveBalance
     rw [div_min_eq, Nat.div_div_eq_div_mul,
       show (2 : Nat) * p.CHURN_LIMIT_QUOTIENT_GLOAS = f.CHURN_LIMIT_QUOTIENT from hc.quotient.symm,
       Nat.mul_div_cancel _ hc.quotient_pos]
@@ -106,9 +106,9 @@ theorem uint64Mod_ok (a b : Nat) (h : 0 < b) : uint64Mod a b = .ok (a % b) := by
 theorem uint64Sub_mod_ok (a b : Nat) : uint64Sub a (a % b) = .ok (a - a % b) := by
   simp [uint64Sub, Nat.mod_le, pure, Except.pure]
 
-/-- The Fulu churn is the Gloas exit churn at `fuluTab`. -/
+/-- The Fulu churn is the Gloas exit churn at `fuluTotalActiveBalance`. -/
 theorem fulu_exit_churn_eq (p : Preset) (f : FuluConfig) (hc : FuluCompat p f) (tab : Gwei) :
-    get_activation_exit_churn_limit p f tab = get_exit_churn_limit p (fuluTab p f tab) := by
+    get_activation_exit_churn_limit p f tab = get_exit_churn_limit p (fuluTotalActiveBalance p f tab) := by
   have hq : 0 < f.CHURN_LIMIT_QUOTIENT := quotient_pos_of _ _ hc.quotient hc.quotient_pos
   have hv := fulu_churn_value p f hc tab
   simp only at hv
@@ -116,9 +116,9 @@ theorem fulu_exit_churn_eq (p : Preset) (f : FuluConfig) (hc : FuluCompat p f) (
     uint64Div_ok _ _ hq, uint64Div_ok _ _ hc.quotient_pos, uint64Mod_ok _ _ hc.increment_pos,
     uint64Sub_mod_ok, bind, Except.bind, pure, Except.pure, hv]
 
-/-- The Fulu churn is the Gloas activation churn at `fuluTab`. -/
+/-- The Fulu churn is the Gloas activation churn at `fuluTotalActiveBalance`. -/
 theorem fulu_activation_churn_eq (p : Preset) (f : FuluConfig) (hc : FuluCompat p f) (tab : Gwei) :
-    get_activation_exit_churn_limit p f tab = get_activation_churn_limit p (fuluTab p f tab) := by
+    get_activation_exit_churn_limit p f tab = get_activation_churn_limit p (fuluTotalActiveBalance p f tab) := by
   have hq : 0 < f.CHURN_LIMIT_QUOTIENT := quotient_pos_of _ _ hc.quotient hc.quotient_pos
   have hv := fulu_churn_value p f hc tab
   simp only at hv
@@ -130,31 +130,31 @@ theorem fulu_activation_churn_eq (p : Preset) (f : FuluConfig) (hc : FuluCompat 
 theorem compute_exit_epoch_and_update_churn_fulu_eq (p : Preset) (f : FuluConfig)
     (hc : FuluCompat p f) (tab : Gwei) (state : BeaconState) (exit_balance : Gwei) :
     compute_exit_epoch_and_update_churn_fulu p f tab state exit_balance =
-      compute_exit_epoch_and_update_churn p (fuluTab p f tab) state exit_balance := by
+      compute_exit_epoch_and_update_churn p (fuluTotalActiveBalance p f tab) state exit_balance := by
   unfold compute_exit_epoch_and_update_churn_fulu compute_exit_epoch_and_update_churn
   rw [fulu_exit_churn_eq p f hc]
 
 theorem initiate_validator_exit_fulu_eq (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
     (tab : Gwei) (state : BeaconState) (index : ValidatorIndex) :
     initiate_validator_exit_fulu p f tab state index =
-      initiate_validator_exit p (fuluTab p f tab) state index := by
+      initiate_validator_exit p (fuluTotalActiveBalance p f tab) state index := by
   unfold initiate_validator_exit_fulu initiate_validator_exit
   simp only [compute_exit_epoch_and_update_churn_fulu_eq p f hc]
 
-/-- Fulu `process_registry_updates` is the Gloas function at `fuluTab`. -/
+/-- Fulu `process_registry_updates` is the Gloas function at `fuluTotalActiveBalance`. -/
 theorem process_registry_updates_fulu_eq (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
     (tab : Gwei) (state : BeaconState) :
     process_registry_updates_fulu p f tab state =
-      process_registry_updates p (fuluTab p f tab) state := by
+      process_registry_updates p (fuluTotalActiveBalance p f tab) state := by
   unfold process_registry_updates_fulu process_registry_updates
   simp only [initiate_validator_exit_fulu_eq p f hc]
 
-/-- Fulu `process_pending_deposits` is the Gloas function at `fuluTab`, with the same preset. -/
+/-- Fulu `process_pending_deposits` is the Gloas function at `fuluTotalActiveBalance`, with the same preset. -/
 theorem process_pending_deposits_fulu_tab_eq (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
     (tab : Gwei) (apply_pending_deposit : BeaconState → PendingDeposit → SpecM BeaconState)
     (state : BeaconState) :
     process_pending_deposits_fulu p f tab apply_pending_deposit state =
-      process_pending_deposits p (fuluTab p f tab) apply_pending_deposit state := by
+      process_pending_deposits p (fuluTotalActiveBalance p f tab) apply_pending_deposit state := by
   unfold process_pending_deposits_fulu process_pending_deposits
   rw [fulu_activation_churn_eq p f hc]
 

@@ -10,11 +10,11 @@ import EpochProofs.Sanity.SinglePass
 /-!
 # The balance floor on every reachable state
 
-`Reachable` states come from an initial state by `state_transition` steps. On mainnet, each
-`process_epoch` call of such a step starts from a state with `BoundaryOk`: the finalized epoch
+`ReachableByBlocks` states come from an initial state by `state_transition` steps. On mainnet, each
+`process_epoch` call of such a step starts from a state with `EpochEndInvariants`: the finalized epoch
 is at most the current epoch, and every validator that is eligible for rewards has
 `effective_balance ≤ 256 * balance`. The proof adds the check
-`BoundaryOk` before each `process_epoch` and shows that the checked transition equals the
+`EpochEndInvariants` before each `process_epoch` and shows that the checked transition equals the
 real one.
 -/
 
@@ -27,7 +27,7 @@ noncomputable def process_epoch_checked (p : Preset) (o : Oracle) (C : BeaconSta
   if C s then process_epoch p o s else throw .assertionFailed
 
 /-- A successful `uint64Mod` is the `Nat` remainder. -/
-private theorem uint64Mod_ok'' [PresetCfg] {a b c : Nat} (h : uint64Mod a b = .ok c) : c = a % b := by
+private theorem uint64Mod_ok'' [CurrentPreset] {a b c : Nat} (h : uint64Mod a b = .ok c) : c = a % b := by
   unfold uint64Mod at h
   split at h
   · cases h
@@ -36,7 +36,7 @@ private theorem uint64Mod_ok'' [PresetCfg] {a b c : Nat} (h : uint64Mod a b = .o
 /-- The `process_slots` loop with a checked `process_epoch` equals the loop with the real one,
 and keeps `P`, if `P` gives the check `C` before each `process_epoch`. `Q` holds after
 `process_epoch`, and the step to the next slot turns it back into `P`. -/
-theorem process_slots_loop_checked [PresetCfg] (p : Preset) (o : Oracle) (slot : Slot)
+theorem process_slots_loop_checked [CurrentPreset] (p : Preset) (o : Oracle) (slot : Slot)
     (P Q C : BeaconState → Prop)
     (hslot : ∀ s s', process_slot p o s = .ok s' → s.slot < slot → P s → P s')
     (hepoch : ∀ s s', s.slot < slot → (s.slot + 1) % p.SLOTS_PER_EPOCH = 0 →
@@ -110,45 +110,45 @@ theorem process_slots_loop_checked [PresetCfg] (p : Preset) (o : Oracle) (slot :
 
 /-- The effective balance part of `EpochEntry` for the previous epoch
 `slot / SLOTS_PER_EPOCH - 1`. -/
-def EntryEB [PresetCfg] (s : BeaconState) : Prop :=
+def EligibleBalancesAboveFloor [CurrentPreset] (s : BeaconState) : Prop :=
   ∀ i (hi : i < s.validators.length),
     rewardsEligible (s.slot / P.SLOTS_PER_EPOCH - 1) s.validators[i] = .ok true →
       s.validators[i].effective_balance ≤ 256 * s.balances.getD i 0
 
-/-- The facts at the end of an epoch: `FfgInvariant`, `RowsOk` and `EntryEB`. -/
-def BoundaryOk [PresetCfg] (s : BeaconState) : Prop :=
-  FfgInvariant P s ∧ RowsOk s ∧ EntryEB s
+/-- The facts at the end of an epoch: `CheckpointsInOrder`, `ListLengthsMatch` and `EligibleBalancesAboveFloor`. -/
+def EpochEndInvariants [CurrentPreset] (s : BeaconState) : Prop :=
+  CheckpointsInOrder P s ∧ ListLengthsMatch s ∧ EligibleBalancesAboveFloor s
 
 /-- At the end of an epoch, the finalized epoch is at most the current epoch. -/
-theorem BoundaryOk.finalized_le [PresetCfg] {s : BeaconState} (h : BoundaryOk s) :
+theorem EpochEndInvariants.finalized_le [CurrentPreset] {s : BeaconState} (h : EpochEndInvariants s) :
     s.finalized_checkpoint.epoch ≤ s.slot / P.SLOTS_PER_EPOCH :=
   h.1.finalized_le
 
-/-- The loop invariant of `process_slots` from slot `start` on mainnet. `FfgInvariant`,
-`RowsOk`, `ExitDelay` and `ExitEpochsU64` hold, and the budget of the current epoch holds
-from a state `s0` with `AfterEB`. `n` sync aggregates ran in the epoch, at most one for each
+/-- The loop invariant of `process_slots` from slot `start` on mainnet. `CheckpointsInOrder`,
+`ListLengthsMatch`, `ExitToWithdrawableDelay` and `ExitEpochsAreUint64` hold, and the budget of the current epoch holds
+from a state `s0` with `AfterEffectiveBalanceUpdates`. `n` sync aggregates ran in the epoch, at most one for each
 slot so far. After the first slot step, the current slot has no block yet. -/
-def LoopInv [PresetCfg] (start : Slot) (t : BeaconState) : Prop :=
-  FfgInvariant P t ∧ RowsOk t ∧ ExitDelay P t ∧ ExitEpochsU64 t ∧
+def SlotLoopInvariants [CurrentPreset] (start : Slot) (t : BeaconState) : Prop :=
+  CheckpointsInOrder P t ∧ ListLengthsMatch t ∧ ExitToWithdrawableDelay P t ∧ ExitEpochsAreUint64 t ∧
     start ≤ t.slot ∧
-    ∃ (s0 : BeaconState) (n : Nat), AfterEB P s0 ∧
-      Budget P s0 (t.slot / P.SLOTS_PER_EPOCH) (fun _ => syncLoss) n t ∧
+    ∃ (s0 : BeaconState) (n : Nat), AfterEffectiveBalanceUpdates P s0 ∧
+      BalanceLossBounded P s0 (t.slot / P.SLOTS_PER_EPOCH) (fun _ => syncLoss) n t ∧
       n + t.slot / P.SLOTS_PER_EPOCH * P.SLOTS_PER_EPOCH ≤ t.slot + 1 ∧
       (start < t.slot →
         n + t.slot / P.SLOTS_PER_EPOCH * P.SLOTS_PER_EPOCH ≤ t.slot)
 
 /-- The invariant of a reachable state. -/
-def ReachInv [PresetCfg] (t : BeaconState) : Prop := LoopInv t.slot t
+def StateInvariants [CurrentPreset] (t : BeaconState) : Prop := SlotLoopInvariants t.slot t
 
 /-- After `process_epoch` inside `process_slots` from slot `start`. -/
-def PostEpoch [PresetCfg] (start : Slot) (t : BeaconState) : Prop :=
-  FfgInvariantAfter P t ∧ RowsOk t ∧ ExitDelay P t ∧
-    ExitEpochsU64 t ∧ AfterEB P t ∧ start ≤ t.slot
+def PostEpoch [CurrentPreset] (start : Slot) (t : BeaconState) : Prop :=
+  CheckpointsInOrderAfterJustification P t ∧ ListLengthsMatch t ∧ ExitToWithdrawableDelay P t ∧
+    ExitEpochsAreUint64 t ∧ AfterEffectiveBalanceUpdates P t ∧ start ≤ t.slot
 
-/-- The budget keeps the effective balances of `s0`, so `AfterEB s0` gives `EBOk`. -/
-theorem Budget.ebOk [PresetCfg] {s0 t : BeaconState} {E : Epoch} {L : Nat → Gwei} {n : Nat}
-    (h0 : AfterEB P s0) (hb : Budget P s0 E L n t) :
-    EBOk P t := by
+/-- The budget keeps the effective balances of `s0`, so `AfterEffectiveBalanceUpdates s0` gives `EffectiveBalancesValid`. -/
+theorem BalanceLossBounded.ebOk [CurrentPreset] {s0 t : BeaconState} {E : Epoch} {L : Nat → Gwei} {n : Nat}
+    (h0 : AfterEffectiveBalanceUpdates P s0) (hb : BalanceLossBounded P s0 E L n t) :
+    EffectiveBalancesValid P t := by
   intro v hv
   obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hv
   have hi0 : i < s0.validators.length := hb.1 ▸ hi
@@ -160,25 +160,25 @@ theorem Budget.ebOk [PresetCfg] {s0 t : BeaconState} {E : Epoch} {L : Nat → Gw
   obtain ⟨hmod, -, hmax⟩ := h0.2 i hi0
   exact ⟨heb ▸ hmod, heb ▸ hmax⟩
 
-/-- `EBOk` and `EffectiveBalanceFloor` give `AfterEB`. -/
-theorem AfterEB.of_floor [PresetCfg] {s : BeaconState} (he : EBOk P s)
-    (hf : EffectiveBalanceFloor P s) : AfterEB P s :=
+/-- `EffectiveBalancesValid` and `EffectiveBalanceFloor` give `AfterEffectiveBalanceUpdates`. -/
+theorem AfterEffectiveBalanceUpdates.of_floor [CurrentPreset] {s : BeaconState} (he : EffectiveBalancesValid P s)
+    (hf : EffectiveBalanceFloor P s) : AfterEffectiveBalanceUpdates P s :=
   ⟨hf.1, fun i hi => ⟨(hf.2 i hi).1, (hf.2 i hi).2, (he _ (List.getElem_mem hi)).2⟩⟩
 
-/-- A genesis-like state with `FfgInvariant`, `RowsOk`, `ExitDelay`, `ExitEpochsU64` and
-`AfterEB` has the invariant. -/
-theorem ReachInv.of_start [PresetCfg] {s : BeaconState} (hffg : FfgInvariant P s)
-    (hrows : RowsOk s) (hd : ExitDelay P s) (hx : ExitEpochsU64 s)
-    (h0 : AfterEB P s) : ReachInv s := by
-  refine ⟨hffg, hrows, hd, hx, Nat.le_refl _, s, 0, h0, Budget.init _ _ _ _, ?_,
+/-- A genesis-like state with `CheckpointsInOrder`, `ListLengthsMatch`, `ExitToWithdrawableDelay`, `ExitEpochsAreUint64` and
+`AfterEffectiveBalanceUpdates` has the invariant. -/
+theorem StateInvariants.of_start [CurrentPreset] {s : BeaconState} (hffg : CheckpointsInOrder P s)
+    (hrows : ListLengthsMatch s) (hd : ExitToWithdrawableDelay P s) (hx : ExitEpochsAreUint64 s)
+    (h0 : AfterEffectiveBalanceUpdates P s) : StateInvariants s := by
+  refine ⟨hffg, hrows, hd, hx, Nat.le_refl _, s, 0, h0, BalanceLossBounded.init _ _ _ _, ?_,
     fun h => absurd h (Nat.lt_irrefl _)⟩
   have := Nat.div_mul_le_self s.slot P.SLOTS_PER_EPOCH
   omega
 
-/-- The invariant before a `process_epoch` gives `BoundaryOk`. -/
-theorem LoopInv.boundaryOk [PresetCfg] [PresetCfg.Ok] {start : Slot} {s : BeaconState}
+/-- The invariant before a `process_epoch` gives `EpochEndInvariants`. -/
+theorem SlotLoopInvariants.boundaryOk [CurrentPreset] [CurrentPreset.Valid] {start : Slot} {s : BeaconState}
     (hfar : s.slot / P.SLOTS_PER_EPOCH < FAR_FUTURE_EPOCH)
-    (h : LoopInv start s) : BoundaryOk s := by
+    (h : SlotLoopInvariants start s) : EpochEndInvariants s := by
   obtain ⟨hffg, hrows, -, -, -, s0, n, h0, hb, hn, -⟩ := h
   refine ⟨hffg, hrows, ?_⟩
   have hn32 : n ≤ P.SLOTS_PER_EPOCH := by
@@ -187,34 +187,34 @@ theorem LoopInv.boundaryOk [PresetCfg] [PresetCfg.Ok] {start : Slot} {s : Beacon
     omega
   exact epochEntry_effective_balance_mainnet s0 s _ _ n h0 hb hn32 hfar (by omega)
 
-/-- The five step facts of `LoopInv` in the `process_slots` loop with target `slot`: the slot
-step, `process_epoch` (to `PostEpoch`), the check `BoundaryOk`, and the two slot increments. -/
-theorem loopInv_steps [PresetCfg] [PresetCfg.Ok] (o : Oracle) (slot : Slot) (start : Slot) (hslot64 : slot < 2 ^ 64) :
+/-- The five step facts of `SlotLoopInvariants` in the `process_slots` loop with target `slot`: the slot
+step, `process_epoch` (to `PostEpoch`), the check `EpochEndInvariants`, and the two slot increments. -/
+theorem loopInv_steps [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (slot : Slot) (start : Slot) (hslot64 : slot < 2 ^ 64) :
     (∀ s s', process_slot P o s = .ok s' → s.slot < slot →
-      LoopInv start s → LoopInv start s') ∧
+      SlotLoopInvariants start s → SlotLoopInvariants start s') ∧
     (∀ s s', s.slot < slot → (s.slot + 1) % P.SLOTS_PER_EPOCH = 0 →
-      process_epoch P o s = .ok s' → LoopInv start s → PostEpoch start s') ∧
+      process_epoch P o s = .ok s' → SlotLoopInvariants start s → PostEpoch start s') ∧
     (∀ s, s.slot < slot → (s.slot + 1) % P.SLOTS_PER_EPOCH = 0 →
-      LoopInv start s → BoundaryOk s) ∧
+      SlotLoopInvariants start s → EpochEndInvariants s) ∧
     (∀ s, (s.slot + 1) % P.SLOTS_PER_EPOCH = 0 → PostEpoch start s →
-      LoopInv start { s with slot := s.slot + 1 }) ∧
+      SlotLoopInvariants start { s with slot := s.slot + 1 }) ∧
     (∀ s, s.slot < slot → (s.slot + 1) % P.SLOTS_PER_EPOCH ≠ 0 →
-      LoopInv start s → LoopInv start { s with slot := s.slot + 1 }) := by
+      SlotLoopInvariants start s → SlotLoopInvariants start { s with slot := s.slot + 1 }) := by
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · intro t t' ht _ hP
     obtain ⟨hf, hsl⟩ := process_slot_frame _ o t t' ht
     obtain ⟨hffg, hrows, hd, hx, hst, s0, n, h0, hb, hn, hstrict⟩ := hP
     exact ⟨hffg.of_checkpointsStable (process_slot_checkpointsStable _ o t t' ht),
-      (process_slot_len _ o t t' ht).rowsOk hrows, ExitDelay.of_validators_eq hf.1 hd,
-      ExitEpochsU64.of_validators_eq hf.1 hx, hsl ▸ hst,
+      (process_slot_len _ o t t' ht).rowsOk hrows, ExitToWithdrawableDelay.of_validators_eq hf.1 hd,
+      ExitEpochsAreUint64.of_validators_eq hf.1 hx, hsl ▸ hst,
       s0, n, h0,
-      Budget.of_eq hf.1 hf.2.1 (hsl ▸ hb), hsl ▸ hn, hsl ▸ hstrict⟩
+      BalanceLossBounded.of_eq hf.1 hf.2.1 (hsl ▸ hb), hsl ▸ hn, hsl ▸ hstrict⟩
   · intro t t' _ _ he hP
     obtain ⟨hffg, hrows, hd, hx, hst, s0, n, h0, hb, -⟩ := hP
     obtain ⟨he', hf⟩ := process_epoch_effective_balances o t t' he (hb.ebOk h0)
     obtain ⟨hffg', hsl⟩ := process_epoch_ffg _ o t t' he hffg
-    exact ⟨hffg', process_epoch_rowsOk _ o t t' he hrows, process_epoch_exitDelay _ o t t' he hd,
-      process_epoch_exitEpochsU64 _ o t t' he hx, AfterEB.of_floor he' hf, hsl ▸ hst⟩
+    exact ⟨hffg', process_epoch_listLengthsMatch _ o t t' he hrows, process_epoch_exitDelay _ o t t' he hd,
+      process_epoch_exitEpochsU64 _ o t t' he hx, AfterEffectiveBalanceUpdates.of_floor he' hf, hsl ▸ hst⟩
   · intro t hlt _ hP
     refine hP.boundaryOk (slot_div_lt_far P_slots_gt_one ?_)
     simp only [Slot] at *
@@ -222,7 +222,7 @@ theorem loopInv_steps [PresetCfg] [PresetCfg.Ok] (o : Oracle) (slot : Slot) (sta
   · intro t hz hQ
     obtain ⟨⟨hord, hcj⟩, hrows, hd, hx, h0, hst⟩ := hQ
     have hle := Nat.div_mul_le_self (t.slot + 1) P.SLOTS_PER_EPOCH
-    have hffg : FfgInvariant P { t with slot := t.slot + 1 } := by
+    have hffg : CheckpointsInOrder P { t with slot := t.slot + 1 } := by
       refine ⟨hord, .inl ?_⟩
       show t.current_justified_checkpoint.epoch < (t.slot + 1) / P.SLOTS_PER_EPOCH
       have hcj' : t.current_justified_checkpoint.epoch ≤ t.slot / P.SLOTS_PER_EPOCH :=
@@ -231,7 +231,7 @@ theorem loopInv_steps [PresetCfg] [PresetCfg.Ok] (o : Oracle) (slot : Slot) (sta
       simp only [Slot, Epoch] at *
       omega
     refine ⟨hffg, hrows, hd, hx, Nat.le_succ_of_le hst, { t with slot := t.slot + 1 }, 0,
-      AfterEB.of_eq rfl rfl h0, Budget.init _ _ _ _, ?_, fun _ => ?_⟩
+      AfterEffectiveBalanceUpdates.of_eq rfl rfl h0, BalanceLossBounded.init _ _ _ _, ?_, fun _ => ?_⟩
     · show 0 + (t.slot + 1) / P.SLOTS_PER_EPOCH * P.SLOTS_PER_EPOCH ≤
         t.slot + 1 + 1
       simp only [Slot] at *
@@ -250,9 +250,9 @@ theorem loopInv_steps [PresetCfg] [PresetCfg.Ok] (o : Oracle) (slot : Slot) (sta
       show _ < (t.slot + 1) / P.SLOTS_PER_EPOCH ∨ _
       rw [hE]
       exact hcj
-    · show Budget _ s0 ((t.slot + 1) / _) _ n { t with slot := t.slot + 1 }
+    · show BalanceLossBounded _ s0 ((t.slot + 1) / _) _ n { t with slot := t.slot + 1 }
       rw [hE]
-      exact Budget.of_eq rfl rfl hb
+      exact BalanceLossBounded.of_eq rfl rfl hb
     · show n + (t.slot + 1) / _ * _ ≤ t.slot + 1 + 1
       rw [hE]
       omega
@@ -261,27 +261,27 @@ theorem loopInv_steps [PresetCfg] [PresetCfg.Ok] (o : Oracle) (slot : Slot) (sta
       exact hn
 
 /-- `process_slots` from a state with the invariant: the checked loop equals the real loop, and
-it keeps `LoopInv`. -/
-theorem process_slots_loop_reach [PresetCfg] [PresetCfg.Ok] (o : Oracle) (slot : Slot) (start : Slot)
+it keeps `SlotLoopInvariants`. -/
+theorem process_slots_loop_reach [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (slot : Slot) (start : Slot)
     (hslot64 : slot < 2 ^ 64) :
-    ∀ fuel st, LoopInv start st →
-      process_slots_loop P o (process_epoch_checked P o BoundaryOk)
+    ∀ fuel st, SlotLoopInvariants start st →
+      process_slots_loop P o (process_epoch_checked P o EpochEndInvariants)
           slot fuel st =
         process_slots_loop P o (process_epoch P o) slot fuel st ∧
       ∀ st', process_slots_loop P o (process_epoch P o) slot fuel st =
-        .ok st' → LoopInv start st' :=
+        .ok st' → SlotLoopInvariants start st' :=
   have h := loopInv_steps o slot start hslot64
-  process_slots_loop_checked _ o slot (LoopInv start) (PostEpoch start) BoundaryOk
+  process_slots_loop_checked _ o slot (SlotLoopInvariants start) (PostEpoch start) EpochEndInvariants
     h.1 h.2.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2
 
 /-- `process_slots` from a state with the invariant: the checked call equals the real call,
-and the result has `LoopInv` from the old slot, at a later slot. -/
-theorem process_slots_reach [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (slot : Slot)
-    (hslot64 : slot < 2 ^ 64) (hs : ReachInv s) :
-    process_slots P o (process_epoch_checked P o BoundaryOk) s slot =
+and the result has `SlotLoopInvariants` from the old slot, at a later slot. -/
+theorem process_slots_reach [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) (slot : Slot)
+    (hslot64 : slot < 2 ^ 64) (hs : StateInvariants s) :
+    process_slots P o (process_epoch_checked P o EpochEndInvariants) s slot =
         process_slots P o (process_epoch P o) s slot ∧
       ∀ s1, process_slots P o (process_epoch P o) s slot = .ok s1 →
-        LoopInv s.slot s1 ∧ s.slot < s1.slot := by
+        SlotLoopInvariants s.slot s1 ∧ s.slot < s1.slot := by
   unfold process_slots
   simp only [bind, Except.bind, pure, Except.pure]
   split
@@ -294,12 +294,12 @@ theorem process_slots_reach [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconS
     rw [this]
     exact Decidable.of_not_not hlt
 
-/-- `state_transition` with the check `BoundaryOk` before each `process_epoch`. -/
-noncomputable def state_transition_checked [PresetCfg] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+/-- `state_transition` with the check `EpochEndInvariants` before each `process_epoch`. -/
+noncomputable def state_transition_checked [CurrentPreset] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (state : BeaconState) (signed_block : SignedBeaconBlock)
     (validate_result : Bool := true) : SpecM BeaconState := do
   let block := signed_block.message
-  let state ← process_slots P o (process_epoch_checked P o BoundaryOk)
+  let state ← process_slots P o (process_epoch_checked P o EpochEndInvariants)
     state block.slot
   if validate_result then
     if ¬ (← verify_block_signature P o state signed_block) then
@@ -310,9 +310,9 @@ noncomputable def state_transition_checked [PresetCfg] (o : Oracle) (max_blobs_p
   pure state
 
 /-- From a state with the invariant, the checked transition equals the real one. -/
-theorem state_transition_checked_eq [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem state_transition_checked_eq [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (s : BeaconState) (signed_block : SignedBeaconBlock)
-    (validate_result : Bool) (hslot64 : signed_block.message.slot < 2 ^ 64) (hs : ReachInv s) :
+    (validate_result : Bool) (hslot64 : signed_block.message.slot < 2 ^ 64) (hs : StateInvariants s) :
     state_transition_checked o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
         validate_result =
       state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
@@ -324,16 +324,16 @@ theorem state_transition_checked_eq [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max
 /-- One `state_transition` keeps the invariant. The block's slot is a `u64`, its sync aggregate
 has at most 512 bits, and the total active balance before the block is at most 139 million
 ETH. -/
-theorem state_transition_reach [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem state_transition_reach [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (s s' : BeaconState) (signed_block : SignedBeaconBlock)
     (validate_result : Bool) (hslot64 : signed_block.message.slot < 2 ^ 64)
     (hbits : signed_block.message.body.sync_aggregate.sync_committee_bits.length ≤ P.SYNC_COMMITTEE_SIZE)
     (htab : ∀ s1, process_slots P o (process_epoch P o) s
       signed_block.message.slot = .ok s1 → ∀ tab,
         get_total_active_balance P s1 = .ok tab → tab ≤ 139000000000000000)
-    (hs : ReachInv s)
+    (hs : StateInvariants s)
     (h : state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
-      validate_result = .ok s') : ReachInv s' := by
+      validate_result = .ok s') : StateInvariants s' := by
   unfold state_transition at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
   obtain ⟨hinv1, hlt1⟩ := (process_slots_reach o s _ hslot64 hs).2 s1 h1
@@ -341,7 +341,7 @@ theorem state_transition_reach [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blob
   obtain ⟨hffg1, hrows1, hd1, hx1, -, s0, n, h0, hb1, -, hstrict⟩ := hinv1
   have hn1 := hstrict hlt1
   have hblock : ∀ s2, process_block P o max_blobs_per_block GLOAS_FORK_EPOCH s1
-      signed_block.message = .ok s2 → ReachInv s2 := by
+      signed_block.message = .ok s2 → StateInvariants s2 := by
     intro s2 h2
     have hfar : s1.slot / P.SLOTS_PER_EPOCH < FAR_FUTURE_EPOCH := by
       rw [hs1]
@@ -366,55 +366,55 @@ theorem state_transition_reach [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blob
 /-- The states that `state_transition` steps reach from `init` on mainnet. Each block's slot is
 a `u64` and its sync aggregate has at most `SYNC_COMMITTEE_SIZE = 512` bits, as their SSZ types
 say. -/
-inductive Reachable [PresetCfg] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+inductive ReachableByBlocks [CurrentPreset] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState) : BeaconState → Prop
-  | init : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init init
+  | init : ReachableByBlocks o max_blobs_per_block GLOAS_FORK_EPOCH init init
   | step {s s' : BeaconState} (signed_block : SignedBeaconBlock) (validate_result : Bool) :
-      Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s →
+      ReachableByBlocks o max_blobs_per_block GLOAS_FORK_EPOCH init s →
       signed_block.message.slot < 2 ^ 64 →
       signed_block.message.body.sync_aggregate.sync_committee_bits.length ≤ P.SYNC_COMMITTEE_SIZE →
       state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
         validate_result = .ok s' →
-      Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s'
+      ReachableByBlocks o max_blobs_per_block GLOAS_FORK_EPOCH init s'
 
 /-- The supply hypothesis: before each block of a reachable run, the total active balance is
 at most 139 million ETH. The total ETH supply is about 120.7 million ETH. -/
-def SupplyBound [PresetCfg] (o : Oracle) (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch)
+def ActiveBalanceBounded [CurrentPreset] (o : Oracle) (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch)
     (init : BeaconState) : Prop :=
   ∀ (s s1 : BeaconState) (signed_block : SignedBeaconBlock),
-    Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s →
+    ReachableByBlocks o max_blobs_per_block GLOAS_FORK_EPOCH init s →
     process_slots P o (process_epoch P o) s signed_block.message.slot =
       .ok s1 →
     ∀ tab, get_total_active_balance P s1 = .ok tab → tab ≤ 139000000000000000
 
 /-- Every reachable state has the invariant. -/
-theorem reachable_inv [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem reachable_inv [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
-    (hffg : FfgInvariant P init) (hrows : RowsOk init)
-    (hd : ExitDelay P init) (hx : ExitEpochsU64 init)
-    (h0 : AfterEB P init)
-    (hsupply : SupplyBound o max_blobs_per_block GLOAS_FORK_EPOCH init) :
-    ∀ s, Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s → ReachInv s := by
+    (hffg : CheckpointsInOrder P init) (hrows : ListLengthsMatch init)
+    (hd : ExitToWithdrawableDelay P init) (hx : ExitEpochsAreUint64 init)
+    (h0 : AfterEffectiveBalanceUpdates P init)
+    (hsupply : ActiveBalanceBounded o max_blobs_per_block GLOAS_FORK_EPOCH init) :
+    ∀ s, ReachableByBlocks o max_blobs_per_block GLOAS_FORK_EPOCH init s → StateInvariants s := by
   intro s hr
   induction hr with
-  | init => exact ReachInv.of_start hffg hrows hd hx h0
+  | init => exact StateInvariants.of_start hffg hrows hd hx h0
   | step signed_block validate_result hr hslot64 hbits h ih =>
     exact state_transition_reach o _ _ _ _ signed_block validate_result hslot64 hbits
       (fun s1 h1 => hsupply _ s1 signed_block hr h1) ih h
 
-/-- On mainnet, from a start state with `FfgInvariant`, `RowsOk`, `ExitDelay` and `AfterEB`,
+/-- On mainnet, from a start state with `CheckpointsInOrder`, `ListLengthsMatch`, `ExitToWithdrawableDelay` and `AfterEffectiveBalanceUpdates`,
 and under the supply bound,
-every `state_transition` from a reachable state equals the one that checks `BoundaryOk`
+every `state_transition` from a reachable state equals the one that checks `EpochEndInvariants`
 before each `process_epoch`. So at every epoch boundary of every run, the finalized epoch is
 at most the current epoch, and `effective_balance ≤ 256 * balance` for each validator that is
 eligible for rewards. -/
-theorem reachable_boundaryOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem reachable_boundaryOk [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
-    (hffg : FfgInvariant P init) (hrows : RowsOk init)
-    (hd : ExitDelay P init) (hx : ExitEpochsU64 init)
-    (h0 : AfterEB P init)
-    (hsupply : SupplyBound o max_blobs_per_block GLOAS_FORK_EPOCH init)
-    (s : BeaconState) (hr : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s)
+    (hffg : CheckpointsInOrder P init) (hrows : ListLengthsMatch init)
+    (hd : ExitToWithdrawableDelay P init) (hx : ExitEpochsAreUint64 init)
+    (h0 : AfterEffectiveBalanceUpdates P init)
+    (hsupply : ActiveBalanceBounded o max_blobs_per_block GLOAS_FORK_EPOCH init)
+    (s : BeaconState) (hr : ReachableByBlocks o max_blobs_per_block GLOAS_FORK_EPOCH init s)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (hslot64 : signed_block.message.slot < 2 ^ 64) :
     state_transition_checked o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
@@ -424,27 +424,27 @@ theorem reachable_boundaryOk [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_
   state_transition_checked_eq o _ _ s signed_block validate_result hslot64
     (reachable_inv o _ _ init hffg hrows hd hx h0 hsupply s hr)
 
-/-- After `process_justification_and_finalization` on a state with `BoundaryOk`, the state where
+/-- After `process_justification_and_finalization` on a state with `EpochEndInvariants`, the state where
 `EpochEntry` applies: the checkpoints are below the current epoch, so the finalized epoch is,
-and `RowsOk` and `EntryEB` still hold. The step keeps the slot, validators and balances. -/
-theorem BoundaryOk.of_justification [PresetCfg] {s s' : BeaconState} (hb : BoundaryOk s)
+and `ListLengthsMatch` and `EligibleBalancesAboveFloor` still hold. The step keeps the slot, validators and balances. -/
+theorem EpochEndInvariants.of_justification [CurrentPreset] {s s' : BeaconState} (hb : EpochEndInvariants s)
     (h : process_justification_and_finalization P s = .ok s') :
-    FfgInvariantAfter P s' ∧
-      s'.finalized_checkpoint.epoch ≤ s'.slot / P.SLOTS_PER_EPOCH ∧ RowsOk s' ∧
-      EntryEB s' := by
+    CheckpointsInOrderAfterJustification P s' ∧
+      s'.finalized_checkpoint.epoch ≤ s'.slot / P.SLOTS_PER_EPOCH ∧ ListLengthsMatch s' ∧
+      EligibleBalancesAboveFloor s' := by
   obtain ⟨⟨hv, hbal, -⟩, hsl⟩ := process_justification_and_finalization_frame _ s s' h
   have hafter := (process_justification_and_finalization_ffg _ s s' h hb.1).1
   refine ⟨hafter, hafter.checkpointsBelow.1,
     (process_justification_and_finalization_len _ s s' h).rowsOk hb.2.1, ?_⟩
   have he := hb.2.2
-  unfold EntryEB at he ⊢
+  unfold EligibleBalancesAboveFloor at he ⊢
   rw [hv, hbal, hsl]
   exact he
 
-/-! ## Any epoch function that agrees on `BoundaryOk` states -/
+/-! ## Any epoch function that agrees on `EpochEndInvariants` states -/
 
 /-- `SameResultOrBothFail` goes through a bind. -/
-theorem sameResultOrBothFail_bind [PresetCfg] {α β : Type} {x y : SpecM α} {k k' : α → SpecM β} (hxy : SameResultOrBothFail x y)
+theorem sameResultOrBothFail_bind [CurrentPreset] {α β : Type} {x y : SpecM α} {k k' : α → SpecM β} (hxy : SameResultOrBothFail x y)
     (hk : ∀ a, y = .ok a → SameResultOrBothFail (k a) (k' a)) : SameResultOrBothFail (x >>= k) (y >>= k') := by
   intro v
   cases hy : y with
@@ -463,7 +463,7 @@ theorem sameResultOrBothFail_bind [PresetCfg] {α β : Type} {x y : SpecM α} {k
 /-- The `process_slots` loop with an epoch function `f` has the same `ok` results as the loop
 with the real `process_epoch`, if `f` has the same `ok` results on states with `C`, and `P`
 gives `C` before each `process_epoch`. -/
-theorem process_slots_loop_sameResultOrBothFail [PresetCfg] (p : Preset) (o : Oracle) (slot : Slot)
+theorem process_slots_loop_sameResultOrBothFail [CurrentPreset] (p : Preset) (o : Oracle) (slot : Slot)
     (P Q C : BeaconState → Prop)
     (hslot : ∀ s s', process_slot p o s = .ok s' → s.slot < slot → P s → P s')
     (hepoch : ∀ s s', s.slot < slot → (s.slot + 1) % p.SLOTS_PER_EPOCH = 0 →
@@ -511,7 +511,7 @@ theorem process_slots_loop_sameResultOrBothFail [PresetCfg] (p : Preset) (o : Or
       exact SameResultOrBothFail.refl _
 
 /-- `state_transition` with an epoch function `f` in place of `process_epoch`. -/
-def state_transition_with [PresetCfg] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+def state_transition_with [CurrentPreset] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (f : BeaconState → SpecM BeaconState) (state : BeaconState)
     (signed_block : SignedBeaconBlock) (validate_result : Bool := true) : SpecM BeaconState := do
   let block := signed_block.message
@@ -525,18 +525,18 @@ def state_transition_with [PresetCfg] (o : Oracle) (max_blobs_per_block : Epoch 
   pure state
 
 /-- On mainnet, from a reachable state, `state_transition` with any epoch function `f` that has
-the same `ok` results as `process_epoch` on states with `BoundaryOk` has the same `ok` results
-as `state_transition`. So a Lighthouse epoch function that matches the spec on `BoundaryOk`
+the same `ok` results as `process_epoch` on states with `EpochEndInvariants` has the same `ok` results
+as `state_transition`. So a Lighthouse epoch function that matches the spec on `EpochEndInvariants`
 states matches it on every reachable run. -/
-theorem reachable_state_transition_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem reachable_state_transition_sameResultOrBothFail [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
-    (hffg : FfgInvariant P init) (hrows : RowsOk init)
-    (hd : ExitDelay P init) (hx : ExitEpochsU64 init)
-    (h0 : AfterEB P init)
-    (hsupply : SupplyBound o max_blobs_per_block GLOAS_FORK_EPOCH init)
+    (hffg : CheckpointsInOrder P init) (hrows : ListLengthsMatch init)
+    (hd : ExitToWithdrawableDelay P init) (hx : ExitEpochsAreUint64 init)
+    (h0 : AfterEffectiveBalanceUpdates P init)
+    (hsupply : ActiveBalanceBounded o max_blobs_per_block GLOAS_FORK_EPOCH init)
     (f : BeaconState → SpecM BeaconState)
-    (hf : ∀ t, BoundaryOk t → SameResultOrBothFail (f t) (process_epoch P o t))
-    (s : BeaconState) (hr : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s)
+    (hf : ∀ t, EpochEndInvariants t → SameResultOrBothFail (f t) (process_epoch P o t))
+    (s : BeaconState) (hr : ReachableByBlocks o max_blobs_per_block GLOAS_FORK_EPOCH init s)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (hslot64 : signed_block.message.slot < 2 ^ 64) :
     SameResultOrBothFail (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH f s signed_block
@@ -552,7 +552,7 @@ theorem reachable_state_transition_sameResultOrBothFail [PresetCfg] [PresetCfg.O
     split
     · exact SameResultOrBothFail.refl _
     · have h := loopInv_steps o _ s.slot hslot64
-      exact process_slots_loop_sameResultOrBothFail _ o _ (LoopInv s.slot) (PostEpoch s.slot) BoundaryOk
+      exact process_slots_loop_sameResultOrBothFail _ o _ (SlotLoopInvariants s.slot) (PostEpoch s.slot) EpochEndInvariants
         h.1 h.2.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2 f hf _ s hs
   unfold state_transition_with state_transition
   dsimp only
@@ -563,30 +563,30 @@ theorem reachable_state_transition_sameResultOrBothFail [PresetCfg] [PresetCfg.O
 /-- The states that the `process_slots` loop reaches from `s` on mainnet, one slot at a time.
 Each step runs `process_slot`, then `process_epoch` at the last slot of an epoch, then moves
 to the next slot. -/
-inductive SlotReach [PresetCfg] (o : Oracle) (s : BeaconState) : BeaconState → Prop
-  | refl : SlotReach o s s
-  | skip {t t1 : BeaconState} : SlotReach o s t → process_slot P o t = .ok t1 →
+inductive ReachableBySlots [CurrentPreset] (o : Oracle) (s : BeaconState) : BeaconState → Prop
+  | refl : ReachableBySlots o s s
+  | skip {t t1 : BeaconState} : ReachableBySlots o s t → process_slot P o t = .ok t1 →
       (t1.slot + 1) % P.SLOTS_PER_EPOCH ≠ 0 →
-      SlotReach o s { t1 with slot := t1.slot + 1 }
-  | epoch {t t1 t2 : BeaconState} : SlotReach o s t → process_slot P o t = .ok t1 →
+      ReachableBySlots o s { t1 with slot := t1.slot + 1 }
+  | epoch {t t1 t2 : BeaconState} : ReachableBySlots o s t → process_slot P o t = .ok t1 →
       (t1.slot + 1) % P.SLOTS_PER_EPOCH = 0 →
       process_epoch P o t1 = .ok t2 →
-      SlotReach o s { t2 with slot := t2.slot + 1 }
+      ReachableBySlots o s { t2 with slot := t2.slot + 1 }
 
 /-- The economic hypothesis on a run: every `process_epoch` input `t1` of a reachable run
-satisfies `Econ`. An input comes from a state `t` that the slot loop reaches, by
+satisfies `InputCondition`. An input comes from a state `t` that the slot loop reaches, by
 `process_slot`, at the last slot of an epoch. -/
-def EpochEcon [PresetCfg] (o : Oracle) (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch)
-    (init : BeaconState) (Econ : BeaconState → Prop) : Prop :=
-  ∀ (s t t1 : BeaconState), Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s →
-    SlotReach o s t → process_slot P o t = .ok t1 →
-    (t1.slot + 1) % P.SLOTS_PER_EPOCH = 0 → Econ t1
+def AtEveryEpochInput [CurrentPreset] (o : Oracle) (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch)
+    (init : BeaconState) (InputCondition : BeaconState → Prop) : Prop :=
+  ∀ (s t t1 : BeaconState), ReachableByBlocks o max_blobs_per_block GLOAS_FORK_EPOCH init s →
+    ReachableBySlots o s t → process_slot P o t = .ok t1 →
+    (t1.slot + 1) % P.SLOTS_PER_EPOCH = 0 → InputCondition t1
 
 /-- The `process_slots` loop with an epoch function `f` has the same `ok` results as the loop
 with the real `process_epoch`. `P` holds at each loop state, `M` after `process_slot`, and `Q`
 after `process_epoch`. `M` gives the check `C`, and `f` has the same `ok` results as
 `process_epoch` on states with `C`. -/
-theorem process_slots_loop_sameResultOrBothFail' [PresetCfg] (p : Preset) (o : Oracle) (slot : Slot)
+theorem process_slots_loop_sameResultOrBothFail' [CurrentPreset] (p : Preset) (o : Oracle) (slot : Slot)
     (P M Q C : BeaconState → Prop)
     (hslot : ∀ s s', process_slot p o s = .ok s' → s.slot < slot → P s → M s')
     (hepoch : ∀ s s', s.slot < slot → (s.slot + 1) % p.SLOTS_PER_EPOCH = 0 →
@@ -633,26 +633,26 @@ theorem process_slots_loop_sameResultOrBothFail' [PresetCfg] (p : Preset) (o : O
     · simp only [process_slots_loop, hlt, if_false]
       exact SameResultOrBothFail.refl _
 
-/-- The facts at each `process_epoch` input of a reachable run: `BoundaryOk`, a `u64` slot,
-`EBOk`, `ExitEpochsU64` and the economic facts `Econ`. -/
-def EpochInputOk [PresetCfg] (Econ : BeaconState → Prop) (t : BeaconState) : Prop :=
-  BoundaryOk t ∧ t.slot < 2 ^ 64 ∧ EBOk P t ∧ ExitEpochsU64 t ∧ Econ t
+/-- The facts at each `process_epoch` input of a reachable run: `EpochEndInvariants`, a `u64` slot,
+`EffectiveBalancesValid`, `ExitEpochsAreUint64` and the economic facts `InputCondition`. -/
+def BasicEpochInputInvariants [CurrentPreset] (InputCondition : BeaconState → Prop) (t : BeaconState) : Prop :=
+  EpochEndInvariants t ∧ t.slot < 2 ^ 64 ∧ EffectiveBalancesValid P t ∧ ExitEpochsAreUint64 t ∧ InputCondition t
 
 /-- On mainnet, from a reachable state, `state_transition` with any epoch function `f` has the
 same `ok` results as `state_transition`, if `f` has the same `ok` results as `process_epoch`
-on every state with `EpochInputOk Econ`, and `Econ` holds at every `process_epoch` input of
-the run (`EpochEcon`). -/
-theorem reachable_state_transition_sameResultOrBothFail' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+on every state with `BasicEpochInputInvariants InputCondition`, and `InputCondition` holds at every `process_epoch` input of
+the run (`AtEveryEpochInput`). -/
+theorem reachable_state_transition_sameResultOrBothFail' [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
-    (hffg : FfgInvariant P init) (hrows : RowsOk init)
-    (hd : ExitDelay P init) (hx : ExitEpochsU64 init)
-    (h0 : AfterEB P init)
-    (hsupply : SupplyBound o max_blobs_per_block GLOAS_FORK_EPOCH init)
-    (Econ : BeaconState → Prop)
-    (hecon : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH init Econ)
+    (hffg : CheckpointsInOrder P init) (hrows : ListLengthsMatch init)
+    (hd : ExitToWithdrawableDelay P init) (hx : ExitEpochsAreUint64 init)
+    (h0 : AfterEffectiveBalanceUpdates P init)
+    (hsupply : ActiveBalanceBounded o max_blobs_per_block GLOAS_FORK_EPOCH init)
+    (InputCondition : BeaconState → Prop)
+    (hinputCondition : AtEveryEpochInput o max_blobs_per_block GLOAS_FORK_EPOCH init InputCondition)
     (f : BeaconState → SpecM BeaconState)
-    (hf : ∀ t, EpochInputOk Econ t → SameResultOrBothFail (f t) (process_epoch P o t))
-    (s : BeaconState) (hr : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s)
+    (hf : ∀ t, BasicEpochInputInvariants InputCondition t → SameResultOrBothFail (f t) (process_epoch P o t))
+    (s : BeaconState) (hr : ReachableByBlocks o max_blobs_per_block GLOAS_FORK_EPOCH init s)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (hslot64 : signed_block.message.slot < 2 ^ 64) :
     SameResultOrBothFail (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH f s signed_block
@@ -669,14 +669,14 @@ theorem reachable_state_transition_sameResultOrBothFail' [PresetCfg] [PresetCfg.
     · exact SameResultOrBothFail.refl _
     · have h := loopInv_steps o signed_block.message.slot s.slot hslot64
       refine process_slots_loop_sameResultOrBothFail' _ o _
-        (fun t => LoopInv s.slot t ∧ SlotReach o s t)
-        (fun t => LoopInv s.slot t ∧ ∃ t0, SlotReach o s t0 ∧
+        (fun t => SlotLoopInvariants s.slot t ∧ ReachableBySlots o s t)
+        (fun t => SlotLoopInvariants s.slot t ∧ ∃ t0, ReachableBySlots o s t0 ∧
           process_slot P o t0 = .ok t)
-        (fun t => PostEpoch s.slot t ∧ ∃ t0 t1, SlotReach o s t0 ∧
+        (fun t => PostEpoch s.slot t ∧ ∃ t0 t1, ReachableBySlots o s t0 ∧
           process_slot P o t0 = .ok t1 ∧
           (t1.slot + 1) % P.SLOTS_PER_EPOCH = 0 ∧
           process_epoch P o t1 = .ok t)
-        (EpochInputOk Econ) ?_ ?_ ?_ ?_ ?_ f hf _ s ⟨hs, .refl⟩
+        (BasicEpochInputInvariants InputCondition) ?_ ?_ ?_ ?_ ?_ f hf _ s ⟨hs, .refl⟩
       · intro t t' ht hlt hP
         exact ⟨h.1 t t' ht hlt hP.1, t, hP.2, ht⟩
       · intro t t' hlt hz he hM
@@ -687,7 +687,7 @@ theorem reachable_state_transition_sameResultOrBothFail' [PresetCfg] [PresetCfg.
         have hok := h.2.2.1 t hlt hz hinv
         obtain ⟨-, -, -, hx', -, s0, n, hA, hb, -⟩ := hinv
         exact ⟨hok, by simp only [Slot] at *; omega, hb.ebOk hA, hx',
-          hecon s t0 t hr h0' ht0 hz⟩
+          hinputCondition s t0 t hr h0' ht0 hz⟩
       · intro t hz hQ
         obtain ⟨hpost, t0, t1, h0', ht0, hz1, he⟩ := hQ
         exact ⟨h.2.2.2.1 t hz hpost, .epoch h0' ht0 hz1 he⟩
@@ -702,10 +702,10 @@ theorem reachable_state_transition_sameResultOrBothFail' [PresetCfg] [PresetCfg.
 
 /-- Every reachable state has unique pubkeys and in-range pending consolidations, if the start
 state has them. -/
-theorem reachable_tail [PresetCfg] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem reachable_tail [CurrentPreset] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState) (hpk : PubkeysUnique init)
     (hcr : ConsolidationsInRange init) :
-    ∀ s, Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s →
+    ∀ s, ReachableByBlocks o max_blobs_per_block GLOAS_FORK_EPOCH init s →
       PubkeysUnique s ∧ ConsolidationsInRange s := by
   intro s hr
   induction hr with
@@ -715,7 +715,7 @@ theorem reachable_tail [PresetCfg] (o : Oracle) (max_blobs_per_block : Epoch →
       state_transition_inRange _ o _ _ _ _ _ _ ih.2 h⟩
 
 /-- The slot loop keeps unique pubkeys and in-range pending consolidations. -/
-theorem SlotReach.tail [PresetCfg] {o : Oracle} {s t : BeaconState} (hr : SlotReach o s t)
+theorem ReachableBySlots.tail [CurrentPreset] {o : Oracle} {s t : BeaconState} (hr : ReachableBySlots o s t)
     (hs : PubkeysUnique s ∧ ConsolidationsInRange s) :
     PubkeysUnique t ∧ ConsolidationsInRange t := by
   induction hr with
@@ -733,107 +733,107 @@ theorem SlotReach.tail [PresetCfg] {o : Oracle} {s t : BeaconState} (hr : SlotRe
 
 /-- The facts at each `process_epoch` input, with unique pubkeys and in-range pending
 consolidations. -/
-def EpochInputOk' [PresetCfg] [PresetCfg.Ok] (Econ : BeaconState → Prop) (t : BeaconState) : Prop :=
-  EpochInputOk Econ t ∧ PubkeysUnique t ∧ ConsolidationsInRange t
+def EpochInputInvariantsWithPubkeys [CurrentPreset] [CurrentPreset.Valid] (InputCondition : BeaconState → Prop) (t : BeaconState) : Prop :=
+  BasicEpochInputInvariants InputCondition t ∧ PubkeysUnique t ∧ ConsolidationsInRange t
 
 /-- `reachable_state_transition_sameResultOrBothFail'` for an epoch function `f` that needs, in addition,
 unique pubkeys and in-range pending consolidations at its input. The start state has them. -/
-theorem reachable_state_transition_sameResultOrBothFail'' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem reachable_state_transition_sameResultOrBothFail'' [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
-    (hffg : FfgInvariant P init) (hrows : RowsOk init)
-    (hd : ExitDelay P init) (hx : ExitEpochsU64 init)
-    (h0 : AfterEB P init) (hpk : PubkeysUnique init)
+    (hffg : CheckpointsInOrder P init) (hrows : ListLengthsMatch init)
+    (hd : ExitToWithdrawableDelay P init) (hx : ExitEpochsAreUint64 init)
+    (h0 : AfterEffectiveBalanceUpdates P init) (hpk : PubkeysUnique init)
     (hcr : ConsolidationsInRange init)
-    (hsupply : SupplyBound o max_blobs_per_block GLOAS_FORK_EPOCH init)
-    (Econ : BeaconState → Prop)
-    (hecon : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH init Econ)
+    (hsupply : ActiveBalanceBounded o max_blobs_per_block GLOAS_FORK_EPOCH init)
+    (InputCondition : BeaconState → Prop)
+    (hinputCondition : AtEveryEpochInput o max_blobs_per_block GLOAS_FORK_EPOCH init InputCondition)
     (f : BeaconState → SpecM BeaconState)
-    (hf : ∀ t, EpochInputOk' Econ t → SameResultOrBothFail (f t) (process_epoch P o t))
-    (s : BeaconState) (hr : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s)
+    (hf : ∀ t, EpochInputInvariantsWithPubkeys InputCondition t → SameResultOrBothFail (f t) (process_epoch P o t))
+    (s : BeaconState) (hr : ReachableByBlocks o max_blobs_per_block GLOAS_FORK_EPOCH init s)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (hslot64 : signed_block.message.slot < 2 ^ 64) :
     SameResultOrBothFail (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH f s signed_block
         validate_result)
       (state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
         validate_result) := by
-  have hecon' : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH init
-      (fun t => Econ t ∧ PubkeysUnique t ∧ ConsolidationsInRange t) := by
+  have hinputCondition' : AtEveryEpochInput o max_blobs_per_block GLOAS_FORK_EPOCH init
+      (fun t => InputCondition t ∧ PubkeysUnique t ∧ ConsolidationsInRange t) := by
     intro s' t t1 hr' hreach ht hz
     have htail := hreach.tail (reachable_tail o _ _ init hpk hcr s' hr')
-    exact ⟨hecon s' t t1 hr' hreach ht hz,
+    exact ⟨hinputCondition s' t t1 hr' hreach ht hz,
       (PkSame.of_eq (process_slot_frame _ o _ _ ht).1.1).pubkeysUnique htail.1,
       (process_slot_cstep _ o _ _ ht).inRange htail.2⟩
-  exact reachable_state_transition_sameResultOrBothFail' o _ _ init hffg hrows hd hx h0 hsupply _ hecon' f
+  exact reachable_state_transition_sameResultOrBothFail' o _ _ init hffg hrows hd hx h0 hsupply _ hinputCondition' f
     (fun t ⟨hb, hslot, heb, hex, hec, hp, hc⟩ => hf t ⟨⟨hb, hslot, heb, hex, hec⟩, hp, hc⟩)
     s hr signed_block validate_result hslot64
 
 /-! ## Withdrawable epochs -/
 
 /-- Every reachable state has `u64` withdrawable epochs, if the start state has them. -/
-theorem reachable_withdrawableU64 [PresetCfg] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
-    (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState) (hw : WithdrawableU64 init) :
-    ∀ s, Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s → WithdrawableU64 s := by
+theorem reachable_withdrawableU64 [CurrentPreset] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+    (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState) (hw : WithdrawableEpochsFitUint64 init) :
+    ∀ s, ReachableByBlocks o max_blobs_per_block GLOAS_FORK_EPOCH init s → WithdrawableEpochsFitUint64 s := by
   intro s hr
   induction hr with
   | init => exact hw
   | step signed_block validate_result _ _ _ h ih =>
     exact state_transition_withdrawableU64 _ o _ _ _ _ _ _ ih h
 
-/-- The slot loop keeps `ExitDelay` and `WithdrawableU64`. -/
-theorem SlotReach.withdrawable [PresetCfg] {o : Oracle} {s t : BeaconState} (hr : SlotReach o s t)
-    (hs : ExitDelay P s ∧ WithdrawableU64 s) :
-    ExitDelay P t ∧ WithdrawableU64 t := by
+/-- The slot loop keeps `ExitToWithdrawableDelay` and `WithdrawableEpochsFitUint64`. -/
+theorem ReachableBySlots.withdrawable [CurrentPreset] {o : Oracle} {s t : BeaconState} (hr : ReachableBySlots o s t)
+    (hs : ExitToWithdrawableDelay P s ∧ WithdrawableEpochsFitUint64 s) :
+    ExitToWithdrawableDelay P t ∧ WithdrawableEpochsFitUint64 t := by
   induction hr with
   | refl => exact hs
   | skip _ ht _ ih =>
     have hv := (process_slot_frame _ o _ _ ht).1.1
-    have h1 := ExitDelay.of_validators_eq hv ih.1
-    have h2 := WithdrawableU64.of_validators_eq hv ih.2
+    have h1 := ExitToWithdrawableDelay.of_validators_eq hv ih.1
+    have h2 := WithdrawableEpochsFitUint64.of_validators_eq hv ih.2
     exact ⟨h1, h2⟩
   | epoch _ ht _ he ih =>
     have hv := (process_slot_frame _ o _ _ ht).1.1
-    have h1 := process_epoch_exitDelay _ o _ _ he (ExitDelay.of_validators_eq hv ih.1)
-    have h2 := process_epoch_withdrawableU64 _ o _ _ he (WithdrawableU64.of_validators_eq hv ih.2)
+    have h1 := process_epoch_exitDelay _ o _ _ he (ExitToWithdrawableDelay.of_validators_eq hv ih.1)
+    have h2 := process_epoch_withdrawableU64 _ o _ _ he (WithdrawableEpochsFitUint64.of_validators_eq hv ih.2)
     exact ⟨h1, h2⟩
 
-/-- The facts at each `process_epoch` input, with `WithdrawableU64` and `WithdrawableValid`. -/
-def EpochInputOk'' [PresetCfg] [PresetCfg.Ok] (Econ : BeaconState → Prop) (t : BeaconState) : Prop :=
-  EpochInputOk' Econ t ∧ WithdrawableU64 t ∧ WithdrawableValid t
+/-- The facts at each `process_epoch` input, with `WithdrawableEpochsFitUint64` and `NoWithdrawableEpochWithoutExit`. -/
+def EpochInputInvariantsFor [CurrentPreset] [CurrentPreset.Valid] (InputCondition : BeaconState → Prop) (t : BeaconState) : Prop :=
+  EpochInputInvariantsWithPubkeys InputCondition t ∧ WithdrawableEpochsFitUint64 t ∧ NoWithdrawableEpochWithoutExit t
 
 /-- `reachable_state_transition_sameResultOrBothFail''` for an epoch function `f` that needs, in addition,
-`u64` withdrawable epochs and `WithdrawableValid` at its input. The start state has
-`WithdrawableU64`. -/
-theorem reachable_state_transition_sameResultOrBothFail''' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+`u64` withdrawable epochs and `NoWithdrawableEpochWithoutExit` at its input. The start state has
+`WithdrawableEpochsFitUint64`. -/
+theorem reachable_state_transition_sameResultOrBothFail''' [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState)
-    (hffg : FfgInvariant P init) (hrows : RowsOk init)
-    (hd : ExitDelay P init) (hx : ExitEpochsU64 init)
-    (h0 : AfterEB P init) (hpk : PubkeysUnique init)
-    (hcr : ConsolidationsInRange init) (hw : WithdrawableU64 init)
-    (hsupply : SupplyBound o max_blobs_per_block GLOAS_FORK_EPOCH init)
-    (Econ : BeaconState → Prop)
-    (hecon : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH init Econ)
+    (hffg : CheckpointsInOrder P init) (hrows : ListLengthsMatch init)
+    (hd : ExitToWithdrawableDelay P init) (hx : ExitEpochsAreUint64 init)
+    (h0 : AfterEffectiveBalanceUpdates P init) (hpk : PubkeysUnique init)
+    (hcr : ConsolidationsInRange init) (hw : WithdrawableEpochsFitUint64 init)
+    (hsupply : ActiveBalanceBounded o max_blobs_per_block GLOAS_FORK_EPOCH init)
+    (InputCondition : BeaconState → Prop)
+    (hinputCondition : AtEveryEpochInput o max_blobs_per_block GLOAS_FORK_EPOCH init InputCondition)
     (f : BeaconState → SpecM BeaconState)
-    (hf : ∀ t, EpochInputOk'' Econ t → SameResultOrBothFail (f t) (process_epoch P o t))
-    (s : BeaconState) (hr : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s)
+    (hf : ∀ t, EpochInputInvariantsFor InputCondition t → SameResultOrBothFail (f t) (process_epoch P o t))
+    (s : BeaconState) (hr : ReachableByBlocks o max_blobs_per_block GLOAS_FORK_EPOCH init s)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (hslot64 : signed_block.message.slot < 2 ^ 64) :
     SameResultOrBothFail (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH f s signed_block
         validate_result)
       (state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
         validate_result) := by
-  have hecon' : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH init
-      (fun t => Econ t ∧ WithdrawableU64 t ∧ WithdrawableValid t) := by
+  have hinputCondition' : AtEveryEpochInput o max_blobs_per_block GLOAS_FORK_EPOCH init
+      (fun t => InputCondition t ∧ WithdrawableEpochsFitUint64 t ∧ NoWithdrawableEpochWithoutExit t) := by
     intro s' t t1 hr' hreach ht hz
-    have hstart : ExitDelay P s' ∧ WithdrawableU64 s' :=
+    have hstart : ExitToWithdrawableDelay P s' ∧ WithdrawableEpochsFitUint64 s' :=
       ⟨(reachable_inv o _ _ init hffg hrows hd hx h0 hsupply s' hr').2.2.1,
         reachable_withdrawableU64 o _ _ init hw s' hr'⟩
     have hwd := hreach.withdrawable hstart
     have hv := (process_slot_frame _ o _ _ ht).1.1
-    have h1 := ExitDelay.of_validators_eq hv hwd.1
-    have h2 := WithdrawableU64.of_validators_eq hv hwd.2
-    exact ⟨hecon s' t t1 hr' hreach ht hz, h2, withdrawableValid_of h1 h2⟩
+    have h1 := ExitToWithdrawableDelay.of_validators_eq hv hwd.1
+    have h2 := WithdrawableEpochsFitUint64.of_validators_eq hv hwd.2
+    exact ⟨hinputCondition s' t t1 hr' hreach ht hz, h2, withdrawableValid_of h1 h2⟩
   exact reachable_state_transition_sameResultOrBothFail'' o _ _ init hffg hrows hd hx h0 hpk hcr hsupply _
-    hecon' f
+    hinputCondition' f
     (fun t ⟨⟨hb, hslot, heb, hex, hec, hwu, hwv⟩, hp, hc⟩ =>
       hf t ⟨⟨⟨hb, hslot, heb, hex, hec⟩, hp, hc⟩, hwu, hwv⟩)
     s hr signed_block validate_result hslot64

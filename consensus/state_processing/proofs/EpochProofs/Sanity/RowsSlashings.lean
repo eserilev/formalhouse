@@ -148,7 +148,7 @@ theorem process_slashings_rows (p : Preset) (total_active_balance : Gwei) (state
     (htarget : epoch + p.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE)
     (adjusted per : Gwei)
     (hpre : slashingsPreamble p total_active_balance state.slashings = .ok (adjusted, per))
-    (hrows : RowsOk state) :
+    (hrows : ListLengthsMatch state) :
     process_slashings p total_active_balance state =
       (fun x => state.withRows x.2) <$>
         passM (slashingsRowStep p (epoch + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) ()
@@ -178,7 +178,7 @@ theorem process_slashings_rows_sameResultOrBothFail (p : Preset) (total_active_b
     (htarget : epoch + p.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE)
     (adjusted per : Gwei)
     (hpre : slashingsPreamble p total_active_balance state.slashings = .ok (adjusted, per))
-    (hrows : RowsOk state) :
+    (hrows : ListLengthsMatch state) :
     SameResultOrBothFail (process_slashings p total_active_balance state)
       ((fun x => state.withRows x.2) <$>
         passM (slashingsRowStep p (epoch + p.EPOCHS_PER_SLASHINGS_VECTOR / 2) per) ()

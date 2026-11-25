@@ -5,7 +5,7 @@ import EpochProofs.Sanity.Effects
 # Justification and finalization: frame and checkpoint invariants
 
 `process_justification_and_finalization` keeps `validators`, `balances`, `inactivity_scores`
-and `slot`. `FfgInvariant` orders the three checkpoints below the current epoch. It holds on every
+and `slot`. `CheckpointsInOrder` orders the three checkpoints below the current epoch. It holds on every
 state outside epoch processing, so the finalized epoch is never in the future.
 -/
 
@@ -178,53 +178,53 @@ def CheckpointOrder (s : BeaconState) : Prop :=
 
 /-- The FFG invariant on states outside epoch processing: the checkpoints are in order, and the
 current justified epoch is below the current epoch or is the genesis epoch. -/
-def FfgInvariant (p : Preset) (s : BeaconState) : Prop :=
+def CheckpointsInOrder (p : Preset) (s : BeaconState) : Prop :=
   CheckpointOrder s ∧
     (s.current_justified_checkpoint.epoch < epochOf p s ∨ s.current_justified_checkpoint.epoch = 0)
 
 /-- The invariant right after `process_justification_and_finalization`: the checkpoints are in
 order, and the current justified epoch is at most the current epoch. -/
-def FfgInvariantAfter (p : Preset) (s : BeaconState) : Prop :=
+def CheckpointsInOrderAfterJustification (p : Preset) (s : BeaconState) : Prop :=
   CheckpointOrder s ∧ s.current_justified_checkpoint.epoch ≤ epochOf p s
 
-/-- Under `FfgInvariant`, the finalized epoch is at most the current epoch. -/
-theorem FfgInvariant.finalized_le {p : Preset} {s : BeaconState} (h : FfgInvariant p s) :
+/-- Under `CheckpointsInOrder`, the finalized epoch is at most the current epoch. -/
+theorem CheckpointsInOrder.finalized_le {p : Preset} {s : BeaconState} (h : CheckpointsInOrder p s) :
     s.finalized_checkpoint.epoch ≤ epochOf p s := by
   obtain ⟨⟨h1, h2⟩, h3⟩ := h
   epoch_omega
 
-/-- `FfgInvariant` gives `CheckpointsBelow`. -/
-theorem FfgInvariant.checkpointsBelow {p : Preset} {s : BeaconState} (h : FfgInvariant p s) :
+/-- `CheckpointsInOrder` gives `CheckpointsBelow`. -/
+theorem CheckpointsInOrder.checkpointsBelow {p : Preset} {s : BeaconState} (h : CheckpointsInOrder p s) :
     CheckpointsBelow p s := by
   obtain ⟨⟨h1, h2⟩, h3⟩ := h
   refine ⟨?_, ?_, ?_⟩ <;> epoch_omega
 
-/-- `FfgInvariantAfter` gives `CheckpointsBelow`. -/
-theorem FfgInvariantAfter.checkpointsBelow {p : Preset} {s : BeaconState}
-    (h : FfgInvariantAfter p s) : CheckpointsBelow p s := by
+/-- `CheckpointsInOrderAfterJustification` gives `CheckpointsBelow`. -/
+theorem CheckpointsInOrderAfterJustification.checkpointsBelow {p : Preset} {s : BeaconState}
+    (h : CheckpointsInOrderAfterJustification p s) : CheckpointsBelow p s := by
   obtain ⟨⟨h1, h2⟩, h3⟩ := h
   refine ⟨?_, ?_, ?_⟩ <;> epoch_omega
 
-/-- A state that keeps the slot and the checkpoints keeps `FfgInvariant`. -/
-theorem FfgInvariant.of_checkpointsStable {p : Preset} {s s' : BeaconState}
-    (h : FfgInvariant p s) (hs : CheckpointsStable s s') : FfgInvariant p s' := by
+/-- A state that keeps the slot and the checkpoints keeps `CheckpointsInOrder`. -/
+theorem CheckpointsInOrder.of_checkpointsStable {p : Preset} {s s' : BeaconState}
+    (h : CheckpointsInOrder p s) (hs : CheckpointsStable s s') : CheckpointsInOrder p s' := by
   obtain ⟨hslot, hf, hc, hp⟩ := hs
-  simp only [FfgInvariant, CheckpointOrder, epochOf, hslot, hf, hc, hp]
+  simp only [CheckpointsInOrder, CheckpointOrder, epochOf, hslot, hf, hc, hp]
   exact h
 
-/-- A state that keeps the slot and the checkpoints keeps `FfgInvariantAfter`. -/
-theorem FfgInvariantAfter.of_checkpointsStable {p : Preset} {s s' : BeaconState}
-    (h : FfgInvariantAfter p s) (hs : CheckpointsStable s s') : FfgInvariantAfter p s' := by
+/-- A state that keeps the slot and the checkpoints keeps `CheckpointsInOrderAfterJustification`. -/
+theorem CheckpointsInOrderAfterJustification.of_checkpointsStable {p : Preset} {s s' : BeaconState}
+    (h : CheckpointsInOrderAfterJustification p s) (hs : CheckpointsStable s s') : CheckpointsInOrderAfterJustification p s' := by
   obtain ⟨hslot, hf, hc, hp⟩ := hs
-  simp only [FfgInvariantAfter, CheckpointOrder, epochOf, hslot, hf, hc, hp]
+  simp only [CheckpointsInOrderAfterJustification, CheckpointOrder, epochOf, hslot, hf, hc, hp]
   exact h
 
-/-- `process_justification_and_finalization` turns `FfgInvariant` into `FfgInvariantAfter`. The
+/-- `process_justification_and_finalization` turns `CheckpointsInOrder` into `CheckpointsInOrderAfterJustification`. The
 finalized epoch does not go down. -/
 theorem process_justification_and_finalization_ffg (p : Preset) (state state' : BeaconState)
     (h : process_justification_and_finalization p state = .ok state')
-    (hinv : FfgInvariant p state) :
-    FfgInvariantAfter p state' ∧
+    (hinv : CheckpointsInOrder p state) :
+    CheckpointsInOrderAfterJustification p state' ∧
       state.finalized_checkpoint.epoch ≤ state'.finalized_checkpoint.epoch := by
   rcases process_justification_and_finalization_step p state state' h with rfl | ⟨h2, hw⟩
   · obtain ⟨⟨h1, h2⟩, h3⟩ := hinv
@@ -383,17 +383,17 @@ theorem process_slots_checkpointsBelow (p : Preset) (o : Oracle)
   simp only [CheckpointsBelow, epochOf, hslot, hf, hc, hp]
   exact ⟨h1, h2, h3⟩
 
-/-- `process_slots` keeps `FfgInvariant`. Each `processEpoch` call starts from a state with
-`FfgInvariant` and must end in a state with `FfgInvariantAfter` at the same slot.
+/-- `process_slots` keeps `CheckpointsInOrder`. Each `processEpoch` call starts from a state with
+`CheckpointsInOrder` and must end in a state with `CheckpointsInOrderAfterJustification` at the same slot.
 `process_justification_and_finalization_ffg` gives this for the justification step. The other
 epoch steps keep the slot and the checkpoints. -/
 theorem process_slots_ffg (p : Preset) (o : Oracle)
     (processEpoch : BeaconState → SpecM BeaconState)
-    (hepoch : ∀ s s', processEpoch s = .ok s' → FfgInvariant p s →
-      FfgInvariantAfter p s' ∧ s'.slot = s.slot)
-    (state state' : BeaconState) (slot : Slot) (hinv : FfgInvariant p state)
-    (h : process_slots p o processEpoch state slot = .ok state') : FfgInvariant p state' := by
-  refine process_slots_invariant_mono p o processEpoch (FfgInvariant p) (FfgInvariantAfter p)
+    (hepoch : ∀ s s', processEpoch s = .ok s' → CheckpointsInOrder p s →
+      CheckpointsInOrderAfterJustification p s' ∧ s'.slot = s.slot)
+    (state state' : BeaconState) (slot : Slot) (hinv : CheckpointsInOrder p state)
+    (h : process_slots p o processEpoch state slot = .ok state') : CheckpointsInOrder p state' := by
+  refine process_slots_invariant_mono p o processEpoch (CheckpointsInOrder p) (CheckpointsInOrderAfterJustification p)
     (fun s s' hs hP => hP.of_checkpointsStable (process_slot_checkpointsStable p o s s' hs))
     (fun s s' _ hs hP => hepoch s s' hs hP) ?_ ?_ state state' slot hinv h
   · intro s hz ⟨hord, hc⟩

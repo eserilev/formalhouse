@@ -15,15 +15,15 @@ import EpochProofs.EthLib.Shuffle
 /-!
 # The assumptions of the main theorems
 
-- The run, `GloasEpochRun` and `FuluEpochRun` (`Runs.lean`): the state is an input of
+- The run, `FuluThenGloasRun` and `FuluOnlyRun` (`Runs.lean`): the state is an input of
   `process_epoch` on a chain from a start state with the facts of a genesis state. The total stake
   stays below its bounds.
-- The chain, `GloasChainAssumptions` and `FuluChainAssumptions`: what the epoch needs to succeed.
+- The chain, `GloasChainConditions` and `FuluChainConditions`: what the epoch needs to succeed.
 - The preset, `PresetMatchesEthLib`: the preset values are those of EthLib. Proved for mainnet and
   minimal.
 - The caches, `GloasCacheAssumptions`: where each cache that the Gloas epoch reads came from. The
   Fulu model reads the spec values, so the Fulu theorems take no cache facts.
-- The untranslated Rust, `GloasRustGlueFacts` and `FuluRustGlueFacts`: what the code that Aeneas
+- The untranslated Rust, `GloasUntranslatedRustFacts` and `FuluUntranslatedRustFacts`: what the code that Aeneas
   does not translate does.
 -/
 
@@ -35,35 +35,35 @@ open Aeneas Aeneas.Std Result
 
 section Chain
 
-variable [Spec.PresetCfg]
+variable [Spec.CurrentPreset]
 
 /-- What the Gloas epoch needs from the chain, beyond the run, to succeed. -/
-structure GloasChainAssumptions (oracle : Spec.Oracle) (state : Spec.BeaconState) : Prop where
+structure GloasChainConditions (oracle : Spec.Oracle) (state : Spec.BeaconState) : Prop where
   /-- `committeeInput` is the state before the three committee steps. There, the pyspec does not
   raise, each selection ends, the registry is below its limit and the pubkeys are valid. -/
   committeeSteps : ∀ committeeInput,
-    Spec.epochToCommittees Spec.P oracle state = .ok committeeInput →
-      Spec.CommitteeStepPreconds oracle committeeInput ∧
-      Spec.SelectionStateFacts oracle committeeInput
+    Spec.epochBeforeCommitteeSteps Spec.P oracle state = .ok committeeInput →
+      Spec.CommitteeStepPreconditions oracle committeeInput ∧
+      Spec.RegistryAllowsSelection oracle committeeInput
   /-- The supply and time bounds. -/
-  physicalLimits : Spec.PhysicalLimits state
+  supplyAndTimeLimits : Spec.SupplyAndTimeLimits state
   /-- The slot is far below `2^64`. The pyspec `get_block_root` raises near `2^64`. -/
   slotFarFromOverflow : state.slot + 8192 < 2 ^ 64
   /-- Lighthouse's list of historical summaries has room. -/
   historicalSummariesBelowLimit : Spec.HistoricalSummariesBelowLimit state
 
-variable [Spec.FuluCfg]
+variable [Spec.CurrentFuluConfig]
 
 /-- What the Fulu epoch needs from the chain, beyond the run, to succeed. -/
-structure FuluChainAssumptions (oracle : Spec.Oracle) (state : Spec.BeaconState) : Prop where
+structure FuluChainConditions (oracle : Spec.Oracle) (state : Spec.BeaconState) : Prop where
   /-- `committeeInput` is the state before the two committee steps. There, the pyspec does not
   raise, each selection ends, the registry is below its limit and the pubkeys are valid. -/
   committeeSteps : ∀ committeeInput,
-    Spec.epochToCommitteesFulu Spec.P Spec.FC oracle state = .ok committeeInput →
-      Spec.FuluCommitteeStepPreconds oracle committeeInput ∧
-      Spec.SelectionStateFacts oracle committeeInput
+    Spec.epochBeforeCommitteeStepsFulu Spec.P Spec.FC oracle state = .ok committeeInput →
+      Spec.CommitteeStepPreconditionsFulu oracle committeeInput ∧
+      Spec.RegistryAllowsSelection oracle committeeInput
   /-- The supply and time bounds. -/
-  physicalLimits : Spec.PhysicalLimits state
+  supplyAndTimeLimits : Spec.SupplyAndTimeLimits state
   /-- The slot is far below `2^64`. -/
   slotFarFromOverflow : state.slot + 8192 < 2 ^ 64
   /-- Lighthouse's list of historical summaries has room. -/
@@ -75,7 +75,7 @@ end Chain
 
 section Preset
 
-variable [Spec.PresetCfg]
+variable [Spec.CurrentPreset]
 
 open EpochProofs.EthLib
 open _root_.EthLib.Consensus (Config Preset)
@@ -97,17 +97,17 @@ end Preset
 
 /-- Mainnet. -/
 theorem presetMatchesEthLib_mainnet :
-    @PresetMatchesEthLib Spec.mainnetCfg _root_.EthLib.Consensus.Preset.mainnet
+    @PresetMatchesEthLib Spec.currentPresetMainnet _root_.EthLib.Consensus.Preset.mainnet
       _root_.EthLib.Consensus.Config.mainnet :=
-  letI := Spec.mainnetCfg
+  letI := Spec.currentPresetMainnet
   ⟨EthLib.toSpecPreset_mainnet, EthLib.divisorsNonzero_mainnet, EthLib.committeeBounds_mainnet,
     by decide⟩
 
 /-- Minimal. -/
 theorem presetMatchesEthLib_minimal :
-    @PresetMatchesEthLib Spec.minimalCfg _root_.EthLib.Consensus.Preset.minimal
+    @PresetMatchesEthLib Spec.currentPresetMinimal _root_.EthLib.Consensus.Preset.minimal
       _root_.EthLib.Consensus.Config.minimal :=
-  letI := Spec.minimalCfg
+  letI := Spec.currentPresetMinimal
   ⟨EthLib.toSpecPreset_minimal, EthLib.divisorsNonzero_minimal, EthLib.committeeBounds_minimal,
     by decide⟩
 
@@ -120,7 +120,7 @@ section Caches
 
 open EpochProofs.CacheBridge
 
-variable [Spec.PresetCfg]
+variable [Spec.CurrentPreset]
 
 /-- What the proofs assume about the caches that the Gloas epoch reads. Lean does not check it. -/
 structure GloasCacheAssumptions {PubkeyMap : Type}
@@ -137,7 +137,7 @@ structure GloasCacheAssumptions {PubkeyMap : Type}
   /-- The epoch cache holds the total active balance of an earlier state `built`. That state has
   the same effective balances and the same active validators. -/
   epochCache : ∃ built : Spec.BeaconState,
-    Spec.ActiveAgree (state.slot / Spec.P.SLOTS_PER_EPOCH) built state ∧
+    Spec.SameActiveBalances (state.slot / Spec.P.SLOTS_PER_EPOCH) built state ∧
     cachedTotal.val = ((built.validators.filter
       (Spec.is_active_validator · (state.slot / Spec.P.SLOTS_PER_EPOCH))).map
         (·.effective_balance)).sum
@@ -157,24 +157,24 @@ end Caches
 
 section Glue
 
-variable [Spec.PresetCfg]
+variable [Spec.CurrentPreset]
 
 /-- The Rust state `st` holds the epoch input `s`, and the untranslated Rust does what the proofs
 assume (`Compose.EpochLinks`). One field is a fact about the state: `SinglePassLinks.depositRoom`,
 the new validators of the epoch fit under the `2^40` limit of Lighthouse's validator list. -/
-structure GloasRustGlueFacts {σ E : Type} (G : Compose.EpochGlue σ E) (o : Spec.Oracle)
+structure GloasUntranslatedRustFacts {σ E : Type} (G : Compose.EpochGlue σ E) (o : Spec.Oracle)
     (view : σ → Spec.BeaconState) (st : σ) (s : Spec.BeaconState) : Prop where
   /-- The Rust state holds the epoch input. -/
   viewEq : view st = s
   /-- What the proofs assume about the untranslated Rust. -/
   glue : Compose.EpochLinks G o view st
 
-variable [Spec.FuluCfg]
+variable [Spec.CurrentFuluConfig]
 
 /-- The Rust state `st` holds the epoch input `s`, and the untranslated Rust of the Fulu epoch does
 what the proofs assume (`Compose.EpochLinksFulu`). As for Gloas, `SinglePassLinks.depositRoom` is a
 fact about the state. -/
-structure FuluRustGlueFacts {σ E : Type} (G : Compose.EpochGlueFulu σ E) (o : Spec.Oracle)
+structure FuluUntranslatedRustFacts {σ E : Type} (G : Compose.EpochGlueFulu σ E) (o : Spec.Oracle)
     (view : σ → Spec.BeaconState) (st : σ) (s : Spec.BeaconState) : Prop where
   /-- The Rust state holds the epoch input. -/
   viewEq : view st = s

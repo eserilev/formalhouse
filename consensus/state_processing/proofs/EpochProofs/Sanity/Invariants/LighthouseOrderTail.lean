@@ -26,7 +26,7 @@ def runSteps : List (BeaconState → SpecM BeaconState) → BeaconState → Spec
 def StepKeeps (P : BeaconState → Prop) (f : BeaconState → SpecM BeaconState) : Prop :=
   ∀ s t, P s → f s = .ok t → P t
 
-theorem runSteps_append [PresetCfg] (pre post : List (BeaconState → SpecM BeaconState)) (s : BeaconState) :
+theorem runSteps_append [CurrentPreset] (pre post : List (BeaconState → SpecM BeaconState)) (s : BeaconState) :
     runSteps (pre ++ post) s = runSteps pre s >>= runSteps post := by
   induction pre generalizing s with
   | nil => rfl
@@ -53,7 +53,7 @@ theorem runSteps_keeps (P : BeaconState → Prop) :
 
 /-- Two neighbours swap when they swap on every state with `P`, and the steps before them keep
 `P`. -/
-theorem runSteps_swap [PresetCfg] (P : BeaconState → Prop) (pre post : List (BeaconState → SpecM BeaconState))
+theorem runSteps_swap [CurrentPreset] (P : BeaconState → Prop) (pre post : List (BeaconState → SpecM BeaconState))
     (f g : BeaconState → SpecM BeaconState) (hpre : ∀ h ∈ pre, StepKeeps P h)
     (hfg : ∀ s, P s → SameResultOrBothFail (f s >>= g) (g s >>= f)) (s : BeaconState) (hs : P s) :
     SameResultOrBothFail (runSteps (pre ++ f :: g :: post) s) (runSteps (pre ++ g :: f :: post) s) := by
@@ -66,11 +66,11 @@ theorem runSteps_swap [PresetCfg] (P : BeaconState → Prop) (pre post : List (B
 /-! ## The steps as computed values and writes -/
 
 /-- The new `slashings` of the slashings reset. -/
-def srNew [PresetCfg] (s : BeaconState) : SpecM (List Gwei) := do
+def srNew [CurrentPreset] (s : BeaconState) : SpecM (List Gwei) := do
   let next_epoch ← uint64Add (← get_current_epoch P s) 1
   listSet s.slashings (← uint64Mod next_epoch P.EPOCHS_PER_SLASHINGS_VECTOR) 0
 
-theorem process_slashings_reset_eq [PresetCfg] (s : BeaconState) :
+theorem process_slashings_reset_eq [CurrentPreset] (s : BeaconState) :
     process_slashings_reset P s =
       (fun v => { s with slashings := v }) <$> srNew s := by
   unfold process_slashings_reset srNew
@@ -82,13 +82,13 @@ theorem process_slashings_reset_eq [PresetCfg] (s : BeaconState) :
     | (rename_i h; cases h)
 
 /-- The new `randao_mixes` of the randao reset. -/
-def rrNew [PresetCfg] (s : BeaconState) : SpecM (List Bytes32) := do
+def rrNew [CurrentPreset] (s : BeaconState) : SpecM (List Bytes32) := do
   let current_epoch ← get_current_epoch P s
   let next_epoch ← uint64Add current_epoch 1
   let mix ← get_randao_mix P s current_epoch
   listSet s.randao_mixes (← uint64Mod next_epoch P.EPOCHS_PER_HISTORICAL_VECTOR) mix
 
-theorem process_randao_mixes_reset_eq [PresetCfg] (s : BeaconState) :
+theorem process_randao_mixes_reset_eq [CurrentPreset] (s : BeaconState) :
     process_randao_mixes_reset P s =
       (fun v => { s with randao_mixes := v }) <$> rrNew s := by
   unfold process_randao_mixes_reset rrNew
@@ -100,7 +100,7 @@ theorem process_randao_mixes_reset_eq [PresetCfg] (s : BeaconState) :
     | (rename_i h; cases h)
 
 /-- The new `historical_summaries` of the historical summaries update. -/
-def hsNew [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM (List HistoricalSummary) := do
+def hsNew [CurrentPreset] (o : Oracle) (s : BeaconState) : SpecM (List HistoricalSummary) := do
   let next_epoch ← uint64Add (← get_current_epoch P s) 1
   if (← uint64Mod next_epoch
       (← uint64Div P.SLOTS_PER_HISTORICAL_ROOT P.SLOTS_PER_EPOCH)) == 0
@@ -112,7 +112,7 @@ def hsNew [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM (List HistoricalSum
   else
     pure s.historical_summaries
 
-theorem process_historical_summaries_update_eq [PresetCfg] (o : Oracle) (s : BeaconState) :
+theorem process_historical_summaries_update_eq [CurrentPreset] (o : Oracle) (s : BeaconState) :
     process_historical_summaries_update P o s =
       (fun v => { s with historical_summaries := v }) <$> hsNew o s := by
   unfold process_historical_summaries_update hsNew
@@ -143,7 +143,7 @@ theorem pfStep_eq (s : BeaconState) :
     pfStep s = (fun v => setPF s v) <$> pfNew s := rfl
 
 /-- The new sync committees of the sync committee update. -/
-def scNew [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM (SyncCommittee × SyncCommittee) := do
+def scNew [CurrentPreset] (o : Oracle) (s : BeaconState) : SpecM (SyncCommittee × SyncCommittee) := do
   let next_epoch ← uint64Add (← get_current_epoch P s) 1
   if (← uint64Mod next_epoch P.EPOCHS_PER_SYNC_COMMITTEE_PERIOD) == 0 then
     let next ← get_next_sync_committee P o
@@ -152,7 +152,7 @@ def scNew [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM (SyncCommittee × S
   else
     pure (s.current_sync_committee, s.next_sync_committee)
 
-theorem process_sync_committee_updates_eq [PresetCfg] (o : Oracle) (s : BeaconState) :
+theorem process_sync_committee_updates_eq [CurrentPreset] (o : Oracle) (s : BeaconState) :
     process_sync_committee_updates P o s =
       (fun v => setSC s v) <$> scNew o s := by
   unfold process_sync_committee_updates scNew setSC
@@ -165,7 +165,7 @@ theorem process_sync_committee_updates_eq [PresetCfg] (o : Oracle) (s : BeaconSt
 
 /-! ## What the steps read -/
 
-theorem scNew_congr [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s1 s2 : BeaconState) (hs : s1.slot = s2.slot)
+theorem scNew_congr [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s1 s2 : BeaconState) (hs : s1.slot = s2.slot)
     (hv : s1.validators = s2.validators) (hr : s1.randao_mixes = s2.randao_mixes)
     (hn : s1.next_sync_committee = s2.next_sync_committee)
     (hc : s1.current_sync_committee = s2.current_sync_committee) :
@@ -179,7 +179,7 @@ theorem scNew_congr [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s1 s2 : BeaconState
 
 /-- The randao reset writes the mix of the next epoch. The seeds two epochs ahead read the mix of
 the current epoch, so they do not change. -/
-theorem rrNew_seed [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (v : List Bytes32)
+theorem rrNew_seed [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) (v : List Bytes32)
     (hfit : s.slot / P.SLOTS_PER_EPOCH + 65538 < 2 ^ 64)
     (hv : rrNew s = .ok v) (d : DomainType) :
     get_seed P o { s with randao_mixes := v }
@@ -220,27 +220,27 @@ theorem rrNew_seed [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (v 
 /-! ## The swaps with the proposer lookahead and the PTC window -/
 
 /-- The slot fits with room for the seed lookups two epochs ahead. -/
-def SlotRoom [PresetCfg] (s : BeaconState) : Prop :=
+def SlotRoom [CurrentPreset] (s : BeaconState) : Prop :=
   s.slot / P.SLOTS_PER_EPOCH + 65538 < 2 ^ 64
 
-theorem plNew_set [PresetCfg] (o : Oracle) (s t : BeaconState) (hpl : t.proposer_lookahead = s.proposer_lookahead)
+theorem plNew_set [CurrentPreset] (o : Oracle) (s t : BeaconState) (hpl : t.proposer_lookahead = s.proposer_lookahead)
     (hs : t.slot = s.slot) (hv : t.validators = s.validators)
     (hr : t.randao_mixes = s.randao_mixes) : plNew o t = plNew o s :=
   plNew_congr o t s hpl hs hv (by rw [get_seed_congr hr])
 
-theorem ptcNew_set [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s t : BeaconState) (hptc : t.ptc_window = s.ptc_window)
+theorem ptcNew_set [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s t : BeaconState) (hptc : t.ptc_window = s.ptc_window)
     (hs : t.slot = s.slot) (hv : t.validators = s.validators)
     (hr : t.randao_mixes = s.randao_mixes) : ptcNew o t = ptcNew o s :=
   ptcNew_congr o t s hptc hs hv (fun d => by rw [get_seed_congr hr])
 
 /-- A step `X` swaps with the proposer lookahead and with the PTC window. -/
-structure SwapsWithCommittees [PresetCfg] (o : Oracle) (X : BeaconState → SpecM BeaconState) : Prop where
+structure SwapsWithCommittees [CurrentPreset] (o : Oracle) (X : BeaconState → SpecM BeaconState) : Prop where
   pl : ∀ s, SlotRoom s → SameResultOrBothFail (X s >>= process_proposer_lookahead P o)
     (process_proposer_lookahead P o s >>= X)
   ptc : ∀ s, SlotRoom s → SameResultOrBothFail (X s >>= process_ptc_window P o)
     (process_ptc_window P o s >>= X)
 
-theorem eth1_swaps [PresetCfg] [PresetCfg.Ok] (o : Oracle) : SwapsWithCommittees o (process_eth1_data_reset P) where
+theorem eth1_swaps [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) : SwapsWithCommittees o (process_eth1_data_reset P) where
   pl s _ := swap_shapes _ _ eth1Cond (fun b t => if b then { t with eth1_data_votes := [] } else t)
     (plNew o) (fun w t => setPL t w) s eth1_eq (process_proposer_lookahead_eq o)
     (fun b _ => by cases b <;> rfl)
@@ -250,7 +250,7 @@ theorem eth1_swaps [PresetCfg] [PresetCfg.Ok] (o : Oracle) : SwapsWithCommittees
     (fun b _ => by cases b <;> rfl)
     (fun _ _ => eth1Cond_slot rfl) (fun b _ => by cases b <;> rfl)
 
-theorem slashings_reset_swaps [PresetCfg] [PresetCfg.Ok] (o : Oracle) :
+theorem slashings_reset_swaps [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) :
     SwapsWithCommittees o (process_slashings_reset P) where
   pl s _ := swap_shapes _ _ srNew (fun v t => { t with slashings := v }) (plNew o)
     (fun w t => setPL t w) s process_slashings_reset_eq (process_proposer_lookahead_eq o)
@@ -259,7 +259,7 @@ theorem slashings_reset_swaps [PresetCfg] [PresetCfg.Ok] (o : Oracle) :
     (fun w t => setPTC t w) s process_slashings_reset_eq (process_ptc_window_eq o)
     (fun _ _ => ptcNew_set o s _ rfl rfl rfl rfl) (fun _ _ => rfl) (fun _ _ => rfl)
 
-theorem randao_reset_swaps [PresetCfg] [PresetCfg.Ok] (o : Oracle) :
+theorem randao_reset_swaps [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) :
     SwapsWithCommittees o (process_randao_mixes_reset P) where
   pl s hroom := swap_shapes _ _ rrNew (fun v t => { t with randao_mixes := v }) (plNew o)
     (fun w t => setPL t w) s process_randao_mixes_reset_eq (process_proposer_lookahead_eq o)
@@ -270,7 +270,7 @@ theorem randao_reset_swaps [PresetCfg] [PresetCfg.Ok] (o : Oracle) :
     (fun v hv => ptcNew_congr o _ s rfl rfl rfl (rrNew_seed o s v hroom hv))
     (fun _ _ => rfl) (fun _ _ => rfl)
 
-theorem historical_swaps [PresetCfg] [PresetCfg.Ok] (o : Oracle) :
+theorem historical_swaps [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) :
     SwapsWithCommittees o (process_historical_summaries_update P o) where
   pl s _ := swap_shapes _ _ (hsNew o) (fun v t => { t with historical_summaries := v })
     (plNew o) (fun w t => setPL t w) s (process_historical_summaries_update_eq o)
@@ -281,7 +281,7 @@ theorem historical_swaps [PresetCfg] [PresetCfg.Ok] (o : Oracle) :
     (process_ptc_window_eq o)
     (fun _ _ => ptcNew_set o s _ rfl rfl rfl rfl) (fun _ _ => rfl) (fun _ _ => rfl)
 
-theorem participation_swaps [PresetCfg] [PresetCfg.Ok] (o : Oracle) : SwapsWithCommittees o pfStep where
+theorem participation_swaps [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) : SwapsWithCommittees o pfStep where
   pl s _ := swap_shapes _ _ pfNew (fun v t => setPF t v) (plNew o) (fun w t => setPL t w) s
     pfStep_eq (process_proposer_lookahead_eq o)
     (fun _ _ => plNew_set o s _ rfl rfl rfl rfl) (fun _ _ => rfl) (fun _ _ => rfl)
@@ -289,7 +289,7 @@ theorem participation_swaps [PresetCfg] [PresetCfg.Ok] (o : Oracle) : SwapsWithC
     pfStep_eq (process_ptc_window_eq o)
     (fun _ _ => ptcNew_set o s _ rfl rfl rfl rfl) (fun _ _ => rfl) (fun _ _ => rfl)
 
-theorem sync_swaps [PresetCfg] [PresetCfg.Ok] (o : Oracle) :
+theorem sync_swaps [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) :
     SwapsWithCommittees o (process_sync_committee_updates P o) where
   pl s _ := swap_shapes _ _ (scNew o) (fun v t => setSC t v) (plNew o) (fun w t => setPL t w) s
     (process_sync_committee_updates_eq o) (process_proposer_lookahead_eq o)
@@ -318,50 +318,50 @@ theorem keeps_of_shape {α : Type} (P : BeaconState → Prop) (X : BeaconState �
   obtain ⟨v, -, rfl⟩ := map_ok_inv h
   exact hG v s hs
 
-theorem slotRoom_keeps_eth1 [PresetCfg] : StepKeeps SlotRoom (process_eth1_data_reset P) :=
+theorem slotRoom_keeps_eth1 [CurrentPreset] : StepKeeps SlotRoom (process_eth1_data_reset P) :=
   keeps_of_shape _ _ _ _ eth1_eq (fun b t h => by cases b <;> exact h)
 
-theorem slotRoom_keeps_sr [PresetCfg] : StepKeeps SlotRoom (process_slashings_reset P) :=
+theorem slotRoom_keeps_sr [CurrentPreset] : StepKeeps SlotRoom (process_slashings_reset P) :=
   keeps_of_shape _ _ _ _ process_slashings_reset_eq (fun _ _ h => h)
 
-theorem slotRoom_keeps_rr [PresetCfg] : StepKeeps SlotRoom (process_randao_mixes_reset P) :=
+theorem slotRoom_keeps_rr [CurrentPreset] : StepKeeps SlotRoom (process_randao_mixes_reset P) :=
   keeps_of_shape _ _ _ _ process_randao_mixes_reset_eq (fun _ _ h => h)
 
-theorem slotRoom_keeps_hs [PresetCfg] (o : Oracle) :
+theorem slotRoom_keeps_hs [CurrentPreset] (o : Oracle) :
     StepKeeps SlotRoom (process_historical_summaries_update P o) :=
   keeps_of_shape _ _ _ _ (process_historical_summaries_update_eq o) (fun _ _ h => h)
 
-theorem slotRoom_keeps_pf [PresetCfg] : StepKeeps SlotRoom pfStep :=
+theorem slotRoom_keeps_pf [CurrentPreset] : StepKeeps SlotRoom pfStep :=
   keeps_of_shape _ _ _ _ pfStep_eq (fun _ _ h => h)
 
-theorem slotRoom_keeps_sc [PresetCfg] (o : Oracle) :
+theorem slotRoom_keeps_sc [CurrentPreset] (o : Oracle) :
     StepKeeps SlotRoom (process_sync_committee_updates P o) :=
   keeps_of_shape _ _ _ _ (process_sync_committee_updates_eq o) (fun _ _ h => h)
 
-theorem slotRoom_keeps_pl [PresetCfg] [PresetCfg.Ok] (o : Oracle) :
+theorem slotRoom_keeps_pl [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) :
     StepKeeps SlotRoom (process_proposer_lookahead P o) :=
   keeps_of_shape _ _ _ _ (process_proposer_lookahead_eq o) (fun _ _ h => h)
 
-theorem slotRoom_keeps_ptc [PresetCfg] [PresetCfg.Ok] (o : Oracle) :
+theorem slotRoom_keeps_ptc [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) :
     StepKeeps SlotRoom (process_ptc_window P o) :=
   keeps_of_shape _ _ _ _ (process_ptc_window_eq o) (fun _ _ h => h)
 
 /-- The spec order of the steps after the builder payments, with the eth1 reset first. -/
-def specOrder [PresetCfg] (o : Oracle) : List (BeaconState → SpecM BeaconState) :=
+def specOrder [CurrentPreset] (o : Oracle) : List (BeaconState → SpecM BeaconState) :=
   [process_eth1_data_reset P, process_slashings_reset P,
     process_randao_mixes_reset P, process_historical_summaries_update P o,
     pfStep, process_sync_committee_updates P o,
     process_proposer_lookahead P o, process_ptc_window P o]
 
 /-- The Lighthouse order: the proposer lookahead and the PTC window first. -/
-def lhOrder [PresetCfg] (o : Oracle) : List (BeaconState → SpecM BeaconState) :=
+def lhOrder [CurrentPreset] (o : Oracle) : List (BeaconState → SpecM BeaconState) :=
   [process_proposer_lookahead P o, process_ptc_window P o,
     process_eth1_data_reset P, process_slashings_reset P,
     process_randao_mixes_reset P, process_historical_summaries_update P o,
     pfStep, process_sync_committee_updates P o]
 
 /-- The two orders give the same `ok` results. -/
-theorem specOrder_lhOrder [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (hroom : SlotRoom s) :
+theorem specOrder_lhOrder [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) (hroom : SlotRoom s) :
     SameResultOrBothFail (runSteps (specOrder o) s) (runSteps (lhOrder o) s) := by
   let e1 := process_eth1_data_reset P
   let sr := process_slashings_reset P

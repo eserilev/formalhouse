@@ -14,7 +14,7 @@ the Fulu constants and the Fulu candidates:
   constants of the pending deposits code: the result is `get_activation_churn_limit`.
 - `next_proposer_lookahead_spec_fulu`: `epoch_committees::next_proposer_lookahead` on all the
   active validators returns Fulu `process_proposer_lookahead`, if each Electra proposer loop
-  ends before its last pass (`ProposerFin`).
+  ends before its last pass (`ProposerSelectionEnds`).
 - `next_sync_committee_indices_spec_fulu`: `epoch_committees::next_sync_committee_indices`
   returns the Electra `get_next_sync_committee_indices`.
 -/
@@ -162,7 +162,7 @@ theorem next_proposer_lookahead_spec_fulu {H B : Type} (inst : ShuffleHashInst H
     (hepoch : ∀ ce, Spec.get_current_epoch p state = .ok ce →
       epoch.val = ce + p.MIN_SEED_LOOKAHEAD + 1)
     (hindices : indices.val.map (·.val) = Spec.get_active_validator_indices state epoch.val)
-    (hfin : ∀ s, Spec.ProposerFin p o state (Spec.get_active_validator_indices state epoch.val) s)
+    (hfin : ∀ s, Spec.ProposerSelectionEnds p o state (Spec.get_active_validator_indices state epoch.val) s)
     (mix : Array U8 32#usize) (hmix : SeedMixLink p state epoch.val mix) (start_slot : U64)
     (hstart : Spec.compute_start_slot_at_epoch p epoch.val = .ok start_slot.val)
     (c : LhSelectionConstants) (hc : SelectionConstantsMatch p c)

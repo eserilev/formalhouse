@@ -16,7 +16,7 @@ slot from the cache, joined in order. `ptc_for_epoch_spec` (`Equiv/EpochCommitte
 `CacheProofs` proves the committee cache equal to its own spec model
 (`get_beacon_committee_equiv`, `shuffling_spec`). The two projects state the shuffle hash
 differently: the epoch reference has `Oracle.hash` on bytes, the cache reference has a function
-on byte values. `natHash o` is `o.hash` on byte values, and `csiFold_eq` proves the two closed
+on byte values. `natHash o` is `o.hash` on byte values, and `shuffledIndexAfterRounds_eq` proves the two closed
 forms of the shuffle equal for it.
 
 `ptcIndices_of_cache` gives `hcomm` from the committee cache build facts: the shuffling is the
@@ -49,7 +49,7 @@ theorem pivotOf_eq (o : Spec.Oracle) (seed : List UInt8) (n r : Nat) :
     CacheProofs.Shuffle.pivotOf (natHash o) (natBytes seed) n r = Spec.pivotOf o seed n r := by
   simp only [CacheProofs.Shuffle.pivotOf, Spec.pivotOf, natHash, List.map_append,
     ofNat_natBytes, List.map_cons, List.map_nil, CacheProofs.Spec.CommitteeCache.bytes_to_uint64,
-    Spec.leNat, ← List.map_take, List.foldr_map]
+    Spec.littleEndianValue, ← List.map_take, List.foldr_map]
 
 theorem bitOf_eq (o : Spec.Oracle) (seed : List UInt8) (r position : Nat) :
     CacheProofs.Shuffle.bitOf (natHash o) (natBytes seed) r position =
@@ -64,9 +64,9 @@ theorem sigma_eq (o : Spec.Oracle) (seed : List UInt8) (n r x : Nat) :
   simp only [CacheProofs.Shuffle.sigma, Spec.sigma, pivotOf_eq, bitOf_eq]
 
 /-- The closed form of the shuffle is the same in both references. -/
-theorem csiFold_eq (o : Spec.Oracle) (seed : List UInt8) (n R x : Nat) :
-    CacheProofs.Shuffle.csiFold (natHash o) (natBytes seed) n R x = Spec.csiFold o seed n R x := by
-  simp only [CacheProofs.Shuffle.csiFold, Spec.csiFold, sigma_eq]
+theorem shuffledIndexAfterRounds_eq (o : Spec.Oracle) (seed : List UInt8) (n R x : Nat) :
+    CacheProofs.Shuffle.shuffledIndexAfterRounds (natHash o) (natBytes seed) n R x = Spec.shuffledIndexAfterRounds o seed n R x := by
+  simp only [CacheProofs.Shuffle.shuffledIndexAfterRounds, Spec.shuffledIndexAfterRounds, sigma_eq]
 
 /-! ## The committees of the epoch reference, from a shuffling -/
 
@@ -87,10 +87,10 @@ theorem epoch_shuffled_at (p : Spec.Preset) (cp : CacheProofs.Spec.CommitteeCach
   unfold shuffledAt at h
   rw [CacheProofs.Shuffle.compute_shuffled_index_eq cp (natHash o) (natHash_length o)
     (natBytes seed.toList) indices.length (Nat.lt_of_le_of_lt (Nat.zero_le i) hi)
-    (by simpa using hn24) (hR ▸ hR256) i hi, csiFold_eq, hR] at h
+    (by simpa using hn24) (hR ▸ hR256) i hi, shuffledIndexAfterRounds_eq, hR] at h
   rw [Spec.compute_shuffled_index_eq p o seed i indices.length hi
     (Nat.le_trans hn24 (by norm_num)) hR256]
-  generalize Spec.csiFold o seed.toList indices.length p.SHUFFLE_ROUND_COUNT i = k at h ⊢
+  generalize Spec.shuffledIndexAfterRounds o seed.toList indices.length p.SHUFFLE_ROUND_COUNT i = k at h ⊢
   simp only [Bind.bind, Except.bind, CacheProofs.Spec.CommitteeCache.listGet] at h
   simp only [Bind.bind, Except.bind, Spec.listGet]
   split at h
@@ -206,19 +206,19 @@ structure CommitteePresetLink (p : Spec.Preset) (cp : CacheProofs.Spec.Committee
   rounds_pos : 0 < p.SHUFFLE_ROUND_COUNT
 
 /-- The committee preset of the cache reference with the values of the epoch preset. -/
-def cachePresetOf [EpochProofs.Spec.PresetCfg] : CacheProofs.Spec.CommitteeCache.Preset :=
+def cachePresetOf [EpochProofs.Spec.CurrentPreset] : CacheProofs.Spec.CommitteeCache.Preset :=
   { SLOTS_PER_EPOCH := Spec.P.SLOTS_PER_EPOCH
     MAX_COMMITTEES_PER_SLOT := Spec.P.MAX_COMMITTEES_PER_SLOT
     TARGET_COMMITTEE_SIZE := Spec.P.TARGET_COMMITTEE_SIZE
     SHUFFLE_ROUND_COUNT := Spec.P.SHUFFLE_ROUND_COUNT }
 
 theorem cachePresetOf_mainnet :
-    @cachePresetOf Spec.mainnetCfg = CacheProofs.Spec.CommitteeCache.Preset.mainnet := rfl
+    @cachePresetOf Spec.currentPresetMainnet = CacheProofs.Spec.CommitteeCache.Preset.mainnet := rfl
 theorem cachePresetOf_minimal :
-    @cachePresetOf Spec.minimalCfg = CacheProofs.Spec.CommitteeCache.Preset.minimal := rfl
+    @cachePresetOf Spec.currentPresetMinimal = CacheProofs.Spec.CommitteeCache.Preset.minimal := rfl
 
-theorem committeePresetLink_P [EpochProofs.Spec.PresetCfg] [EpochProofs.Spec.PresetCfg.Ok]
-    [EpochProofs.Spec.PresetCfg.Bounds] : CommitteePresetLink Spec.P cachePresetOf where
+theorem committeePresetLink_P [EpochProofs.Spec.CurrentPreset] [EpochProofs.Spec.CurrentPreset.Valid]
+    [EpochProofs.Spec.CurrentPreset.Bounds] : CommitteePresetLink Spec.P cachePresetOf where
   slots_per_epoch := rfl
   max_committees_per_slot := rfl
   target_committee_size := rfl

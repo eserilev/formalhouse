@@ -8,14 +8,14 @@ import EpochProofs.Sanity.FuluRegistry
 Before Gloas, `registry_constants` in `single_pass.rs` passes the Fulu quotient and the Fulu
 cap to the translated `registry_update` and `single_pass_step`. With these constants,
 `exit_churn_limit` returns the Fulu churn (`exit_churn_limit_fulu`), which is the Gloas churn at
-`fuluTab` (`fulu_exit_churn_eq`). So the Gloas theorems apply with `T = fuluTab`:
+`fuluTotalActiveBalance` (`fulu_exit_churn_eq`). So the Gloas theorems apply with `T = fuluTotalActiveBalance`:
 
-- `fulu_churnSpec`: the Fulu constants satisfy `ChurnSpec p c (fuluTab p f)`.
-- `registry_update_equiv_fulu`: `registry_update` equals `registryStepIndependent` at `fuluTab`.
+- `fulu_churnSpec`: the Fulu constants satisfy `ChurnSpec p c (fuluTotalActiveBalance p f)`.
+- `registry_update_equiv_fulu`: `registry_update` equals `registryStepIndependent` at `fuluTotalActiveBalance`.
 - `registry_update_eq_spec_fulu`: on valid states it equals the loop body of Fulu
   `process_registry_updates` (`process_registry_updates_fulu_eq`).
 - `single_pass_step_equiv_fulu`: `single_pass_step` equals `lhRowStepFull` with the registry
-  total `fuluTab`.
+  total `fuluTotalActiveBalance`.
 -/
 
 namespace EpochProofs
@@ -23,10 +23,10 @@ namespace EpochProofs
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 open state_processing.per_epoch_processing.single_pass_step (ValidatorRow ExitChurn StepContext RowInputs)
 
-/-- The Fulu registry constants give the Gloas exit churn at `fuluTab`. -/
+/-- The Fulu registry constants give the Gloas exit churn at `fuluTotalActiveBalance`. -/
 theorem fulu_churnSpec (p : Spec.Preset) (f : Spec.FuluConfig) (c : LhRegistryConstants)
     (hcompat : Spec.FuluCompat p f) (hc : FuluChurnMatch p f c) :
-    ChurnSpec p c (Spec.fuluTab p f) := by
+    ChurnSpec p c (Spec.fuluTotalActiveBalance p f) := by
   intro total_active_balance
   have h := exit_churn_limit_fulu p f total_active_balance c hc
   rw [Spec.fulu_exit_churn_eq p f hcompat] at h
@@ -38,13 +38,13 @@ theorem registry_update_equiv_fulu (p : Spec.Preset) (f : Spec.FuluConfig)
     (c : LhRegistryConstants) (hc : ConstantsMatchBase p c) (hfulu : FuluChurnMatch p f c) :
     per_epoch_processing.registry_update.registry_update fields effective_balance current_epoch
       finalized_epoch total_active_balance c ⦃ r => absResult absRegistry r =
-        Spec.registryStepIndependent p (Spec.fuluTab p f total_active_balance.val)
+        Spec.registryStepIndependent p (Spec.fuluTotalActiveBalance p f total_active_balance.val)
           current_epoch.val finalized_epoch.val effective_balance.val (absRegistry fields) ⦄ :=
   registry_update_equiv_churn p fields effective_balance current_epoch finalized_epoch
-    total_active_balance c hc (Spec.fuluTab p f) (fulu_churnSpec p f c hcompat hfulu)
+    total_active_balance c hc (Spec.fuluTotalActiveBalance p f) (fulu_churnSpec p f c hcompat hfulu)
 
 /-- On valid states, Lighthouse's Fulu registry update equals the loop body of Fulu
-`process_registry_updates`, which is the Gloas loop body at `fuluTab`. -/
+`process_registry_updates`, which is the Gloas loop body at `fuluTotalActiveBalance`. -/
 theorem registry_update_eq_spec_fulu (p : Spec.Preset) (f : Spec.FuluConfig)
     (hcompat : Spec.FuluCompat p f) (fields : LhRegistryFields)
     (effective_balance current_epoch finalized_epoch total_active_balance : U64)
@@ -56,7 +56,7 @@ theorem registry_update_eq_spec_fulu (p : Spec.Preset) (f : Spec.FuluConfig)
     (hactivation : Spec.compute_activation_exit_epoch p current_epoch.val = .ok activation_epoch) :
     per_epoch_processing.registry_update.registry_update fields effective_balance current_epoch
       finalized_epoch total_active_balance c ⦃ r => absResult absRegistry r =
-        Spec.registryStepExclusive p (Spec.fuluTab p f total_active_balance.val)
+        Spec.registryStepExclusive p (Spec.fuluTotalActiveBalance p f total_active_balance.val)
           current_epoch.val finalized_epoch.val activation_epoch effective_balance.val
           (absRegistry fields) ⦄ := by
   apply WP.spec_mono (registry_update_equiv_fulu p f hcompat fields effective_balance
@@ -70,7 +70,7 @@ theorem registry_update_eq_spec_fulu (p : Spec.Preset) (f : Spec.FuluConfig)
   simpa [absRegistry, Spec.FAR_FUTURE_EPOCH] using hb
 
 /-- Lighthouse's Fulu `single_pass_step` equals `lhRowStepFull` with the registry total
-`fuluTab`. The rewards, the slashings and the effective balance update read the real total. -/
+`fuluTotalActiveBalance`. The rewards, the slashings and the effective balance update read the real total. -/
 theorem single_pass_step_equiv_fulu (p : Spec.Preset) (f : Spec.FuluConfig)
     (hcompat : Spec.FuluCompat p f) (lr : ValidatorRow) (r : Spec.Row)
     (hm : RowMatches lr r) (i : RowInputs) (inputs : Spec.LhRowInputs)
@@ -81,10 +81,10 @@ theorem single_pass_step_equiv_fulu (p : Spec.Preset) (f : Spec.FuluConfig)
     (hfulu : FuluChurnMatch p f consts) :
     per_epoch_processing.single_pass_step.single_pass_step lr i churn c consts ⦃ res =>
       absStep r res = Spec.lhRowStepFull p
-        { ctx with total_active_balance := Spec.fuluTab p f ctx.total_active_balance }
+        { ctx with total_active_balance := Spec.fuluTotalActiveBalance p f ctx.total_active_balance }
         downward upward inputs
         (churn.earliest_exit_epoch.val, churn.exit_balance_to_consume.val) r ⦄ :=
   single_pass_step_equiv_churn p lr r hm i inputs hi churn c ctx hc downward upward hdownward
-    hupward consts hconsts (Spec.fuluTab p f) (fulu_churnSpec p f consts hcompat hfulu)
+    hupward consts hconsts (Spec.fuluTotalActiveBalance p f) (fulu_churnSpec p f consts hcompat hfulu)
 
 end EpochProofs

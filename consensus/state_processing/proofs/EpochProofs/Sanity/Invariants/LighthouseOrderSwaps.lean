@@ -137,7 +137,7 @@ def setPL (s : BeaconState) (l : List ValidatorIndex) : BeaconState :=
   { s with proposer_lookahead := l }
 
 /-- The new `proposer_lookahead` that `process_proposer_lookahead` writes. -/
-def plNew [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM (List ValidatorIndex) := do
+def plNew [CurrentPreset] (o : Oracle) (s : BeaconState) : SpecM (List ValidatorIndex) := do
   let last_epoch_start ← uint64Sub s.proposer_lookahead.length P.SLOTS_PER_EPOCH
   let st := setPL s (s.proposer_lookahead.drop P.SLOTS_PER_EPOCH ++
     s.proposer_lookahead.drop last_epoch_start)
@@ -146,7 +146,7 @@ def plNew [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM (List ValidatorInde
       P.MIN_SEED_LOOKAHEAD) 1)
   pure (st.proposer_lookahead.take last_epoch_start ++ last_epoch_proposers)
 
-theorem process_proposer_lookahead_eq [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) :
+theorem process_proposer_lookahead_eq [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) :
     process_proposer_lookahead P o s = (fun l => setPL s l) <$> plNew o s := by
   unfold process_proposer_lookahead plNew setPL
   simp only [get_current_epoch_mainnet, ok_bind']
@@ -168,7 +168,7 @@ theorem uint64Add_of_ge (a b : Nat) (h : ¬ a + b < 2 ^ 64) :
 
 /-- `plNew` reads `proposer_lookahead`, `slot`, `validators` and the proposer seed two epochs
 ahead. -/
-theorem plNew_congr [PresetCfg] (o : Oracle) (s1 s2 : BeaconState)
+theorem plNew_congr [CurrentPreset] (o : Oracle) (s1 s2 : BeaconState)
     (hpl : s1.proposer_lookahead = s2.proposer_lookahead) (hs : s1.slot = s2.slot)
     (hv : s1.validators = s2.validators)
     (hseed : get_seed P o s1 (s2.slot / P.SLOTS_PER_EPOCH + 1 + 1)
@@ -206,7 +206,7 @@ def setPTC (s : BeaconState) (w : List (List ValidatorIndex)) : BeaconState :=
   { s with ptc_window := w }
 
 /-- The new `ptc_window` that `process_ptc_window` writes. -/
-def ptcNew [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM (List (List ValidatorIndex)) := do
+def ptcNew [CurrentPreset] (o : Oracle) (s : BeaconState) : SpecM (List (List ValidatorIndex)) := do
   let shift_end ← uint64Sub s.ptc_window.length P.SLOTS_PER_EPOCH
   let st := setPTC s (s.ptc_window.drop P.SLOTS_PER_EPOCH ++
     s.ptc_window.drop shift_end)
@@ -219,7 +219,7 @@ def ptcNew [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM (List (List Valida
   let fill_start ← uint64Sub st.ptc_window.length P.SLOTS_PER_EPOCH
   pure (st.ptc_window.take fill_start ++ ptcs)
 
-theorem process_ptc_window_eq [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) :
+theorem process_ptc_window_eq [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) :
     process_ptc_window P o s = (fun w => setPTC s w) <$> ptcNew o s := by
   unfold process_ptc_window ptcNew setPTC
   simp only [get_current_epoch_mainnet, ok_bind']
@@ -242,7 +242,7 @@ theorem uint64Mul_of_ge (a b : Nat) (h : ¬ a * b < 2 ^ 64) :
   rfl
 
 /-- `ptcNew` reads `ptc_window`, `slot`, `validators` and the seeds two epochs ahead. -/
-theorem ptcNew_congr [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s1 s2 : BeaconState)
+theorem ptcNew_congr [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s1 s2 : BeaconState)
     (hptc : s1.ptc_window = s2.ptc_window) (hs : s1.slot = s2.slot)
     (hv : s1.validators = s2.validators)
     (hseed : ∀ d, get_seed P o s1 (s2.slot / P.SLOTS_PER_EPOCH + 1 + 1)

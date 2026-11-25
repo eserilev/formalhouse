@@ -13,8 +13,8 @@ import EpochProofs.Sanity.Invariants.FuluBalance
 the same state facts as the Gloas `process_epoch_total_rows`. Most steps are the Gloas steps.
 The differences:
 
-- The registry update and the pending deposits run at the churn total `fuluTabM tab`
-  (`MidCore`, `DepCore` with `g = fuluTabM`).
+- The registry update and the pending deposits run at the churn total `fuluChurnTotal tab`
+  (`MidCore`, `DepCore` with `g = fuluChurnTotal`).
 - No builder payments and no PTC window.
 - The sync committee update is the Electra loop. It gives the same `ok` results as the Gloas
   selection (`process_sync_committee_updates_fulu_sameResultOrBothFail`).
@@ -23,7 +23,7 @@ The differences:
   (`compute_proposer_indices_ok_fulu`).
 
 The pyspec preconditions of the Fulu committee steps are weaker than the Gloas ones
-(`FuluCommitteeStepPreconds`): some validator is active at `current + 2`, slashed or not, and the PTC
+(`CommitteeStepPreconditionsFulu`): some validator is active at `current + 2`, slashed or not, and the PTC
 needs nothing, because Fulu has no PTC. So Fulu has no minimum number of active validators: a Fulu chain with
 fewer than `SLOTS_PER_EPOCH` active validators does not halt at the epoch boundary.
 -/
@@ -46,8 +46,8 @@ def BeaconState.FuluVectorLengths (p : Preset) (state : BeaconState) : Prop :=
 
 /-! ## Churn total -/
 
-theorem fuluTabM_lt [PresetCfg] [FuluCfg] (x : Gwei) (hx : x < 2 ^ 57) : fuluTabM x < 2 ^ 60 := by
-  unfold fuluTabM fuluTab
+theorem fuluChurnTotal_lt [CurrentPreset] [CurrentFuluConfig] (x : Gwei) (hx : x < 2 ^ 57) : fuluChurnTotal x < 2 ^ 60 := by
+  unfold fuluChurnTotal fuluTotalActiveBalance
   have h : @LE.le Nat _ (min (x / 2) (FC.MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT *
       P.CHURN_LIMIT_QUOTIENT_GLOAS)) (x / 2) := Nat.min_le_left _ _
   have hx' : @LT.lt Nat _ x (2 ^ 57) := hx
@@ -58,21 +58,21 @@ theorem fuluTabM_lt [PresetCfg] [FuluCfg] (x : Gwei) (hx : x < 2 ^ 57) : fuluTab
 
 /-- The Fulu inactivity, rewards, registry and slashings steps succeed after justification and
 finalization. -/
-def MidOkFulu [PresetCfg] [FuluCfg] (t : BeaconState) : Prop :=
+def MidOkFulu [CurrentPreset] [CurrentFuluConfig] (t : BeaconState) : Prop :=
   ∀ s1, JFShape t s1 → s1.finalized_checkpoint.epoch ≤ t.slot / P.SLOTS_PER_EPOCH →
     (t.slot / P.SLOTS_PER_EPOCH ≠ 0 → s1.finalized_checkpoint.epoch + 1 ≤ t.slot / P.SLOTS_PER_EPOCH) →
     OkWith (specFourStepsFulu s1) (fun s => TailFrame t s ∧ DepFrame t s)
 
-theorem midOkFulu_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] [FuluCfg] (t : BeaconState) (hrows : RowsOk t)
-    (hslot : t.slot + 8192 < 2 ^ 64) (heb : EBOk P t)
+theorem midOkFulu_of_supplyAndTimeLimits [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] [CurrentFuluConfig] (t : BeaconState) (hrows : ListLengthsMatch t)
+    (hslot : t.slot + 8192 < 2 ^ 64) (heb : EffectiveBalancesValid P t)
     (hrl : t.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR) (hsll : t.slashings.length = P.EPOCHS_PER_SLASHINGS_VECTOR)
-    (hcons : ConsolidationsInRange t) (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : PhysicalLimits t) :
+    (hcons : ConsolidationsInRange t) (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : SupplyAndTimeLimits t) :
     MidOkFulu t := by
   intro s1 hshape hfin0 hfin
-  have hcore := midCore_of_physicalLimits fuluTabM fuluTabM_lt t hrows hslot heb hrl hsll hcons hsl
+  have hcore := midCore_of_supplyAndTimeLimits fuluChurnTotal fuluChurnTotal_lt t hrows hslot heb hrl hsll hcons hsl
     hrb s1 hshape hfin0 hfin
   obtain ⟨cp1, cp2, cp3, bits, hs1⟩ := hshape
-  have hrows1 : RowsOk s1 := by rw [hs1]; exact hrows
+  have hrows1 : ListLengthsMatch s1 := by rw [hs1]; exact hrows
   have hslot1 : s1.slot = t.slot := by rw [hs1]
   have hteb1 : totalEffectiveBalance s1 = totalEffectiveBalance t := by rw [hs1]; rfl
   have hslot' : @LT.lt Nat _ (t.slot + 8192) (2 ^ 64) := hslot
@@ -80,7 +80,7 @@ theorem midOkFulu_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds
   have hcur : get_current_epoch P s1 = .ok (t.slot / P.SLOTS_PER_EPOCH) := by
     rw [← hslot1]; exact tot_current_epoch s1
   obtain ⟨tab, htab, -, -⟩ := get_total_active_balance_bounds P s1
-    (t.slot / P.SLOTS_PER_EPOCH) hcur (by rw [hteb1]; exact Nat.lt_trans hrb.supply (by decide))
+    (t.slot / P.SLOTS_PER_EPOCH) hcur (by rw [hteb1]; exact Nat.lt_trans hrb.effectiveBalancesBounded (by decide))
   have hact := compute_activation_exit_epoch_of_lt P (t.slot / P.SLOTS_PER_EPOCH)
     (by show @LT.lt Nat _ (t.slot / P.SLOTS_PER_EPOCH + 1 + 4) (2 ^ 64); omega)
   have hfar : t.slot / P.SLOTS_PER_EPOCH < FAR_FUTURE_EPOCH := by
@@ -91,14 +91,14 @@ theorem midOkFulu_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds
 
 /-! ## The committee steps -/
 
-theorem compute_proposer_indices_total [PresetCfg] [PresetCfg.Bounds] (o : Oracle) (s : BeaconState)
+theorem compute_proposer_indices_total [CurrentPreset] [CurrentPreset.Bounds] (o : Oracle) (s : BeaconState)
     (e : Nat) (seed : Bytes32)
     (indices : List ValidatorIndex) (hstart : e * P.SLOTS_PER_EPOCH + P.SLOTS_PER_EPOCH < 2 ^ 64)
     (hne : indices ≠ [])
     (hin : ∀ j ∈ indices, j < s.validators.length)
     (heb : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000)
     (hlen : indices.length ≤ 2 ^ 40)
-    (hsel : ∀ sd, SelFin P o s indices sd 1 true) :
+    (hsel : ∀ sd, SelectionEnds P o s indices sd 1 true) :
     ∃ r, compute_proposer_indices P o s e seed indices = .ok r := by
   unfold compute_proposer_indices compute_start_slot_at_epoch
   rw [tot_mul (show e * P.SLOTS_PER_EPOCH < 2 ^ 64 by omega), tot_bind_ok]
@@ -118,7 +118,7 @@ theorem compute_proposer_indices_total [PresetCfg] [PresetCfg.Bounds] (o : Oracl
   rw [hr1, tot_bind_ok, tot_get (show 0 < r.length by omega)]
   exact ⟨_, rfl⟩
 
-theorem get_beacon_proposer_indices_fulu_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds]
+theorem get_beacon_proposer_indices_fulu_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds]
     (o : Oracle) (s : BeaconState) (e : Nat)
     (he : e + P.EPOCHS_PER_HISTORICAL_VECTOR < 2 ^ 64)
     (hstart : e * P.SLOTS_PER_EPOCH + P.SLOTS_PER_EPOCH < 2 ^ 64)
@@ -126,7 +126,7 @@ theorem get_beacon_proposer_indices_fulu_total [PresetCfg] [PresetCfg.Ok] [Prese
     (hreg : s.validators.length ≤ 2 ^ 40)
     (heb : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000)
     (hne : get_active_validator_indices s e ≠ [])
-    (hsel : ∀ seed, SelFin P o s (get_active_validator_indices s e) seed 1 true) :
+    (hsel : ∀ seed, SelectionEnds P o s (get_active_validator_indices s e) seed 1 true) :
     ∃ r, get_beacon_proposer_indices_fulu P o s e = .ok r := by
   obtain ⟨seed, hseed⟩ := get_seed_total o s e DOMAIN_BEACON_PROPOSER he hr
   have hin : ∀ j ∈ get_active_validator_indices s e, j < s.validators.length :=
@@ -137,14 +137,14 @@ theorem get_beacon_proposer_indices_fulu_total [PresetCfg] [PresetCfg.Ok] [Prese
   rw [hseed, tot_bind_ok]
   exact ⟨r, compute_proposer_indices_ok_fulu P o s e seed _ hin r hr1⟩
 
-theorem process_proposer_lookahead_fulu_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds]
+theorem process_proposer_lookahead_fulu_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds]
     (o : Oracle) (s : BeaconState)
     (hslot : s.slot + 8192 < 2 ^ 64) (hr : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
     (hreg : s.validators.length ≤ 2 ^ 40)
     (heb : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000)
     (hlen : s.proposer_lookahead.length = 2 * P.SLOTS_PER_EPOCH)
     (hne : get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 2) ≠ [])
-    (hsel : ∀ seed, SelFin P o s (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 2))
+    (hsel : ∀ seed, SelectionEnds P o s (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 2))
       seed 1 true) :
     ∃ s', process_proposer_lookahead_fulu P o s = .ok s' := by
   have he : s.slot / P.SLOTS_PER_EPOCH + 2 + P.EPOCHS_PER_HISTORICAL_VECTOR < 2 ^ 64 :=
@@ -169,35 +169,35 @@ theorem process_proposer_lookahead_fulu_total [PresetCfg] [PresetCfg.Ok] [Preset
 
 /-- State facts that the two Fulu committee steps read beyond `CommFrame`. They are the Gloas
 `CommitteeStepFacts` without the PTC window length. -/
-structure FuluCommitteeStepFacts [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
-  regLen : s.validators.length ≤ 2 ^ 40
-  ebMax : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000
-  lookahead : s.proposer_lookahead.length = 2 * P.SLOTS_PER_EPOCH
-  keys : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true
+structure CommitteeStepFactsFulu [CurrentPreset] (o : Oracle) (s : BeaconState) : Prop where
+  registryBelowLimit : s.validators.length ≤ 2 ^ 40
+  effectiveBalancesBelowMax : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000
+  proposerLookaheadLength : s.proposer_lookahead.length = 2 * P.SLOTS_PER_EPOCH
+  pubkeysValid : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true
 
 /-- Preconditions of the Fulu pyspec itself. Without them the pyspec raises.
 
-- `syncActive`: some validator is active at the next epoch (`i % active_validator_count` divides
+- `syncCommitteeHasCandidate`: some validator is active at the next epoch (`i % active_validator_count` divides
   by zero otherwise).
-- `proposers`: some validator is active at `current + 2` (`compute_proposer_index` asserts
+- `proposerHasCandidate`: some validator is active at `current + 2` (`compute_proposer_index` asserts
   `len(indices) > 0`). A slashed active validator counts.
-- `selSync`, `selProp`: each selection accepts its candidates within `2^64` passes.
+- `syncSelectionEnds`, `proposerSelectionEnds`: each selection accepts its candidates within `2^64` passes.
   This depends on the hash values. A candidate with effective balance `0` still passes when its
   random value is `0`, so the loop ends with probability 1. -/
-structure FuluCommitteeStepPreconds [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
-  syncActive : get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 1) ≠ []
-  proposers : get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 2) ≠ []
-  selSync : ∀ seed, SelFin P o s (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 1))
+structure CommitteeStepPreconditionsFulu [CurrentPreset] (o : Oracle) (s : BeaconState) : Prop where
+  syncCommitteeHasCandidate : get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 1) ≠ []
+  proposerHasCandidate : get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 2) ≠ []
+  syncSelectionEnds : ∀ seed, SelectionEnds P o s (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 1))
     seed P.SYNC_COMMITTEE_SIZE true
-  selProp : ∀ seed, SelFin P o s (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 2))
+  proposerSelectionEnds : ∀ seed, SelectionEnds P o s (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 2))
     seed 1 true
 
 /-- The steps of `epochRestFulu` before the committee steps. -/
-def epochRestToCommitteesFulu [PresetCfg] [FuluCfg] (o : Oracle) (state : BeaconState) :
+def epochRestToCommitteesFulu [CurrentPreset] [CurrentFuluConfig] (o : Oracle) (state : BeaconState) :
     SpecM BeaconState := do
   let state ← process_eth1_data_reset P state
   let state ← process_pending_deposits P
-    (fuluTabM (← get_total_active_balance P state))
+    (fuluChurnTotal (← get_total_active_balance P state))
     (apply_pending_deposit P o) state
   let state ← process_pending_consolidations P state
   let state ← process_effective_balance_updates P state
@@ -206,69 +206,69 @@ def epochRestToCommitteesFulu [PresetCfg] [FuluCfg] (o : Oracle) (state : Beacon
   let state ← process_historical_summaries_update P o state
   pure (process_participation_flag_updates state)
 
-/-- `epochToCommitteesFulu` on mainnet in three parts, as `process_epoch_fulu_parts`. -/
-theorem epochToCommitteesFulu_parts [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle)
+/-- `epochBeforeCommitteeStepsFulu` on mainnet in three parts, as `process_epoch_fulu_parts`. -/
+theorem epochBeforeCommitteeStepsFulu_parts [CurrentPreset] [CurrentFuluConfig] [CurrentFuluConfig.Valid] (o : Oracle)
     (s : BeaconState) :
-    epochToCommitteesFulu P FC o s = (do
+    epochBeforeCommitteeStepsFulu P FC o s = (do
       let s1 ← process_justification_and_finalization P s
       let s5 ← specFourStepsFulu s1
       epochRestToCommitteesFulu o s5) := by
-  unfold epochToCommitteesFulu
+  unfold epochBeforeCommitteeStepsFulu
   simp only [process_registry_updates_fulu_eq P FC fuluCompat,
     process_pending_deposits_fulu_tab_eq P FC fuluCompat, specFourStepsFulu,
-    epochRestToCommitteesFulu, fuluTabM, bind_assoc]
+    epochRestToCommitteesFulu, fuluChurnTotal, bind_assoc]
 
 /-- The Fulu committee conditions at the epoch input `t`, at the state that the epoch passes to
-the committee steps (`epochToCommitteesFulu`). See `AtCommitteeStepState`. -/
-def FuluAtCommitteeStepState [PresetCfg] [FuluCfg] (o : Oracle) (t : BeaconState) : Prop :=
-  ∀ s, epochToCommitteesFulu P FC o t = .ok s → FuluCommitteeStepFacts o s ∧ FuluCommitteeStepPreconds o s
+the committee steps (`epochBeforeCommitteeStepsFulu`). See `AtCommitteeStepState`. -/
+def AtCommitteeStepStateFulu [CurrentPreset] [CurrentFuluConfig] (o : Oracle) (t : BeaconState) : Prop :=
+  ∀ s, epochBeforeCommitteeStepsFulu P FC o t = .ok s → CommitteeStepFactsFulu o s ∧ CommitteeStepPreconditionsFulu o s
 
 /-- The Fulu sync committee update and proposer lookahead succeed on the state that
-`epochToCommitteesFulu` returns. -/
-def CommitteesOkFulu [PresetCfg] [FuluCfg] (o : Oracle) (t : BeaconState) : Prop :=
-  ∀ s, epochToCommitteesFulu P FC o t = .ok s → CommFrame t s →
+`epochBeforeCommitteeStepsFulu` returns. -/
+def CommitteesOkFulu [CurrentPreset] [CurrentFuluConfig] (o : Oracle) (t : BeaconState) : Prop :=
+  ∀ s, epochBeforeCommitteeStepsFulu P FC o t = .ok s → CommFrame t s →
     OkWith (committeeStepsFulu P o s) (fun _ => True)
 
-theorem committeesOkFulu_of [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] [FuluCfg] (o : Oracle) (t : BeaconState) (hslot : t.slot + 8192 < 2 ^ 64)
-    (h : FuluAtCommitteeStepState o t) :
+theorem committeesOkFulu_of [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] [CurrentFuluConfig] (o : Oracle) (t : BeaconState) (hslot : t.slot + 8192 < 2 ^ 64)
+    (h : AtCommitteeStepStateFulu o t) :
     CommitteesOkFulu o t := by
   intro s hs hf
   obtain ⟨hc, hp⟩ := h s hs
   unfold committeeStepsFulu
   have hs : s.slot + 8192 < 2 ^ 64 := hf.slot ▸ hslot
   obtain ⟨s1, h1, e1s, e1v, e1r, e1l, -⟩ := process_sync_committee_updates_total o s hs hf.randao
-    hc.regLen hc.ebMax hc.keys hp.syncActive hp.selSync
+    hc.registryBelowLimit hc.effectiveBalancesBelowMax hc.pubkeysValid hp.syncCommitteeHasCandidate hp.syncSelectionEnds
   have h1f := ((process_sync_committee_updates_fulu_sameResultOrBothFail P o s P_sync_pos) s1).mpr
     h1
   rw [h1f, tot_bind_ok]
-  have hsel1 : ∀ seed, SelFin P o s1
+  have hsel1 : ∀ seed, SelectionEnds P o s1
       (get_active_validator_indices s1 (s1.slot / P.SLOTS_PER_EPOCH + 2)) seed 1 true := by
     intro seed
-    simp only [SelFin, ebsOf_congr e1v, get_active_validator_indices_congr e1v, e1s]
-    exact hp.selProp seed
+    simp only [SelectionEnds, effectiveBalancesOf_congr e1v, get_active_validator_indices_congr e1v, e1s]
+    exact hp.proposerSelectionEnds seed
   obtain ⟨s2, h2⟩ := process_proposer_lookahead_fulu_total o s1 (e1s ▸ hs) (e1r ▸ hf.randao)
-    (e1v ▸ hc.regLen) (e1v ▸ hc.ebMax) (e1l ▸ hc.lookahead)
-    (by rw [get_active_validator_indices_congr e1v, e1s]; exact hp.proposers) hsel1
+    (e1v ▸ hc.registryBelowLimit) (e1v ▸ hc.effectiveBalancesBelowMax) (e1l ▸ hc.proposerLookaheadLength)
+    (by rw [get_active_validator_indices_congr e1v, e1s]; exact hp.proposerHasCandidate) hsel1
   exact ⟨s2, h2, trivial⟩
 
 /-! ## The whole Fulu epoch -/
 
 /-- The Fulu steps before the committee steps succeed on mainnet at the last slot of an epoch,
-from the reachable-state facts at the epoch input and `PhysicalLimits`, and keep `CommFrame`. -/
-theorem epochToCommitteesFulu_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] [FuluCfg]
-    [FuluCfg.Ok] (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
+from the reachable-state facts at the epoch input and `SupplyAndTimeLimits`, and keep `CommFrame`. -/
+theorem epochBeforeCommitteeStepsFulu_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] [CurrentFuluConfig]
+    [CurrentFuluConfig.Valid] (o : Oracle) (t : BeaconState) (hrows : ListLengthsMatch t)
     (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % P.SLOTS_PER_EPOCH = 0)
-    (hvec : t.FuluVectorLengths P) (hffg : FfgInvariant P t)
-    (heb : EBOk P t) (hcons : ConsolidationsInRange t)
-    (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : PhysicalLimits t) :
-    ∃ s, epochToCommitteesFulu P FC o t = .ok s ∧ CommFrame t s := by
-  have hsup : totalEffectiveBalance t < 2 ^ 60 := Nat.lt_trans hrb.supply (by decide)
-  have hmid := midOkFulu_of_physicalLimits t hrows hslot heb hvec.2.2.1 hvec.2.2.2.1 hcons hsl hrb
-  have hdep := depCore_of_physicalLimits fuluTabM o t hslot hrb
+    (hvec : t.FuluVectorLengths P) (hffg : CheckpointsInOrder P t)
+    (heb : EffectiveBalancesValid P t) (hcons : ConsolidationsInRange t)
+    (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : SupplyAndTimeLimits t) :
+    ∃ s, epochBeforeCommitteeStepsFulu P FC o t = .ok s ∧ CommFrame t s := by
+  have hsup : totalEffectiveBalance t < 2 ^ 60 := Nat.lt_trans hrb.effectiveBalancesBounded (by decide)
+  have hmid := midOkFulu_of_supplyAndTimeLimits t hrows hslot heb hvec.2.2.1 hvec.2.2.2.1 hcons hsl hrb
+  have hdep := depCore_of_supplyAndTimeLimits fuluChurnTotal o t hslot hrb
   have hslot64 : t.slot < 2 ^ 64 := Nat.lt_of_le_of_lt (Nat.le_add_right _ _) hslot
   obtain ⟨hbr, -, -, -, hbits, -⟩ := hvec
   have hcp := tot_cp hffg.1.2 hffg.2 hslot64
-  rw [epochToCommitteesFulu_parts]
+  rw [epochBeforeCommitteeStepsFulu_parts]
   obtain ⟨s1, h1, -⟩ := process_justification_and_finalization_total t hrows hslot hlast hbr hbits
     hcp hsup
   rw [h1, tot_bind_ok]
@@ -311,25 +311,25 @@ theorem epochToCommitteesFulu_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds
     (fun b hb => Nat.lt_of_le_of_lt (tot_mem_le_sum hb) (Nat.lt_trans f8.bsum (by decide)))
     (fun v hv => Nat.lt_trans (f8.ebs v hv) (by decide))
   rw [h10, tot_bind_ok]
-  have r10 : RowsOk s10 := by subst e10; exact tot_rowsOk_validators f8.rows vs hvs
+  have r10 : ListLengthsMatch s10 := by subst e10; exact tot_rowsOk_validators f8.rows vs hvs
   have k10 : s10.slot = t.slot ∧ s10.slashings.length = P.EPOCHS_PER_SLASHINGS_VECTOR ∧
       s10.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR := by subst e10; exact ⟨f8.slot, f8.slashings, f8.randao⟩
   -- slashings reset
   obtain ⟨s11, h11, i11, a11, e11⟩ := process_slashings_reset_total s10 (k10.1 ▸ hslot64) k10.2.1
   rw [h11, tot_bind_ok]
-  have k11 : RowsOk s11 ∧ s11.slot = t.slot ∧ s11.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR := by
+  have k11 : ListLengthsMatch s11 ∧ s11.slot = t.slot ∧ s11.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR := by
     subst e11; exact ⟨r10, k10.1, k10.2.2⟩
   -- RANDAO mixes reset
   obtain ⟨s12, h12, i12, a12, e12⟩ := process_randao_mixes_reset_total s11 (k11.2.1 ▸ hslot64)
     k11.2.2
   rw [h12, tot_bind_ok]
-  have k12 : RowsOk s12 ∧ s12.slot = t.slot ∧ s12.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR := by
+  have k12 : ListLengthsMatch s12 ∧ s12.slot = t.slot ∧ s12.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR := by
     subst e12; exact ⟨k11.1, k11.2.1, by simp [k11.2.2]⟩
   -- historical summaries
   obtain ⟨s13, h13, l13, e13⟩ := process_historical_summaries_update_total o s12
     (k12.2.1 ▸ hslot64)
   rw [h13, tot_bind_ok]
-  have k13 : RowsOk s13 ∧ s13.slot = t.slot ∧ s13.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR := by
+  have k13 : ListLengthsMatch s13 ∧ s13.slot = t.slot ∧ s13.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR := by
     subst e13; exact k12
   -- participation flags
   exact ⟨_, rfl,
@@ -337,15 +337,15 @@ theorem epochToCommitteesFulu_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds
       k13.2.2⟩⟩
 
 /-- The Fulu spec `process_epoch` succeeds on mainnet at the last slot of an epoch, from the
-reachable-state facts at its input, `PhysicalLimits`, and the Fulu committee steps. -/
-theorem process_epoch_fulu_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] [FuluCfg]
-    [FuluCfg.Ok] (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
+reachable-state facts at its input, `SupplyAndTimeLimits`, and the Fulu committee steps. -/
+theorem process_epoch_fulu_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] [CurrentFuluConfig]
+    [CurrentFuluConfig.Valid] (o : Oracle) (t : BeaconState) (hrows : ListLengthsMatch t)
     (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % P.SLOTS_PER_EPOCH = 0)
-    (hvec : t.FuluVectorLengths P) (hffg : FfgInvariant P t)
-    (heb : EBOk P t) (hcons : ConsolidationsInRange t)
-    (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : PhysicalLimits t) (hcomm : CommitteesOkFulu o t) :
+    (hvec : t.FuluVectorLengths P) (hffg : CheckpointsInOrder P t)
+    (heb : EffectiveBalancesValid P t) (hcons : ConsolidationsInRange t)
+    (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : SupplyAndTimeLimits t) (hcomm : CommitteesOkFulu o t) :
     ∃ s', process_epoch_fulu P FC o t = .ok s' := by
-  obtain ⟨s, hs, hf⟩ := epochToCommitteesFulu_total o t hrows hslot hlast hvec hffg heb hcons hsl
+  obtain ⟨s, hs, hf⟩ := epochBeforeCommitteeStepsFulu_total o t hrows hslot hlast hvec hffg heb hcons hsl
     hrb
   obtain ⟨s', hs', -⟩ := hcomm s hs hf
   exact ⟨s', by rw [process_epoch_fulu_committees, hs, tot_bind_ok]; exact hs'⟩

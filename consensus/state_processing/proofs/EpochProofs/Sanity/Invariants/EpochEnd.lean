@@ -5,36 +5,36 @@ import EpochProofs.Sanity.EffectiveBalanceInvariant
 /-!
 # Effective balances at the end of `process_epoch`
 
-`EBOk` says that each effective balance is a multiple of the increment and at most
+`EffectiveBalancesValid` says that each effective balance is a multiple of the increment and at most
 `MAX_EFFECTIVE_BALANCE_ELECTRA`. The epoch steps before the effective balance updates keep
-`EBOk`, and new validators from deposits satisfy it. The updates then give
+`EffectiveBalancesValid`, and new validators from deposits satisfy it. The updates then give
 `EffectiveBalanceFloor`, and the later steps keep validators and balances. So on mainnet,
-`process_epoch` turns `EBOk` into `EBOk` and `EffectiveBalanceFloor`.
+`process_epoch` turns `EffectiveBalancesValid` into `EffectiveBalancesValid` and `EffectiveBalanceFloor`.
 -/
 
 namespace EpochProofs.Spec
 
 /-- The effective balance is a multiple of the increment and at most
 `MAX_EFFECTIVE_BALANCE_ELECTRA`. -/
-def EBOkV (p : Preset) (v : Validator) : Prop :=
+def EffectiveBalanceValid (p : Preset) (v : Validator) : Prop :=
   v.effective_balance % p.EFFECTIVE_BALANCE_INCREMENT = 0 ∧
     v.effective_balance ≤ p.MAX_EFFECTIVE_BALANCE_ELECTRA
 
-/-- Each validator satisfies `EBOkV`. -/
-def EBOk (p : Preset) (s : BeaconState) : Prop :=
-  ∀ v ∈ s.validators, EBOkV p v
+/-- Each validator satisfies `EffectiveBalanceValid`. -/
+def EffectiveBalancesValid (p : Preset) (s : BeaconState) : Prop :=
+  ∀ v ∈ s.validators, EffectiveBalanceValid p v
 
 /-- The preset facts that the proofs use. Mainnet holds them. -/
-def EBPresetOk (p : Preset) : Prop :=
-  PresetIncrementOk p ∧ p.MIN_ACTIVATION_BALANCE ≤ p.MAX_EFFECTIVE_BALANCE_ELECTRA
+def EffectiveBalancePresetValid (p : Preset) : Prop :=
+  PresetIncrementValid p ∧ p.MIN_ACTIVATION_BALANCE ≤ p.MAX_EFFECTIVE_BALANCE_ELECTRA
 
-/-- Mainnet holds `EBPresetOk`. -/
-theorem ebPresetOk_mainnet [PresetCfg] : EBPresetOk P :=
+/-- Mainnet holds `EffectiveBalancePresetValid`. -/
+theorem ebPresetOk_mainnet [CurrentPreset] : EffectiveBalancePresetValid P :=
   ⟨presetIncrementOk_mainnet, by pdecide⟩
 
-/-- `EBOk` reads only `validators`. -/
-theorem EBOk.of_validators {p : Preset} {s s' : BeaconState} (h : EBOk p s)
-    (hv : s'.validators = s.validators) : EBOk p s' := by
+/-- `EffectiveBalancesValid` reads only `validators`. -/
+theorem EffectiveBalancesValid.of_validators {p : Preset} {s s' : BeaconState} (h : EffectiveBalancesValid p s)
+    (hv : s'.validators = s.validators) : EffectiveBalancesValid p s' := by
   intro v hv'
   rw [hv] at hv'
   exact h v hv'
@@ -129,7 +129,7 @@ theorem process_builder_pending_payments_validators (p : Preset) (total_active_b
   vs_tac h
 
 /-- `process_pending_consolidations` keeps `validators`. -/
-theorem process_pending_consolidations_validators [PresetCfg] (p : Preset) (s s' : BeaconState)
+theorem process_pending_consolidations_validators [CurrentPreset] (p : Preset) (s s' : BeaconState)
     (h : process_pending_consolidations p s = .ok s') : s'.validators = s.validators := by
   unfold process_pending_consolidations at h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
@@ -146,7 +146,7 @@ theorem process_pending_consolidations_validators [PresetCfg] (p : Preset) (s s'
       | contradiction
       | (cases hb; exact hst)
 
-/-! ## Steps that keep `EBOk` -/
+/-! ## Steps that keep `EffectiveBalancesValid` -/
 
 /-- `compute_exit_epoch_and_update_churn` keeps `validators`. -/
 theorem compute_exit_epoch_and_update_churn_validators (p : Preset)
@@ -157,11 +157,11 @@ theorem compute_exit_epoch_and_update_churn_validators (p : Preset)
   unfold compute_exit_epoch_and_update_churn at h
   vs_tac h
 
-/-- `initiate_validator_exit` keeps `EBOk`. -/
+/-- `initiate_validator_exit` keeps `EffectiveBalancesValid`. -/
 theorem initiate_validator_exit_ebOk (p : Preset) (total_active_balance : Gwei)
     (s s' : BeaconState) (index : ValidatorIndex)
-    (h : initiate_validator_exit p total_active_balance s index = .ok s') (hs : EBOk p s) :
-    EBOk p s' := by
+    (h : initiate_validator_exit p total_active_balance s index = .ok s') (hs : EffectiveBalancesValid p s) :
+    EffectiveBalancesValid p s' := by
   unfold initiate_validator_exit at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
@@ -173,23 +173,23 @@ theorem initiate_validator_exit_ebOk (p : Preset) (total_active_balance : Gwei)
          ‹compute_exit_epoch_and_update_churn _ _ _ _ = _›
        have hv := listGet_mem ‹listGet s.validators index = _›
        have hset := ‹listSet _ _ _ = _›
-       refine listSet_forall (Q := EBOkV p) ?_ ?_ hset
+       refine listSet_forall (Q := EffectiveBalanceValid p) ?_ ?_ hset
        · intro w hw
          rw [hr] at hw
          exact hs w hw
        · have hw := hs _ hv
          exact ⟨hw.1, hw.2⟩)
 
-/-- `process_registry_updates` keeps `EBOk`. It writes only epochs of validators. -/
-theorem process_registry_updates_ebOk [PresetCfg] (p : Preset) (total_active_balance : Gwei)
+/-- `process_registry_updates` keeps `EffectiveBalancesValid`. It writes only epochs of validators. -/
+theorem process_registry_updates_ebOk [CurrentPreset] (p : Preset) (total_active_balance : Gwei)
     (s s' : BeaconState) (h : process_registry_updates p total_active_balance s = .ok s')
-    (hs : EBOk p s) : EBOk p s' := by
+    (hs : EffectiveBalancesValid p s) : EffectiveBalancesValid p s' := by
   unfold process_registry_updates at h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨r, hr, h⟩ := specM_bind_ok h
   cases h
-  refine forIn_ok_invariant (EBOk p) _ ?_ _ s _ hs hr
+  refine forIn_ok_invariant (EffectiveBalancesValid p) _ ?_ _ s _ hs hr
   intro index st r hst hb
   simp only [bind, Except.bind, pure, Except.pure] at hb
   repeat' split at hb
@@ -202,7 +202,7 @@ theorem process_registry_updates_ebOk [PresetCfg] (p : Preset) (total_active_bal
     | (cases hb
        have hset := ‹listSet _ _ _ = _›
        have hm := listGet_mem ‹listGet _ _ = _›
-       refine listSet_forall (Q := EBOkV p) hst ?_ hset
+       refine listSet_forall (Q := EffectiveBalanceValid p) hst ?_ hset
        have hw := hst _ hm
        exact ⟨hw.1, hw.2⟩)
 
@@ -215,8 +215,8 @@ private theorem min_round_mod (amount increment m : Nat) (hm : m % increment = 0
   · rw [Nat.min_eq_right hle]
     exact hm
 
-/-- A new validator from a deposit satisfies the `EBOk` bounds. -/
-theorem get_validator_from_deposit_ebOk (p : Preset) (hp : EBPresetOk p) (pubkey : BLSPubkey)
+/-- A new validator from a deposit satisfies the `EffectiveBalancesValid` bounds. -/
+theorem get_validator_from_deposit_ebOk (p : Preset) (hp : EffectiveBalancePresetValid p) (pubkey : BLSPubkey)
     (withdrawal_credentials : Bytes32) (amount : Gwei) (v : Validator)
     (h : get_validator_from_deposit p pubkey withdrawal_credentials amount = .ok v) :
     v.effective_balance % p.EFFECTIVE_BALANCE_INCREMENT = 0 ∧
@@ -238,11 +238,11 @@ theorem get_validator_from_deposit_ebOk (p : Preset) (hp : EBPresetOk p) (pubkey
     exact ⟨min_round_mod _ _ _ (get_max_effective_balance_mod p hp.1 _),
       Nat.le_trans (Nat.min_le_right _ _) (hmax _)⟩
 
-/-- `add_validator_to_registry` keeps `EBOk`. -/
-theorem add_validator_to_registry_ebOk (p : Preset) (hp : EBPresetOk p) (s s' : BeaconState)
+/-- `add_validator_to_registry` keeps `EffectiveBalancesValid`. -/
+theorem add_validator_to_registry_ebOk (p : Preset) (hp : EffectiveBalancePresetValid p) (s s' : BeaconState)
     (pubkey : BLSPubkey) (withdrawal_credentials : Bytes32) (amount : Gwei)
     (h : add_validator_to_registry p s pubkey withdrawal_credentials amount = .ok s')
-    (hs : EBOk p s) : EBOk p s' := by
+    (hs : EffectiveBalancesValid p s) : EffectiveBalancesValid p s' := by
   unfold add_validator_to_registry at h
   obtain ⟨v, hv, h⟩ := specM_bind_ok h
   obtain ⟨l, hl, h⟩ := specM_bind_ok h
@@ -251,13 +251,13 @@ theorem add_validator_to_registry_ebOk (p : Preset) (hp : EBPresetOk p) (s s' : 
   all_goals first
     | contradiction
     | (cases h
-       exact set_or_append_list_forall (Q := EBOkV p) hs
+       exact set_or_append_list_forall (Q := EffectiveBalanceValid p) hs
          (get_validator_from_deposit_ebOk p hp _ _ _ v hv) hl)
 
-/-- `apply_pending_deposit` keeps `EBOk`. -/
-theorem apply_pending_deposit_ebOk (p : Preset) (o : Oracle) (hp : EBPresetOk p)
+/-- `apply_pending_deposit` keeps `EffectiveBalancesValid`. -/
+theorem apply_pending_deposit_ebOk (p : Preset) (o : Oracle) (hp : EffectiveBalancePresetValid p)
     (s s' : BeaconState) (deposit : PendingDeposit)
-    (h : apply_pending_deposit p o s deposit = .ok s') (hs : EBOk p s) : EBOk p s' := by
+    (h : apply_pending_deposit p o s deposit = .ok s') (hs : EffectiveBalancesValid p s) : EffectiveBalancesValid p s' := by
   unfold apply_pending_deposit at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
@@ -266,11 +266,11 @@ theorem apply_pending_deposit_ebOk (p : Preset) (o : Oracle) (hp : EBPresetOk p)
     | (cases h; exact hs)
     | exact add_validator_to_registry_ebOk p hp s s' _ _ _ h hs
 
-/-- `process_pending_deposits` with `apply_pending_deposit` keeps `EBOk`. -/
-theorem process_pending_deposits_ebOk [PresetCfg] (p : Preset) (o : Oracle) (hp : EBPresetOk p)
+/-- `process_pending_deposits` with `apply_pending_deposit` keeps `EffectiveBalancesValid`. -/
+theorem process_pending_deposits_ebOk [CurrentPreset] (p : Preset) (o : Oracle) (hp : EffectiveBalancePresetValid p)
     (total_active_balance : Gwei) (s s' : BeaconState)
     (h : process_pending_deposits p total_active_balance (apply_pending_deposit p o) s = .ok s')
-    (hs : EBOk p s) : EBOk p s' := by
+    (hs : EffectiveBalancesValid p s) : EffectiveBalancesValid p s' := by
   unfold process_pending_deposits at h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
@@ -280,7 +280,7 @@ theorem process_pending_deposits_ebOk [PresetCfg] (p : Preset) (o : Oracle) (hp 
   obtain ⟨⟨_, _, _, _, st⟩, hr, h⟩ := specM_bind_ok h
   have hP := forIn_ok_invariant
     (fun r : Prod Uint64 (Prod Uint64 (Prod (List PendingDeposit) (Prod Bool BeaconState))) =>
-      EBOk p r.2.2.2.2) _ ?_ _ _ _ hs hr
+      EffectiveBalancesValid p r.2.2.2.2) _ ?_ _ _ _ hs hr
   · simp only [bind, Except.bind, pure, Except.pure] at h
     repeat' split at h
     all_goals first
@@ -299,7 +299,7 @@ theorem process_pending_deposits_ebOk [PresetCfg] (p : Preset) (o : Oracle) (hp 
 
 /-- After `process_effective_balance_updates`, each effective balance is at most
 `MAX_EFFECTIVE_BALANCE_ELECTRA`, if it was before. -/
-theorem process_effective_balance_updates_le_max (p : Preset) (hp : EBPresetOk p)
+theorem process_effective_balance_updates_le_max (p : Preset) (hp : EffectiveBalancePresetValid p)
     (downward upward : Uint64) (hthresholds : hysteresisThresholds p = .ok (downward, upward))
     (s s' : BeaconState) (h : process_effective_balance_updates p s = .ok s')
     (hle : ∀ v ∈ s.validators, v.effective_balance ≤ p.MAX_EFFECTIVE_BALANCE_ELECTRA) :
@@ -332,7 +332,7 @@ theorem process_effective_balance_updates_le_max (p : Preset) (hp : EBPresetOk p
 
 /-- The steps of `process_epoch` before the three committee steps. Its result is the state that
 `process_sync_committee_updates` reads. -/
-def epochToCommittees (p : Preset) (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
+def epochBeforeCommitteeSteps (p : Preset) (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
   let state ← process_justification_and_finalization p state
   let state ← process_inactivity_updates p state
   let state ← process_rewards_and_penalties p (← get_total_active_balance p state) state
@@ -356,19 +356,19 @@ def committeeSteps (p : Preset) (o : Oracle) (state : BeaconState) : SpecM Beaco
   let state ← process_proposer_lookahead p o state
   process_ptc_window p o state
 
-/-- `process_epoch` is `epochToCommittees`, then the committee steps. -/
+/-- `process_epoch` is `epochBeforeCommitteeSteps`, then the committee steps. -/
 theorem process_epoch_committees (p : Preset) (o : Oracle) (s : BeaconState) :
-    process_epoch p o s = epochToCommittees p o s >>= committeeSteps p o := by
-  simp only [process_epoch, epochToCommittees, committeeSteps, bind_assoc, pure_bind]
+    process_epoch p o s = epochBeforeCommitteeSteps p o s >>= committeeSteps p o := by
+  simp only [process_epoch, epochBeforeCommitteeSteps, committeeSteps, bind_assoc, pure_bind]
 
-/-- On mainnet, the steps of `process_epoch` before the committee steps keep `EBOk` and end with
+/-- On mainnet, the steps of `process_epoch` before the committee steps keep `EffectiveBalancesValid` and end with
 `EffectiveBalanceFloor`: each validator has a balance, and each effective balance is a multiple
 of the increment, at most `MAX_EFFECTIVE_BALANCE_ELECTRA` and at most `4/3` of the balance. -/
-theorem epochToCommittees_effective_balances [PresetCfg] (o : Oracle) (s t : BeaconState)
-    (h : epochToCommittees P o s = .ok t) (hs : EBOk P s) :
-    EBOk P t ∧ EffectiveBalanceFloor P t := by
+theorem epochBeforeCommitteeSteps_effective_balances [CurrentPreset] (o : Oracle) (s t : BeaconState)
+    (h : epochBeforeCommitteeSteps P o s = .ok t) (hs : EffectiveBalancesValid P s) :
+    EffectiveBalancesValid P t ∧ EffectiveBalanceFloor P t := by
   have hp := ebPresetOk_mainnet
-  unfold epochToCommittees at h
+  unfold epochBeforeCommitteeSteps at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
   obtain ⟨s2, h2, h⟩ := specM_bind_ok h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
@@ -388,22 +388,22 @@ theorem epochToCommittees_effective_balances [PresetCfg] (o : Oracle) (s t : Bea
   obtain ⟨s12, h12, h⟩ := specM_bind_ok h
   obtain ⟨s13, h13, h⟩ := specM_bind_ok h
   have ht : process_participation_flag_updates s13 = t := by simpa [pure, Except.pure] using h
-  have e1 : EBOk _ s1 :=
+  have e1 : EffectiveBalancesValid _ s1 :=
     hs.of_validators (process_justification_and_finalization_frame _ _ _ h1).1.1
-  have e2 : EBOk _ s2 := e1.of_validators (process_inactivity_updates_validators _ _ _ h2)
-  have e3 : EBOk _ s3 := e2.of_validators (process_rewards_and_penalties_validators _ _ _ _ h3)
-  have e4 : EBOk _ s4 := process_registry_updates_ebOk _ _ _ _ h4 e3
-  have e5 : EBOk _ s5 := e4.of_validators (process_slashings_validators _ _ _ _ h5)
-  have e6 : EBOk _ s6 := e5.of_validators (process_eth1_data_reset_frame _ _ _ h6).1.1
-  have e7 : EBOk _ s7 := process_pending_deposits_ebOk _ o hp _ _ _ h7 e6
-  have e8 : EBOk _ s8 := e7.of_validators (process_pending_consolidations_validators _ _ _ h8)
-  have e9 : EBOk _ s9 :=
+  have e2 : EffectiveBalancesValid _ s2 := e1.of_validators (process_inactivity_updates_validators _ _ _ h2)
+  have e3 : EffectiveBalancesValid _ s3 := e2.of_validators (process_rewards_and_penalties_validators _ _ _ _ h3)
+  have e4 : EffectiveBalancesValid _ s4 := process_registry_updates_ebOk _ _ _ _ h4 e3
+  have e5 : EffectiveBalancesValid _ s5 := e4.of_validators (process_slashings_validators _ _ _ _ h5)
+  have e6 : EffectiveBalancesValid _ s6 := e5.of_validators (process_eth1_data_reset_frame _ _ _ h6).1.1
+  have e7 : EffectiveBalancesValid _ s7 := process_pending_deposits_ebOk _ o hp _ _ _ h7 e6
+  have e8 : EffectiveBalancesValid _ s8 := e7.of_validators (process_pending_consolidations_validators _ _ _ h8)
+  have e9 : EffectiveBalancesValid _ s9 :=
     e8.of_validators (process_builder_pending_payments_validators _ _ _ _ h9)
   have hfloor : EffectiveBalanceFloor _ s10 :=
     process_effective_balance_updates_floor_mainnet s9 s10 h10 fun v hv => (e9 v hv).1
   have hmax := process_effective_balance_updates_le_max _ hp _ _ hysteresisThresholds_mainnet
     s9 s10 h10 fun v hv => (e9 v hv).2
-  have e10 : EBOk _ s10 := fun v hv => by
+  have e10 : EffectiveBalancesValid _ s10 := fun v hv => by
     obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hv
     exact ⟨(hfloor.2 i hi).1, hmax _ hv⟩
   have f : RegistryFrame s10 t := ht ▸
@@ -417,14 +417,14 @@ theorem epochToCommittees_effective_balances [PresetCfg] (o : Oracle) (s t : Bea
   rw [hvs, hbs]
   exact hfloor
 
-/-- On mainnet, `process_epoch` keeps `EBOk` and ends with `EffectiveBalanceFloor`
-(`epochToCommittees_effective_balances`; the committee steps leave the registry alone). -/
-theorem process_epoch_effective_balances [PresetCfg] (o : Oracle) (s s' : BeaconState)
-    (h : process_epoch P o s = .ok s') (hs : EBOk P s) :
-    EBOk P s' ∧ EffectiveBalanceFloor P s' := by
+/-- On mainnet, `process_epoch` keeps `EffectiveBalancesValid` and ends with `EffectiveBalanceFloor`
+(`epochBeforeCommitteeSteps_effective_balances`; the committee steps leave the registry alone). -/
+theorem process_epoch_effective_balances [CurrentPreset] (o : Oracle) (s s' : BeaconState)
+    (h : process_epoch P o s = .ok s') (hs : EffectiveBalancesValid P s) :
+    EffectiveBalancesValid P s' ∧ EffectiveBalanceFloor P s' := by
   rw [process_epoch_committees] at h
   obtain ⟨t, ht, h⟩ := specM_bind_ok h
-  obtain ⟨he, hfloor⟩ := epochToCommittees_effective_balances o s t ht hs
+  obtain ⟨he, hfloor⟩ := epochBeforeCommitteeSteps_effective_balances o s t ht hs
   unfold committeeSteps at h
   obtain ⟨u1, h1, h⟩ := specM_bind_ok h
   obtain ⟨u2, h2, h⟩ := specM_bind_ok h
@@ -440,8 +440,8 @@ theorem process_epoch_effective_balances [PresetCfg] (o : Oracle) (s s' : Beacon
 
 /-- On mainnet, after `process_epoch` the balance list is at least as long as the validator
 list. -/
-theorem process_epoch_balances_length [PresetCfg] (o : Oracle) (s s' : BeaconState)
-    (h : process_epoch P o s = .ok s') (hs : EBOk P s) :
+theorem process_epoch_balances_length [CurrentPreset] (o : Oracle) (s s' : BeaconState)
+    (h : process_epoch P o s = .ok s') (hs : EffectiveBalancesValid P s) :
     s'.validators.length ≤ s'.balances.length :=
   (process_epoch_effective_balances o s s' h hs).2.1
 

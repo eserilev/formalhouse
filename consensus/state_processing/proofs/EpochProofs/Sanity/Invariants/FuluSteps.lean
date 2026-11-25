@@ -10,7 +10,7 @@ function. This file joins those facts. A property of the inner `BeaconState` tha
 keeps is kept by:
 
 - the Fulu `process_epoch` (`process_epoch_fulu_inv`). By `process_epoch_fulu_eq_tab`, its
-  steps are the Gloas steps at `fuluTab`, without builder payments and the PTC window, and with
+  steps are the Gloas steps at `fuluTotalActiveBalance`, without builder payments and the PTC window, and with
   the Fulu sync committee and proposer lookahead.
 - the Fulu `process_operations` and `process_block` (`process_operations_fulu_inv`,
   `process_block_fulu_inv`).

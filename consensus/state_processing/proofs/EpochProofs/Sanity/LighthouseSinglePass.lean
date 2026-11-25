@@ -47,7 +47,7 @@ structure EpochEntry (state : BeaconState) (previous_epoch : Epoch) : Prop where
     state.validators[i].exit_epoch ≤ FAR_FUTURE_EPOCH
 
 /-- The effective balance update establishes the effective balance part of `EpochEntry`. -/
-theorem EpochEntry.effective_balance_of_floor [PresetCfg] (state : BeaconState) (previous_epoch : Epoch)
+theorem EpochEntry.effective_balance_of_floor [CurrentPreset] (state : BeaconState) (previous_epoch : Epoch)
     (h : EffectiveBalanceFloor P state) :
     ∀ i (hi : i < state.validators.length),
       rewardsEligible previous_epoch state.validators[i] = .ok true →
@@ -55,7 +55,7 @@ theorem EpochEntry.effective_balance_of_floor [PresetCfg] (state : BeaconState) 
   fun i hi _ => EffectiveBalanceFloor.le_mul _ _ h i hi
 
 /-- The Lighthouse step context for this state. -/
-def lhContextOf [PresetCfg] (state : BeaconState) (total_active_balance : Gwei)
+def lhContextOf [CurrentPreset] (state : BeaconState) (total_active_balance : Gwei)
     (current_epoch : Epoch) (rctx : RewardsContext) (per : Gwei) : LhStepContext :=
   { current_epoch
     previous_epoch := rctx.previous_epoch
@@ -74,7 +74,7 @@ def lhContextOf [PresetCfg] (state : BeaconState) (total_active_balance : Gwei)
 rewards, registry and slashings passes.
 
 The hypotheses are facts about the state at the start of epoch processing:
-- `RowsOk`, `EpochEntry`: SSZ lengths, the effective balance floor for eligible validators,
+- `ListLengthsMatch`, `EpochEntry`: SSZ lengths, the effective balance floor for eligible validators,
   the supply bound, `u64` exit epochs.
 - `hfinalized`, `hcurrent64`: the finalized epoch is not after the current epoch, and the next
   epoch fits in a `u64`.
@@ -82,8 +82,8 @@ The hypotheses are facts about the state at the start of epoch processing:
 - `hincrements`: previous-epoch participation is at most 256 times the active balance.
 - `hbase`: `base_reward` is `get_base_reward` for each eligible row. Lighthouse reads it from
   the epoch cache. -/
-theorem lighthouse_single_pass_eq_spec [PresetCfg] (total_active_balance : Gwei) (state : BeaconState)
-    (hrows : RowsOk state) (current_epoch : Epoch)
+theorem lighthouse_single_pass_eq_spec [CurrentPreset] (total_active_balance : Gwei) (state : BeaconState)
+    (hrows : ListLengthsMatch state) (current_epoch : Epoch)
     (hcurrent : get_current_epoch P state = .ok current_epoch)
     (hgenesis : current_epoch ≠ GENESIS_EPOCH)
     (rctx : RewardsContext)

@@ -22,7 +22,7 @@ def LoopAgree : SpecM DepositLoopResult → SpecM DepositLoopResult → Prop
 
 /-- From index `k ≤ MAX`, the loop over all views agrees with the loop over the first `MAX - k`
 views: at index `MAX` the loop stops with the state unchanged and no churn flag. -/
-theorem depositLoop_take_agree [PresetCfg] (fs avail : Nat) :
+theorem depositLoop_take_agree [CurrentPreset] (fs avail : Nat) :
     ∀ (vs : List DepositSpecView) (ls : DepositLoopState),
       ls.next_deposit_index ≤ P.MAX_PENDING_DEPOSITS_PER_EPOCH →
       LoopAgree (depositLoop P fs avail ls vs)
@@ -60,7 +60,7 @@ theorem depositLoop_take_agree [PresetCfg] (fs avail : Nat) :
           exact depositLoop_take_agree fs avail vs r.state hk'
 
 /-- The decisions read only the first `MAX_PENDING_DEPOSITS_PER_EPOCH` views. -/
-theorem depositDecisions_take_max [PresetCfg] (fs dbtc churn : Nat) (views : List DepositSpecView) :
+theorem depositDecisions_take_max [CurrentPreset] (fs dbtc churn : Nat) (views : List DepositSpecView) :
     depositDecisions P fs dbtc churn views =
       depositDecisions P fs dbtc churn
         (views.take P.MAX_PENDING_DEPOSITS_PER_EPOCH) := by
@@ -85,7 +85,7 @@ theorem depositDecisions_take_max [PresetCfg] (fs dbtc churn : Nat) (views : Lis
 
 /-- The validator of a row after `lhRowStep` is the input validator with the registry fields of
 `registryStepIndependent`. The inactivity and rewards steps do not change the validator. -/
-theorem lhRowStep_registry [PresetCfg] (ctx : LhStepContext) (base : Gwei) (churn : Epoch × Gwei) (r : Row)
+theorem lhRowStep_registry [CurrentPreset] (ctx : LhStepContext) (base : Gwei) (churn : Epoch × Gwei) (r : Row)
     (x : (Epoch × Gwei) × Row) (h : lhRowStep P ctx base churn r = .ok x) :
     ∃ g, registryStepIndependent P ctx.total_active_balance ctx.current_epoch
         ctx.finalized_epoch r.validator.effective_balance (registryFieldsOf r.validator churn) =
@@ -98,7 +98,7 @@ theorem lhRowStep_registry [PresetCfg] (ctx : LhStepContext) (base : Gwei) (chur
     | (cases h; exact ⟨_, ‹registryStepIndependent _ _ _ _ _ _ = _›, rfl⟩)
 
 /-- `lhRowStep_registry` with the spec's exclusive registry step. -/
-theorem lhRowStep_registry_exclusive [PresetCfg] (ctx : LhStepContext) (base : Gwei) (churn : Epoch × Gwei)
+theorem lhRowStep_registry_exclusive [CurrentPreset] (ctx : LhStepContext) (base : Gwei) (churn : Epoch × Gwei)
     (r : Row) (x : (Epoch × Gwei) × Row) (activation_epoch : Epoch)
     (hfinalized : ctx.finalized_epoch ≤ ctx.current_epoch)
     (hexit : r.validator.exit_epoch ≤ FAR_FUTURE_EPOCH)
@@ -144,7 +144,7 @@ theorem passM_rows {A R : Type} (f : A → R → SpecM (A × R)) :
 
 /-- After a successful Lighthouse pass over the rows of `s`, each validator is the validator of
 `s` with the registry fields of a successful `registryStepExclusive`. -/
-theorem passM_rows_registry [PresetCfg] (ctx : LhStepContext) (bf : Row → Gwei) (s : BeaconState)
+theorem passM_rows_registry [CurrentPreset] (ctx : LhStepContext) (bf : Row → Gwei) (s : BeaconState)
     (churn0 churn : Epoch × Gwei) (rows : List Row) (activation_epoch : Epoch)
     (hfinalized : ctx.finalized_epoch ≤ ctx.current_epoch)
     (hexit : ∀ i (h : i < s.validators.length), s.validators[i].exit_epoch ≤ FAR_FUTURE_EPOCH)
@@ -198,7 +198,7 @@ theorem exitStep_exit_lt (p : Preset) (total_active_balance current_epoch : Nat)
 
 /-- On mainnet, a validator that the registry step ejects gets an exit epoch below
 `FAR_FUTURE_EPOCH`: its withdrawable epoch, exit plus 256, is computed by a checked add. -/
-theorem registryStepExclusive_ejected [PresetCfg] (total_active_balance current_epoch finalized_epoch
+theorem registryStepExclusive_ejected [CurrentPreset] (total_active_balance current_epoch finalized_epoch
     activation_epoch : Nat) (effective_balance : Gwei) (f g : RegistryFields)
     (hreg : registryStepExclusive P total_active_balance current_epoch
       finalized_epoch activation_epoch effective_balance f = .ok g)
@@ -225,13 +225,13 @@ theorem registryStepExclusive_ejected [PresetCfg] (total_active_balance current_
       exact absurd hej (hnej ⟨hact, hex⟩)
 
 /-- `predictedStatus` reads only the validator epochs, not the churn. -/
-theorem predictedStatus_churn [PresetCfg] (v : Validator) (c c' : Epoch × Gwei) (eb current next : Nat) :
+theorem predictedStatus_churn [CurrentPreset] (v : Validator) (c c' : Epoch × Gwei) (eb current next : Nat) :
     predictedStatus P true true (registryFieldsOf v c) eb current next =
       predictedStatus P true true (registryFieldsOf v c') eb current next := rfl
 
 /-- After a successful Lighthouse pass, the flags that the spec reads in a state with the new
 validators equal the flags that Lighthouse predicts from the state before the pass. -/
-theorem views_eq [PresetCfg] (ctx : LhStepContext) (bf : Row → Gwei) (s : BeaconState)
+theorem views_eq [CurrentPreset] (ctx : LhStepContext) (bf : Row → Gwei) (s : BeaconState)
     (churn0 churn : Epoch × Gwei) (rows : List Row) (activation_epoch : Epoch)
     (hfinalized : ctx.finalized_epoch ≤ ctx.current_epoch)
     (hexit : ∀ i (h : i < s.validators.length), s.validators[i].exit_epoch ≤ FAR_FUTURE_EPOCH)

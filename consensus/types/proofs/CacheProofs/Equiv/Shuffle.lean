@@ -18,8 +18,8 @@ Proof outline:
 - `loop1_spec`, `loop2_spec`: the two inner loops swap each pair `(i, j)` with
   `i + j ≡ pivot (mod n)` when the bit of `max(i, j)` is set. So after one round, entry `x`
   holds the old entry `sigma r x`.
-- `round_spec`, `rounds_loop_spec`: rounds `R - 1, ..., 0` compose to `csiFold`.
-- `compute_shuffled_permutation_eq` (in `ShuffleSpec.lean`): the spec gives the same `csiFold`.
+- `round_spec`, `rounds_loop_spec`: rounds `R - 1, ..., 0` compose to `shuffledIndexAfterRounds`.
+- `compute_shuffled_permutation_eq` (in `ShuffleSpec.lean`): the spec gives the same `shuffledIndexAfterRounds`.
 -/
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result types
@@ -781,8 +781,8 @@ theorem gFrom_step (sha256 : List Nat → List Nat) (seed : List Nat) (n s R x :
   rfl
 
 theorem gFrom_zero (sha256 : List Nat → List Nat) (seed : List Nat) (n R x : Nat) :
-    gFrom sha256 seed n 0 R x = csiFold sha256 seed n R x := by
-  unfold gFrom csiFold
+    gFrom sha256 seed n 0 R x = shuffledIndexAfterRounds sha256 seed n R x := by
+  unfold gFrom shuffledIndexAfterRounds
   rw [List.range_eq_range', Nat.sub_zero]
 
 theorem gFrom_self (sha256 : List Nat → List Nat) (seed : List Nat) (n R x : Nat) :
@@ -798,7 +798,7 @@ theorem rounds_loop_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → L
     (hA : ∀ x < n, nats input x = nats input0 (gFrom sha256 seed n (r.val + 1) rounds.val x)) :
     swap_or_not_shuffle.shuffle_list.shuffle_list_with_loop0 inst input rounds false list_size
       buf r ⦃ out => out.val.length = n ∧
-        ∀ x < n, nats out x = nats input0 (csiFold sha256 seed n rounds.val x) ⦄ := by
+        ∀ x < n, nats out x = nats input0 (shuffledIndexAfterRounds sha256 seed n rounds.val x) ⦄ := by
   unfold swap_or_not_shuffle.shuffle_list.shuffle_list_with_loop0
   apply loop.spec_decr_nat
     (measure := fun (x : alloc.vec.Vec Usize × Buf × U8) => x.2.2.val)
@@ -833,7 +833,7 @@ theorem shuffle_list_with_spec {H : Type} (inst : HashInst H) (sha256 : List Nat
     swap_or_not_shuffle.shuffle_list.shuffle_list_with inst input rounds seed false ⦃ out =>
       ∃ v, out = some v ∧ v.val.length = input.val.length ∧
         ∀ x < input.val.length, nats v x = nats input
-          (csiFold sha256 (seed.val.map (·.val)) input.val.length rounds.val x) ⦄ := by
+          (shuffledIndexAfterRounds sha256 (seed.val.map (·.val)) input.val.length rounds.val x) ⦄ := by
   unfold swap_or_not_shuffle.shuffle_list.shuffle_list_with
   step*
   all_goals try (rcases System.Platform.numBits_eq with h | h <;> simp [h] <;> done)
@@ -864,7 +864,7 @@ open CacheProofs.Spec.CommitteeCache in
 theorem compute_shuffled_index_eq (p : Preset) (sha256 : List Nat → List Nat)
     (hsha : ∀ l, (sha256 l).length = 32) (seed : List Nat) (n : Nat) (hn : 0 < n)
     (hn24 : n ≤ 16777216) (hR : p.SHUFFLE_ROUND_COUNT ≤ 256) (i : Nat) (hi : i < n) :
-    compute_shuffled_index p sha256 i n seed = .ok (csiFold sha256 seed n p.SHUFFLE_ROUND_COUNT i) := by
+    compute_shuffled_index p sha256 i n seed = .ok (shuffledIndexAfterRounds sha256 seed n p.SHUFFLE_ROUND_COUNT i) := by
   unfold compute_shuffled_index
   rw [compute_shuffled_permutation_eq p sha256 hsha seed n hn hn24 hR]
   simp only [hi, not_true_eq_false, if_false]
@@ -894,11 +894,11 @@ theorem shuffling_spec {H : Type} (inst : HashInst H) (sha256 : List Nat → Lis
   unfold CommitteeCache.shuffledAt
   rw [List.length_map, compute_shuffled_index_eq p sha256 hsha _ _ hn hn24 hR' i hi]
   rw [hR]
-  have hc := csiFold_lt sha256 (seed.val.map (·.val)) indices.val.length rounds.val i hn hi
+  have hc := shuffledIndexAfterRounds_lt sha256 (seed.val.map (·.val)) indices.val.length rounds.val i hn hi
   have hvi := hv i hi
   unfold nats at hvi
   rw [hvi]
-  generalize csiFold sha256 (seed.val.map (·.val)) indices.val.length rounds.val i = k at hc ⊢
+  generalize shuffledIndexAfterRounds sha256 (seed.val.map (·.val)) indices.val.length rounds.val i = k at hc ⊢
   unfold Spec.CommitteeCache.listGet
   have hk : k < (indices.val.map (·.val)).length := by simpa using hc
   rw [except_bind_ok_eq]

@@ -47,7 +47,7 @@ theorem participation_increments_ok_preset (p : Spec.Preset) (source target head
   participation_increments_ok source target head total inc (by rw [hinc]; exact hp)
 
 /-- `hysteresis_thresholds` cannot fail on mainnet: the thresholds are constants. -/
-theorem hysteresis_thresholds_ok_mainnet [EpochProofs.Spec.PresetCfg] :
+theorem hysteresis_thresholds_ok_mainnet [EpochProofs.Spec.CurrentPreset] :
     ∃ d u : U64, per_epoch_processing.effective_balance.hysteresis_thresholds
         1000000000#u64 4#u64 1#u64 5#u64 = ok (.Ok (d, u))
       ∧ d.val = 250000000 ∧ u.val = 1250000000 := by

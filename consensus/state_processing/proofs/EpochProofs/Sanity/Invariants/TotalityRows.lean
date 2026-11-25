@@ -6,29 +6,29 @@ import EpochProofs.Spec.PresetBounds
 # The per-validator epoch steps and the pending deposits succeed
 
 `process_epoch_total` takes two step facts, `MidOk` and `DepOk`. This file proves both on
-mainnet, from the facts at the epoch input and `PhysicalLimits`.
+mainnet, from the facts at the epoch input and `SupplyAndTimeLimits`.
 
 The four per-validator steps (inactivity, rewards, registry, slashings) run as passes over rows.
 Each row step returns `ok` when its row and the pass state have small values, and keeps them
 small for the next row.
 
 Error sources and why they do not fire:
-- Inactivity: `score + INACTIVITY_SCORE_BIAS`. `PhysicalLimits.scores` keeps scores below `2^22`.
+- Inactivity: `score + INACTIVITY_SCORE_BIAS`. `SupplyAndTimeLimits.scores` keeps scores below `2^22`.
 - Rewards: `base_reward * weight * participating_increments`. The base reward is at most
   `2048 * 2023907` Gwei because the total active balance is at least `10^9`, and the
-  participating increments are at most `2^57 / 10^9` (`PhysicalLimits.supply`). The inactivity
+  participating increments are at most `2^57 / 10^9` (`SupplyAndTimeLimits.supply`). The inactivity
   penalty `effective_balance * inactivity_score` stays below `2^64` for the same reason as
   the scores.
 - Registry: `compute_exit_epoch_and_update_churn`. An ejected validator has at most
   `EJECTION_BALANCE` and the exit churn is at least `MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA`, so
-  each exit adds one epoch at most. `PhysicalLimits.churn` and `PhysicalLimits.count` keep the earliest
+  each exit adds one epoch at most. `SupplyAndTimeLimits.churn` and `SupplyAndTimeLimits.count` keep the earliest
   exit epoch below `2^63`.
 - Slashings: `penalty_per_increment * increments`. The penalty per increment is at most
   `2 * 10^9`.
-- Pending deposits: the churn sums and `increase_balance`. `PhysicalLimits.funds` bounds the
+- Pending deposits: the churn sums and `increase_balance`. `SupplyAndTimeLimits.funds` bounds the
   balances, the pending deposits and `deposit_balance_to_consume` together.
 
-`PhysicalLimits.participation` bounds the reward sum: each flag's participating increments are at
+`SupplyAndTimeLimits.participation` bounds the reward sum: each flag's participating increments are at
 most `1024` times the active increments.
 -/
 
@@ -73,7 +73,7 @@ theorem inactivityScoreStep_total (p : Preset) (participating in_leak : Bool) (s
     · exact Nat.le_trans h1 h2
     · exact Nat.le_trans (trw_sub_le _ _) (Nat.le_trans h1 h2)
 
-theorem inactivityRowStep_total [PresetCfg] (previous_epoch : Epoch) (in_leak : Bool) (r : Row)
+theorem inactivityRowStep_total [CurrentPreset] (previous_epoch : Epoch) (in_leak : Bool) (r : Row)
     (hprev : previous_epoch + 1 < 2 ^ 64) (hscore : r.inactivity_score + 4 < 2 ^ 64) :
     ∃ x, inactivityRowStep P previous_epoch in_leak () r = .ok ((), x) ∧
       x = { r with inactivity_score := x.inactivity_score } ∧
@@ -108,7 +108,7 @@ theorem flagDelta_total (base w : Nat) (part head leak : Bool) (inc act : Nat)
       exact ⟨_, rfl⟩
     · exact ⟨_, rfl⟩
 
-theorem inactivityDelta_total [PresetCfg] (eb score : Nat) (target : Bool) (h : eb * score < 2 ^ 64) :
+theorem inactivityDelta_total [CurrentPreset] (eb score : Nat) (target : Bool) (h : eb * score < 2 ^ 64) :
     ∃ x, inactivityDelta P eb score target = .ok x := by
   unfold inactivityDelta
   split
@@ -118,7 +118,7 @@ theorem inactivityDelta_total [PresetCfg] (eb score : Nat) (target : Bool) (h : 
 
 /-- On mainnet, with a total active balance of at least one increment, the base reward of a
 validator with at most `MAX_EFFECTIVE_BALANCE_ELECTRA` is at most `2048 * 2023907`. -/
-theorem rewardsBaseReward_small [PresetCfg] (tab : Gwei) (v : Validator) (htab : 1000000000 ≤ tab)
+theorem rewardsBaseReward_small [CurrentPreset] (tab : Gwei) (v : Validator) (htab : 1000000000 ≤ tab)
     (hmax : v.effective_balance ≤ 2048000000000) :
     ∃ b, rewardsBaseReward P tab v = .ok b ∧ b ≤ 4144961536 := by
   have hroot : 31622 ≤ integer_squareroot tab :=
@@ -136,7 +136,7 @@ theorem rewardsBaseReward_small [PresetCfg] (tab : Gwei) (v : Validator) (htab :
   have hm : (1000000000 : Nat) * 64 < UINT64_SIZE := by decide
   have hlt : v.effective_balance / 1000000000 * (1000000000 * 64 / r) < UINT64_SIZE :=
     Nat.lt_of_le_of_lt hprod (by decide)
-  simp only [rewardsBaseReward, get_base_reward_per_increment, P, Preset.ofVar, uint64Div,
+  simp only [rewardsBaseReward, get_base_reward_per_increment, P, Preset.ofValues, uint64Div,
     uint64Mul, hr, hr0, hm, hlt, bind, Except.bind, pure, Except.pure, if_true, if_false,
     show (1000000000 : Nat) ≠ 0 from by decide]
 
@@ -153,7 +153,7 @@ structure RewardsCtxOk (ctx : RewardsContext) : Prop where
   rhead : ctx.head_increments ≤ 1024 * ctx.active_increments
   prev : ctx.previous_epoch + 1 < 2 ^ 64
 
-theorem rewardsRowDeltas_total [PresetCfg] (ctx : RewardsContext) (hc : RewardsCtxOk ctx) (r : Row)
+theorem rewardsRowDeltas_total [CurrentPreset] (ctx : RewardsContext) (hc : RewardsCtxOk ctx) (r : Row)
     (hmax : r.validator.effective_balance ≤ 2048000000000)
     (hscore : r.inactivity_score < 2 ^ 23) :
     ∃ ds, rewardsRowDeltas P ctx r = .ok ds := by
@@ -230,7 +230,7 @@ theorem rewardsSequential_total (b : Nat) (ds : List (Nat × Nat))
       exact Nat.le_trans hle' (Nat.le_trans (Nat.add_le_add_right hle _)
         (Nat.le_of_eq (Nat.add_assoc _ _ _)))
 
-theorem rewardsRowStep_total [PresetCfg] (ctx : RewardsContext) (hc : RewardsCtxOk ctx) (r : Row)
+theorem rewardsRowStep_total [CurrentPreset] (ctx : RewardsContext) (hc : RewardsCtxOk ctx) (r : Row)
     (hmax : r.validator.effective_balance ≤ 2048000000000)
     (hscore : r.inactivity_score < 2 ^ 23)
     (hbal : r.balance + 4 * r.validator.effective_balance < 2 ^ 64) :
@@ -264,14 +264,14 @@ theorem rewardsRowStep_total [PresetCfg] (ctx : RewardsContext) (hc : RewardsCtx
 
 /-! ## Registry -/
 
-theorem exit_churn_total [PresetCfg] [PresetCfg.Bounds] (tab : Gwei) (htab : tab < 2 ^ 60) :
+theorem exit_churn_total [CurrentPreset] [CurrentPreset.Bounds] (tab : Gwei) (htab : tab < 2 ^ 60) :
     ∃ c : Nat, get_exit_churn_limit P tab = .ok c ∧ 64000000000 ≤ c ∧ c < 2 ^ 60 := by
   obtain ⟨M, hM, hM1, hM2, hM3⟩ : ∃ M : Nat, P.MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA = M ∧
       64000000000 ≤ M ∧ M ≤ 128000000000 ∧ M % 1000000000 = 0 :=
-    ⟨_, rfl, PresetCfg.Bounds.min_churn_ge, PresetCfg.Bounds.min_churn_le,
-      PresetCfg.Bounds.min_churn_inc⟩
+    ⟨_, rfl, CurrentPreset.Bounds.min_churn_ge, CurrentPreset.Bounds.min_churn_le,
+      CurrentPreset.Bounds.min_churn_inc⟩
   obtain ⟨Q, hQ, hQ1⟩ : ∃ Q : Nat, P.CHURN_LIMIT_QUOTIENT_GLOAS = Q ∧ 0 < Q :=
-    ⟨_, rfl, PresetCfg.Bounds.churn_quot_pos⟩
+    ⟨_, rfl, CurrentPreset.Bounds.churn_quot_pos⟩
   have hi : P.EFFECTIVE_BALANCE_INCREMENT = 1000000000 := rfl
   unfold get_exit_churn_limit
   rw [hQ, tot_div (by omega), trw_bind_ok]
@@ -286,7 +286,7 @@ theorem exit_churn_total [PresetCfg] [PresetCfg.Bounds] (tab : Gwei) (htab : tab
   rw [hx, tot_sub (Nat.mod_le _ _)]
   refine ⟨_, rfl, ?_, ?_⟩ <;> omega
 
-theorem exitChurnStep_total [PresetCfg] (tab : Gwei) (cur : Nat) (eb E B c : Nat)
+theorem exitChurnStep_total [CurrentPreset] (tab : Gwei) (cur : Nat) (eb E B c : Nat)
     (hc : get_exit_churn_limit P tab = .ok c) (hc1 : 64000000000 ≤ c)
     (hc2 : c < 2 ^ 60) (hcur : cur + 5 < 2 ^ 62) (heb : eb ≤ 16000000000)
     (hE : E < 2 ^ 63) (hB : B < 2 ^ 62) :
@@ -295,7 +295,7 @@ theorem exitChurnStep_total [PresetCfg] (tab : Gwei) (cur : Nat) (eb E B c : Nat
   have hact : compute_activation_exit_epoch P cur = .ok (cur + 5) := by
     have h1 : cur + 1 < 2 ^ 64 := by omega
     have h2 : cur + 1 + 4 < 2 ^ 64 := by omega
-    simp [compute_activation_exit_epoch, tot_add h1, tot_add h2, P, Preset.ofVar, bind,
+    simp [compute_activation_exit_epoch, tot_add h1, tot_add h2, P, Preset.ofValues, bind,
       Except.bind]
   have hEmax : max E (cur + 5) + 1 < 2 ^ 64 := by
     have := Nat.max_lt.mpr ⟨hE, show cur + 5 < 2 ^ 63 by omega⟩
@@ -331,7 +331,7 @@ theorem exitChurnStep_total [PresetCfg] (tab : Gwei) (cur : Nat) (eb E B c : Nat
     rw [tot_sub hle', trw_bind_ok]
     exact ⟨_, _, _, rfl, rfl, by omega, by omega⟩
 
-theorem registryRowStep_total [PresetCfg] (tab : Gwei) (cur fin act c : Nat)
+theorem registryRowStep_total [CurrentPreset] (tab : Gwei) (cur fin act c : Nat)
     (hc : get_exit_churn_limit P tab = .ok c) (hc1 : 64000000000 ≤ c)
     (hc2 : c < 2 ^ 60) (hcur : cur + 5 < 2 ^ 62) (E B : Nat) (hE : E < 2 ^ 63)
     (hB : B < 2 ^ 62) (r : Row) :
@@ -376,7 +376,7 @@ theorem registryRowStep_total [PresetCfg] (tab : Gwei) (cur fin act c : Nat)
 
 /-! ## Slashings -/
 
-theorem slashingsPreamble_per [PresetCfg] (tab : Gwei) (slashings : List Gwei) (adj per : Gwei)
+theorem slashingsPreamble_per [CurrentPreset] (tab : Gwei) (slashings : List Gwei) (adj per : Gwei)
     (htab : 1000000000 ≤ tab)
     (h : slashingsPreamble P tab slashings = .ok (adj, per)) :
     @LE.le Nat _ per 2000000000 := by
@@ -400,7 +400,7 @@ theorem slashingsPreamble_per [PresetCfg] (tab : Gwei) (slashings : List Gwei) (
   apply (Nat.div_le_iff_le_mul_add_pred (by omega)).mpr
   omega
 
-theorem slashingsRowStep_total [PresetCfg] (target per : Nat) (hper : per ≤ 2000000000) (r : Row)
+theorem slashingsRowStep_total [CurrentPreset] (target per : Nat) (hper : per ≤ 2000000000) (r : Row)
     (hmax : r.validator.effective_balance ≤ 2048000000000) :
     ∃ x : Row, slashingsRowStep P target per () r = .ok ((), x) ∧
       x = { r with balance := x.balance } ∧ @LE.le Nat _ x.balance r.balance := by
@@ -531,7 +531,7 @@ def PReg (a b : Row) : Prop :=
 def PSlash (a b : Row) : Prop :=
   b = { a with balance := b.balance } ∧ @LE.le Nat _ b.balance a.balance
 
-theorem inactivity_pass_total [PresetCfg] (rows : List Row) (prev : Epoch) (in_leak : Bool)
+theorem inactivity_pass_total [CurrentPreset] (rows : List Row) (prev : Epoch) (in_leak : Bool)
     (hprev : prev + 1 < 2 ^ 64) (hs : ∀ r ∈ rows, @LT.lt Nat _ r.inactivity_score (2 ^ 22)) :
     ∃ ys, passM (inactivityRowStep P prev in_leak) () rows = .ok ((), ys) ∧
       RowRel PInact rows ys := by
@@ -543,7 +543,7 @@ theorem inactivity_pass_total [PresetCfg] (rows : List Row) (prev : Epoch) (in_l
       exact ⟨(), x, hx, trivial, he, hle⟩) rows 0 () trivial hs
   exact ⟨ys, h, hr⟩
 
-theorem rewards_pass_total [PresetCfg] (rows : List Row) (ctx : RewardsContext) (hc : RewardsCtxOk ctx)
+theorem rewards_pass_total [CurrentPreset] (rows : List Row) (ctx : RewardsContext) (hc : RewardsCtxOk ctx)
     (hs : ∀ r ∈ rows, r.validator.effective_balance ≤ 2048000000000 ∧
       @LT.lt Nat _ r.inactivity_score (2 ^ 23) ∧
       r.balance + 4 * r.validator.effective_balance < 2 ^ 64) :
@@ -558,7 +558,7 @@ theorem rewards_pass_total [PresetCfg] (rows : List Row) (ctx : RewardsContext) 
       exact ⟨(), x, hx, trivial, he, hle⟩) rows 0 () trivial hs
   exact ⟨ys, h, hr⟩
 
-theorem registry_pass_total [PresetCfg] (rows : List Row) (tab : Gwei) (cur fin act c : Nat)
+theorem registry_pass_total [CurrentPreset] (rows : List Row) (tab : Gwei) (cur fin act c : Nat)
     (hc : get_exit_churn_limit P tab = .ok c) (hc1 : 64000000000 ≤ c)
     (hc2 : c < 2 ^ 60) (hcur : cur + 5 < 2 ^ 62) (E B : Nat) (hE : E < 2 ^ 62)
     (hB : B < 2 ^ 61) (hn : rows.length < 2 ^ 40) :
@@ -594,7 +594,7 @@ theorem registry_pass_total [PresetCfg] (rows : List Row) (tab : Gwei) (cur fin 
     rows 0 (E, B) ⟨Nat.le_max_left _ _, Nat.le_max_left _ _⟩ (by omega)
   exact ⟨E', B', ys, h, hr⟩
 
-theorem slashings_pass_total [PresetCfg] (rows : List Row) (target per : Nat) (hper : per ≤ 2000000000)
+theorem slashings_pass_total [CurrentPreset] (rows : List Row) (target per : Nat) (hper : per ≤ 2000000000)
     (hs : ∀ r ∈ rows, r.validator.effective_balance ≤ 2048000000000) :
     ∃ ys, passM (slashingsRowStep P target per) () rows = .ok ((), ys) ∧
       RowRel PSlash rows ys := by
@@ -640,7 +640,7 @@ def RegSlashOut (s3 s5 : BeaconState) : Prop :=
 
 /-- The registry update at the churn total `rtab`, then the slashings at `tab`. Fulu runs the
 registry update at a different churn total than the slashings. -/
-theorem regSlash_total_g [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (s3 : BeaconState) (tab rtab : Gwei) (hrows : RowsOk s3)
+theorem regSlash_total_g [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (s3 : BeaconState) (tab rtab : Gwei) (hrows : ListLengthsMatch s3)
     (hslot : s3.slot + 8192 < 2 ^ 64) (hrtab : rtab < 2 ^ 60) (htab_lo : 1000000000 ≤ tab)
     (heb : ∀ v ∈ s3.validators, v.effective_balance ≤ 2048000000000)
     (hn : s3.validators.length < 2 ^ 40) (hE : s3.earliest_exit_epoch < 2 ^ 62)
@@ -668,7 +668,7 @@ theorem regSlash_total_g [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (s3 : Bea
   have hk4 : ys4.map rowKey = (rowsOf s3).map rowKey :=
     RowRel.map_eq rowKey (fun _ _ h => h.key) hr4
   have hl4 : ys4.length = s3.validators.length := by rw [RowRel.length hr4, rowsOf_length]
-  have hrows4 : RowsOk s4 := rowsOk_withRows s3 ys4 hrows hl4
+  have hrows4 : ListLengthsMatch s4 := rowsOk_withRows s3 ys4 hrows hl4
   have hrw4 : rowsOf s4 = ys4 := rowsOf_withRows s3 ys4 hk4
   obtain ⟨adj, per, hpre⟩ := slashingsPreamble_ok tab s3.slashings hsl htab_lo
   have hper := slashingsPreamble_per tab s3.slashings adj per htab_lo hpre
@@ -689,7 +689,7 @@ theorem regSlash_total_g [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (s3 : Bea
   rw [hp5]
   exact OkWith.of_eq rfl ⟨ys5, E', B', rfl, RowRel.comp hr4 hr5⟩
 
-theorem regSlash_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (s3 : BeaconState) (tab : Gwei) (hrows : RowsOk s3)
+theorem regSlash_total [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (s3 : BeaconState) (tab : Gwei) (hrows : ListLengthsMatch s3)
     (hslot : s3.slot + 8192 < 2 ^ 64) (htab : tab < 2 ^ 60) (htab_lo : 1000000000 ≤ tab)
     (heb : ∀ v ∈ s3.validators, v.effective_balance ≤ 2048000000000)
     (hn : s3.validators.length < 2 ^ 40) (hE : s3.earliest_exit_epoch < 2 ^ 62)
@@ -714,15 +714,15 @@ deposits need. Each one is a time or supply bound; the pyspec raises without the
 - `participation`: each flag's participating increments of the previous epoch are at most
   `1024` times the active increments of the current epoch. Exits are churn limited, so the
   active balance cannot drop by that factor in one epoch unless almost nothing is staked. -/
-structure PhysicalLimits [PresetCfg] (t : BeaconState) : Prop where
-  scores : ∀ x ∈ t.inactivity_scores, @LT.lt Nat _ x (2 ^ 22)
-  supply : totalEffectiveBalance t < 2 ^ 57
-  funds : t.balances.sum + (t.pending_deposits.map (·.amount)).sum +
+structure SupplyAndTimeLimits [CurrentPreset] (t : BeaconState) : Prop where
+  inactivityScoresBounded : ∀ x ∈ t.inactivity_scores, @LT.lt Nat _ x (2 ^ 22)
+  effectiveBalancesBounded : totalEffectiveBalance t < 2 ^ 57
+  balancesAndDepositsBounded : t.balances.sum + (t.pending_deposits.map (·.amount)).sum +
     t.deposit_balance_to_consume < 2 ^ 61
-  earliest : t.earliest_exit_epoch < 2 ^ 62
-  exit_balance : t.exit_balance_to_consume < 2 ^ 61
-  count : t.validators.length < 2 ^ 40
-  participation : ∀ tab, get_total_active_balance P t = .ok tab →
+  earliestExitEpochBounded : t.earliest_exit_epoch < 2 ^ 62
+  exitBalanceBounded : t.exit_balance_to_consume < 2 ^ 61
+  validatorCountBounded : t.validators.length < 2 ^ 40
+  participationBounded : ∀ tab, get_total_active_balance P t = .ok tab →
     ∀ f, f < 3 → ∀ x, rewardsFlagIncrements P t (t.slot / P.SLOTS_PER_EPOCH - 1) f = .ok x →
       @LE.le Nat _ x (1024 * (tab / 1000000000))
 
@@ -735,7 +735,7 @@ theorem trw_sat_one (e : Nat) (h : e ≠ 0) : saturating_sub e 1 = e - 1 := by
     have : e = 1 := by omega
     subst this; rfl
 
-theorem trw_mem_rowsOf {s : BeaconState} (hrows : RowsOk s) {r : Row} (hr : r ∈ rowsOf s) :
+theorem trw_mem_rowsOf {s : BeaconState} (hrows : ListLengthsMatch s) {r : Row} (hr : r ∈ rowsOf s) :
     r.validator ∈ s.validators ∧ r.balance ∈ s.balances ∧
       r.inactivity_score ∈ s.inactivity_scores := by
   obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hr
@@ -751,7 +751,7 @@ theorem trw_mem_rowsOf {s : BeaconState} (hrows : RowsOk s) {r : Row} (hr : r �
 /-- The state before the registry update: `t` with other balances and inactivity scores. -/
 structure S3Facts (t s1 s3 : BeaconState) : Prop where
   slot : s3.slot = t.slot
-  rows : RowsOk s3
+  rows : ListLengthsMatch s3
   vals : s3.validators = t.validators
   bsum : s3.balances.sum ≤ t.balances.sum + 4 * totalEffectiveBalance t
   eee : s3.earliest_exit_epoch = t.earliest_exit_epoch
@@ -769,9 +769,9 @@ theorem trw_sum_map_mul (l : List Row) (g : Row → Nat) (k : Nat) :
   | nil => simp
   | cons x xs ih => simp only [List.map_cons, List.sum_cons, ih, Nat.mul_add]
 
-theorem post_of_regSlash [PresetCfg] (t s1 s3 s5 : BeaconState) (hrl : t.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
+theorem post_of_regSlash [CurrentPreset] (t s1 s3 s5 : BeaconState) (hrl : t.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
     (hsll : t.slashings.length = P.EPOCHS_PER_SLASHINGS_VECTOR)
-    (heb : EBOk P t) (hcons : ConsolidationsInRange t) (hrb : PhysicalLimits t)
+    (heb : EffectiveBalancesValid P t) (hcons : ConsolidationsInRange t) (hrb : SupplyAndTimeLimits t)
     (hfin0 : s1.finalized_checkpoint.epoch ≤ t.slot / P.SLOTS_PER_EPOCH) (h3 : S3Facts t s1 s3)
     (h5 : RegSlashOut s3 s5) : TailFrame t s5 ∧ DepFrame t s5 := by
   obtain ⟨ys, E, B, rfl, hr⟩ := h5
@@ -812,9 +812,9 @@ theorem post_of_regSlash [PresetCfg] (t s1 s3 s5 : BeaconState) (hrl : t.randao_
       have hmem : s3.validators[i]'(by rw [← rowsOf_length]; exact hi) ∈ t.validators := by
         rw [← h3.vals]; exact List.getElem_mem _
       exact (heb _ hmem).2
-  have hsup : @LT.lt Nat _ (totalEffectiveBalance t) (2 ^ 57) := hrb.supply
+  have hsup : @LT.lt Nat _ (totalEffectiveBalance t) (2 ^ 57) := hrb.effectiveBalancesBounded
   have hfunds : @LT.lt Nat _ (t.balances.sum + (t.pending_deposits.map (·.amount)).sum +
-      t.deposit_balance_to_consume) (2 ^ 61) := hrb.funds
+      t.deposit_balance_to_consume) (2 ^ 61) := hrb.balancesAndDepositsBounded
   have hbt : @LT.lt Nat _ t.balances.sum (2 ^ 61) := by omega
   refine ⟨⟨h3.slot, hrows5, ?_, ?_, ?_, ?_, ?_, ?_⟩,
     ⟨h3.pend, h3.dbtc, ?_, hbsum, hteb, h3.fin ▸ hfin0⟩⟩
@@ -837,13 +837,13 @@ theorem post_of_regSlash [PresetCfg] (t s1 s3 s5 : BeaconState) (hrl : t.randao_
   · show (ys.map (·.validator)).length = t.validators.length
     rw [List.length_map, hlt]
 
-theorem trw_inact_genesis [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (s : BeaconState) (h : s.slot / P.SLOTS_PER_EPOCH = 0) :
+theorem trw_inact_genesis [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (s : BeaconState) (h : s.slot / P.SLOTS_PER_EPOCH = 0) :
     process_inactivity_updates P s = .ok s := by
   unfold process_inactivity_updates
   rw [tot_current_epoch, trw_bind_ok, h]
   rfl
 
-theorem trw_rewards_genesis [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (tab : Gwei) (s : BeaconState) (h : s.slot / P.SLOTS_PER_EPOCH = 0) :
+theorem trw_rewards_genesis [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (tab : Gwei) (s : BeaconState) (h : s.slot / P.SLOTS_PER_EPOCH = 0) :
     process_rewards_and_penalties P tab s = .ok s := by
   unfold process_rewards_and_penalties
   rw [tot_current_epoch, trw_bind_ok, h]
@@ -851,8 +851,8 @@ theorem trw_rewards_genesis [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (tab :
 
 /-- The inactivity, rewards, registry and slashings steps after justification and
 finalization, with one total active balance `tab` and the registry update at the churn total
-`g tab`. Gloas uses `g = id`. Fulu uses `fuluTabM`. -/
-def MidCore [PresetCfg] (g : Gwei → Gwei) (t : BeaconState) : Prop :=
+`g tab`. Gloas uses `g = id`. Fulu uses `fuluChurnTotal`. -/
+def MidCore [CurrentPreset] (g : Gwei → Gwei) (t : BeaconState) : Prop :=
   ∀ s1, JFShape t s1 → s1.finalized_checkpoint.epoch ≤ t.slot / P.SLOTS_PER_EPOCH →
     (t.slot / P.SLOTS_PER_EPOCH ≠ 0 → s1.finalized_checkpoint.epoch + 1 ≤ t.slot / P.SLOTS_PER_EPOCH) →
     ∀ tab, get_total_active_balance P s1 = .ok tab →
@@ -863,17 +863,17 @@ def MidCore [PresetCfg] (g : Gwei → Gwei) (t : BeaconState) : Prop :=
       process_slashings P tab s4) (fun s => TailFrame t s ∧ DepFrame t s)
 
 /-- On mainnet, the inactivity, rewards, registry and slashings steps succeed after
-justification and finalization, under `PhysicalLimits`, for any churn total `g tab` below `2^60`. -/
-theorem midCore_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (g : Gwei → Gwei) (hg : ∀ x, x < 2 ^ 57 → g x < 2 ^ 60)
-    (t : BeaconState) (hrows : RowsOk t) (hslot : t.slot + 8192 < 2 ^ 64)
-    (heb : EBOk P t) (hrl : t.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
+justification and finalization, under `SupplyAndTimeLimits`, for any churn total `g tab` below `2^60`. -/
+theorem midCore_of_supplyAndTimeLimits [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (g : Gwei → Gwei) (hg : ∀ x, x < 2 ^ 57 → g x < 2 ^ 60)
+    (t : BeaconState) (hrows : ListLengthsMatch t) (hslot : t.slot + 8192 < 2 ^ 64)
+    (heb : EffectiveBalancesValid P t) (hrl : t.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
     (hsll : t.slashings.length = P.EPOCHS_PER_SLASHINGS_VECTOR)
     (hcons : ConsolidationsInRange t) (hsl : t.slashings.sum * 3 < 2 ^ 64)
-    (hrb : PhysicalLimits t) : MidCore g t := by
+    (hrb : SupplyAndTimeLimits t) : MidCore g t := by
   intro s1 hshape hfin0 hfin tab htab
   obtain ⟨cp1, cp2, cp3, bits, hs1⟩ := hshape
   have hv1 : s1.validators = t.validators := by rw [hs1]
-  have hrows1 : RowsOk s1 := by rw [hs1]; exact hrows
+  have hrows1 : ListLengthsMatch s1 := by rw [hs1]; exact hrows
   have hslot1 : s1.slot = t.slot := by rw [hs1]
   have htabeq : get_total_active_balance P s1 =
       get_total_active_balance P t := by rw [hs1]; rfl
@@ -882,9 +882,9 @@ theorem midCore_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] 
   have hteb1 : totalEffectiveBalance s1 = totalEffectiveBalance t := by rw [hs1]; rfl
   have hslot' : @LT.lt Nat _ (t.slot + 8192) (2 ^ 64) := hslot
   have hdiv6 := P_epoch_le_div6 t.slot
-  have hsup : @LT.lt Nat _ (totalEffectiveBalance t) (2 ^ 57) := hrb.supply
+  have hsup : @LT.lt Nat _ (totalEffectiveBalance t) (2 ^ 57) := hrb.effectiveBalancesBounded
   have hfunds : @LT.lt Nat _ (t.balances.sum + (t.pending_deposits.map (·.amount)).sum +
-      t.deposit_balance_to_consume) (2 ^ 61) := hrb.funds
+      t.deposit_balance_to_consume) (2 ^ 61) := hrb.balancesAndDepositsBounded
   have hcur : get_current_epoch P s1 = .ok (t.slot / P.SLOTS_PER_EPOCH) := by
     rw [← hslot1]; exact tot_current_epoch s1
   obtain ⟨tab', htab', htab_lo, htab_hi⟩ := get_total_active_balance_bounds P s1
@@ -896,7 +896,7 @@ theorem midCore_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] 
     have h' : @LE.le Nat _ tab (max 1000000000 (totalEffectiveBalance t)) := by
       rw [← hteb1]; exact htab_hi
     exact Nat.lt_of_le_of_lt h' (Nat.max_lt.mpr ⟨by decide, hsup⟩)
-  have hn : t.validators.length < 2 ^ 40 := hrb.count
+  have hn : t.validators.length < 2 ^ 40 := hrb.validatorCountBounded
   have hebmax : ∀ v ∈ t.validators, v.effective_balance ≤ 2048000000000 :=
     fun v hv => (heb v hv).2
   -- the last two steps from a state with the facts `S3Facts`
@@ -906,8 +906,8 @@ theorem midCore_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] 
     intro s3 h3
     refine OkWith.mono (regSlash_total_g s3 tab (g tab) h3.rows (by rw [h3.slot]; exact hslot)
       (hg tab htab57) htab_lo' (by rw [h3.vals]; exact hebmax)
-      (by rw [h3.vals]; exact hn) (by rw [h3.eee]; exact hrb.earliest)
-      (by rw [h3.ebtc]; exact hrb.exit_balance) (by rw [h3.slashings]; exact hsl)) ?_
+      (by rw [h3.vals]; exact hn) (by rw [h3.eee]; exact hrb.earliestExitEpochBounded)
+      (by rw [h3.ebtc]; exact hrb.exitBalanceBounded) (by rw [h3.slashings]; exact hsl)) ?_
     intro s5 h5
     exact post_of_regSlash t s1 s3 s5 hrl hsll heb hcons hrb hfin0 h3 h5
   have hb1 : s1.balances = t.balances := by rw [hs1]
@@ -940,7 +940,7 @@ theorem midCore_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] 
       obtain ⟨m1, m2, m3⟩ := trw_mem_rowsOf hrows1 hr
       rw [hs1] at m1 m2 m3
       have hbt : @LT.lt Nat _ t.balances.sum (2 ^ 61) := by omega
-      exact ⟨hebmax _ m1, hrb.scores _ m3, Nat.lt_of_le_of_lt (tot_mem_le_sum m2) hbt⟩
+      exact ⟨hebmax _ m1, hrb.inactivityScoresBounded _ m3, Nat.lt_of_le_of_lt (tot_mem_le_sum m2) hbt⟩
     obtain ⟨ys2, hp2, hr2⟩ := inactivity_pass_total (rowsOf s1) (t.slot / P.SLOTS_PER_EPOCH - 1) lk
       (by show @LT.lt Nat _ (t.slot / P.SLOTS_PER_EPOCH - 1 + 1) (2 ^ 64); omega) (fun r hr => (hQ1 r hr).2.1)
     have hi := (process_inactivity_updates_rows P s1 (t.slot / P.SLOTS_PER_EPOCH) (t.slot / P.SLOTS_PER_EPOCH - 1)
@@ -954,7 +954,7 @@ theorem midCore_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] 
       rw [RowRel.map_eq (·.balance) (fun a b h => by rw [h.1]) hr2,
         rowsOf_map_balance s1 hrows1.1]
     have hl2 : ys2.length = s1.validators.length := by rw [RowRel.length hr2, rowsOf_length]
-    have hrows2 : RowsOk (s1.withRows ys2) := rowsOk_withRows s1 ys2 hrows1 hl2
+    have hrows2 : ListLengthsMatch (s1.withRows ys2) := rowsOk_withRows s1 ys2 hrows1 hl2
     have hrw2 : rowsOf (s1.withRows ys2) = ys2 := rowsOf_withRows s1 ys2 hk2
     -- the rewards context
     obtain ⟨ctx, hctx, hsrc, htgt, hhd⟩ := rewardsContextOf_bounds P tab s1 hrows1
@@ -975,7 +975,7 @@ theorem midCore_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] 
       intro f hf x hx
       rw [hincq, hpe] at hx
       rw [hact_eq]
-      exact hrb.participation tab htab_t f hf x hx
+      exact hrb.participationBounded tab htab_t f hf x hx
     have hmaxinc : @LE.le Nat _ (max P.EFFECTIVE_BALANCE_INCREMENT
         (totalEffectiveBalance s1) / P.EFFECTIVE_BALANCE_INCREMENT) 144115188 := by
       rw [hteb1]
@@ -1032,16 +1032,16 @@ theorem midCore_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] 
       exact hb3
 
 /-- On mainnet, the inactivity, rewards, registry and slashings steps succeed after
-justification and finalization, under `PhysicalLimits`. -/
-theorem midOk_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (t : BeaconState) (hrows : RowsOk t) (hslot : t.slot + 8192 < 2 ^ 64)
-    (heb : EBOk P t) (hvec : t.VectorLengths P)
+justification and finalization, under `SupplyAndTimeLimits`. -/
+theorem midOk_of_supplyAndTimeLimits [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (t : BeaconState) (hrows : ListLengthsMatch t) (hslot : t.slot + 8192 < 2 ^ 64)
+    (heb : EffectiveBalancesValid P t) (hvec : t.VectorLengths P)
     (hcons : ConsolidationsInRange t) (hsl : t.slashings.sum * 3 < 2 ^ 64)
-    (hrb : PhysicalLimits t) : MidOk t := by
+    (hrb : SupplyAndTimeLimits t) : MidOk t := by
   intro s1 hshape hfin0 hfin
-  have hcore := midCore_of_physicalLimits id (fun x hx => Nat.lt_trans hx (by decide)) t hrows hslot
+  have hcore := midCore_of_supplyAndTimeLimits id (fun x hx => Nat.lt_trans hx (by decide)) t hrows hslot
     heb hvec.2.2.1 hvec.2.2.2.1 hcons hsl hrb s1 hshape hfin0 hfin
   obtain ⟨cp1, cp2, cp3, bits, hs1⟩ := hshape
-  have hrows1 : RowsOk s1 := by rw [hs1]; exact hrows
+  have hrows1 : ListLengthsMatch s1 := by rw [hs1]; exact hrows
   have hslot1 : s1.slot = t.slot := by rw [hs1]
   have hteb1 : totalEffectiveBalance s1 = totalEffectiveBalance t := by rw [hs1]; rfl
   have hslot' : @LT.lt Nat _ (t.slot + 8192) (2 ^ 64) := hslot
@@ -1049,7 +1049,7 @@ theorem midOk_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (t
   have hcur : get_current_epoch P s1 = .ok (t.slot / P.SLOTS_PER_EPOCH) := by
     rw [← hslot1]; exact tot_current_epoch s1
   obtain ⟨tab, htab, -, -⟩ := get_total_active_balance_bounds P s1
-    (t.slot / P.SLOTS_PER_EPOCH) hcur (by rw [hteb1]; exact Nat.lt_trans hrb.supply (by decide))
+    (t.slot / P.SLOTS_PER_EPOCH) hcur (by rw [hteb1]; exact Nat.lt_trans hrb.effectiveBalancesBounded (by decide))
   have hact := compute_activation_exit_epoch_of_lt P (t.slot / P.SLOTS_PER_EPOCH)
     (by show @LT.lt Nat _ (t.slot / P.SLOTS_PER_EPOCH + 1 + 4) (2 ^ 64); omega)
   have hfar : t.slot / P.SLOTS_PER_EPOCH < FAR_FUTURE_EPOCH := by
@@ -1081,12 +1081,12 @@ theorem forIn_total_rest {α β : Type} (I : List α → β → Prop) (F : β �
     | done c => exact ⟨c, rfl, hdone c rfl⟩
     | yield c => exact ih c (hyield c rfl)
 
-theorem act_churn_total [PresetCfg] [PresetCfg.Bounds] (tab : Gwei) :
+theorem act_churn_total [CurrentPreset] [CurrentPreset.Bounds] (tab : Gwei) :
     ∃ c : Nat, get_activation_churn_limit P tab = .ok c ∧ c ≤ 256000000000 := by
   obtain ⟨Q, hQ, hQ1⟩ : ∃ Q : Nat, P.CHURN_LIMIT_QUOTIENT_GLOAS = Q ∧ 0 < Q :=
-    ⟨_, rfl, PresetCfg.Bounds.churn_quot_pos⟩
+    ⟨_, rfl, CurrentPreset.Bounds.churn_quot_pos⟩
   obtain ⟨A, hA, hA1⟩ : ∃ A : Nat, P.MAX_PER_EPOCH_ACTIVATION_CHURN_LIMIT_GLOAS = A ∧
-      A ≤ 256000000000 := ⟨_, rfl, PresetCfg.Bounds.max_act_churn_le⟩
+      A ≤ 256000000000 := ⟨_, rfl, CurrentPreset.Bounds.max_act_churn_le⟩
   have hi : P.EFFECTIVE_BALANCE_INCREMENT = 1000000000 := rfl
   unfold get_activation_churn_limit
   rw [hQ, tot_div (by omega), trw_bind_ok]
@@ -1103,7 +1103,7 @@ def DepInv (s : BeaconState) (avail : Nat) (rest : List PendingDeposit)
     (s.balances.sum + (s.pending_deposits.map (·.amount)).sum) ∧
   @LE.le Nat _ (totalEffectiveBalance r.2.2.2.2 + (rest.map (·.amount)).sum)
     (totalEffectiveBalance s + (s.pending_deposits.map (·.amount)).sum) ∧
-  RowsOk r.2.2.2.2 ∧
+  ListLengthsMatch r.2.2.2.2 ∧
   (∀ v ∈ r.2.2.2.2.validators, @LT.lt Nat _ v.effective_balance (2 ^ 62)) ∧
   r.2.2.2.2.slot = s.slot ∧ r.2.2.2.2.randao_mixes = s.randao_mixes ∧
   r.2.2.2.2.slashings = s.slashings ∧
@@ -1156,18 +1156,18 @@ theorem DepInv.skip {s : BeaconState} {avail : Nat} {a : PendingDeposit}
   exact ⟨h1, by dsimp only; omega, by dsimp only; omega, h4⟩
 
 /-- `process_pending_deposits` at the churn total `g tab` succeeds after the eth1 data reset.
-Gloas uses `g = id`. Fulu uses `fuluTabM`. -/
-def DepCore [PresetCfg] (g : Gwei → Gwei) (o : Oracle) (t : BeaconState) : Prop :=
+Gloas uses `g = id`. Fulu uses `fuluChurnTotal`. -/
+def DepCore [CurrentPreset] (g : Gwei → Gwei) (o : Oracle) (t : BeaconState) : Prop :=
   ∀ s tab, TailFrame t s → DepFrame t s → get_total_active_balance P s = .ok tab →
     OkWith (process_pending_deposits P (g tab) (apply_pending_deposit P o)
       s) (TailFrame t)
 
-theorem depCore_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (g : Gwei → Gwei) (o : Oracle) (t : BeaconState)
-    (hslot0 : t.slot + 8192 < 2 ^ 64) (hrb : PhysicalLimits t) : DepCore g o t := by
+theorem depCore_of_supplyAndTimeLimits [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (g : Gwei → Gwei) (o : Oracle) (t : BeaconState)
+    (hslot0 : t.slot + 8192 < 2 ^ 64) (hrb : SupplyAndTimeLimits t) : DepCore g o t := by
   intro s tab hf hd htab
-  have hteb : @LT.lt Nat _ (totalEffectiveBalance t) (2 ^ 57) := hrb.supply
+  have hteb : @LT.lt Nat _ (totalEffectiveBalance t) (2 ^ 57) := hrb.effectiveBalancesBounded
   have hfunds : @LT.lt Nat _ (t.balances.sum + (t.pending_deposits.map (·.amount)).sum +
-      t.deposit_balance_to_consume) (2 ^ 61) := hrb.funds
+      t.deposit_balance_to_consume) (2 ^ 61) := hrb.balancesAndDepositsBounded
   obtain ⟨tab', htab', -, htab_hi⟩ := get_total_active_balance_bounds P s _
     (tot_current_epoch s) (Nat.lt_trans hf.teb (by decide))
   rw [htab] at htab'
@@ -1302,24 +1302,24 @@ theorem depCore_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] 
       exact OkWith.pure (hframe _ rfl rfl rfl rfl rfl rfl rfl rfl rfl)
     · exact OkWith.pure (hframe _ rfl rfl rfl rfl rfl rfl rfl rfl rfl)
 
-theorem depOk_of_physicalLimits [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : Oracle) (t : BeaconState) (hslot0 : t.slot + 8192 < 2 ^ 64)
-    (hrb : PhysicalLimits t) : DepOk o t :=
-  depCore_of_physicalLimits id o t hslot0 hrb
+theorem depOk_of_supplyAndTimeLimits [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (o : Oracle) (t : BeaconState) (hslot0 : t.slot + 8192 < 2 ^ 64)
+    (hrb : SupplyAndTimeLimits t) : DepOk o t :=
+  depCore_of_supplyAndTimeLimits id o t hslot0 hrb
 
 /-! ## The whole epoch -/
 
 /-- `process_epoch_total` with the per-validator steps and the pending deposits proved: on
-mainnet, the spec `process_epoch` succeeds from the facts at its input, `PhysicalLimits`, and the
+mainnet, the spec `process_epoch` succeeds from the facts at its input, `SupplyAndTimeLimits`, and the
 committee steps (`CommitteesOk`). -/
-theorem process_epoch_total_rows [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
+theorem process_epoch_total_rows [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds] (o : Oracle) (t : BeaconState) (hrows : ListLengthsMatch t)
     (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % P.SLOTS_PER_EPOCH = 0)
-    (hvec : t.VectorLengths P) (hffg : FfgInvariant P t)
-    (heb : EBOk P t) (hcons : ConsolidationsInRange t)
-    (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : PhysicalLimits t) (hcomm : CommitteesOk o t) :
+    (hvec : t.VectorLengths P) (hffg : CheckpointsInOrder P t)
+    (heb : EffectiveBalancesValid P t) (hcons : ConsolidationsInRange t)
+    (hsl : t.slashings.sum * 3 < 2 ^ 64) (hrb : SupplyAndTimeLimits t) (hcomm : CommitteesOk o t) :
     ∃ s', process_epoch P o t = .ok s' :=
   process_epoch_total o t hrows hslot hlast hvec hffg
-    (Nat.lt_trans hrb.supply (by decide))
-    (midOk_of_physicalLimits t hrows hslot heb hvec hcons hsl hrb)
-    (depOk_of_physicalLimits o t hslot hrb) hcomm
+    (Nat.lt_trans hrb.effectiveBalancesBounded (by decide))
+    (midOk_of_supplyAndTimeLimits t hrows hslot heb hvec hcons hsl hrb)
+    (depOk_of_supplyAndTimeLimits o t hslot hrb) hcomm
 
 end EpochProofs.Spec

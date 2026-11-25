@@ -24,7 +24,7 @@ open state_processing.per_epoch_processing.single_pass_step (ExitChurn StepConte
 epoch `cur`, with total active balance `tab`. The flag balances are the previous epoch totals
 of `get_unslashed_participating_indices`, which the progressive balances cache holds. All step
 switches are on, as in production. -/
-structure ContextInputsMatch [Spec.PresetCfg] (s : Spec.BeaconState) (cur tab : Nat)
+structure ContextInputsMatch [Spec.CurrentPreset] (s : Spec.BeaconState) (cur tab : Nat)
     (i : ContextInputs) : Prop where
   current_epoch : i.current_epoch.val = cur
   finalized_epoch : i.finalized_epoch.val = s.finalized_checkpoint.epoch
@@ -102,7 +102,7 @@ theorem rewardsContext_epochs (p : Spec.Preset) (s : Spec.BeaconState) (cur : Na
 inputs are the spec's raw values. The hypotheses `hr`, `hpre` and `hh` are the spec
 computations of the model (`lhFullTailG`), and `htarget` rules out the overflow of the slashings
 target epoch. -/
-theorem step_context_spec [Spec.PresetCfg] (s : Spec.BeaconState) (cur : Nat)
+theorem step_context_spec [Spec.CurrentPreset] (s : Spec.BeaconState) (cur : Nat)
     (hcur : Spec.get_current_epoch Spec.P s = .ok cur) (tab : Nat) (rctx : Spec.RewardsContext)
     (hr : Spec.rewardsContextOf Spec.P tab s = .ok rctx) (adjusted per : Nat)
     (hpre : Spec.slashingsPreamble Spec.P tab s.slashings = .ok (adjusted, per))
@@ -205,7 +205,7 @@ theorem step_context_spec [Spec.PresetCfg] (s : Spec.BeaconState) (cur : Nat)
 
 /-- The loop of `single_pass_rows_model`, with the context computed by `step_context` from raw
 inputs. The context is no longer an assumption: only the raw reads (`ContextInputsMatch`) are. -/
-theorem single_pass_rows_model_inputs [Spec.PresetCfg] {R E : Type} (inst : LhRegistryRows R E)
+theorem single_pass_rows_model_inputs [Spec.CurrentPreset] {R E : Type} (inst : LhRegistryRows R E)
     (s : Spec.BeaconState) (tab : Spec.Gwei) (topups : List Spec.Gwei)
     (named : List Spec.ValidatorIndex) (view : R → List Spec.Row) (rows : R)
     (hview : view rows = Spec.rowsOf s)

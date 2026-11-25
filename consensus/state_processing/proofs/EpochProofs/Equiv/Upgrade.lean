@@ -9,7 +9,7 @@ The values that the Fulu and Gloas upgrades compute go through translated functi
 - `upgrade_to_fulu`: `initialize_proposer_lookahead` calls
   `epoch_committees::proposer_indices_for_epoch` for the current and the next epoch, on all the
   active validators (`proposer_indices_for_epoch_spec_fulu`). Like the Fulu epoch step, this
-  needs each Electra proposer loop to end before its last pass (`ProposerFin`).
+  needs each Electra proposer loop to end before its last pass (`ProposerSelectionEnds`).
 - `upgrade_to_gloas`: `initialize_ptc_window` calls `epoch_committees::ptc_for_epoch` for the
   current and the next epoch (`initialize_ptc_window_lh`).
 
@@ -37,7 +37,7 @@ theorem proposer_indices_for_epoch_spec_fulu {H B : Type} (inst : ShuffleHashIns
     (indices : Slice Usize) (domain : Array U8 4#usize)
     (hdomain : u8s domain.val = Spec.DOMAIN_BEACON_PROPOSER.toList) (epoch : U64)
     (hindices : indices.val.map (·.val) = Spec.get_active_validator_indices state epoch.val)
-    (hfin : ∀ s, Spec.ProposerFin p o state (Spec.get_active_validator_indices state epoch.val) s)
+    (hfin : ∀ s, Spec.ProposerSelectionEnds p o state (Spec.get_active_validator_indices state epoch.val) s)
     (mix : Array U8 32#usize) (hmix : SeedMixLink p state epoch.val mix) (start_slot : U64)
     (hstart : Spec.compute_start_slot_at_epoch p epoch.val = .ok start_slot.val)
     (c : LhSelectionConstants) (hc : SelectionConstantsMatch p c)

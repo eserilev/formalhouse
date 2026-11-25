@@ -415,7 +415,7 @@ private theorem active_indices_rows (state : BeaconState) (epoch : Epoch) :
 
 /-- `get_unslashed_participating_indices` for the previous epoch is the indices of the
 participating rows. -/
-private theorem participating_ok (p : Preset) (state : BeaconState) (hrows : RowsOk state)
+private theorem participating_ok (p : Preset) (state : BeaconState) (hrows : ListLengthsMatch state)
     (current_epoch previous_epoch : Epoch) (flag_index : Nat)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hprevious : get_previous_epoch p state = .ok previous_epoch)
@@ -565,7 +565,7 @@ private theorem get_base_reward_row (p : Preset) (total_active_balance : Gwei)
   rfl
 
 /-- `get_flag_index_deltas` gives the same `ok` values as `flagRow` over the rows. -/
-private theorem flag_deltas_sameResultOrBothFail (p : Preset) (state : BeaconState) (hrows : RowsOk state)
+private theorem flag_deltas_sameResultOrBothFail (p : Preset) (state : BeaconState) (hrows : ListLengthsMatch state)
     (ctx : RewardsContext) (current_epoch : Epoch)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hprevious : get_previous_epoch p state = .ok ctx.previous_epoch)
@@ -709,7 +709,7 @@ private def inactivityRow (p : Preset) (ctx : RewardsContext) (r : Row) : SpecM 
 /-- `get_inactivity_penalty_deltas` gives the same `ok` values as `inactivityRow` over the
 rows. -/
 private theorem inactivity_deltas_sameResultOrBothFail (p : Preset) (state : BeaconState)
-    (hrows : RowsOk state) (ctx : RewardsContext) (current_epoch : Epoch)
+    (hrows : ListLengthsMatch state) (ctx : RewardsContext) (current_epoch : Epoch)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hprevious : get_previous_epoch p state = .ok ctx.previous_epoch)
     (hne : ctx.previous_epoch ≠ current_epoch) :
@@ -999,7 +999,7 @@ private theorem rowStep_snd (p : Preset) (ctx : RewardsContext) (r : Row) :
 
 /-- Rows that keep the validator and the inactivity score of the state rows write back only
 the balances. -/
-private theorem withRows_balances (state : BeaconState) (hrows : RowsOk state) (ys : List Row)
+private theorem withRows_balances (state : BeaconState) (hrows : ListLengthsMatch state) (ys : List Row)
     (hlen : ys.length = (rowsOf state).length)
     (hkeep : ∀ i (h1 : i < ys.length) (h2 : i < (rowsOf state).length),
       ys[i].validator = (rowsOf state)[i].validator
@@ -1022,7 +1022,7 @@ private theorem withRows_balances (state : BeaconState) (hrows : RowsOk state) (
 
 /-- The single pass succeeds with `v` exactly when `v` is good. -/
 private theorem single_pass_ok_iff (p : Preset) (ctx : RewardsContext) (state : BeaconState)
-    (hrows : RowsOk state) (v : BeaconState) :
+    (hrows : ListLengthsMatch state) (v : BeaconState) :
     (fun x => state.withRows x.2) <$> passM (rewardsRowStep p ctx) () (rowsOf state) = .ok v ↔
       RewardsGood p ctx state v := by
   rw [passM_unit, map_ok_iff]
@@ -1109,7 +1109,7 @@ private theorem balance_rowsOf (state : BeaconState) (i : Nat)
 
 /-- The spec pass, after the genesis check, succeeds with `v` exactly when `v` is good.
 `body` is the loop body that applies the deltas. -/
-private theorem spec_ok_iff (p : Preset) (state : BeaconState) (hrows : RowsOk state)
+private theorem spec_ok_iff (p : Preset) (state : BeaconState) (hrows : ListLengthsMatch state)
     (ctx : RewardsContext) (current_epoch : Epoch)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hprevious : get_previous_epoch p state = .ok ctx.previous_epoch)
@@ -1260,7 +1260,7 @@ private theorem ok_bind {α β : Type} (a : α) (f : α → SpecM β) :
 the rows. `SameResultOrBothFail`, not equality: the spec computes all deltas before it changes any balance, so
 it can fail on a later row first. -/
 theorem process_rewards_and_penalties_rows (p : Preset) (total_active_balance : Gwei)
-    (state : BeaconState) (hrows : RowsOk state) (current_epoch : Epoch)
+    (state : BeaconState) (hrows : ListLengthsMatch state) (current_epoch : Epoch)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hgenesis : current_epoch ≠ GENESIS_EPOCH) (ctx : RewardsContext)
     (hctx : rewardsContextOf p total_active_balance state = .ok ctx) :

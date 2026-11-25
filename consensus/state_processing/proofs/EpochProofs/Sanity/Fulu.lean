@@ -414,7 +414,7 @@ theorem selection_compute_proposer_index_loop (p : Preset) (o : Oracle) (state :
 /-- The Electra proposer loop for `seed`, if it returns, returns before its last pass. Like the
 selection end facts of Gloas, this is a fact about the hash values: the last pass needs
 `2**64 - 1` rejected candidates before it. -/
-def ProposerFin (p : Preset) (o : Oracle) (state : BeaconState) (indices : List ValidatorIndex)
+def ProposerSelectionEnds (p : Preset) (o : Oracle) (state : BeaconState) (indices : List ValidatorIndex)
     (seed : Bytes32) : Prop :=
   ∀ c, compute_proposer_index_loop p o state.validators indices seed indices.length UINT64_SIZE 0 = .ok c →
     compute_proposer_index_loop p o state.validators indices seed indices.length (UINT64_SIZE - 1) 0 = .ok c
@@ -422,7 +422,7 @@ def ProposerFin (p : Preset) (o : Oracle) (state : BeaconState) (indices : List 
 theorem compute_proposer_index_selection (p : Preset) (o : Oracle) (state : BeaconState)
     (indices : List ValidatorIndex) (seed : Bytes32)
     (hvalid : ∀ x ∈ indices, x < state.validators.length)
-    (hfin : ProposerFin p o state indices seed) (c : ValidatorIndex)
+    (hfin : ProposerSelectionEnds p o state indices seed) (c : ValidatorIndex)
     (h : compute_proposer_index p o state indices seed = .ok c) :
     (compute_balance_weighted_selection p o state indices seed 1 true >>= fun s => listGet s 0) =
       .ok c := by
@@ -474,7 +474,7 @@ same candidates. -/
 theorem compute_proposer_indices_fulu_ok (p : Preset) (o : Oracle) (state : BeaconState)
     (epoch : Epoch) (seed : Bytes32) (indices : List ValidatorIndex)
     (hvalid : ∀ x ∈ indices, x < state.validators.length)
-    (hfin : ∀ s, ProposerFin p o state indices s) (props : List ValidatorIndex)
+    (hfin : ∀ s, ProposerSelectionEnds p o state indices s) (props : List ValidatorIndex)
     (h : compute_proposer_indices_fulu p o state epoch seed indices = .ok props) :
     compute_proposer_indices p o state epoch seed indices = .ok props := by
   unfold compute_proposer_indices_fulu at h

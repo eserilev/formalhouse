@@ -26,10 +26,10 @@ which fields each step after the loop keeps.
 namespace EpochProofs.Spec
 
 /-- The Lighthouse model from the start of the single pass to the builder payments. -/
-def lhSinglePass [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
+def lhSinglePass [CurrentPreset] (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
   lhFullTailWith (fun s tab plan x => lhMid o s tab plan (s.withRowsChurn x.1 x.2)) s
 
-theorem lhFullTailWith_order_eq [PresetCfg] (o : Oracle) (s : BeaconState) :
+theorem lhFullTailWith_order_eq [CurrentPreset] (o : Oracle) (s : BeaconState) :
     lhFullTailWith (lhAfterPassOrder o) s = lhSinglePass o s >>= lhRestOrder o := by
   unfold lhSinglePass lhFullTailWith lhAfterPassOrder
   simp only [bind, Except.bind]
@@ -86,7 +86,7 @@ theorem add_validator_balLen (p : Preset) (t t' : BeaconState) (pubkey : BLSPubk
   show l2.length = l1.length
   omega
 
-theorem apply_balLen [PresetCfg] (o : Oracle) (t t' : BeaconState) (d : PendingDeposit)
+theorem apply_balLen [CurrentPreset] (o : Oracle) (t t' : BeaconState) (d : PendingDeposit)
     (h : apply_pending_deposit P o t d = .ok t') (ht : BalLen t) : BalLen t' := by
   unfold apply_pending_deposit at h
   simp only [bind, Except.bind, pure, Except.pure] at h
@@ -110,7 +110,7 @@ theorem apply_balLen [PresetCfg] (o : Oracle) (t t' : BeaconState) (d : PendingD
              rw [List.length_set]; exact ht
            · contradiction)
 
-theorem ebUpdateAt_balLen [PresetCfg] (t t' : BeaconState) (i : Nat)
+theorem ebUpdateAt_balLen [CurrentPreset] (t t' : BeaconState) (i : Nat)
     (h : ebUpdateAt t i = .ok t') (ht : BalLen t) : BalLen t' := by
   obtain ⟨v, b, e, -, -, -, rfl⟩ := (ebUpdateAt_ok t t' i).mp h
   unfold setEB BalLen at *
@@ -146,7 +146,7 @@ theorem add_validator_midKeep (p : Preset) (t t' : BeaconState) (pubkey : BLSPub
     | contradiction
     | (cases h; exact ⟨rfl, rfl, rfl, rfl⟩)
 
-theorem apply_midKeep [PresetCfg] (o : Oracle) (t t' : BeaconState) (d : PendingDeposit)
+theorem apply_midKeep [CurrentPreset] (o : Oracle) (t t' : BeaconState) (d : PendingDeposit)
     (h : apply_pending_deposit P o t d = .ok t') : MidKeep t t' := by
   unfold apply_pending_deposit at h
   simp only [bind, Except.bind, pure, Except.pure] at h
@@ -158,7 +158,7 @@ theorem apply_midKeep [PresetCfg] (o : Oracle) (t t' : BeaconState) (d : Pending
     · contradiction
     · cases h; exact ⟨rfl, rfl, rfl, rfl⟩
 
-theorem ebUpdateAt_midKeep [PresetCfg] (t t' : BeaconState) (i : Nat)
+theorem ebUpdateAt_midKeep [CurrentPreset] (t t' : BeaconState) (i : Nat)
     (h : ebUpdateAt t i = .ok t') : MidKeep t t' := by
   obtain ⟨v, b, e, -, -, -, rfl⟩ := (ebUpdateAt_ok t t' i).mp h
   unfold setEB
@@ -181,7 +181,7 @@ theorem consolidations_keepB (p : Preset) (t t' : BeaconState)
       | contradiction
       | (cases hb; exact hst)
 
-theorem lhNewValidators_keep [PresetCfg] (o : Oracle) (plan : LhDepositPlan) (t t' : BeaconState)
+theorem lhNewValidators_keep [CurrentPreset] (o : Oracle) (plan : LhDepositPlan) (t t' : BeaconState)
     (h : lhNewValidators o plan t = .ok t') (ht : BalLen t) : MidKeep t t' ∧ BalLen t' := by
   unfold lhNewValidators at h
   rw [lhApplyPendingDeposit_mainnet] at h
@@ -193,7 +193,7 @@ theorem lhNewValidators_keep [PresetCfg] (o : Oracle) (plan : LhDepositPlan) (t 
     (fun u i u' hu hd => ⟨hu.1.trans (ebUpdateAt_midKeep u u' i hd), ebUpdateAt_balLen u u' i hd hu.2⟩)
     _ t3 t' k3 h
 
-theorem ebFold_keepB [PresetCfg] (l : List Nat) (t t' : BeaconState)
+theorem ebFold_keepB [CurrentPreset] (l : List Nat) (t t' : BeaconState)
     (h : l.foldlM ebUpdateAt t = .ok t') : KeepB t t' :=
   foldlM_keep (fun u => KeepB t u) ebUpdateAt
     (fun u i u' hu hd => hu.trans (ebUpdateAt_midKeep u u' i hd).2) l t t' ⟨rfl, rfl, rfl⟩ h
@@ -216,20 +216,20 @@ theorem process_builder_pending_payments_frame (p : Preset) (tab : Gwei) (t t0 t
 
 /-- The steps of `lhMid` before the builder payments: the deposit writes, the pending
 consolidations and the effective balance updates of the validators that consolidations name. -/
-def lhMidCore [PresetCfg] (o : Oracle) (s : BeaconState) (plan : LhDepositPlan)
+def lhMidCore [CurrentPreset] (o : Oracle) (s : BeaconState) (plan : LhDepositPlan)
     (s1 : BeaconState) : SpecM BeaconState := do
   let s4 ← lhNewValidators o plan (lhQueueWrite s plan s1)
   let s5 ← process_pending_consolidations P s4
   (consolidationIndices s).foldlM ebUpdateAt s5
 
-theorem lhMid_eq [PresetCfg] (o : Oracle) (s : BeaconState) (tab : Gwei) (plan : LhDepositPlan)
+theorem lhMid_eq [CurrentPreset] (o : Oracle) (s : BeaconState) (tab : Gwei) (plan : LhDepositPlan)
     (s1 : BeaconState) :
     lhMid o s tab plan s1 = lhMidCore o s plan s1 >>= process_builder_pending_payments P tab := by
   simp only [lhMid, lhMidCore, bind_assoc]
 
 /-- `lhMidCore` does not write the builder pending payments, the proposer lookahead or the PTC
 window. -/
-theorem lhMidCore_keep [PresetCfg] (o : Oracle) (s : BeaconState) (plan : LhDepositPlan)
+theorem lhMidCore_keep [CurrentPreset] (o : Oracle) (s : BeaconState) (plan : LhDepositPlan)
     (x : (Epoch × Gwei) × List Row) (s6 : BeaconState)
     (h : lhMidCore o s plan (s.withRowsChurn x.1 x.2) = .ok s6) : KeepB s s6 := by
   unfold lhMidCore at h
@@ -241,7 +241,7 @@ theorem lhMidCore_keep [PresetCfg] (o : Oracle) (s : BeaconState) (plan : LhDepo
     (consolidations_keepB _ s4 s5 h5)).trans (ebFold_keepB _ s5 s6 h6)
 
 /-- The single pass does not write the proposer lookahead or the PTC window. -/
-theorem lhSinglePass_keep [PresetCfg] (o : Oracle) (s T : BeaconState)
+theorem lhSinglePass_keep [CurrentPreset] (o : Oracle) (s T : BeaconState)
     (h : lhSinglePass o s = .ok T) :
     T.proposer_lookahead = s.proposer_lookahead ∧ T.ptc_window = s.ptc_window := by
   unfold lhSinglePass lhFullTailWith at h
@@ -378,13 +378,13 @@ def singlePass (G : SinglePassGlue σ E) (P : PaymentsGlue σ E) (st : σ) : Res
   | none => ok none
   | some st4 => payments P st st4
 
-variable [Spec.PresetCfg]
+variable [Spec.CurrentPreset]
 
 /-- The trusted facts about the untranslated code `G` at the input `st` of the single pass, with
 `view` the spec state that a Rust state holds. The contracts are those of `Trusted/`. The borrow
 facts say which fields of the state each wrapper holds. The read facts say that the values passed
 to the translated code are the spec values. `planTab` is the total that the deposit plan uses: the
-total active balance in Gloas, `fuluTab` in Fulu. -/
+total active balance in Gloas, `fuluTotalActiveBalance` in Fulu. -/
 structure SinglePassLinks (G : SinglePassGlue σ E) (o : Spec.Oracle)
     (view : σ → Spec.BeaconState) (st : σ) (planTab : Spec.Gwei → Spec.Gwei) : Prop where
   /-- `RowsContract`, with the row inputs of the model. -/
@@ -581,7 +581,7 @@ theorem payments_spec (P : PaymentsGlue σ E) (view : σ → Spec.BeaconState) (
 
 /-- The composed Gloas single pass returns the state of the model `lhSinglePass`: when the model
 returns `ok`, the Rust returns `Ok` with a state whose view is the model's. -/
-theorem singlePass_spec [Spec.PresetCfg.Ok] (G : SinglePassGlue σ E) (P : PaymentsGlue σ E)
+theorem singlePass_spec [Spec.CurrentPreset.Valid] (G : SinglePassGlue σ E) (P : PaymentsGlue σ E)
     (o : Spec.Oracle) (view : σ → Spec.BeaconState) (st : σ) (hL : SinglePassLinks G o view st id)
     (hPL : PaymentsLinks P view st) (hk : ConstantsMatch Spec.P G.registryConstants)
     (hslot : (view st).slot < 2 ^ 64)

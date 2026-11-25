@@ -21,7 +21,7 @@ structure Row where
   deriving DecidableEq, Repr
 
 /-- The per-validator lists of the state have the same length. SSZ states always do. -/
-def RowsOk (state : BeaconState) : Prop :=
+def ListLengthsMatch (state : BeaconState) : Prop :=
   state.balances.length = state.validators.length
   ∧ state.inactivity_scores.length = state.validators.length
   ∧ state.previous_epoch_participation.length = state.validators.length

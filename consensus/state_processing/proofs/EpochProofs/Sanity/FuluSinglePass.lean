@@ -9,17 +9,17 @@ import EpochProofs.Sanity.FuluRegistry
 `lighthouse_single_pass_eq_spec_fulu` is `lighthouse_single_pass_eq_spec` for Fulu on mainnet.
 The spec side runs the Fulu inactivity, rewards, registry and slashings passes. Only the
 registry pass differs from Gloas: its churn is `get_activation_exit_churn_limit`. Lighthouse runs
-`lhRowStep` with the registry total `fuluTab` (`single_pass_step_equiv_fulu`), and
-`process_registry_updates_fulu_eq` makes the Fulu registry pass the Gloas pass at `fuluTab`.
+`lhRowStep` with the registry total `fuluTotalActiveBalance` (`single_pass_step_equiv_fulu`), and
+`process_registry_updates_fulu_eq` makes the Fulu registry pass the Gloas pass at `fuluTotalActiveBalance`.
 -/
 
 namespace EpochProofs.Spec
 
-/-- On mainnet, one pass of `lhRowStep` with the registry total `fuluTab` gives the same `ok`
+/-- On mainnet, one pass of `lhRowStep` with the registry total `fuluTotalActiveBalance` gives the same `ok`
 results as the Fulu inactivity, rewards, registry and slashings passes. The hypotheses are the
 ones of `lighthouse_single_pass_eq_spec`. -/
-theorem lighthouse_single_pass_eq_spec_fulu [PresetCfg] [FuluCfg] [FuluCfg.Ok] (total_active_balance : Gwei) (state : BeaconState)
-    (hrows : RowsOk state) (current_epoch : Epoch)
+theorem lighthouse_single_pass_eq_spec_fulu [CurrentPreset] [CurrentFuluConfig] [CurrentFuluConfig.Valid] (total_active_balance : Gwei) (state : BeaconState)
+    (hrows : ListLengthsMatch state) (current_epoch : Epoch)
     (hcurrent : get_current_epoch P state = .ok current_epoch)
     (hgenesis : current_epoch ≠ GENESIS_EPOCH)
     (rctx : RewardsContext)
@@ -49,22 +49,22 @@ theorem lighthouse_single_pass_eq_spec_fulu [PresetCfg] [FuluCfg] [FuluCfg.Ok] (
       process_slashings P total_active_balance s3)
     ((fun y => state.withRowsChurn y.1 y.2) <$>
       passM (fun churn r => lhRowStep P
-          (lhContextOf state (fuluTab P FC total_active_balance)
+          (lhContextOf state (fuluTotalActiveBalance P FC total_active_balance)
             current_epoch rctx per) (base_reward r) churn r)
         (state.earliest_exit_epoch, state.exit_balance_to_consume) (rowsOf state)) := by
   simp only [process_registry_updates_fulu_eq P FC fuluCompat]
   obtain ⟨hprevious, -, -, -, -, hleak, htab⟩ :=
     rewardsContextOf_ok P total_active_balance state rctx hctx
   refine SameResultOrBothFail.trans (separate_passes_eq_single_pass_tab P total_active_balance
-    (fuluTab P FC total_active_balance) state hrows current_epoch
+    (fuluTotalActiveBalance P FC total_active_balance) state hrows current_epoch
     rctx.previous_epoch rctx.in_leak hcurrent hgenesis hprevious hleak rctx hctx activation_epoch
     hactivation htarget adjusted per hpre) (SameResultOrBothFail.of_eq ?_)
   have hstep : ∀ churn r, r ∈ rowsOf state →
       lhRowStep P (lhContextOf state
-        (fuluTab P FC total_active_balance) current_epoch rctx per)
+        (fuluTotalActiveBalance P FC total_active_balance) current_epoch rctx per)
         (base_reward r) churn r =
       (fun x => (x.1.1.2, x.2)) <$> singlePassStep P
-        (fuluTab P FC total_active_balance)
+        (fuluTotalActiveBalance P FC total_active_balance)
         rctx.previous_epoch rctx.in_leak rctx current_epoch state.finalized_checkpoint.epoch
         activation_epoch (current_epoch + P.EPOCHS_PER_SLASHINGS_VECTOR / 2) per
         ((((), ()), churn), ()) r := by
@@ -82,7 +82,7 @@ theorem lighthouse_single_pass_eq_spec_fulu [PresetCfg] [FuluCfg] [FuluCfg.Ok] (
       (hentry.exit_epoch i hiv)
   rw [passM_congr _ _ (rowsOf state) (fun churn r hr => hstep churn r hr)]
   rw [passM_proj (singlePassStep P
-    (fuluTab P FC total_active_balance) rctx.previous_epoch
+    (fuluTotalActiveBalance P FC total_active_balance) rctx.previous_epoch
     rctx.in_leak rctx current_epoch state.finalized_checkpoint.epoch activation_epoch
     (current_epoch + P.EPOCHS_PER_SLASHINGS_VECTOR / 2) per)
     (fun c => ((((), ()), c), ())) (fun b => b.1.2) (fun _ => rfl) (fun _ => rfl)]

@@ -289,7 +289,7 @@ private theorem passM_registry_preserves (p : Preset) (total_active_balance curr
 `hcurrent` and `hactivation` give the two epochs that the step takes as parameters.
 If one of them fails, the spec fails but the pass does not. -/
 theorem process_registry_updates_rows (p : Preset) (total_active_balance : Gwei)
-    (state : BeaconState) (current_epoch activation_epoch : Epoch) (hrows : RowsOk state)
+    (state : BeaconState) (current_epoch activation_epoch : Epoch) (hrows : ListLengthsMatch state)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hactivation : compute_activation_exit_epoch p current_epoch = .ok activation_epoch) :
     SameResultOrBothFail (process_registry_updates p total_active_balance state)

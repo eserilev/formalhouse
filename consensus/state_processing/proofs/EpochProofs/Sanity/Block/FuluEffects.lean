@@ -10,7 +10,7 @@ This file gives each Fulu block function the effect facts that the Gloas functio
 
 Most Fulu functions differ from the Gloas ones only in the exit churn. Under `FuluCompat`, the
 Fulu `initiate_validator_exit` and `compute_exit_epoch_and_update_churn` are the Gloas functions
-at `fuluTab` (`initiate_validator_exit_fulu_eq`, `compute_exit_epoch_and_update_churn_fulu_eq`).
+at `fuluTotalActiveBalance` (`initiate_validator_exit_fulu_eq`, `compute_exit_epoch_and_update_churn_fulu_eq`).
 The Gloas facts about these two functions hold for every total, so they carry over. The
 consolidation churn is the Electra one, so `compute_consolidation_epoch_and_update_churn_fulu`
 gets its own bound.
@@ -113,7 +113,7 @@ some total. -/
 theorem slash_validator_fulu_initiate_ok (p : Preset) (f : FuluConfig) (s s1 : BeaconState)
     (i : ValidatorIndex) (v : Validator) (hv : listGet s.validators i = .ok v)
     (h : (if (v.exit_epoch != FAR_FUTURE_EPOCH) = true then pure s
-      else get_total_active_balance p s >>= fun t => initiate_validator_exit p (fuluTab p f t) s i) =
+      else get_total_active_balance p s >>= fun t => initiate_validator_exit p (fuluTotalActiveBalance p f t) s i) =
       (.ok s1 : SpecM BeaconState)) :
     ∃ tab, initiate_validator_exit p tab s i = .ok s1 := by
   by_cases hx : v.exit_epoch = FAR_FUTURE_EPOCH

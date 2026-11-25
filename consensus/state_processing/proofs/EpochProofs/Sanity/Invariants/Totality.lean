@@ -19,7 +19,7 @@ Error sources and why they do not fire:
 - The vector reads (`block_roots`, `randao_mixes`, `slashings`, `justification_bits`) need the
   SSZ lengths (`VectorLengths`). The Lean state holds the vectors as lists.
 - The balance sums stay below `2^64` because the effective balance total is below `2^60`
-  (`EpochBalanceBounds`), and a consolidation moves balance without raising the sum
+  (`BalancesFarFromOverflow`), and a consolidation moves balance without raising the sum
   (`process_pending_consolidations_total`).
 - `apply_pending_deposit` raises only if a balance plus the deposit passes `2^64`
   (`apply_pending_deposit_total`).
@@ -93,20 +93,20 @@ theorem forIn_ne_error {α β : Type} (l : List α) (b : β) (f : α → β → 
   rw [hr]; exact fun h => by cases h
 
 /-- `n` names the value of a `Nat` abbreviation, so that `omega` sees a `Nat`. -/
-theorem tot_slot_bound [PresetCfg] [PresetCfg.Ok] {x : Nat} (h : x < 2 ^ 64) :
+theorem tot_slot_bound [CurrentPreset] [CurrentPreset.Valid] {x : Nat} (h : x < 2 ^ 64) :
     x / P.SLOTS_PER_EPOCH + 1 < 2 ^ 64 := by
   have := P_slot_epoch_lt h
   omega
 
-theorem tot_current_epoch [PresetCfg] [PresetCfg.Ok] (s : BeaconState) :
+theorem tot_current_epoch [CurrentPreset] [CurrentPreset.Valid] (s : BeaconState) :
     get_current_epoch P s = .ok (s.slot / P.SLOTS_PER_EPOCH) := by
   unfold get_current_epoch compute_epoch_at_slot; exact tot_div (Nat.ne_of_gt P_slots_pos)
 
-theorem tot_previous_epoch [PresetCfg] [PresetCfg.Ok] (s : BeaconState) :
+theorem tot_previous_epoch [CurrentPreset] [CurrentPreset.Valid] (s : BeaconState) :
     get_previous_epoch P s = .ok (saturating_sub (s.slot / P.SLOTS_PER_EPOCH) 1) := by
   simp [get_previous_epoch, tot_current_epoch, bind, Except.bind, pure, Except.pure]
 
-theorem tot_quorum_bound [PresetCfg] [PresetCfg.Ok] {x : Nat} (h : x < 2 ^ 64) :
+theorem tot_quorum_bound [CurrentPreset] [CurrentPreset.Valid] {x : Nat} (h : x < 2 ^ 64) :
     x / P.SLOTS_PER_EPOCH * 6 < 2 ^ 64 := by
   obtain ⟨S, R, hS, -, hS6, -, -⟩ := P_slots_nat
   rw [hS]
@@ -120,7 +120,7 @@ theorem tot_quorum_bound [PresetCfg] [PresetCfg.Ok] {x : Nat} (h : x < 2 ^ 64) :
 /-! ## The resets and the participation rotation -/
 
 /-- `process_eth1_data_reset` succeeds and writes only `eth1_data_votes`. -/
-theorem process_eth1_data_reset_total [PresetCfg] [PresetCfg.Ok] (s : BeaconState) (hslot : s.slot < 2 ^ 64) :
+theorem process_eth1_data_reset_total [CurrentPreset] [CurrentPreset.Valid] (s : BeaconState) (hslot : s.slot < 2 ^ 64) :
     OkWith (process_eth1_data_reset P s)
       (fun s' => s' = s ∨ s' = { s with eth1_data_votes := [] }) := by
   have hadd : s.slot / P.SLOTS_PER_EPOCH + 1 < 2 ^ 64 := tot_slot_bound hslot
@@ -132,7 +132,7 @@ theorem process_eth1_data_reset_total [PresetCfg] [PresetCfg.Ok] (s : BeaconStat
   · exact OkWith.pure (Or.inl rfl)
 
 /-- `process_slashings_reset` succeeds and keeps the length of `slashings`. -/
-theorem process_slashings_reset_total [PresetCfg] [PresetCfg.Ok] (s : BeaconState) (hslot : s.slot < 2 ^ 64)
+theorem process_slashings_reset_total [CurrentPreset] [CurrentPreset.Valid] (s : BeaconState) (hslot : s.slot < 2 ^ 64)
     (hlen : s.slashings.length = P.EPOCHS_PER_SLASHINGS_VECTOR) :
     OkWith (process_slashings_reset P s)
       (fun s' => ∃ i a, s' = { s with slashings := s.slashings.set i a }) := by
@@ -147,7 +147,7 @@ theorem process_slashings_reset_total [PresetCfg] [PresetCfg.Ok] (s : BeaconStat
   exact OkWith.pure ⟨_, _, rfl⟩
 
 /-- `process_randao_mixes_reset` succeeds and keeps the length of `randao_mixes`. -/
-theorem process_randao_mixes_reset_total [PresetCfg] [PresetCfg.Ok] (s : BeaconState) (hslot : s.slot < 2 ^ 64)
+theorem process_randao_mixes_reset_total [CurrentPreset] [CurrentPreset.Valid] (s : BeaconState) (hslot : s.slot < 2 ^ 64)
     (hlen : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR) :
     OkWith (process_randao_mixes_reset P s)
       (fun s' => ∃ i a, s' = { s with randao_mixes := s.randao_mixes.set i a }) := by
@@ -167,7 +167,7 @@ theorem process_randao_mixes_reset_total [PresetCfg] [PresetCfg.Ok] (s : BeaconS
 
 /-- `process_historical_summaries_update` succeeds and only appends to
 `historical_summaries`. The spec list has no limit in beta.4. -/
-theorem process_historical_summaries_update_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState)
+theorem process_historical_summaries_update_total [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState)
     (hslot : s.slot < 2 ^ 64) :
     OkWith (process_historical_summaries_update P o s)
       (fun s' => ∃ l, s' = { s with historical_summaries := s.historical_summaries ++ l }) := by
@@ -186,7 +186,7 @@ theorem process_historical_summaries_update_total [PresetCfg] [PresetCfg.Ok] (o 
 /-! ## Builder payments -/
 
 /-- `process_builder_pending_payments` succeeds for any total below `2^64`. -/
-theorem process_builder_pending_payments_total [PresetCfg] [PresetCfg.Ok] (tab : Gwei) (htab : tab < 2 ^ 64)
+theorem process_builder_pending_payments_total [CurrentPreset] [CurrentPreset.Valid] (tab : Gwei) (htab : tab < 2 ^ 64)
     (s : BeaconState) :
     OkWith (process_builder_pending_payments P tab s)
       (fun s' => ∃ w q, s' = { s with
@@ -216,7 +216,7 @@ theorem tot_has_flag (flags : ParticipationFlags) (f : Nat) (hf : f < 3) :
 def rowFlags (epoch current_epoch : Epoch) (r : Row) : ParticipationFlags :=
   if epoch == current_epoch then r.current_participation else r.previous_participation
 
-theorem tot_get_rows_current {state : BeaconState} (hrows : RowsOk state) {r : Row}
+theorem tot_get_rows_current {state : BeaconState} (hrows : ListLengthsMatch state) {r : Row}
     (h : r ∈ rowsOf state) :
     listGet state.current_epoch_participation r.index = .ok r.current_participation := by
   obtain ⟨i, hi, rfl⟩ := mem_rowsOf h
@@ -225,7 +225,7 @@ theorem tot_get_rows_current {state : BeaconState} (hrows : RowsOk state) {r : R
 
 /-- `get_unslashed_participating_indices` succeeds at the previous and the current epoch, and
 gives the indices of the rows that are active, have the flag and are not slashed. -/
-theorem participating_total [PresetCfg] [PresetCfg.Ok] (s : BeaconState) (hrows : RowsOk s) (f : Nat) (hf : f < 3)
+theorem participating_total [CurrentPreset] [CurrentPreset.Valid] (s : BeaconState) (hrows : ListLengthsMatch s) (f : Nat) (hf : f < 3)
     (epoch : Epoch)
     (hepoch : epoch = saturating_sub (s.slot / P.SLOTS_PER_EPOCH) 1 ∨ epoch = s.slot / P.SLOTS_PER_EPOCH) :
     get_unslashed_participating_indices P s f epoch =
@@ -284,7 +284,7 @@ theorem tot_filter3 (l : List Row) (P Q R : Row → Bool) :
 theorem tot_nat_add_lt {a b c : Nat} (h1 : a ≤ b) (h2 : b < 2 ^ 64) (hc : c ≤ 8192) :
     a + c < 2 ^ 64 + 8192 := by omega
 
-theorem get_block_root_total [PresetCfg] [PresetCfg.Ok] (s : BeaconState) (e : Epoch)
+theorem get_block_root_total [CurrentPreset] [CurrentPreset.Valid] (s : BeaconState) (e : Epoch)
     (h1 : e * P.SLOTS_PER_EPOCH < s.slot)
     (h2 : s.slot ≤ e * P.SLOTS_PER_EPOCH + P.SLOTS_PER_HISTORICAL_ROOT)
     (hslot : s.slot + 8192 < 2 ^ 64)
@@ -350,7 +350,7 @@ theorem tot_lt63_add {a k : Nat} (h : a < 2 ^ 63) (hk : k ≤ 3) : a + k < 2 ^ 6
 theorem tot_set_length {α : Type} (l : List α) (i : Nat) (a : α) :
     (l.set i a).length = l.length := List.length_set
 
-theorem get_block_root_congr [PresetCfg] (t s : BeaconState) (e : Epoch) (h1 : t.slot = s.slot)
+theorem get_block_root_congr [CurrentPreset] (t s : BeaconState) (e : Epoch) (h1 : t.slot = s.slot)
     (h2 : t.block_roots = s.block_roots) :
     get_block_root P t e = get_block_root P s e := by
   unfold get_block_root get_block_root_at_slot
@@ -371,7 +371,7 @@ theorem fin_block {P : BeaconState → Prop} (b : Bool) (cp k E : Nat) (hcp : cp
     · exact OkWith.pure hB
   · exact OkWith.pure hB
 
-theorem weigh_total [PresetCfg] [PresetCfg.Ok] (s : BeaconState) (tab pb cb : Gwei) (htab : tab < 2 ^ 62) (hpb : pb < 2 ^ 62)
+theorem weigh_total [CurrentPreset] [CurrentPreset.Valid] (s : BeaconState) (tab pb cb : Gwei) (htab : tab < 2 ^ 62) (hpb : pb < 2 ^ 62)
     (hcb : cb < 2 ^ 62) (hslot : s.slot + 8192 < 2 ^ 64) (h64 : 2 * P.SLOTS_PER_EPOCH ≤ s.slot)
     (hlast : (s.slot + 1) % P.SLOTS_PER_EPOCH = 0)
     (hbr : s.block_roots.length = P.SLOTS_PER_HISTORICAL_ROOT)
@@ -432,7 +432,7 @@ theorem tot_sum_filter_le {α : Type} (P : α → Bool) (f : α → Nat) (l : Li
   | cons x xs ih =>
     cases hp : P x <;> simp [hp] <;> omega
 
-theorem tot_rows_sum_le [PresetCfg] (s : BeaconState) (Q : Row → Bool) :
+theorem tot_rows_sum_le [CurrentPreset] (s : BeaconState) (Q : Row → Bool) :
     (((rowsOf s).filter Q).map (·.validator.effective_balance)).sum ≤ totalEffectiveBalance s := by
   have h := tot_sum_filter_le Q (·.validator.effective_balance) (rowsOf s)
   have hm : (rowsOf s).map (·.validator.effective_balance) = s.validators.map (·.effective_balance) := by
@@ -441,12 +441,12 @@ theorem tot_rows_sum_le [PresetCfg] (s : BeaconState) (Q : Row → Bool) :
   rw [hm] at h
   exact h
 
-theorem tot_max_lt [PresetCfg] {x : Nat} (h : x < 2 ^ 60) : max (P).EFFECTIVE_BALANCE_INCREMENT x < 2 ^ 62 := by
+theorem tot_max_lt [CurrentPreset] {x : Nat} (h : x < 2 ^ 60) : max (P).EFFECTIVE_BALANCE_INCREMENT x < 2 ^ 62 := by
   have h' : x < 1152921504606846976 := h
   show max 1000000000 x < 4611686018427387904
   omega
 
-theorem tot_ge64 [PresetCfg] [PresetCfg.Ok] {x : Nat} (h : ¬ x / P.SLOTS_PER_EPOCH ≤ 1) :
+theorem tot_ge64 [CurrentPreset] [CurrentPreset.Valid] {x : Nat} (h : ¬ x / P.SLOTS_PER_EPOCH ≤ 1) :
     2 * P.SLOTS_PER_EPOCH ≤ x := by
   obtain ⟨S, R, hS, -, -, -, -⟩ := P_slots_nat
   rw [hS] at h ⊢
@@ -455,7 +455,7 @@ theorem tot_ge64 [PresetCfg] [PresetCfg.Ok] {x : Nat} (h : ¬ x / P.SLOTS_PER_EP
   have := Nat.mul_le_mul_right S h2
   omega
 
-theorem process_justification_and_finalization_total [PresetCfg] [PresetCfg.Ok] (s : BeaconState) (hrows : RowsOk s)
+theorem process_justification_and_finalization_total [CurrentPreset] [CurrentPreset.Valid] (s : BeaconState) (hrows : ListLengthsMatch s)
     (hslot : s.slot + 8192 < 2 ^ 64) (hlast : (s.slot + 1) % P.SLOTS_PER_EPOCH = 0)
     (hbr : s.block_roots.length = P.SLOTS_PER_HISTORICAL_ROOT)
     (hbits : s.justification_bits.length = 4)
@@ -498,7 +498,7 @@ theorem passM_total {A R : Type} (f : A → R → SpecM (A × R)) (rows : List R
 
 /-! ## Effective balance updates -/
 
-theorem tot_hysteresis [PresetCfg] : hysteresisThresholds P = .ok (250000000, 1250000000) :=
+theorem tot_hysteresis [CurrentPreset] : hysteresisThresholds P = .ok (250000000, 1250000000) :=
   hysteresisThresholds_mainnet
 
 theorem tot_lt63_add_small {a k : Nat} (h : a < 2 ^ 63) (hk : k ≤ 1250000000) : a + k < 2 ^ 64 := by
@@ -506,7 +506,7 @@ theorem tot_lt63_add_small {a k : Nat} (h : a < 2 ^ 63) (hk : k ≤ 1250000000) 
   show a + k < 18446744073709551616
   omega
 
-theorem newEffectiveBalance_total [PresetCfg] (v : Validator) (b : Gwei) (hb : b < 2 ^ 63)
+theorem newEffectiveBalance_total [CurrentPreset] (v : Validator) (b : Gwei) (hb : b < 2 ^ 63)
     (hv : v.effective_balance < 2 ^ 63) :
     ∃ e, newEffectiveBalance P 250000000 1250000000 v b = .ok e := by
   unfold newEffectiveBalance
@@ -524,7 +524,7 @@ theorem newEffectiveBalance_total [PresetCfg] (v : Validator) (b : Gwei) (hb : b
 
 /-- `process_effective_balance_updates` succeeds when the balances and the effective balances
 are below `2^63`. It changes only `validators`, and keeps their number. -/
-theorem process_effective_balance_updates_total [PresetCfg] (s : BeaconState) (hrows : RowsOk s)
+theorem process_effective_balance_updates_total [CurrentPreset] (s : BeaconState) (hrows : ListLengthsMatch s)
     (hb : ∀ b ∈ s.balances, b < 2 ^ 63) (hv : ∀ v ∈ s.validators, v.effective_balance < 2 ^ 63) :
     OkWith (process_effective_balance_updates P s)
       (fun s' => ∃ vs : List Validator, vs.length = s.validators.length ∧
@@ -601,7 +601,7 @@ theorem tot_get_le_sum (l : List Nat) (i : Nat) (hi : i < l.length) : l[i] ≤ l
       have := ih j (by simpa using hi)
       omega
 
-theorem OkWith.forIn [PresetCfg] {α β : Type} (I : β → Prop) (l : List α) (b : β)
+theorem OkWith.forIn [CurrentPreset] {α β : Type} (I : β → Prop) (l : List α) (b : β)
     (f : α → β → SpecM (ForInStep β))
     (hf : ∀ a ∈ l, ∀ b, I b → ∃ r, f a b = .ok r ∧ I (stepVal r)) (hb : I b) :
     OkWith (forIn l b f) I :=
@@ -630,7 +630,7 @@ def ConsInv (s : BeaconState) (r : Prod Nat BeaconState) : Prop :=
   ∃ B : List Gwei, r.snd = { s with balances := B } ∧ B.length = s.validators.length ∧
     B.sum ≤ s.balances.sum
 
-theorem process_pending_consolidations_total [PresetCfg] [PresetCfg.Ok] (s : BeaconState) (hrows : RowsOk s)
+theorem process_pending_consolidations_total [CurrentPreset] [CurrentPreset.Valid] (s : BeaconState) (hrows : ListLengthsMatch s)
     (hslot : s.slot < 2 ^ 64) (hcr : ConsolidationsInRange s) (hsum : s.balances.sum < 2 ^ 64) :
     OkWith (process_pending_consolidations P s) (fun s' => ∃ (B : List Gwei) (k : Nat),
       s' = { s with balances := B, pending_consolidations := s.pending_consolidations.drop k } ∧
@@ -687,7 +687,7 @@ structure DepStep (s s' : BeaconState) (amount : Gwei) : Prop where
   dbtc : s'.deposit_balance_to_consume = s.deposit_balance_to_consume
   pend : s'.pending_deposits = s.pending_deposits
   vlen : s.validators.length ≤ s'.validators.length
-  rows : RowsOk s'
+  rows : ListLengthsMatch s'
   bsum : s'.balances.sum ≤ s.balances.sum + amount
   teb : totalEffectiveBalance s' ≤ totalEffectiveBalance s + amount
   ebs : ∀ v ∈ s'.validators, v ∈ s.validators ∨ v.effective_balance ≤ amount
@@ -707,8 +707,8 @@ theorem tot_sum_set_add (B : List Nat) (i : Nat) (hi : i < B.length) (x : Nat) :
   have := tot_sum_set_le B i (B[i] + x) hi
   omega
 
-theorem apply_pending_deposit_total [PresetCfg] (o : Oracle) (s : BeaconState) (d : PendingDeposit)
-    (hrows : RowsOk s) (hsum : s.balances.sum + d.amount < 2 ^ 64) :
+theorem apply_pending_deposit_total [CurrentPreset] (o : Oracle) (s : BeaconState) (d : PendingDeposit)
+    (hrows : ListLengthsMatch s) (hsum : s.balances.sum + d.amount < 2 ^ 64) :
     OkWith (apply_pending_deposit P o s d) (fun s' => DepStep s s' d.amount) := by
   obtain ⟨h1, h2, h3, h4⟩ := hrows
   unfold apply_pending_deposit
@@ -728,7 +728,7 @@ theorem apply_pending_deposit_total [PresetCfg] (o : Oracle) (s : BeaconState) (
       rw [tot_set_or_append_eq _ _ _ h2, tot_bind_ok]
       refine OkWith.pure ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, by simp, ?_, by simp, ?_, ?_,
         Or.inr ⟨_, rfl⟩⟩
-      · unfold RowsOk
+      · unfold ListLengthsMatch
         exact ⟨by simp [h1], by simp [h2], by simp [h3], by simp [h4]⟩
       · unfold totalEffectiveBalance
         simp only [List.map_append, List.sum_append, List.map_cons, List.map_nil, List.sum_cons,
@@ -752,16 +752,16 @@ theorem apply_pending_deposit_total [PresetCfg] (o : Oracle) (s : BeaconState) (
     rw [tot_get hlt, tot_bind_ok, tot_add hadd, tot_bind_ok, tot_set _ hlt, tot_bind_ok]
     refine OkWith.pure ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, le_refl _, ?_, ?_, Nat.le_add_right _ _,
       fun v hv => Or.inl hv, Or.inl rfl⟩
-    · unfold RowsOk
+    · unfold ListLengthsMatch
       exact ⟨by simp [h1], h2, h3, h4⟩
     · exact Nat.le_of_eq (tot_sum_set_add s.balances _ hlt d.amount)
 
 /-! ## The whole epoch -/
 
 /-- The facts that the steps after `process_slashings` read. -/
-structure TailFrame [PresetCfg] (t s : BeaconState) : Prop where
+structure TailFrame [CurrentPreset] (t s : BeaconState) : Prop where
   slot : s.slot = t.slot
-  rows : RowsOk s
+  rows : ListLengthsMatch s
   randao : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR
   slashings : s.slashings.length = P.EPOCHS_PER_SLASHINGS_VECTOR
   cons : ConsolidationsInRange s
@@ -771,15 +771,15 @@ structure TailFrame [PresetCfg] (t s : BeaconState) : Prop where
 
 /-- The facts that the last three steps read: the slot, the RANDAO mixes and the per-validator
 lists. -/
-structure CommFrame [PresetCfg] (t s : BeaconState) : Prop where
+structure CommFrame [CurrentPreset] (t s : BeaconState) : Prop where
   slot : s.slot = t.slot
-  rows : RowsOk s
+  rows : ListLengthsMatch s
   randao : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR
 
 /-- The facts that `process_pending_deposits` reads from the state after the per-validator
 steps, besides `TailFrame`: the deposit queue and the churn left from the last epoch, the
 number of validators, the balance sum after the rewards, and the finalized epoch. -/
-structure DepFrame [PresetCfg] (t s : BeaconState) : Prop where
+structure DepFrame [CurrentPreset] (t s : BeaconState) : Prop where
   pend : s.pending_deposits = t.pending_deposits
   dbtc : s.deposit_balance_to_consume = t.deposit_balance_to_consume
   vlen : s.validators.length = t.validators.length
@@ -788,15 +788,15 @@ structure DepFrame [PresetCfg] (t s : BeaconState) : Prop where
   fin : s.finalized_checkpoint.epoch ≤ t.slot / P.SLOTS_PER_EPOCH
 
 /-- The inactivity, rewards, registry and slashings steps succeed after justification and
-finalization. `TotalityRows.lean` proves it (`midOk_of_physicalLimits`). -/
-def MidOk [PresetCfg] (t : BeaconState) : Prop :=
+finalization. `TotalityRows.lean` proves it (`midOk_of_supplyAndTimeLimits`). -/
+def MidOk [CurrentPreset] (t : BeaconState) : Prop :=
   ∀ s1, JFShape t s1 → s1.finalized_checkpoint.epoch ≤ t.slot / P.SLOTS_PER_EPOCH →
     (t.slot / P.SLOTS_PER_EPOCH ≠ 0 → s1.finalized_checkpoint.epoch + 1 ≤ t.slot / P.SLOTS_PER_EPOCH) →
     OkWith (specFourSteps P s1) (fun s => TailFrame t s ∧ DepFrame t s)
 
 /-- `process_pending_deposits` succeeds after the eth1 data reset. `TotalityRows.lean` proves it
-(`depOk_of_physicalLimits`). -/
-def DepOk [PresetCfg] (o : Oracle) (t : BeaconState) : Prop :=
+(`depOk_of_supplyAndTimeLimits`). -/
+def DepOk [CurrentPreset] (o : Oracle) (t : BeaconState) : Prop :=
   ∀ s tab, TailFrame t s → DepFrame t s → get_total_active_balance P s = .ok tab →
     OkWith (process_pending_deposits P tab (apply_pending_deposit P o) s)
       (TailFrame t)
@@ -816,21 +816,21 @@ def epochRestToCommittees (p : Preset) (o : Oracle) (state : BeaconState) :
   let state ← process_historical_summaries_update p o state
   pure (process_participation_flag_updates state)
 
-/-- `epochToCommittees` in three parts, as `process_epoch_parts`. -/
-theorem epochToCommittees_parts (p : Preset) (o : Oracle) (s : BeaconState) :
-    epochToCommittees p o s = (do
+/-- `epochBeforeCommitteeSteps` in three parts, as `process_epoch_parts`. -/
+theorem epochBeforeCommitteeSteps_parts (p : Preset) (o : Oracle) (s : BeaconState) :
+    epochBeforeCommitteeSteps p o s = (do
       let s1 ← process_justification_and_finalization p s
       let s5 ← specFourSteps p s1
       epochRestToCommittees p o s5) := by
-  simp only [epochToCommittees, specFourSteps, epochRestToCommittees, bind_assoc]
+  simp only [epochBeforeCommitteeSteps, specFourSteps, epochRestToCommittees, bind_assoc]
 
 /-- The sync committee, proposer lookahead and PTC window steps succeed on the state that
-`epochToCommittees` returns. `committeesOk_of` proves it. -/
-def CommitteesOk [PresetCfg] (o : Oracle) (t : BeaconState) : Prop :=
-  ∀ s, epochToCommittees P o t = .ok s → CommFrame t s → OkWith (committeeSteps P o s)
+`epochBeforeCommitteeSteps` returns. `committeesOk_of` proves it. -/
+def CommitteesOk [CurrentPreset] (o : Oracle) (t : BeaconState) : Prop :=
+  ∀ s, epochBeforeCommitteeSteps P o t = .ok s → CommFrame t s → OkWith (committeeSteps P o s)
     (fun _ => True)
 
-theorem tot_cp [PresetCfg] [PresetCfg.Ok] {a b x : Nat} (hab : a ≤ b)
+theorem tot_cp [CurrentPreset] [CurrentPreset.Valid] {a b x : Nat} (hab : a ≤ b)
     (hb : b < x / P.SLOTS_PER_EPOCH ∨ b = 0) (hx : x < 2 ^ 64) :
     a < 2 ^ 63 ∧ b < 2 ^ 63 := by
   have := P_slot_epoch_lt hx
@@ -849,12 +849,12 @@ theorem tot_max_lt64 {x : Nat} (h : x < 2 ^ 62) : max 1000000000 x < 2 ^ 64 := b
   show max 1000000000 x < 18446744073709551616
   omega
 
-theorem tot_rowsOk_validators {s : BeaconState} (h : RowsOk s) (vs : List Validator)
-    (hl : vs.length = s.validators.length) : RowsOk { s with validators := vs } := by
+theorem tot_rowsOk_validators {s : BeaconState} (h : ListLengthsMatch s) (vs : List Validator)
+    (hl : vs.length = s.validators.length) : ListLengthsMatch { s with validators := vs } := by
   obtain ⟨h1, h2, h3, h4⟩ := h
   exact ⟨h1.trans hl.symm, h2.trans hl.symm, h3.trans hl.symm, h4.trans hl.symm⟩
 
-theorem tot_tab_lt [PresetCfg] [PresetCfg.Ok] (s : BeaconState) (h : totalEffectiveBalance s < 2 ^ 62) :
+theorem tot_tab_lt [CurrentPreset] [CurrentPreset.Valid] (s : BeaconState) (h : totalEffectiveBalance s < 2 ^ 62) :
     ∃ tab, get_total_active_balance P s = .ok tab ∧ tab < 2 ^ 64 := by
   obtain ⟨tab, ht, -, hle⟩ := get_total_active_balance_bounds P s _
     (tot_current_epoch s) (Nat.lt_trans h (by decide))
@@ -862,16 +862,16 @@ theorem tot_tab_lt [PresetCfg] [PresetCfg.Ok] (s : BeaconState) (h : totalEffect
 
 /-- The steps before the committee steps succeed on mainnet at the last slot of an epoch, from
 the reachable-state facts at the epoch input and the open steps, and keep `CommFrame`. -/
-theorem epochToCommittees_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState)
-    (hrows : RowsOk t)
+theorem epochBeforeCommitteeSteps_total [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (t : BeaconState)
+    (hrows : ListLengthsMatch t)
     (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % P.SLOTS_PER_EPOCH = 0)
-    (hvec : t.VectorLengths P) (hffg : FfgInvariant P t)
+    (hvec : t.VectorLengths P) (hffg : CheckpointsInOrder P t)
     (hsup : totalEffectiveBalance t < 2 ^ 60) (hmid : MidOk t) (hdep : DepOk o t) :
-    ∃ s, epochToCommittees P o t = .ok s ∧ CommFrame t s := by
+    ∃ s, epochBeforeCommitteeSteps P o t = .ok s ∧ CommFrame t s := by
   have hslot64 : t.slot < 2 ^ 64 := Nat.lt_of_le_of_lt (Nat.le_add_right _ _) hslot
   obtain ⟨hbr, -, -, -, hbits, -⟩ := hvec
   have hcp := tot_cp hffg.1.2 hffg.2 hslot64
-  rw [epochToCommittees_parts]
+  rw [epochBeforeCommitteeSteps_parts]
   obtain ⟨s1, h1, -⟩ := process_justification_and_finalization_total t hrows hslot hlast hbr hbits
     hcp hsup
   rw [h1, tot_bind_ok]
@@ -914,7 +914,7 @@ theorem epochToCommittees_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : Bea
   rw [ht8, tot_bind_ok]
   obtain ⟨s9, h9, w, q, e9⟩ := process_builder_pending_payments_total tab8 htab8 s8
   rw [h9, tot_bind_ok]
-  have g9 : RowsOk s9 ∧ (∀ b ∈ s9.balances, b < 2 ^ 63) ∧
+  have g9 : ListLengthsMatch s9 ∧ (∀ b ∈ s9.balances, b < 2 ^ 63) ∧
       (∀ v ∈ s9.validators, v.effective_balance < 2 ^ 63) := by
     subst e9
     exact ⟨f8.rows,
@@ -926,25 +926,25 @@ theorem epochToCommittees_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : Bea
   -- effective balance updates
   obtain ⟨s10, h10, vs, hvs, e10⟩ := process_effective_balance_updates_total s9 g9.1 g9.2.1 g9.2.2
   rw [h10, tot_bind_ok]
-  have r10 : RowsOk s10 := by subst e10; exact tot_rowsOk_validators g9.1 vs hvs
+  have r10 : ListLengthsMatch s10 := by subst e10; exact tot_rowsOk_validators g9.1 vs hvs
   have k10 : s10.slot = t.slot ∧ s10.slashings.length = P.EPOCHS_PER_SLASHINGS_VECTOR ∧
       s10.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR := by subst e10; exact k9
   -- slashings reset
   obtain ⟨s11, h11, i11, a11, e11⟩ := process_slashings_reset_total s10 (k10.1 ▸ hslot64) k10.2.1
   rw [h11, tot_bind_ok]
-  have k11 : RowsOk s11 ∧ s11.slot = t.slot ∧ s11.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR := by
+  have k11 : ListLengthsMatch s11 ∧ s11.slot = t.slot ∧ s11.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR := by
     subst e11; exact ⟨r10, k10.1, k10.2.2⟩
   -- RANDAO mixes reset
   obtain ⟨s12, h12, i12, a12, e12⟩ := process_randao_mixes_reset_total s11 (k11.2.1 ▸ hslot64)
     k11.2.2
   rw [h12, tot_bind_ok]
-  have k12 : RowsOk s12 ∧ s12.slot = t.slot ∧ s12.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR := by
+  have k12 : ListLengthsMatch s12 ∧ s12.slot = t.slot ∧ s12.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR := by
     subst e12; exact ⟨k11.1, k11.2.1, by simp [k11.2.2]⟩
   -- historical summaries
   obtain ⟨s13, h13, l13, e13⟩ := process_historical_summaries_update_total o s12
     (k12.2.1 ▸ hslot64)
   rw [h13, tot_bind_ok]
-  have k13 : RowsOk s13 ∧ s13.slot = t.slot ∧ s13.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR := by
+  have k13 : ListLengthsMatch s13 ∧ s13.slot = t.slot ∧ s13.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR := by
     subst e13; exact k12
   -- participation flags
   exact ⟨_, rfl,
@@ -953,13 +953,13 @@ theorem epochToCommittees_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : Bea
 
 /-- The spec `process_epoch` succeeds on mainnet at the last slot of an epoch, from the
 reachable-state facts at its input and the open steps. -/
-theorem process_epoch_total [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState) (hrows : RowsOk t)
+theorem process_epoch_total [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (t : BeaconState) (hrows : ListLengthsMatch t)
     (hslot : t.slot + 8192 < 2 ^ 64) (hlast : (t.slot + 1) % P.SLOTS_PER_EPOCH = 0)
-    (hvec : t.VectorLengths P) (hffg : FfgInvariant P t)
+    (hvec : t.VectorLengths P) (hffg : CheckpointsInOrder P t)
     (hsup : totalEffectiveBalance t < 2 ^ 60) (hmid : MidOk t) (hdep : DepOk o t)
     (hcomm : CommitteesOk o t) :
     ∃ s', process_epoch P o t = .ok s' := by
-  obtain ⟨s, hs, hf⟩ := epochToCommittees_total o t hrows hslot hlast hvec hffg hsup hmid hdep
+  obtain ⟨s, hs, hf⟩ := epochBeforeCommitteeSteps_total o t hrows hslot hlast hvec hffg hsup hmid hdep
   obtain ⟨s', hs', -⟩ := hcomm s hs hf
   exact ⟨s', by rw [process_epoch_committees, hs, tot_bind_ok]; exact hs'⟩
 

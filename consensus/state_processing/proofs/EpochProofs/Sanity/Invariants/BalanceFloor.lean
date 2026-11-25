@@ -7,8 +7,8 @@ import EpochProofs.Spec.Block.Block
 # The balance floor at the epoch boundary
 
 After the effective balance updates, `3 * effective_balance ≤ 4 * balance` for every validator
-(`AfterEB`). The blocks of the next epoch lower a balance in three ways: one slashing penalty,
-the sync committee penalties, and withdrawals. `Budget` bounds the drop since the start of the
+(`AfterEffectiveBalanceUpdates`). The blocks of the next epoch lower a balance in three ways: one slashing penalty,
+the sync committee penalties, and withdrawals. `BalanceLossBounded` bounds the drop since the start of the
 epoch. At the next boundary it gives `effective_balance ≤ 256 * balance` for every validator
 that is eligible for rewards: the effective balance part of `EpochEntry`.
 
@@ -21,7 +21,7 @@ namespace EpochProofs.Spec
 
 /-- The uniform loss of one sync aggregate: `2 * (integer_squareroot(139M ETH) + 2) /
 SLOTS_PER_EPOCH`. It is 23,301,689 Gwei on mainnet and 93,206,759 Gwei on minimal. -/
-def syncLoss [PresetCfg] : Nat := 745654078 / P.SLOTS_PER_EPOCH
+def syncLoss [CurrentPreset] : Nat := 745654078 / P.SLOTS_PER_EPOCH
 
 /-- A slot in epoch `E` lies in `[E * S, E * S + S)`. -/
 theorem slot_div_bounds {x S E : Nat} (hS : 0 < S) (h : x / S = E) :
@@ -79,7 +79,7 @@ private theorem lt_withdrawable_of_slashable {v : Validator} {e : Epoch}
 /-! ## Slashings -/
 
 /-- The effect of a slashing at epoch `E`. Each validator stays, or it was not slashed, is
-slashed now, keeps its effective balance, activation epoch and `ExitDelayV`, keeps its exit
+slashed now, keeps its effective balance, activation epoch and `ValidatorExitToWithdrawableDelay`, keeps its exit
 epoch or exits after `E`, and was withdrawable only after `E`. A balance drops only for a
 validator slashed in this step, and by at most
 `effective_balance / MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA`. -/
@@ -88,7 +88,7 @@ def SlashStep (p : Preset) (E : Epoch) (s s' : BeaconState) : Prop :=
     (∀ (i : Nat) (v v' : Validator), s.validators[i]? = some v → s'.validators[i]? = some v' →
       v' = v ∨ (v.slashed = false ∧ v'.slashed = true ∧
         v'.effective_balance = v.effective_balance ∧ E < v.withdrawable_epoch ∧
-        (ExitDelayV p v → ExitDelayV p v') ∧
+        (ValidatorExitToWithdrawableDelay p v → ValidatorExitToWithdrawableDelay p v') ∧
         v'.activation_epoch = v.activation_epoch ∧
         (v'.exit_epoch = v.exit_epoch ∨
           (v.exit_epoch = FAR_FUTURE_EPOCH ∧ E < v'.exit_epoch)))) ∧
@@ -97,10 +97,10 @@ def SlashStep (p : Preset) (E : Epoch) (s s' : BeaconState) : Prop :=
         v.slashed = false ∧ v'.slashed = true ∧
         b ≤ b' + v.effective_balance / p.MIN_SLASHING_PENALTY_QUOTIENT_ELECTRA)
 
-/-- A slashing step keeps `ExitDelay`. -/
+/-- A slashing step keeps `ExitToWithdrawableDelay`. -/
 theorem SlashStep.exitDelay {p : Preset} {E : Epoch} {s s' : BeaconState}
-    (h : SlashStep p E s s') (hs : ExitDelay p s) : ExitDelay p s' := by
-  refine ExitDelay.of_pointwise (fun j v' hv' => ?_) hs
+    (h : SlashStep p E s s') (hs : ExitToWithdrawableDelay p s) : ExitToWithdrawableDelay p s' := by
+  refine ExitToWithdrawableDelay.of_pointwise (fun j v' hv' => ?_) hs
   have hj : j < s.validators.length := by
     rw [← h.1]; exact (List.getElem?_eq_some_iff.mp hv').1
   refine ⟨_, List.getElem?_eq_getElem hj, fun hd => ?_⟩
@@ -229,7 +229,7 @@ sync aggregate.
 Each validator of `s0` keeps its effective balance and its slashed flag. It is withdrawn by
 `E`, or its balance plus the allowed losses is at least `min b0 MIN_ACTIVATION_BALANCE`. A
 withdrawal can lower a balance to `MIN_ACTIVATION_BALANCE`, so the floor is that minimum. -/
-def Budget (p : Preset) (s0 : BeaconState) (E : Epoch) (L : Nat → Gwei) (n : Nat)
+def BalanceLossBounded (p : Preset) (s0 : BeaconState) (E : Epoch) (L : Nat → Gwei) (n : Nat)
     (s : BeaconState) : Prop :=
   s.validators.length = s0.validators.length ∧
     ∀ (i : Nat) (v0 : Validator) (b0 : Gwei), s0.validators[i]? = some v0 →
@@ -240,17 +240,17 @@ def Budget (p : Preset) (s0 : BeaconState) (E : Epoch) (L : Nat → Gwei) (n : N
           min b0 p.MIN_ACTIVATION_BALANCE ≤ b + slashLoss p v0 v + n * L i)
 
 /-- The budget holds at the start of the epoch, with no sync aggregate. -/
-theorem Budget.init (p : Preset) (s0 : BeaconState) (E : Epoch) (L : Nat → Gwei) :
-    Budget p s0 E L 0 s0 := by
+theorem BalanceLossBounded.init (p : Preset) (s0 : BeaconState) (E : Epoch) (L : Nat → Gwei) :
+    BalanceLossBounded p s0 E L 0 s0 := by
   refine ⟨rfl, fun i v0 b0 h0 hb0 => ⟨v0, b0, h0, hb0, rfl, id, .inr ?_⟩⟩
   simp only [Nat.zero_mul, Nat.add_zero]
   exact Nat.le_trans (Nat.min_le_left _ _) (Nat.le_add_right _ _)
 
 /-- Same validators and balances keep the budget. The slot does not matter. -/
-theorem Budget.of_eq {p : Preset} {s0 : BeaconState} {E : Epoch} {L : Nat → Gwei} {n : Nat}
+theorem BalanceLossBounded.of_eq {p : Preset} {s0 : BeaconState} {E : Epoch} {L : Nat → Gwei} {n : Nat}
     {s s' : BeaconState} (hv : s'.validators = s.validators) (hbal : s'.balances = s.balances)
-    (hb : Budget p s0 E L n s) : Budget p s0 E L n s' := by
-  rw [Budget, hv, hbal]
+    (hb : BalanceLossBounded p s0 E L n s) : BalanceLossBounded p s0 E L n s' := by
+  rw [BalanceLossBounded, hv, hbal]
   exact hb
 
 /-- `min b0 m ≤ b + x` and `min b m ≤ b'` give `min b0 m ≤ b' + x`. -/
@@ -260,9 +260,9 @@ private theorem floor_step {b0 m b b' x : Nat} (h : min b0 m ≤ b + x) (h' : mi
   split at h <;> split at h' <;> split <;> omega
 
 /-- An operation step keeps the budget. A withdrawn validator does not start an exit again. -/
-theorem Budget.of_opStep {p : Preset} {s0 : BeaconState} {E : Epoch} {L : Nat → Gwei} {n : Nat}
+theorem BalanceLossBounded.of_opStep {p : Preset} {s0 : BeaconState} {E : Epoch} {L : Nat → Gwei} {n : Nat}
     {s s' : BeaconState} (hfar : E < FAR_FUTURE_EPOCH) (hop : OpStep p s s')
-    (hb : Budget p s0 E L n s) : Budget p s0 E L n s' := by
+    (hb : BalanceLossBounded p s0 E L n s) : BalanceLossBounded p s0 E L n s' := by
   obtain ⟨hlen, hall⟩ := hb
   obtain ⟨-, hvlen, hvstep, -, hbstep⟩ := hop
   refine ⟨hvlen.trans hlen, fun i v0 b0 h0 hb0 => ?_⟩
@@ -285,9 +285,9 @@ theorem Budget.of_opStep {p : Preset} {s0 : BeaconState} {E : Epoch} {L : Nat �
 
 /-- A slashing step keeps the budget. The penalty falls on a validator that was not slashed at
 the start of the epoch, so `slashLoss` covers it. -/
-theorem Budget.of_slashStep {p : Preset} {s0 : BeaconState} {E : Epoch} {L : Nat → Gwei}
-    {n : Nat} {s s' : BeaconState} (hs : SlashStep p E s s') (hb : Budget p s0 E L n s) :
-    Budget p s0 E L n s' := by
+theorem BalanceLossBounded.of_slashStep {p : Preset} {s0 : BeaconState} {E : Epoch} {L : Nat → Gwei}
+    {n : Nat} {s s' : BeaconState} (hs : SlashStep p E s s') (hb : BalanceLossBounded p s0 E L n s) :
+    BalanceLossBounded p s0 E L n s' := by
   obtain ⟨hlen, hall⟩ := hb
   obtain ⟨hvlen, hvstep, hbstep⟩ := hs
   refine ⟨hvlen.trans hlen, fun i v0 b0 h0 hb0 => ?_⟩
@@ -350,12 +350,12 @@ theorem min_activation_le_max_effective_balance {p : Preset}
 
 /-- `process_withdrawals` at epoch `E` keeps the budget. A partial withdrawal leaves at least
 `MIN_ACTIVATION_BALANCE`. A full withdrawal leaves a validator that is withdrawn by `E`. -/
-theorem Budget.of_withdrawals {p : Preset} {s0 : BeaconState} {E : Epoch} {L : Nat → Gwei}
+theorem BalanceLossBounded.of_withdrawals {p : Preset} {s0 : BeaconState} {E : Epoch} {L : Nat → Gwei}
     {n : Nat} {s s' : BeaconState} (hE : s.slot / p.SLOTS_PER_EPOCH = E)
     (hfar : E < FAR_FUTURE_EPOCH)
     (hmax : p.MIN_ACTIVATION_BALANCE ≤ p.MAX_EFFECTIVE_BALANCE_ELECTRA)
-    (hd : ExitDelay p s) (h : process_withdrawals p s = .ok s')
-    (hb : Budget p s0 E L n s) : Budget p s0 E L n s' := by
+    (hd : ExitToWithdrawableDelay p s) (h : process_withdrawals p s = .ok s')
+    (hb : BalanceLossBounded p s0 E L n s) : BalanceLossBounded p s0 E L n s' := by
   obtain ⟨hvs, -, -, -⟩ := process_withdrawals_core p s s' h
   obtain ⟨-, hbal⟩ := process_withdrawals_balances p s s' h
   obtain ⟨hlen, hall⟩ := hb
@@ -386,13 +386,13 @@ theorem Budget.of_withdrawals {p : Preset} {s0 : BeaconState} {E : Epoch} {L : N
 
 /-- `process_sync_aggregate` keeps the budget with one more sync aggregate, if `L i` bounds the
 sync penalty of each validator `i` at the current total active balance. -/
-theorem Budget.of_sync {p : Preset} {s0 : BeaconState} {E : Epoch} {L : Nat → Gwei} {n : Nat}
+theorem BalanceLossBounded.of_sync {p : Preset} {s0 : BeaconState} {E : Epoch} {L : Nat → Gwei} {n : Nat}
     {o : Oracle} {s s' : BeaconState} {sync_aggregate : SyncAggregate}
     (h : process_sync_aggregate p o s sync_aggregate = .ok s')
     (hL : ∀ tab, get_total_active_balance p s = .ok tab → ∀ i,
       syncPenaltyCount s sync_aggregate.sync_committee_bits i * sync_participant_reward p tab ≤
         L i)
-    (hb : Budget p s0 E L n s) : Budget p s0 E L (n + 1) s' := by
+    (hb : BalanceLossBounded p s0 E L n s) : BalanceLossBounded p s0 E L (n + 1) s' := by
   obtain ⟨hfr, -⟩ := process_sync_aggregate_frame p o s s' sync_aggregate h
   have hvs : s'.validators = s.validators := by rw [hfr]
   obtain ⟨tab, htab, hbal⟩ := process_sync_aggregate_balance_bound p o s s' sync_aggregate h
@@ -417,29 +417,29 @@ theorem Budget.of_sync {p : Preset} {s0 : BeaconState} {E : Epoch} {L : Nat → 
 /-- The facts at the start of an epoch, right after the effective balance updates. Each
 effective balance is a multiple of the increment, at most `4/3` of the balance, and at most
 `MAX_EFFECTIVE_BALANCE_ELECTRA`. -/
-def AfterEB (p : Preset) (s : BeaconState) : Prop :=
+def AfterEffectiveBalanceUpdates (p : Preset) (s : BeaconState) : Prop :=
   s.validators.length ≤ s.balances.length ∧
     ∀ i (hi : i < s.validators.length),
       s.validators[i].effective_balance % p.EFFECTIVE_BALANCE_INCREMENT = 0 ∧
       3 * s.validators[i].effective_balance ≤ 4 * s.balances.getD i 0 ∧
       s.validators[i].effective_balance ≤ p.MAX_EFFECTIVE_BALANCE_ELECTRA
 
-/-- Same validators and balances keep `AfterEB`. The epoch steps after the effective balance
+/-- Same validators and balances keep `AfterEffectiveBalanceUpdates`. The epoch steps after the effective balance
 updates do not write them. -/
-theorem AfterEB.of_eq {p : Preset} {s s' : BeaconState} (hv : s'.validators = s.validators)
-    (hb : s'.balances = s.balances) (h : AfterEB p s) : AfterEB p s' := by
-  rw [AfterEB, hv, hb]
+theorem AfterEffectiveBalanceUpdates.of_eq {p : Preset} {s s' : BeaconState} (hv : s'.validators = s.validators)
+    (hb : s'.balances = s.balances) (h : AfterEffectiveBalanceUpdates p s) : AfterEffectiveBalanceUpdates p s' := by
+  rw [AfterEffectiveBalanceUpdates, hv, hb]
   exact h
 
-/-- On mainnet, `process_effective_balance_updates` establishes `AfterEB`, if every effective
+/-- On mainnet, `process_effective_balance_updates` establishes `AfterEffectiveBalanceUpdates`, if every effective
 balance before it is a multiple of the increment and at most `MAX_EFFECTIVE_BALANCE_ELECTRA`. -/
-theorem process_effective_balance_updates_afterEB_mainnet [PresetCfg] (state state' : BeaconState)
+theorem process_effective_balance_updates_afterEB_mainnet [CurrentPreset] (state state' : BeaconState)
     (h : process_effective_balance_updates P state = .ok state')
     (hmod : ∀ v ∈ state.validators,
       v.effective_balance % P.EFFECTIVE_BALANCE_INCREMENT = 0)
     (hmax : ∀ v ∈ state.validators,
       v.effective_balance ≤ P.MAX_EFFECTIVE_BALANCE_ELECTRA) :
-    AfterEB P state' := by
+    AfterEffectiveBalanceUpdates P state' := by
   have hfl := process_effective_balance_updates_floor_mainnet state state' h hmod
   refine ⟨hfl.1, fun i hi => ⟨(hfl.2 i hi).1, (hfl.2 i hi).2, ?_⟩⟩
   rw [process_effective_balance_updates_eq] at h
@@ -469,8 +469,8 @@ theorem process_effective_balance_updates_afterEB_mainnet [PresetCfg] (state sta
 eligible for rewards at `previous_epoch`, if the allowed losses fit. `hfit` says that the sync
 penalties of `n` sync aggregates, one slashing penalty and `effective_balance / 256` fit in the
 floor `min (3 * effective_balance / 4) MIN_ACTIVATION_BALANCE`. -/
-theorem budget_effective_balance_mainnet [PresetCfg] (s0 s : BeaconState) (E previous_epoch n : Nat)
-    (L : Nat → Gwei) (h0 : AfterEB P s0) (hb : Budget P s0 E L n s)
+theorem budget_effective_balance_mainnet [CurrentPreset] (s0 s : BeaconState) (E previous_epoch n : Nat)
+    (L : Nat → Gwei) (h0 : AfterEffectiveBalanceUpdates P s0) (hb : BalanceLossBounded P s0 E L n s)
     (hfar : E < FAR_FUTURE_EPOCH) (hE : E ≤ previous_epoch + 1)
     (hfit : ∀ (i : Nat) (v0 : Validator), s0.validators[i]? = some v0 →
       0 < v0.effective_balance →
@@ -535,9 +535,9 @@ theorem lossFits_mainnet {n l eb S : Nat} (hn : n ≤ S) (hl : l ≤ 745654078 /
 `effective_balance ≤ 256 * balance`. The epoch starts at `s0` after the effective balance
 updates. Its blocks run at most 32 sync aggregates, and each one costs each validator at most
 23,307,800 Gwei (`sync_loss_le_mainnet`). -/
-theorem epochEntry_effective_balance_mainnet [PresetCfg] (s0 s : BeaconState) (E previous_epoch n : Nat)
-    (h0 : AfterEB P s0)
-    (hb : Budget P s0 E (fun _ => syncLoss) n s) (hn : n ≤ P.SLOTS_PER_EPOCH)
+theorem epochEntry_effective_balance_mainnet [CurrentPreset] (s0 s : BeaconState) (E previous_epoch n : Nat)
+    (h0 : AfterEffectiveBalanceUpdates P s0)
+    (hb : BalanceLossBounded P s0 E (fun _ => syncLoss) n s) (hn : n ≤ P.SLOTS_PER_EPOCH)
     (hfar : E < FAR_FUTURE_EPOCH) (hE : E ≤ previous_epoch + 1) :
     ∀ i (hi : i < s.validators.length),
       rewardsEligible previous_epoch s.validators[i] = .ok true →
@@ -601,7 +601,7 @@ theorem syncPenaltyCount_le_bits (state : BeaconState) (bits : List Bool) (i : V
 `SYNC_COMMITTEE_SIZE` bits and the total active balance is at most 139 million ETH. Then
 `integer_squareroot` is at most 372,827,037, and the seats cost at most
 `2 * (372,827,037 + 2) / SLOTS_PER_EPOCH` Gwei. -/
-theorem sync_loss_le_mainnet [PresetCfg] [PresetCfg.Ok] (state : BeaconState) (bits : List Bool)
+theorem sync_loss_le_mainnet [CurrentPreset] [CurrentPreset.Valid] (state : BeaconState) (bits : List Bool)
     (i : ValidatorIndex) (total_active_balance : Gwei) (hbits : bits.length ≤ P.SYNC_COMMITTEE_SIZE)
     (htab : total_active_balance ≤ 139000000000000000) :
     syncPenaltyCount state bits i * sync_participant_reward P total_active_balance ≤
@@ -643,36 +643,36 @@ theorem sync_loss_le_mainnet [PresetCfg] [PresetCfg.Ok] (state : BeaconState) (b
 /-- On mainnet, `process_sync_aggregate` keeps the budget with the uniform loss 23,307,800
 Gwei and one more sync aggregate, if it has at most 512 bits and the total active balance is at
 most 139 million ETH. -/
-theorem Budget.of_sync_mainnet [PresetCfg] [PresetCfg.Ok] {s0 : BeaconState} {E : Epoch} {n : Nat} {o : Oracle}
+theorem BalanceLossBounded.of_sync_mainnet [CurrentPreset] [CurrentPreset.Valid] {s0 : BeaconState} {E : Epoch} {n : Nat} {o : Oracle}
     {s s' : BeaconState} {sync_aggregate : SyncAggregate}
     (h : process_sync_aggregate P o s sync_aggregate = .ok s')
     (hbits : sync_aggregate.sync_committee_bits.length ≤ P.SYNC_COMMITTEE_SIZE)
     (htab : ∀ tab, get_total_active_balance P s = .ok tab →
       tab ≤ 139000000000000000)
-    (hb : Budget P s0 E (fun _ => syncLoss) n s) :
-    Budget P s0 E (fun _ => syncLoss) (n + 1) s' :=
-  Budget.of_sync h (fun tab htab' i => sync_loss_le_mainnet s _ i tab hbits (htab tab htab')) hb
+    (hb : BalanceLossBounded P s0 E (fun _ => syncLoss) n s) :
+    BalanceLossBounded P s0 E (fun _ => syncLoss) (n + 1) s' :=
+  BalanceLossBounded.of_sync h (fun tab htab' i => sync_loss_le_mainnet s _ i tab hbits (htab tab htab')) hb
 
 /-! ## The total active balance within an epoch -/
 
 /-- `t` has the validators of `s` with the same effective balances and the same activity at
 epoch `E`. -/
-def ActiveAgree (E : Epoch) (s t : BeaconState) : Prop :=
+def SameActiveBalances (E : Epoch) (s t : BeaconState) : Prop :=
   t.validators.length = s.validators.length ∧
     ∀ (i : Nat) (v v' : Validator), s.validators[i]? = some v → t.validators[i]? = some v' →
       v'.effective_balance = v.effective_balance ∧
         is_active_validator v' E = is_active_validator v E
 
 /-- A state agrees with itself. -/
-theorem ActiveAgree.refl (E : Epoch) (s : BeaconState) : ActiveAgree E s s := by
+theorem SameActiveBalances.refl (E : Epoch) (s : BeaconState) : SameActiveBalances E s s := by
   refine ⟨rfl, fun i v v' h h' => ?_⟩
   rw [h] at h'
   cases h'
   exact ⟨rfl, rfl⟩
 
-/-- `ActiveAgree` composes. -/
-theorem ActiveAgree.trans {E : Epoch} {s1 s2 s3 : BeaconState} (h12 : ActiveAgree E s1 s2)
-    (h23 : ActiveAgree E s2 s3) : ActiveAgree E s1 s3 := by
+/-- `SameActiveBalances` composes. -/
+theorem SameActiveBalances.trans {E : Epoch} {s1 s2 s3 : BeaconState} (h12 : SameActiveBalances E s1 s2)
+    (h23 : SameActiveBalances E s2 s3) : SameActiveBalances E s1 s3 := by
   refine ⟨h23.1.trans h12.1, fun i v1 v3 h1 h3 => ?_⟩
   have hi : i < s2.validators.length := by
     rw [h12.1]; exact (List.getElem?_eq_some_iff.mp h1).1
@@ -682,22 +682,22 @@ theorem ActiveAgree.trans {E : Epoch} {s1 s2 s3 : BeaconState} (h12 : ActiveAgre
   exact ⟨he23.trans he12, ha23.trans ha12⟩
 
 /-- Same validators agree. -/
-theorem ActiveAgree.of_eq {E : Epoch} {s t : BeaconState} (hv : t.validators = s.validators) :
-    ActiveAgree E s t := by
-  rw [ActiveAgree, hv]
-  exact (ActiveAgree.refl E s)
+theorem SameActiveBalances.of_eq {E : Epoch} {s t : BeaconState} (hv : t.validators = s.validators) :
+    SameActiveBalances E s t := by
+  rw [SameActiveBalances, hv]
+  exact (SameActiveBalances.refl E s)
 
 /-- An operation step keeps the activity at the current epoch. -/
 theorem OpStep.activeAgree {p : Preset} {s s' : BeaconState} (h : OpStep p s s')
     (hfar : s.slot / p.SLOTS_PER_EPOCH < FAR_FUTURE_EPOCH) :
-    ActiveAgree (s.slot / p.SLOTS_PER_EPOCH) s s' :=
+    SameActiveBalances (s.slot / p.SLOTS_PER_EPOCH) s s' :=
   ⟨h.2.1, fun i v v' hv hv' =>
     have hst := h.2.2.1 i v v' hv hv'
     ⟨hst.1, hst.active_eq hfar⟩⟩
 
 /-- A slashing step at `E` keeps the activity at `E`. -/
 theorem SlashStep.activeAgree {p : Preset} {E : Epoch} {s s' : BeaconState}
-    (h : SlashStep p E s s') (hfar : E < FAR_FUTURE_EPOCH) : ActiveAgree E s s' := by
+    (h : SlashStep p E s s') (hfar : E < FAR_FUTURE_EPOCH) : SameActiveBalances E s s' := by
   refine ⟨h.1, fun i v v' hv hv' => ?_⟩
   rcases h.2.1 i v v' hv hv' with rfl | ⟨-, -, heb, -, -, hact, hex⟩
   · exact ⟨rfl, rfl⟩
@@ -758,7 +758,7 @@ private theorem total_balance_congr (p : Preset) (s t : BeaconState)
 agree on effective balances and activity. -/
 theorem get_total_active_balance_congr (p : Preset) (s t : BeaconState)
     (hslot : t.slot / p.SLOTS_PER_EPOCH = s.slot / p.SLOTS_PER_EPOCH)
-    (h : ActiveAgree (s.slot / p.SLOTS_PER_EPOCH) s t) :
+    (h : SameActiveBalances (s.slot / p.SLOTS_PER_EPOCH) s t) :
     get_total_active_balance p t = get_total_active_balance p s := by
   have hcur : get_current_epoch p t = get_current_epoch p s := by
     simp only [get_current_epoch, compute_epoch_at_slot, uint64Div]
@@ -781,16 +781,16 @@ theorem get_total_active_balance_congr (p : Preset) (s t : BeaconState)
 /-! ## One block -/
 
 /-- What one step inside a block keeps, for the budget of epoch `E` that starts at `s0`: the
-slot, the activity at `E`, `ExitDelay`, and the budget with `n` sync aggregates. -/
+slot, the activity at `E`, `ExitToWithdrawableDelay`, and the budget with `n` sync aggregates. -/
 def Keeps (p : Preset) (s0 : BeaconState) (E : Epoch) (L : Nat → Gwei) (n : Nat)
     (s t : BeaconState) : Prop :=
-  t.slot = s.slot ∧ ActiveAgree E s t ∧
-    (ExitDelay p s → ExitDelay p t ∧ (Budget p s0 E L n s → Budget p s0 E L n t))
+  t.slot = s.slot ∧ SameActiveBalances E s t ∧
+    (ExitToWithdrawableDelay p s → ExitToWithdrawableDelay p t ∧ (BalanceLossBounded p s0 E L n s → BalanceLossBounded p s0 E L n t))
 
 /-- A state keeps everything to itself. -/
 theorem Keeps.refl (p : Preset) (s0 : BeaconState) (E : Epoch) (L : Nat → Gwei) (n : Nat)
     (s : BeaconState) : Keeps p s0 E L n s s :=
-  ⟨rfl, ActiveAgree.refl E s, fun hd => ⟨hd, id⟩⟩
+  ⟨rfl, SameActiveBalances.refl E s, fun hd => ⟨hd, id⟩⟩
 
 /-- `Keeps` composes. -/
 theorem Keeps.trans {p : Preset} {s0 : BeaconState} {E : Epoch} {L : Nat → Gwei} {n : Nat}
@@ -805,13 +805,13 @@ theorem Keeps.trans {p : Preset} {s0 : BeaconState} {E : Epoch} {L : Nat → Gwe
 theorem Keeps.of_opStep {p : Preset} {s0 : BeaconState} {E : Epoch} {L : Nat → Gwei} {n : Nat}
     {s t : BeaconState} (hE : s.slot / p.SLOTS_PER_EPOCH = E) (hfar : E < FAR_FUTURE_EPOCH)
     (h : OpStep p s t) : Keeps p s0 E L n s t :=
-  ⟨h.1, hE ▸ h.activeAgree (hE ▸ hfar), fun hd => ⟨h.exitDelay hd, Budget.of_opStep hfar h⟩⟩
+  ⟨h.1, hE ▸ h.activeAgree (hE ▸ hfar), fun hd => ⟨h.exitDelay hd, BalanceLossBounded.of_opStep hfar h⟩⟩
 
 /-- A slashing step at epoch `E` keeps everything. -/
 theorem Keeps.of_slashStep {p : Preset} {s0 : BeaconState} {E : Epoch} {L : Nat → Gwei}
     {n : Nat} {s t : BeaconState} (hfar : E < FAR_FUTURE_EPOCH) (hslot : t.slot = s.slot)
     (h : SlashStep p E s t) : Keeps p s0 E L n s t :=
-  ⟨hslot, h.activeAgree hfar, fun hd => ⟨h.exitDelay hd, Budget.of_slashStep h⟩⟩
+  ⟨hslot, h.activeAgree hfar, fun hd => ⟨h.exitDelay hd, BalanceLossBounded.of_slashStep h⟩⟩
 
 /-- `process_withdrawals` at epoch `E` keeps everything. -/
 theorem Keeps.of_withdrawals {p : Preset} {s0 : BeaconState} {E : Epoch} {L : Nat → Gwei}
@@ -821,7 +821,7 @@ theorem Keeps.of_withdrawals {p : Preset} {s0 : BeaconState} {E : Epoch} {L : Na
     (h : process_withdrawals p s = .ok t) : Keeps p s0 E L n s t := by
   obtain ⟨hvs, hcp, -, -⟩ := process_withdrawals_core p s t h
   exact ⟨hcp.1, .of_eq hvs, fun hd =>
-    ⟨process_withdrawals_exitDelay p s t h hd, Budget.of_withdrawals hE hfar hmax hd h⟩⟩
+    ⟨process_withdrawals_exitDelay p s t h hd, BalanceLossBounded.of_withdrawals hE hfar hmax hd h⟩⟩
 
 /-- A `foldlM` over a block's operations keeps every reflexive and transitive relation that
 each operation keeps. -/
@@ -899,22 +899,22 @@ theorem process_operations_keeps (p : Preset) (o : Oracle) (GLOAS_FORK_EPOCH : E
       (process_payload_attestation_opStep p o GLOAS_FORK_EPOCH st st' a hst)) _ _ _ h hE5
   exact k1.trans (k2.trans (k3.trans (k4.trans (k5.trans k6))))
 
-/-- On mainnet, one `process_block` at epoch `E` keeps `ExitDelay`, the slot and the activity
+/-- On mainnet, one `process_block` at epoch `E` keeps `ExitToWithdrawableDelay`, the slot and the activity
 at `E`, and keeps the budget with one more sync aggregate. The sync aggregate has at most 512
 bits (it is a `BitVector[SYNC_COMMITTEE_SIZE]`), and the total active balance is at most 139
 million ETH. The block does not change the total active balance before the sync aggregate. -/
-theorem process_block_budget_mainnet [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem process_block_budget_mainnet [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (s0 : BeaconState) (E : Epoch) (n : Nat) (s s' : BeaconState)
     (block : BeaconBlock)
     (h : process_block P o max_blobs_per_block GLOAS_FORK_EPOCH s block = .ok s')
     (hE : s.slot / P.SLOTS_PER_EPOCH = E) (hfar : E < FAR_FUTURE_EPOCH)
-    (hd : ExitDelay P s)
-    (hb : Budget P s0 E (fun _ => syncLoss) n s)
+    (hd : ExitToWithdrawableDelay P s)
+    (hb : BalanceLossBounded P s0 E (fun _ => syncLoss) n s)
     (hbits : block.body.sync_aggregate.sync_committee_bits.length ≤ P.SYNC_COMMITTEE_SIZE)
     (htab : ∀ tab, get_total_active_balance P s = .ok tab →
       tab ≤ 139000000000000000) :
-    Budget P s0 E (fun _ => syncLoss) (n + 1) s' ∧ ExitDelay P s' ∧
-      s'.slot = s.slot ∧ ActiveAgree E s s' := by
+    BalanceLossBounded P s0 E (fun _ => syncLoss) (n + 1) s' ∧ ExitToWithdrawableDelay P s' ∧
+      s'.slot = s.slot ∧ SameActiveBalances E s s' := by
   unfold process_block at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
   obtain ⟨s2, h2, h⟩ := specM_bind_ok h
@@ -951,14 +951,14 @@ theorem process_block_budget_mainnet [PresetCfg] [PresetCfg.Ok] (o : Oracle) (ma
   obtain ⟨hfr, -⟩ := process_sync_aggregate_frame _ o s7 s' _ h
   have hvs : s'.validators = s7.validators := by rw [hfr]
   have hsl : s'.slot = s7.slot := by rw [hfr]
-  exact ⟨Budget.of_sync_mainnet h hbits htab7 (hb7 hb),
+  exact ⟨BalanceLossBounded.of_sync_mainnet h hbits htab7 (hb7 hb),
     process_sync_aggregate_exitDelay _ o s7 s' _ h hd7, hsl.trans hslot,
     hagree.trans (.of_eq hvs)⟩
 
 /-! ## One epoch of blocks on mainnet -/
 
 /-- A successful `uint64Mod` is the `Nat` remainder. -/
-private theorem uint64Mod_ok' [PresetCfg] {a b c : Nat} (h : uint64Mod a b = .ok c) : c = a % b := by
+private theorem uint64Mod_ok' [CurrentPreset] {a b c : Nat} (h : uint64Mod a b = .ok c) : c = a % b := by
   unfold uint64Mod at h
   split at h
   · cases h
@@ -966,7 +966,7 @@ private theorem uint64Mod_ok' [PresetCfg] {a b c : Nat} (h : uint64Mod a b = .ok
 
 /-- The `process_slots` loop with the real `process_epoch` keeps `P`, if each step keeps `P`
 while the slot is below the target. -/
-theorem process_slots_loop_guard [PresetCfg] (p : Preset) (o : Oracle) (slot : Slot)
+theorem process_slots_loop_guard [CurrentPreset] (p : Preset) (o : Oracle) (slot : Slot)
     (P : BeaconState → Prop)
     (hslot : ∀ s s', process_slot p o s = .ok s' → s.slot < slot → P s → P s')
     (hepoch : ∀ s s', s.slot < slot → (s.slot + 1) % p.SLOTS_PER_EPOCH = 0 →
@@ -1014,24 +1014,24 @@ theorem process_slots_loop_guard [PresetCfg] (p : Preset) (o : Oracle) (slot : S
 /-- The state of the blocks of epoch `E` on mainnet, from the start `s0` of the epoch. `r` is a
 state of epoch `E` with the validators of the epoch. `n` sync aggregates ran, and there were at
 most as many slots in the epoch so far. -/
-def EpochInv [PresetCfg] (s0 r : BeaconState) (E n : Nat) (t : BeaconState) : Prop :=
-  Budget P s0 E (fun _ => syncLoss) n t ∧ ExitDelay P t ∧
-    t.slot / P.SLOTS_PER_EPOCH = E ∧ ActiveAgree E r t ∧
+def EpochInv [CurrentPreset] (s0 r : BeaconState) (E n : Nat) (t : BeaconState) : Prop :=
+  BalanceLossBounded P s0 E (fun _ => syncLoss) n t ∧ ExitToWithdrawableDelay P t ∧
+    t.slot / P.SLOTS_PER_EPOCH = E ∧ SameActiveBalances E r t ∧
     n + E * P.SLOTS_PER_EPOCH ≤ t.slot + 1
 
 /-- At the start of epoch `E`, with the state `t` right after the slot moves into `E`.
 `t` keeps the validators and balances of `s0`. -/
-theorem EpochInv.start [PresetCfg] [PresetCfg.Ok] (s0 t : BeaconState) (E : Nat) (hd : ExitDelay P s0)
+theorem EpochInv.start [CurrentPreset] [CurrentPreset.Valid] (s0 t : BeaconState) (E : Nat) (hd : ExitToWithdrawableDelay P s0)
     (hv : t.validators = s0.validators) (hb : t.balances = s0.balances)
     (hslot : t.slot = E * P.SLOTS_PER_EPOCH) : EpochInv s0 t E 0 t := by
-  refine ⟨Budget.of_eq hv hb (Budget.init _ s0 E _), ExitDelay.of_validators_eq hv hd, ?_,
-    ActiveAgree.refl E t, ?_⟩
+  refine ⟨BalanceLossBounded.of_eq hv hb (BalanceLossBounded.init _ s0 E _), ExitToWithdrawableDelay.of_validators_eq hv hd, ?_,
+    SameActiveBalances.refl E t, ?_⟩
   · rw [hslot]; exact Nat.mul_div_cancel _ P_slots_pos
   · rw [hslot]; omega
 
 /-- `process_slots` inside epoch `E` keeps `EpochInv`. It runs no `process_epoch`, because the
 target slot is in `E`. -/
-theorem process_slots_epochInv [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s0 r : BeaconState) (E n : Nat)
+theorem process_slots_epochInv [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s0 r : BeaconState) (E n : Nat)
     (s s' : BeaconState) (slot : Slot) (hslotE : slot / P.SLOTS_PER_EPOCH = E)
     (h : process_slots P o (process_epoch P o) s slot = .ok s')
     (hinv : EpochInv s0 r E n s) : EpochInv s0 r E n s' := by
@@ -1043,7 +1043,7 @@ theorem process_slots_epochInv [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s0 r : B
   · intro t t' ht _ hP
     obtain ⟨hf, hsl⟩ := process_slot_frame _ o t t' ht
     obtain ⟨h1, h2, h3, h4, h5⟩ := hP
-    exact ⟨Budget.of_eq hf.1 hf.2.1 h1, ExitDelay.of_validators_eq hf.1 h2, hsl ▸ h3,
+    exact ⟨BalanceLossBounded.of_eq hf.1 hf.2.1 h1, ExitToWithdrawableDelay.of_validators_eq hf.1 h2, hsl ▸ h3,
       h4.trans (.of_eq hf.1), hsl ▸ h5⟩
   · intro t t' hlt hz _ hP
     exfalso
@@ -1066,7 +1066,7 @@ theorem process_slots_epochInv [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s0 r : B
 /-- On mainnet, one `state_transition` inside epoch `E` keeps `EpochInv` with one more sync
 aggregate. The block's slot is in `E`, its sync aggregate has at most 512 bits, and the total
 active balance of `E` is at most 139 million ETH. -/
-theorem state_transition_epochInv [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+theorem state_transition_epochInv [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
     (GLOAS_FORK_EPOCH : Epoch) (s0 r : BeaconState) (E n : Nat) (s s' : BeaconState)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (hblockE : signed_block.message.slot / P.SLOTS_PER_EPOCH = E)
@@ -1114,8 +1114,8 @@ theorem state_transition_epochInv [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_b
 `effective_balance ≤ 256 * balance` for every validator that is eligible for rewards at the
 previous epoch `E - 1`. `s0` is the state after the effective balance updates of epoch
 `E - 1`. -/
-theorem boundary_effective_balance_mainnet [PresetCfg] [PresetCfg.Ok] (s0 r t : BeaconState) (E n previous_epoch : Nat)
-    (h0 : AfterEB P s0) (hinv : EpochInv s0 r E n t)
+theorem boundary_effective_balance_mainnet [CurrentPreset] [CurrentPreset.Valid] (s0 r t : BeaconState) (E n previous_epoch : Nat)
+    (h0 : AfterEffectiveBalanceUpdates P s0) (hinv : EpochInv s0 r E n t)
     (hfar : E < FAR_FUTURE_EPOCH) (hE : E ≤ previous_epoch + 1) :
     ∀ i (hi : i < t.validators.length),
       rewardsEligible previous_epoch t.validators[i] = .ok true →

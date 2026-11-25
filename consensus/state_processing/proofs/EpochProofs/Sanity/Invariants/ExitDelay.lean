@@ -11,7 +11,7 @@ import EpochProofs.Sanity.EffectiveBalanceInvariant
 /-!
 # The exit delay invariant and the validator step of block operations
 
-`ExitDelay` says that each validator has no withdrawable epoch yet, or becomes withdrawable at
+`ExitToWithdrawableDelay` says that each validator has no withdrawable epoch yet, or becomes withdrawable at
 least `MIN_VALIDATOR_WITHDRAWABILITY_DELAY` epochs after its exit. Every block operation,
 `process_epoch` and `process_slots` keep it. A validator that is withdrawable at the current
 epoch is not eligible for rewards at the next epoch boundary.
@@ -27,58 +27,58 @@ namespace EpochProofs.Spec
 
 /-- The validator has no withdrawable epoch yet, or its withdrawable epoch is at least
 `MIN_VALIDATOR_WITHDRAWABILITY_DELAY` after its exit epoch. -/
-def ExitDelayV (p : Preset) (v : Validator) : Prop :=
+def ValidatorExitToWithdrawableDelay (p : Preset) (v : Validator) : Prop :=
   FAR_FUTURE_EPOCH ≤ v.withdrawable_epoch ∨
     v.exit_epoch + p.MIN_VALIDATOR_WITHDRAWABILITY_DELAY ≤ v.withdrawable_epoch
 
-/-- Every validator has `ExitDelayV`. -/
-def ExitDelay (p : Preset) (s : BeaconState) : Prop :=
-  ∀ v ∈ s.validators, ExitDelayV p v
+/-- Every validator has `ValidatorExitToWithdrawableDelay`. -/
+def ExitToWithdrawableDelay (p : Preset) (s : BeaconState) : Prop :=
+  ∀ v ∈ s.validators, ValidatorExitToWithdrawableDelay p v
 
-/-- `ExitDelayV` of a validator with a later withdrawable epoch and the same exit epoch. -/
-theorem ExitDelayV.mono {p : Preset} {v v' : Validator} (h : ExitDelayV p v)
+/-- `ValidatorExitToWithdrawableDelay` of a validator with a later withdrawable epoch and the same exit epoch. -/
+theorem ValidatorExitToWithdrawableDelay.mono {p : Preset} {v v' : Validator} (h : ValidatorExitToWithdrawableDelay p v)
     (he : v'.exit_epoch = v.exit_epoch) (hw : v.withdrawable_epoch ≤ v'.withdrawable_epoch) :
-    ExitDelayV p v' := by
+    ValidatorExitToWithdrawableDelay p v' := by
   rcases h with h | h
   · exact .inl (Nat.le_trans h hw)
   · exact .inr (by rw [he]; exact Nat.le_trans h hw)
 
-/-- `ExitDelay` from a pointwise fact on the new validators. -/
-theorem ExitDelay.of_pointwise {p : Preset} {s s' : BeaconState}
+/-- `ExitToWithdrawableDelay` from a pointwise fact on the new validators. -/
+theorem ExitToWithdrawableDelay.of_pointwise {p : Preset} {s s' : BeaconState}
     (hpt : ∀ (j : Nat) (v' : Validator), s'.validators[j]? = some v' →
-      ∃ v : Validator, s.validators[j]? = some v ∧ (ExitDelayV p v → ExitDelayV p v'))
-    (hs : ExitDelay p s) : ExitDelay p s' := by
+      ∃ v : Validator, s.validators[j]? = some v ∧ (ValidatorExitToWithdrawableDelay p v → ValidatorExitToWithdrawableDelay p v'))
+    (hs : ExitToWithdrawableDelay p s) : ExitToWithdrawableDelay p s' := by
   intro v' hv'
   obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem hv'
   obtain ⟨v, hv, himp⟩ := hpt j _ (List.getElem?_eq_getElem hj)
   exact himp (hs v (List.mem_of_getElem? hv))
 
-/-- Same validators keep `ExitDelay`. -/
-theorem ExitDelay.of_validators_eq {p : Preset} {s s' : BeaconState}
-    (hv : s'.validators = s.validators) (hs : ExitDelay p s) : ExitDelay p s' := by
+/-- Same validators keep `ExitToWithdrawableDelay`. -/
+theorem ExitToWithdrawableDelay.of_validators_eq {p : Preset} {s s' : BeaconState}
+    (hv : s'.validators = s.validators) (hs : ExitToWithdrawableDelay p s) : ExitToWithdrawableDelay p s' := by
   intro v h
   rw [hv] at h
   exact hs v h
 
-/-- `ExitChange` keeps `ExitDelayV`. A new exit sets the withdrawable epoch to the exit epoch
+/-- `ExitChange` keeps `ValidatorExitToWithdrawableDelay`. A new exit sets the withdrawable epoch to the exit epoch
 plus the delay. -/
 theorem ExitChange.exitDelay {p : Preset} {s : BeaconState} {v v' : Validator}
-    (h : ExitChange p s v v') (hv : ExitDelayV p v) : ExitDelayV p v' := by
+    (h : ExitChange p s v v') (hv : ValidatorExitToWithdrawableDelay p v) : ValidatorExitToWithdrawableDelay p v' := by
   rcases h with rfl | ⟨-, cur, e, -, -, rfl⟩
   · exact hv
   · exact .inr (Nat.le_refl _)
 
-/-- `SlashChange` keeps `ExitDelayV`. The withdrawable epoch only grows. -/
+/-- `SlashChange` keeps `ValidatorExitToWithdrawableDelay`. The withdrawable epoch only grows. -/
 theorem SlashChange.exitDelay {p : Preset} {s : BeaconState} {v v' : Validator}
-    (h : SlashChange p s v v') (hv : ExitDelayV p v) : ExitDelayV p v' := by
+    (h : SlashChange p s v v') (hv : ValidatorExitToWithdrawableDelay p v) : ValidatorExitToWithdrawableDelay p v' := by
   obtain ⟨v1, cur, hch, -, rfl⟩ := h
   exact (hch.exitDelay hv).mono rfl (Nat.le_max_left _ _)
 
-/-- A validator with `ExitDelayV` that is withdrawable at epoch `E` is not eligible for rewards
+/-- A validator with `ValidatorExitToWithdrawableDelay` that is withdrawable at epoch `E` is not eligible for rewards
 at a previous epoch `previous_epoch ≥ E - 1`. It exited at least one epoch before
 `previous_epoch + 1`, and it is withdrawable by `previous_epoch + 1`. -/
 theorem rewardsEligible_of_withdrawable {p : Preset} {v : Validator} {E previous_epoch : Nat}
-    (hd : ExitDelayV p v) (hw : v.withdrawable_epoch ≤ E) (hfar : E < FAR_FUTURE_EPOCH)
+    (hd : ValidatorExitToWithdrawableDelay p v) (hw : v.withdrawable_epoch ≤ E) (hfar : E < FAR_FUTURE_EPOCH)
     (hdelay : 1 ≤ p.MIN_VALIDATOR_WITHDRAWABILITY_DELAY) (hE : E ≤ previous_epoch + 1) :
     rewardsEligible previous_epoch v ≠ .ok true := by
   have hx : v.exit_epoch + p.MIN_VALIDATOR_WITHDRAWABILITY_DELAY ≤ v.withdrawable_epoch := by
@@ -136,15 +136,15 @@ theorem VStep.trans {p : Preset} {E : Epoch} {v1 v2 v3 : Validator} (h12 : VStep
     · exact .inr ⟨hf, he' ▸ hlt, by rw [hw', hw, he']⟩
     · exact .inr ⟨hf, hlt', hw'⟩
 
-/-- A validator step keeps `ExitDelayV`. -/
+/-- A validator step keeps `ValidatorExitToWithdrawableDelay`. -/
 theorem VStep.exitDelay {p : Preset} {E : Epoch} {v v' : Validator} (h : VStep p E v v')
-    (hv : ExitDelayV p v) : ExitDelayV p v' := by
+    (hv : ValidatorExitToWithdrawableDelay p v) : ValidatorExitToWithdrawableDelay p v' := by
   rcases h.2.2.2 with ⟨he, hw⟩ | ⟨-, -, hw⟩
   · exact hv.mono he (Nat.le_of_eq hw.symm)
   · exact .inr (Nat.le_of_eq hw.symm)
 
 /-- A validator step keeps a validator that is withdrawable at epoch `E'`, if it has
-`ExitDelayV` and `E'` is a real epoch. Its exit already started, so no new exit starts. -/
+`ValidatorExitToWithdrawableDelay` and `E'` is a real epoch. Its exit already started, so no new exit starts. -/
 theorem VStep.frozen {p : Preset} {E : Epoch} {v v' : Validator} {E' : Nat}
     (h : VStep p E v v') (hw : v.withdrawable_epoch ≤ E')
     (hx : v.exit_epoch + p.MIN_VALIDATOR_WITHDRAWABILITY_DELAY ≤ v.withdrawable_epoch)
@@ -202,10 +202,10 @@ theorem OpStep.trans {p : Preset} {s1 s2 s3 : BeaconState} (h12 : OpStep p s1 s2
     simp only [Nat.min_def, Gwei] at *
     split at hle2 <;> split at hle3 <;> split <;> omega
 
-/-- An operation step keeps `ExitDelay`. -/
+/-- An operation step keeps `ExitToWithdrawableDelay`. -/
 theorem OpStep.exitDelay {p : Preset} {s s' : BeaconState} (h : OpStep p s s')
-    (hs : ExitDelay p s) : ExitDelay p s' := by
-  refine ExitDelay.of_pointwise (fun j v' hv' => ?_) hs
+    (hs : ExitToWithdrawableDelay p s) : ExitToWithdrawableDelay p s' := by
+  refine ExitToWithdrawableDelay.of_pointwise (fun j v' hv' => ?_) hs
   have hj : j < s.validators.length := by
     rw [← h.2.1]; exact (List.getElem?_eq_some_iff.mp hv').1
   exact ⟨_, List.getElem?_eq_getElem hj,
@@ -559,11 +559,11 @@ theorem process_parent_execution_payload_opStep (p : Preset) (o : Oracle) (s s' 
 
 /-! ## Slashings, withdrawals and sync rewards -/
 
-/-- A slashing keeps `ExitDelay`. -/
+/-- A slashing keeps `ExitToWithdrawableDelay`. -/
 theorem SlashFields.exitDelay {p : Preset} {s s' : BeaconState} (h : SlashFields p s s')
-    (hlen : s'.validators.length = s.validators.length) (hs : ExitDelay p s) :
-    ExitDelay p s' := by
-  refine ExitDelay.of_pointwise (fun j v' hv' => ?_) hs
+    (hlen : s'.validators.length = s.validators.length) (hs : ExitToWithdrawableDelay p s) :
+    ExitToWithdrawableDelay p s' := by
+  refine ExitToWithdrawableDelay.of_pointwise (fun j v' hv' => ?_) hs
   have hj : j < s.validators.length := by
     rw [← hlen]; exact (List.getElem?_eq_some_iff.mp hv').1
   refine ⟨_, List.getElem?_eq_getElem hj, fun hd => ?_⟩
@@ -571,13 +571,13 @@ theorem SlashFields.exitDelay {p : Preset} {s s' : BeaconState} (h : SlashFields
   · exact hd
   · exact hch.exitDelay hd
 
-/-- `process_proposer_slashing` keeps `ExitDelay`. -/
+/-- `process_proposer_slashing` keeps `ExitToWithdrawableDelay`. -/
 theorem process_proposer_slashing_exitDelay (p : Preset) (o : Oracle) (s s' : BeaconState)
     (ps : ProposerSlashing) (h : process_proposer_slashing p o s ps = .ok s')
-    (hs : ExitDelay p s) : ExitDelay p s' := by
+    (hs : ExitToWithdrawableDelay p s) : ExitToWithdrawableDelay p s' := by
   obtain ⟨-, -, -, -, hother, ⟨v, v', hv, hv', -, -, hch⟩, -⟩ :=
     process_proposer_slashing_effects p o s s' ps h
-  refine ExitDelay.of_pointwise (fun j u' hu' => ?_) hs
+  refine ExitToWithdrawableDelay.of_pointwise (fun j u' hu' => ?_) hs
   by_cases hj : j = ps.signed_header_1.message.proposer_index
   · subst hj
     rw [hv'] at hu'
@@ -585,23 +585,23 @@ theorem process_proposer_slashing_exitDelay (p : Preset) (o : Oracle) (s s' : Be
     exact ⟨v, hv, hch.exitDelay⟩
   · exact ⟨u', (hother j hj).symm.trans hu', id⟩
 
-/-- `process_attester_slashing` keeps `ExitDelay`. -/
+/-- `process_attester_slashing` keeps `ExitToWithdrawableDelay`. -/
 theorem process_attester_slashing_exitDelay (p : Preset) (o : Oracle) (s s' : BeaconState)
     (as : AttesterSlashing) (h : process_attester_slashing p o s as = .ok s')
-    (hs : ExitDelay p s) : ExitDelay p s' := by
+    (hs : ExitToWithdrawableDelay p s) : ExitToWithdrawableDelay p s' := by
   obtain ⟨heff, hf⟩ := process_attester_slashing_ok p o s s' as h
   exact hf.exitDelay heff.2.1 hs
 
-/-- `process_withdrawals` keeps `ExitDelay`. -/
+/-- `process_withdrawals` keeps `ExitToWithdrawableDelay`. -/
 theorem process_withdrawals_exitDelay (p : Preset) (s s' : BeaconState)
-    (h : process_withdrawals p s = .ok s') (hs : ExitDelay p s) : ExitDelay p s' :=
+    (h : process_withdrawals p s = .ok s') (hs : ExitToWithdrawableDelay p s) : ExitToWithdrawableDelay p s' :=
   .of_validators_eq (process_withdrawals_core p s s' h).1 hs
 
-/-- `process_sync_aggregate` keeps `ExitDelay`. -/
+/-- `process_sync_aggregate` keeps `ExitToWithdrawableDelay`. -/
 theorem process_sync_aggregate_exitDelay (p : Preset) (o : Oracle) (s s' : BeaconState)
     (sync_aggregate : SyncAggregate)
-    (h : process_sync_aggregate p o s sync_aggregate = .ok s') (hs : ExitDelay p s) :
-    ExitDelay p s' := by
+    (h : process_sync_aggregate p o s sync_aggregate = .ok s') (hs : ExitToWithdrawableDelay p s) :
+    ExitToWithdrawableDelay p s' := by
   obtain ⟨hv, -⟩ := process_sync_aggregate_frame p o s s' sync_aggregate h
   exact .of_validators_eq (by rw [hv]) hs
 
@@ -668,24 +668,24 @@ private theorem process_pending_consolidations_validators (p : Preset) (s s' : B
       | contradiction
       | (cases hb; exact hst)
 
-/-- One validator write that keeps the exit and withdrawable epochs keeps `ExitDelay`. -/
-theorem ExitDelay.of_listSet {p : Preset} {s : BeaconState} {i : Nat} {v v' : Validator}
+/-- One validator write that keeps the exit and withdrawable epochs keeps `ExitToWithdrawableDelay`. -/
+theorem ExitToWithdrawableDelay.of_listSet {p : Preset} {s : BeaconState} {i : Nat} {v v' : Validator}
     {l : List Validator} (hl : listSet s.validators i v' = .ok l)
     (hv : listGet s.validators i = .ok v) (he : v'.exit_epoch = v.exit_epoch)
-    (hw : v'.withdrawable_epoch = v.withdrawable_epoch) (hd : ExitDelay p s) :
-    ∀ u ∈ l, ExitDelayV p u := by
+    (hw : v'.withdrawable_epoch = v.withdrawable_epoch) (hd : ExitToWithdrawableDelay p s) :
+    ∀ u ∈ l, ValidatorExitToWithdrawableDelay p u := by
   rw [(ExitsSanity.listSet_ok hl).2]
   intro u hu
   rcases List.mem_or_eq_of_mem_set hu with hu | rfl
   · exact hd u hu
   · exact (hd v (List.mem_of_getElem? (listGet_ok hv).2)).mono he (Nat.le_of_eq hw.symm)
 
-/-- `initiate_validator_exit` keeps `ExitDelay`. -/
+/-- `initiate_validator_exit` keeps `ExitToWithdrawableDelay`. -/
 theorem initiate_validator_exit_exitDelay {p : Preset} {tab : Gwei} {s s' : BeaconState}
-    {index : Nat} (h : initiate_validator_exit p tab s index = .ok s') (hd : ExitDelay p s) :
-    ExitDelay p s' := by
+    {index : Nat} (h : initiate_validator_exit p tab s index = .ok s') (hd : ExitToWithdrawableDelay p s) :
+    ExitToWithdrawableDelay p s' := by
   obtain ⟨-, -, hother, v, v', hv, hv', hch⟩ := initiate_validator_exit_ok p tab s s' index h
-  refine ExitDelay.of_pointwise (fun j u' hu' => ?_) hd
+  refine ExitToWithdrawableDelay.of_pointwise (fun j u' hu' => ?_) hd
   by_cases hj : j = index
   · subst hj
     rw [hv'] at hu'
@@ -693,17 +693,17 @@ theorem initiate_validator_exit_exitDelay {p : Preset} {tab : Gwei} {s s' : Beac
     exact ⟨v, hv, hch.exitDelay⟩
   · exact ⟨u', (hother j hj).symm.trans hu', id⟩
 
-/-- `process_registry_updates` keeps `ExitDelay`. It writes activation epochs, or starts an
+/-- `process_registry_updates` keeps `ExitToWithdrawableDelay`. It writes activation epochs, or starts an
 exit through `initiate_validator_exit`. -/
 theorem process_registry_updates_exitDelay (p : Preset) (total_active_balance : Gwei)
     (s s' : BeaconState) (h : process_registry_updates p total_active_balance s = .ok s')
-    (hd : ExitDelay p s) : ExitDelay p s' := by
+    (hd : ExitToWithdrawableDelay p s) : ExitToWithdrawableDelay p s' := by
   unfold process_registry_updates at h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨r, hr, h⟩ := specM_bind_ok h
   cases h
-  refine SlashingsSanity.forIn_invariant (ExitDelay p) _ ?_ _ s _ hd hr
+  refine SlashingsSanity.forIn_invariant (ExitToWithdrawableDelay p) _ ?_ _ s _ hd hr
   intro index st r hst hb
   simp only [bind, Except.bind, pure, Except.pure] at hb
   repeat' split at hb
@@ -713,7 +713,7 @@ theorem process_registry_updates_exitDelay (p : Preset) (total_active_balance : 
     | (cases hb
        exact initiate_validator_exit_exitDelay ‹initiate_validator_exit _ _ _ _ = _› hst)
     | (cases hb
-       refine ExitDelay.of_listSet ‹listSet _ _ _ = _› ‹listGet _ _ = _› ?_ ?_ hst <;> rfl)
+       refine ExitToWithdrawableDelay.of_listSet ‹listSet _ _ _ = _› ‹listGet _ _ = _› ?_ ?_ hst <;> rfl)
 
 /-- A validator from a deposit has no withdrawable epoch yet. -/
 theorem get_validator_from_deposit_withdrawable (p : Preset) (pubkey : BLSPubkey)
@@ -727,12 +727,12 @@ theorem get_validator_from_deposit_withdrawable (p : Preset) (pubkey : BLSPubkey
     | contradiction
     | (cases h; rfl)
 
-/-- `add_validator_to_registry` keeps `ExitDelay`. The new validator has no withdrawable epoch
+/-- `add_validator_to_registry` keeps `ExitToWithdrawableDelay`. The new validator has no withdrawable epoch
 yet. -/
 theorem add_validator_to_registry_exitDelay (p : Preset) (s s' : BeaconState)
     (pubkey : BLSPubkey) (withdrawal_credentials : Bytes32) (amount : Gwei)
     (h : add_validator_to_registry p s pubkey withdrawal_credentials amount = .ok s')
-    (hd : ExitDelay p s) : ExitDelay p s' := by
+    (hd : ExitToWithdrawableDelay p s) : ExitToWithdrawableDelay p s' := by
   unfold add_validator_to_registry at h
   obtain ⟨v, hv, h⟩ := specM_bind_ok h
   obtain ⟨l, hl, h⟩ := specM_bind_ok h
@@ -750,10 +750,10 @@ theorem add_validator_to_registry_exitDelay (p : Preset) (s s' : BeaconState)
   · rw [List.mem_singleton.mp hu]
     exact .inl (Nat.le_of_eq hw.symm)
 
-/-- `apply_pending_deposit` keeps `ExitDelay`. -/
+/-- `apply_pending_deposit` keeps `ExitToWithdrawableDelay`. -/
 theorem apply_pending_deposit_exitDelay (p : Preset) (o : Oracle) (s s' : BeaconState)
     (deposit : PendingDeposit) (h : apply_pending_deposit p o s deposit = .ok s')
-    (hd : ExitDelay p s) : ExitDelay p s' := by
+    (hd : ExitToWithdrawableDelay p s) : ExitToWithdrawableDelay p s' := by
   unfold apply_pending_deposit at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
@@ -762,11 +762,11 @@ theorem apply_pending_deposit_exitDelay (p : Preset) (o : Oracle) (s s' : Beacon
     | (cases h; exact hd)
     | exact add_validator_to_registry_exitDelay p s s' _ _ _ h hd
 
-/-- `process_pending_deposits` with `apply_pending_deposit` keeps `ExitDelay`. -/
+/-- `process_pending_deposits` with `apply_pending_deposit` keeps `ExitToWithdrawableDelay`. -/
 theorem process_pending_deposits_exitDelay (p : Preset) (o : Oracle)
     (total_active_balance : Gwei) (s s' : BeaconState)
     (h : process_pending_deposits p total_active_balance (apply_pending_deposit p o) s = .ok s')
-    (hd : ExitDelay p s) : ExitDelay p s' := by
+    (hd : ExitToWithdrawableDelay p s) : ExitToWithdrawableDelay p s' := by
   unfold process_pending_deposits at h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
@@ -776,7 +776,7 @@ theorem process_pending_deposits_exitDelay (p : Preset) (o : Oracle)
   obtain ⟨⟨_, _, _, _, st⟩, hr, h⟩ := specM_bind_ok h
   have hP := SlashingsSanity.forIn_invariant
     (fun r : Prod Uint64 (Prod Uint64 (Prod (List PendingDeposit) (Prod Bool BeaconState))) =>
-      ExitDelay p r.2.2.2.2) _ ?_ _ _ _ hd hr
+      ExitToWithdrawableDelay p r.2.2.2.2) _ ?_ _ _ _ hd hr
   · simp only [bind, Except.bind, pure, Except.pure] at h
     repeat' split at h
     all_goals first
@@ -792,11 +792,11 @@ theorem process_pending_deposits_exitDelay (p : Preset) (o : Oracle)
          exact apply_pending_deposit_exitDelay p o _ _ _
            ‹apply_pending_deposit _ _ _ _ = _› hst)
 
-/-- `process_effective_balance_updates` keeps `ExitDelay`. It writes only effective
+/-- `process_effective_balance_updates` keeps `ExitToWithdrawableDelay`. It writes only effective
 balances. -/
 theorem process_effective_balance_updates_exitDelay (p : Preset) (s s' : BeaconState)
-    (h : process_effective_balance_updates p s = .ok s') (hd : ExitDelay p s) :
-    ExitDelay p s' := by
+    (h : process_effective_balance_updates p s = .ok s') (hd : ExitToWithdrawableDelay p s) :
+    ExitToWithdrawableDelay p s' := by
   rw [process_effective_balance_updates_eq] at h
   cases hm : s.validators.zipIdx.mapM (effectiveBalanceStep p s.balances) with
   | error e => simp [hm, Except.map] at h
@@ -821,9 +821,9 @@ theorem process_effective_balance_updates_exitDelay (p : Preset) (s s' : BeaconS
         | (cases hs; exact ⟨rfl, rfl⟩)
     exact (hd _ (List.getElem_mem hv)).mono hkeep.1 (Nat.le_of_eq hkeep.2.symm)
 
-/-- `process_epoch` keeps `ExitDelay`. -/
+/-- `process_epoch` keeps `ExitToWithdrawableDelay`. -/
 theorem process_epoch_exitDelay (p : Preset) (o : Oracle) (s s' : BeaconState)
-    (h : process_epoch p o s = .ok s') (hd : ExitDelay p s) : ExitDelay p s' := by
+    (h : process_epoch p o s = .ok s') (hd : ExitToWithdrawableDelay p s) : ExitToWithdrawableDelay p s' := by
   unfold process_epoch at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
   obtain ⟨s2, h2, h⟩ := specM_bind_ok h
@@ -845,33 +845,33 @@ theorem process_epoch_exitDelay (p : Preset) (o : Oracle) (s s' : BeaconState)
   obtain ⟨s13, h13, h⟩ := specM_bind_ok h
   obtain ⟨s14, h14, h⟩ := specM_bind_ok h
   obtain ⟨s15, h15, h⟩ := specM_bind_ok h
-  have d1 := ExitDelay.of_validators_eq
+  have d1 := ExitToWithdrawableDelay.of_validators_eq
     (process_justification_and_finalization_frame p s s1 h1).1.1 hd
-  have d2 := ExitDelay.of_validators_eq (process_inactivity_updates_validators p _ _ h2) d1
-  have d3 := ExitDelay.of_validators_eq (process_rewards_and_penalties_validators p _ _ _ h3) d2
+  have d2 := ExitToWithdrawableDelay.of_validators_eq (process_inactivity_updates_validators p _ _ h2) d1
+  have d3 := ExitToWithdrawableDelay.of_validators_eq (process_rewards_and_penalties_validators p _ _ _ h3) d2
   have d4 := process_registry_updates_exitDelay p _ _ _ h4 d3
-  have d5 := ExitDelay.of_validators_eq (process_slashings_validators p _ _ _ h5) d4
-  have d6 := ExitDelay.of_validators_eq (process_eth1_data_reset_validators p _ _ h6) d5
+  have d5 := ExitToWithdrawableDelay.of_validators_eq (process_slashings_validators p _ _ _ h5) d4
+  have d6 := ExitToWithdrawableDelay.of_validators_eq (process_eth1_data_reset_validators p _ _ h6) d5
   have d7 := process_pending_deposits_exitDelay p o _ _ _ h7 d6
-  have d8 := ExitDelay.of_validators_eq (process_pending_consolidations_validators p _ _ h8) d7
-  have d9 := ExitDelay.of_validators_eq
+  have d8 := ExitToWithdrawableDelay.of_validators_eq (process_pending_consolidations_validators p _ _ h8) d7
+  have d9 := ExitToWithdrawableDelay.of_validators_eq
     (process_builder_pending_payments_validators p _ _ _ h9) d8
   have d10 := process_effective_balance_updates_exitDelay p _ _ h10 d9
-  have d11 := ExitDelay.of_validators_eq (process_slashings_reset_frame p _ _ h11).1.1 d10
-  have d12 := ExitDelay.of_validators_eq (process_randao_mixes_reset_frame p _ _ h12).1.1 d11
-  have d13 := ExitDelay.of_validators_eq
+  have d11 := ExitToWithdrawableDelay.of_validators_eq (process_slashings_reset_frame p _ _ h11).1.1 d10
+  have d12 := ExitToWithdrawableDelay.of_validators_eq (process_randao_mixes_reset_frame p _ _ h12).1.1 d11
+  have d13 := ExitToWithdrawableDelay.of_validators_eq
     (process_historical_summaries_update_frame p o _ _ h13).1.1 d12
-  have d14 := ExitDelay.of_validators_eq
+  have d14 := ExitToWithdrawableDelay.of_validators_eq
     (process_sync_committee_updates_frame p o _ _ h14).1.1 d13
-  have d15 := ExitDelay.of_validators_eq (process_proposer_lookahead_frame p o _ _ h15).1.1 d14
-  exact ExitDelay.of_validators_eq (process_ptc_window_frame p o _ _ h).1.1 d15
+  have d15 := ExitToWithdrawableDelay.of_validators_eq (process_proposer_lookahead_frame p o _ _ h15).1.1 d14
+  exact ExitToWithdrawableDelay.of_validators_eq (process_ptc_window_frame p o _ _ h).1.1 d15
 
-/-- `process_slots` with the real `process_epoch` keeps `ExitDelay`. -/
+/-- `process_slots` with the real `process_epoch` keeps `ExitToWithdrawableDelay`. -/
 theorem process_slots_exitDelay (p : Preset) (o : Oracle) (s s' : BeaconState) (slot : Slot)
-    (h : process_slots p o (process_epoch p o) s slot = .ok s') (hd : ExitDelay p s) :
-    ExitDelay p s' :=
-  process_slots_invariant p o (process_epoch p o) (ExitDelay p)
-    (fun _ _ hs hP => ExitDelay.of_validators_eq (process_slot_frame p o _ _ hs).1.1 hP)
+    (h : process_slots p o (process_epoch p o) s slot = .ok s') (hd : ExitToWithdrawableDelay p s) :
+    ExitToWithdrawableDelay p s' :=
+  process_slots_invariant p o (process_epoch p o) (ExitToWithdrawableDelay p)
+    (fun _ _ hs hP => ExitToWithdrawableDelay.of_validators_eq (process_slot_frame p o _ _ hs).1.1 hP)
     (fun _ _ hs hP => process_epoch_exitDelay p o _ _ hs hP)
     (fun _ _ hP => hP) s s' slot hd h
 

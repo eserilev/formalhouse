@@ -16,10 +16,10 @@ namespace EpochProofs.Spec
 
 /-- The Lighthouse Fulu model from the start of the single pass to the effective balance updates
 after the consolidations. -/
-def lhSinglePassFulu [PresetCfg] [FuluCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
+def lhSinglePassFulu [CurrentPreset] [CurrentFuluConfig] (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
   lhFullTailWithFulu (fun s _ plan x => lhMidCore o s plan (s.withRowsChurn x.1 x.2)) s
 
-theorem lhFullTailWithFulu_order_eq [PresetCfg] [FuluCfg] (o : Oracle) (s : BeaconState) :
+theorem lhFullTailWithFulu_order_eq [CurrentPreset] [CurrentFuluConfig] (o : Oracle) (s : BeaconState) :
     lhFullTailWithFulu (lhAfterPassOrderFulu o) s = lhSinglePassFulu o s >>= lhRestOrderFulu o := by
   unfold lhSinglePassFulu lhFullTailWithFulu lhAfterPassOrderFulu lhMidFulu lhMidCore
   simp only [bind, Except.bind]
@@ -27,7 +27,7 @@ theorem lhFullTailWithFulu_order_eq [PresetCfg] [FuluCfg] (o : Oracle) (s : Beac
   all_goals rfl
 
 /-- The Fulu single pass does not write the proposer lookahead. -/
-theorem lhSinglePassFulu_keep [PresetCfg] [FuluCfg] (o : Oracle) (s T : BeaconState)
+theorem lhSinglePassFulu_keep [CurrentPreset] [CurrentFuluConfig] (o : Oracle) (s T : BeaconState)
     (h : lhSinglePassFulu o s = .ok T) : T.proposer_lookahead = s.proposer_lookahead := by
   unfold lhSinglePassFulu lhFullTailWithFulu at h
   obtain ⟨cur, -, h⟩ := specM_bind_ok h
@@ -39,7 +39,7 @@ theorem lhSinglePassFulu_keep [PresetCfg] [FuluCfg] (o : Oracle) (s T : BeaconSt
   obtain ⟨x, -, h⟩ := specM_bind_ok h
   exact (lhMidCore_keep o s plan x T h).2.1
 
-theorem lhRestOrderFulu_eq [PresetCfg] (o : Oracle) (t : BeaconState) :
+theorem lhRestOrderFulu_eq [CurrentPreset] (o : Oracle) (t : BeaconState) :
     lhRestOrderFulu o t = process_proposer_lookahead_fulu P o t >>= lhTailOrder o := rfl
 
 /-- `process_proposer_lookahead_fulu` keeps the length of the lookahead. -/
@@ -92,7 +92,7 @@ open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 open state_processing.per_epoch_processing.single_pass_step (ExitChurn StepContext)
 
 /-- `rowsContract_stepSpec` with the Fulu step: under `RowsContract`, one `apply_step` call
-runs `lhRowStepFull` with the registry total `fuluTab`. -/
+runs `lhRowStepFull` with the registry total `fuluTotalActiveBalance`. -/
 theorem rowsContract_stepSpec_fulu {R E : Type} (inst : LhRegistryRows R E) (p : Spec.Preset)
     (f : Spec.FuluConfig) (hcompat : Spec.FuluCompat p f) (view : R → List Spec.Row)
     (inputsOf : Spec.Row → Spec.LhRowInputs) (hc : RowsContract inst p view inputsOf)
@@ -102,7 +102,7 @@ theorem rowsContract_stepSpec_fulu {R E : Type} (inst : LhRegistryRows R E) (p :
     (k : per_epoch_processing.registry_update.RegistryConstants) (hk : ConstantsMatchBase p k)
     (hkf : FuluChurnMatch p f k) :
     StepSpec inst view (fun churn r => Spec.lhRowStepFull p
-      { ctx with total_active_balance := Spec.fuluTab p f ctx.total_active_balance }
+      { ctx with total_active_balance := Spec.fuluTotalActiveBalance p f ctx.total_active_balance }
       downward upward (inputsOf r) churn r) c k := by
   intro s i ch r hr
   obtain ⟨lr, ri, hm, hi, hrun⟩ := hc.apply_step s i ch c k r hr
@@ -111,11 +111,11 @@ theorem rowsContract_stepSpec_fulu {R E : Type} (inst : LhRegistryRows R E) (p :
   obtain ⟨res, hres, habs⟩ := spec_imp_exists (single_pass_step_equiv_fulu p f hcompat lr r hm ri _
     hi' ch c ctx hcm downward upward hdownward hupward k hk hkf)
   have hirr : Spec.lhRowStepFull p
-      { ctx with total_active_balance := Spec.fuluTab p f ctx.total_active_balance }
+      { ctx with total_active_balance := Spec.fuluTotalActiveBalance p f ctx.total_active_balance }
       downward upward { inputsOf r with base_reward := ri.base_reward.val }
       (ch.earliest_exit_epoch.val, ch.exit_balance_to_consume.val) r =
       Spec.lhRowStepFull p
-      { ctx with total_active_balance := Spec.fuluTab p f ctx.total_active_balance }
+      { ctx with total_active_balance := Spec.fuluTotalActiveBalance p f ctx.total_active_balance }
       downward upward (inputsOf r)
       (ch.earliest_exit_epoch.val, ch.exit_balance_to_consume.val) r := by
     rcases hi.base_reward with h | h
@@ -142,7 +142,7 @@ theorem rowsContract_stepSpec_fulu {R E : Type} (inst : LhRegistryRows R E) (p :
 
 variable {σ E : Type}
 
-variable [Spec.PresetCfg] [Spec.FuluCfg]
+variable [Spec.CurrentPreset] [Spec.CurrentFuluConfig]
 
 /-- The Fulu proposer candidates: the active validators at the lookahead epoch. -/
 def FuluProposerIndices (L : LookaheadGlue σ) (view : σ → Spec.BeaconState) : Prop :=
@@ -153,12 +153,12 @@ def FuluProposerIndices (L : LookaheadGlue σ) (view : σ → Spec.BeaconState) 
 pass. -/
 def LookaheadFin (L : LookaheadGlue σ) (o : Spec.Oracle) (view : σ → Spec.BeaconState)
     (st : σ) : Prop :=
-  ∀ s, Spec.ProposerFin Spec.P o (view st)
+  ∀ s, Spec.ProposerSelectionEnds Spec.P o (view st)
     (Spec.get_active_validator_indices (view st) (L.epoch st).val) s
 
-omit [Spec.FuluCfg] in
+omit [Spec.CurrentFuluConfig] in
 /-- The composed Fulu lookahead returns the state of `process_proposer_lookahead_fulu`. -/
-theorem lookahead_spec_fulu [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds] (L : LookaheadGlue σ)
+theorem lookahead_spec_fulu [Spec.CurrentPreset.Valid] [Spec.CurrentPreset.Bounds] (L : LookaheadGlue σ)
     (o : Spec.Oracle) (view : σ → Spec.BeaconState) (hL : LookaheadLinks L o view)
     (hpi : FuluProposerIndices L view) (st : σ) (hn1 : LookaheadN1 L st)
     (hfin : LookaheadFin L o view st)
@@ -193,9 +193,9 @@ theorem lookahead_spec_fulu [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds] (L : Loo
   rfl
 
 /-- The composed Fulu single pass returns the state of the model `lhSinglePassFulu`. -/
-theorem singlePassFulu_spec [Spec.PresetCfg.Ok] [Spec.FuluCfg.Ok] (G : SinglePassGlue σ E)
+theorem singlePassFulu_spec [Spec.CurrentPreset.Valid] [Spec.CurrentFuluConfig.Valid] (G : SinglePassGlue σ E)
     (o : Spec.Oracle) (view : σ → Spec.BeaconState) (st : σ)
-    (hL : SinglePassLinks G o view st Spec.fuluTabM)
+    (hL : SinglePassLinks G o view st Spec.fuluChurnTotal)
     (hk : ConstantsMatchBase Spec.P G.registryConstants)
     (hkf : FuluChurnMatch Spec.P Spec.FC G.registryConstants)
     (hslot : (view st).slot < 2 ^ 64)
@@ -239,7 +239,7 @@ theorem singlePassFulu_spec [Spec.PresetCfg.Ok] [Spec.FuluCfg.Ok] (G : SinglePas
     cases this; rfl
   subst hxv
   -- The steps after the loop.
-  obtain ⟨st4, ha, hv4⟩ := afterLoop_spec G o view st Spec.fuluTabM hL tab cur htab hcur plan
+  obtain ⟨st4, ha, hv4⟩ := afterLoop_spec G o view st Spec.fuluChurnTotal hL tab cur htab hcur plan
     hplan (G.rowsReturn st rows' ch) _ (hL.rowsReturn rows' ch) (by rw [← hxlen]) T hT
   refine ⟨st4, ?_, hv4⟩
   unfold singlePassCore
@@ -257,7 +257,7 @@ structure EpochGlueFulu (σ E : Type) where
   tail : TailGlue σ
 
 section
-omit [Spec.PresetCfg] [Spec.FuluCfg]
+omit [Spec.CurrentPreset] [Spec.CurrentFuluConfig]
 
 /-- The Rust state after justification and finalization. -/
 def afterJustificationFulu (G : EpochGlueFulu σ E) (st : σ) : OptionT Result σ :=
@@ -294,7 +294,7 @@ structure EpochLinksFulu (G : EpochGlueFulu σ E) (o : Spec.Oracle)
   justification : JustificationLinks G.justification view st
   /-- The single pass, at the state after justification. -/
   singlePass : ∀ st1, (afterJustificationFulu G st).run = ok (some st1) →
-    SinglePassLinks G.singlePass o view st1 Spec.fuluTabM
+    SinglePassLinks G.singlePass o view st1 Spec.fuluChurnTotal
   /-- `registry_constants` for Fulu. -/
   registryConstants : ConstantsMatchBase Spec.P G.singlePass.registryConstants
   /-- The churn constants of Fulu. -/
@@ -310,7 +310,7 @@ structure EpochLinksFulu (G : EpochGlueFulu σ E) (o : Spec.Oracle)
     (G.lookahead.proposerIndices st2).val.length ≤ 2 ^ 24
   /-- A fact about hash values: each Electra proposer loop ends before its last pass. -/
   proposerSelectionEnds : ∀ st2, (afterSinglePassFulu G st).run = ok (some st2) →
-    ∀ seed, Spec.ProposerFin Spec.P o (view st2)
+    ∀ seed, Spec.ProposerSelectionEnds Spec.P o (view st2)
       (Spec.get_active_validator_indices (view st2) (G.lookahead.epoch st2).val) seed
   /-- At most `2^24` sync committee candidates enter the shuffle. -/
   syncCandidatesFitShuffle : ∀ st5, (afterResetsFulu G st).run = ok (some st5) →
@@ -320,7 +320,7 @@ structure EpochLinksFulu (G : EpochGlueFulu σ E) (o : Spec.Oracle)
 /-- The composed Fulu epoch returns the state of the model: when
 `process_epoch_lighthouse_fulu` returns `ok`, the Rust returns `Ok` with a state whose view is the
 model's. -/
-theorem epochFulu_spec [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds] [Spec.FuluCfg.Ok]
+theorem epochFulu_spec [Spec.CurrentPreset.Valid] [Spec.CurrentPreset.Bounds] [Spec.CurrentFuluConfig.Valid]
     (G : EpochGlueFulu σ E) (o : Spec.Oracle) (view : σ → Spec.BeaconState) (st : σ)
     (hL : EpochLinksFulu G o view st) (hslot : (view st).slot < 2 ^ 64)
     (hjb : (view st).justification_bits.length = Spec.JUSTIFICATION_BITS_LENGTH)

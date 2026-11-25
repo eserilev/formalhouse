@@ -39,9 +39,9 @@ theorem uint_to_bytes_eq (width n : Nat) :
     apply UInt8.toNat_inj.mp
     simp [Spec.uint_to_bytes, ByteOrder.toLE, Nat.shiftRight_eq_div_pow, Nat.pow_mul]
 
-theorem leNat_eq {n : Nat} (bytes : Vector UInt8 n) :
-    Spec.leNat bytes.toList = ByteOrder.ofLE bytes := by
-  rw [Spec.leNat, ByteOrder.ofLE, ← Array.foldr_toList]
+theorem littleEndianValue_eq {n : Nat} (bytes : Vector UInt8 n) :
+    Spec.littleEndianValue bytes.toList = ByteOrder.ofLE bytes := by
+  rw [Spec.littleEndianValue, ByteOrder.ofLE, ← Array.foldr_toList]
   rfl
 
 /-- The hash of the reference, on bytes that EthLib keeps in an array. -/
@@ -56,7 +56,7 @@ theorem pivotOf_eq {checks : SignatureChecks} {o : Spec.Oracle}
     (ho : OracleMatches preset checks o) (seed : Bytes32) (n round : Nat) :
     Spec.pivotOf o seed.toList n round = Shuffle.pivot seed round n := by
   unfold Spec.pivotOf Shuffle.pivot Shuffle.roundInput
-  rw [hash_eq ho (data := seed.toArray.push (UInt8.ofNat round)) (by simp [toArray_toList]), ← leNat_eq]
+  rw [hash_eq ho (data := seed.toArray.push (UInt8.ofNat round)) (by simp [toArray_toList]), ← littleEndianValue_eq]
   congr 2
 
 theorem sigma_eq {checks : SignatureChecks} {o : Spec.Oracle}
@@ -88,18 +88,18 @@ theorem sigma_eq {checks : SignatureChecks} {o : Spec.Oracle}
     rw [← decide_eq_true_iff (p := _ ≠ 0), ← hshift]
   simp only [hbit]
 
-theorem csiFold_eq {checks : SignatureChecks} {o : Spec.Oracle}
+theorem shuffledIndexAfterRounds_eq {checks : SignatureChecks} {o : Spec.Oracle}
     (ho : OracleMatches preset checks o) (seed : Bytes32) (n rounds x : Nat) :
-    Spec.csiFold o seed.toList n rounds x = Shuffle.shuffledIndex rounds seed n x := by
+    Spec.shuffledIndexAfterRounds o seed.toList n rounds x = Shuffle.shuffledIndex rounds seed n x := by
   rw [Shuffle.shuffledIndex_eq_foldl]
-  simp only [Spec.csiFold, sigma_eq ho]
+  simp only [Spec.shuffledIndexAfterRounds, sigma_eq ho]
 
 theorem compute_shuffled_index_eq {checks : SignatureChecks} {o : Spec.Oracle}
     (hbounds : CommitteeBounds preset) (ho : OracleMatches preset checks o) (seed : Bytes32)
     {index n : Nat} (hindex : index < n) (hn : n ≤ 2 ^ 40) :
     Spec.compute_shuffled_index (toSpecPreset preset config) o index n seed =
       .ok (Shuffle.shuffledIndex preset.SHUFFLE_ROUND_COUNT.toNat seed n index) := by
-  rw [Spec.compute_shuffled_index_eq _ _ _ _ _ hindex hn hbounds.rounds, csiFold_eq ho]
+  rw [Spec.compute_shuffled_index_eq _ _ _ _ _ hindex hn hbounds.rounds, shuffledIndexAfterRounds_eq ho]
   rfl
 
 /-! ## Seeds -/

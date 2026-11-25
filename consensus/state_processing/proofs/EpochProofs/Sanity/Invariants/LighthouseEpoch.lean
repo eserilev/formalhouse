@@ -117,7 +117,7 @@ theorem registryRowStep_activeKey (p : Preset) (total_active_balance current_epo
 /-- `process_registry_updates` keeps the `activeKey` of each validator at the current epoch,
 and so the total active balance. -/
 theorem process_registry_updates_activeKey (p : Preset) (total_active_balance : Gwei)
-    (s s' : BeaconState) (hrows : RowsOk s) (current_epoch activation_epoch : Epoch)
+    (s s' : BeaconState) (hrows : ListLengthsMatch s) (current_epoch activation_epoch : Epoch)
     (hcurrent : get_current_epoch p s = .ok current_epoch)
     (hactivation : compute_activation_exit_epoch p current_epoch = .ok activation_epoch)
     (hcur : current_epoch < FAR_FUTURE_EPOCH)
@@ -151,7 +151,7 @@ theorem process_registry_updates_activeKey (p : Preset) (total_active_balance : 
 has at most `k` times the active increments, for any `k ≤ 2^60 / 10^9`. A total effective
 balance below `2^60` Gwei gives such a `k`. In exchange the row has a balance below `2^62` and
 an effective balance at most `MAX_EFFECTIVE_BALANCE_ELECTRA`. -/
-theorem lhRowStep_eq_singlePassStep_of_supply [PresetCfg] (ctx : LhStepContext)
+theorem lhRowStep_eq_singlePassStep_of_supply [CurrentPreset] (ctx : LhStepContext)
     (hgen : ctx.after_genesis = true) (rctx : RewardsContext)
     (r : Row) (churn : Epoch × Gwei) (base_reward : Gwei) (activation_epoch : Epoch)
     (hprev : rctx.previous_epoch = ctx.previous_epoch)
@@ -242,7 +242,7 @@ private theorem sum_filter_map_le {α : Type} (P : α → Bool) (f : α → Nat)
     · simp [hp]; omega
 
 /-- The sum of the effective balances of some rows is at most the supply. -/
-private theorem rows_sum_le [PresetCfg] (s : BeaconState) (Q : Row → Bool) :
+private theorem rows_sum_le [CurrentPreset] (s : BeaconState) (Q : Row → Bool) :
     (((rowsOf s).filter Q).map (·.validator.effective_balance)).sum ≤ totalEffectiveBalance s := by
   have h := sum_filter_map_le Q (·.validator.effective_balance) (rowsOf s)
   have hm : (rowsOf s).map (·.validator.effective_balance) =
@@ -265,7 +265,7 @@ private theorem mapM_rows_effective_balance (s : BeaconState) :
     rfl
 
 /-- `get_total_balance` of the indices of some rows: the sum, at least one increment. -/
-theorem get_total_balance_rows [PresetCfg] (p : Preset) (s : BeaconState) (Q : Row → Bool)
+theorem get_total_balance_rows [CurrentPreset] (p : Preset) (s : BeaconState) (Q : Row → Bool)
     (hsupply : totalEffectiveBalance s < 2 ^ 64) :
     get_total_balance p s (((rowsOf s).filter Q).map (·.index)) =
       .ok (max p.EFFECTIVE_BALANCE_INCREMENT
@@ -279,7 +279,7 @@ theorem get_total_balance_rows [PresetCfg] (p : Preset) (s : BeaconState) (Q : R
 
 /-- `get_total_active_balance` succeeds below the supply bound, is at least one increment and
 at most the supply. -/
-theorem get_total_active_balance_bounds [PresetCfg] (p : Preset) (s : BeaconState) (epoch : Epoch)
+theorem get_total_active_balance_bounds [CurrentPreset] (p : Preset) (s : BeaconState) (epoch : Epoch)
     (hepoch : get_current_epoch p s = .ok epoch)
     (hsupply : totalEffectiveBalance s < 2 ^ 64) :
     ∃ t, get_total_active_balance p s = .ok t ∧ p.EFFECTIVE_BALANCE_INCREMENT ≤ t ∧
@@ -348,7 +348,7 @@ private theorem has_flag_eq (flags : ParticipationFlags) (flag_index : Nat)
 
 /-- `get_unslashed_participating_indices` for the previous epoch is the indices of the
 participating rows. -/
-private theorem participating_ok [PresetCfg] (p : Preset) (state : BeaconState) (hrows : RowsOk state)
+private theorem participating_ok [CurrentPreset] (p : Preset) (state : BeaconState) (hrows : ListLengthsMatch state)
     (current_epoch previous_epoch : Epoch) (flag_index : Nat)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hprevious : get_previous_epoch p state = .ok previous_epoch)
@@ -406,7 +406,7 @@ private theorem participating_ok [PresetCfg] (p : Preset) (state : BeaconState) 
     cases state.validators[i].slashed <;> rfl
 
 /-- One flag has at most the supply in increments. -/
-theorem rewardsFlagIncrements_bound [PresetCfg] (p : Preset) (s : BeaconState) (hrows : RowsOk s)
+theorem rewardsFlagIncrements_bound [CurrentPreset] (p : Preset) (s : BeaconState) (hrows : ListLengthsMatch s)
     (current_epoch previous_epoch : Epoch) (flag_index : Nat)
     (hcurrent : get_current_epoch p s = .ok current_epoch)
     (hprevious : get_previous_epoch p s = .ok previous_epoch)
@@ -428,8 +428,8 @@ theorem rewardsFlagIncrements_bound [PresetCfg] (p : Preset) (s : BeaconState) (
 
 /-- The rewards context succeeds below the supply bound, if the finalized epoch is not after the
 previous epoch. Each flag then has at most the supply in increments. -/
-theorem rewardsContextOf_bounds [PresetCfg] (p : Preset) (total_active_balance : Gwei) (s : BeaconState)
-    (hrows : RowsOk s) (current_epoch previous_epoch : Epoch)
+theorem rewardsContextOf_bounds [CurrentPreset] (p : Preset) (total_active_balance : Gwei) (s : BeaconState)
+    (hrows : ListLengthsMatch s) (current_epoch previous_epoch : Epoch)
     (hcurrent : get_current_epoch p s = .ok current_epoch)
     (hprevious : get_previous_epoch p s = .ok previous_epoch)
     (hne : previous_epoch ≠ current_epoch) (hinc : p.EFFECTIVE_BALANCE_INCREMENT ≠ 0)
@@ -468,7 +468,7 @@ private theorem current_participation_row {state : BeaconState} {r : Row}
 
 /-- `get_unslashed_participating_indices` for the current epoch is the indices of the rows that
 have the flag in the current participation. -/
-private theorem participating_current_ok [PresetCfg] (p : Preset) (state : BeaconState) (hrows : RowsOk state)
+private theorem participating_current_ok [CurrentPreset] (p : Preset) (state : BeaconState) (hrows : ListLengthsMatch state)
     (current_epoch previous_epoch : Epoch) (flag_index : Nat)
     (hcurrent : get_current_epoch p state = .ok current_epoch)
     (hprevious : get_previous_epoch p state = .ok previous_epoch)
@@ -527,8 +527,8 @@ private theorem participating_current_ok [PresetCfg] (p : Preset) (state : Beaco
 
 /-- At the genesis epoch, below the supply bound, the rewards context succeeds, and its previous
 epoch is the genesis epoch. The flags read the current participation there. -/
-theorem rewardsContextOf_genesis [PresetCfg] (p : Preset) (total_active_balance : Gwei) (s : BeaconState)
-    (hrows : RowsOk s) (hcurrent : get_current_epoch p s = .ok GENESIS_EPOCH)
+theorem rewardsContextOf_genesis [CurrentPreset] (p : Preset) (total_active_balance : Gwei) (s : BeaconState)
+    (hrows : ListLengthsMatch s) (hcurrent : get_current_epoch p s = .ok GENESIS_EPOCH)
     (hinc : p.EFFECTIVE_BALANCE_INCREMENT ≠ 0) (hsupply : totalEffectiveBalance s < 2 ^ 64)
     (hfinalized : s.finalized_checkpoint.epoch = GENESIS_EPOCH) :
     ∃ rctx, rewardsContextOf p total_active_balance s = .ok rctx ∧
@@ -561,8 +561,8 @@ theorem rewardsContextOf_genesis [PresetCfg] (p : Preset) (total_active_balance 
 supply part of `EpochEntry`: each flag has at most `k` times the active increments for some
 `k ≤ 2^60 / 10^9`, each balance is below `2^62`, and each effective balance is at most
 `MAX_EFFECTIVE_BALANCE_ELECTRA`. -/
-theorem lighthouse_single_pass_eq_spec_supply [PresetCfg] (total_active_balance : Gwei) (state : BeaconState)
-    (hrows : RowsOk state) (current_epoch : Epoch)
+theorem lighthouse_single_pass_eq_spec_supply [CurrentPreset] (total_active_balance : Gwei) (state : BeaconState)
+    (hrows : ListLengthsMatch state) (current_epoch : Epoch)
     (hcurrent : get_current_epoch P state = .ok current_epoch)
     (hgenesis : current_epoch ≠ GENESIS_EPOCH)
     (rctx : RewardsContext)
@@ -636,7 +636,7 @@ theorem lighthouse_single_pass_eq_spec_supply [PresetCfg] (total_active_balance 
 
 /-- The base reward of a row, as the epoch cache holds it. It is 0 when `get_base_reward`
 fails, and the pass reads it only for eligible rows. -/
-def lhBaseReward [PresetCfg] (total_active_balance : Gwei) (r : Row) : Gwei :=
+def lhBaseReward [CurrentPreset] (total_active_balance : Gwei) (r : Row) : Gwei :=
   match rewardsBaseReward P total_active_balance r.validator with
   | .ok b => b
   | .error _ => 0
@@ -650,7 +650,7 @@ def specFourSteps (p : Preset) (s : BeaconState) : SpecM BeaconState := do
 
 /-- The Lighthouse single pass on mainnet: the inactivity, rewards, registry and slashings
 steps in one pass over the rows. The context comes from the state before the pass. -/
-def lhPass [PresetCfg] (s : BeaconState) : SpecM BeaconState := do
+def lhPass [CurrentPreset] (s : BeaconState) : SpecM BeaconState := do
   let current_epoch ← get_current_epoch P s
   let total_active_balance ← get_total_active_balance P s
   let rctx ← rewardsContextOf P total_active_balance s
@@ -687,7 +687,7 @@ theorem process_epoch_parts (p : Preset) (o : Oracle) (s : BeaconState) :
   simp only [process_epoch, specFourSteps, epochRest, bind_assoc]
 
 /-- Justification and finalization, the Lighthouse single pass, then the rest of the epoch. -/
-def process_epoch_lh_core [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
+def process_epoch_lh_core [CurrentPreset] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
   let s1 ← process_justification_and_finalization P s
   let s5 ← lhPass s1
   epochRest P o s5
@@ -696,7 +696,7 @@ def process_epoch_lh_core [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM Bea
 inactivity, rewards, registry and slashings steps. At the genesis epoch the spec skips the
 inactivity and rewards steps. Lighthouse also skips them there, through `after_genesis`, and
 this one epoch uses the spec path. -/
-def process_epoch_lh [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
+def process_epoch_lh [CurrentPreset] (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
   if s.slot / P.SLOTS_PER_EPOCH = GENESIS_EPOCH then process_epoch P o s
   else process_epoch_lh_core o s
 
@@ -769,11 +769,11 @@ private theorem current_epoch_eq {p : Preset} {s : BeaconState} {e : Epoch}
   · cases h
   · cases h; rfl
 
-/-- Under `FfgInvariant`, after `process_justification_and_finalization` the finalized epoch is
+/-- Under `CheckpointsInOrder`, after `process_justification_and_finalization` the finalized epoch is
 before the current epoch. -/
 theorem process_justification_and_finalization_finalized (p : Preset) (s s' : BeaconState)
     (current_epoch : Epoch) (hcurrent : get_current_epoch p s = .ok current_epoch)
-    (hgenesis : current_epoch ≠ GENESIS_EPOCH) (hinv : FfgInvariant p s)
+    (hgenesis : current_epoch ≠ GENESIS_EPOCH) (hinv : CheckpointsInOrder p s)
     (h : process_justification_and_finalization p s = .ok s') :
     s'.finalized_checkpoint.epoch + 1 ≤ current_epoch := by
   have hc := current_epoch_eq hcurrent
@@ -799,7 +799,7 @@ private theorem current_epoch_of_slot {p : Preset} {s s' : BeaconState} {e : Epo
 /-- Inside `process_epoch`, the total active balance does not change during the inactivity,
 rewards and registry steps. So the four steps use the total of the state before them. -/
 theorem specFourSteps_sameResultOrBothFail (p : Preset) (s1 : BeaconState) (total_active_balance : Gwei)
-    (htab : get_total_active_balance p s1 = .ok total_active_balance) (hrows : RowsOk s1)
+    (htab : get_total_active_balance p s1 = .ok total_active_balance) (hrows : ListLengthsMatch s1)
     (current_epoch activation_epoch : Epoch)
     (hcurrent : get_current_epoch p s1 = .ok current_epoch)
     (hactivation : compute_activation_exit_epoch p current_epoch = .ok activation_epoch)
@@ -831,7 +831,7 @@ theorem specFourSteps_sameResultOrBothFail (p : Preset) (s1 : BeaconState) (tota
   rw [t3, ok_bind]
   refine SameResultOrBothFail.bind (SameResultOrBothFail.refl _) (fun s4 h4 => ?_)
   have hslot4 := (process_registry_updates_checkpointsStable p _ _ _ h4).1
-  have hrows3 : RowsOk s3 := (hl2.trans hl3).rowsOk hrows
+  have hrows3 : ListLengthsMatch s3 := (hl2.trans hl3).rowsOk hrows
   have hkey := process_registry_updates_activeKey p _ s3 s4 hrows3 current_epoch
     activation_epoch hc3 hactivation hcur h4
   have t4 : get_total_active_balance p s4 = .ok total_active_balance := by
@@ -851,7 +851,7 @@ theorem compute_activation_exit_epoch_of_lt (p : Preset) (epoch : Epoch)
 
 /-- On mainnet, `slashingsPreamble` succeeds if three times the slashed sum fits in a `u64`
 and the total active balance is at least one increment. -/
-theorem slashingsPreamble_ok [PresetCfg] (total_active_balance : Gwei) (slashings : List Gwei)
+theorem slashingsPreamble_ok [CurrentPreset] (total_active_balance : Gwei) (slashings : List Gwei)
     (hmul : slashings.sum * 3 < UINT64_SIZE)
     (htotal : P.EFFECTIVE_BALANCE_INCREMENT ≤ total_active_balance) :
     ∃ adjusted per,
@@ -873,7 +873,7 @@ private theorem saturating_sub_one (e : Nat) : saturating_sub e 1 = e - 1 := by
 
 /-- On mainnet, `get_base_reward` succeeds when the total is at least one increment and the
 effective balance is at most `MAX_EFFECTIVE_BALANCE_ELECTRA`. -/
-theorem rewardsBaseReward_ok_mainnet [PresetCfg] (total_active_balance : Gwei) (v : Validator)
+theorem rewardsBaseReward_ok_mainnet [CurrentPreset] (total_active_balance : Gwei) (v : Validator)
     (htotal : P.EFFECTIVE_BALANCE_INCREMENT ≤ total_active_balance)
     (hmax : v.effective_balance ≤ P.MAX_EFFECTIVE_BALANCE_ELECTRA) :
     ∃ b, rewardsBaseReward P total_active_balance v = .ok b := by
@@ -892,7 +892,7 @@ theorem rewardsBaseReward_ok_mainnet [PresetCfg] (total_active_balance : Gwei) (
   have hr0 : r ≠ 0 := Nat.ne_of_gt (Nat.lt_of_lt_of_le (by decide) hroot)
   refine ⟨v.effective_balance / 1000000000 * (1000000000 * 64 / r), ?_⟩
   have hm : (1000000000 : Nat) * 64 < UINT64_SIZE := by decide
-  simp only [rewardsBaseReward, get_base_reward_per_increment, P, Preset.ofVar, uint64Div,
+  simp only [rewardsBaseReward, get_base_reward_per_increment, P, Preset.ofValues, uint64Div,
     uint64Mul, hr, hr0, hm, hprod, bind, Except.bind, pure, Except.pure, if_true, if_false,
     show (1000000000 : Nat) ≠ 0 from by decide]
 
@@ -903,7 +903,7 @@ results as `process_epoch`.
 
 The hypotheses are facts about the state at the start of the epoch:
 - `hrows`: the row lists have one entry per validator.
-- `hinv`: `FfgInvariant`. After justification and finalization it puts the finalized epoch
+- `hinv`: `CheckpointsInOrder`. After justification and finalization it puts the finalized epoch
   before the current epoch, so the inactivity leak test succeeds.
 - `hgenesis`, `hepoch`: the current epoch is not the genesis epoch, and the slashings target
   epoch (current + EPOCHS_PER_SLASHINGS_VECTOR / 2) fits in a `u64`.
@@ -913,8 +913,8 @@ The hypotheses are facts about the state at the start of the epoch:
   balances is below `2^60`. They replace the participation bound and the supply part of
   `EpochEntry`.
 - `hslashings`: three times the sum of the slashings vector fits in a `u64`. -/
-theorem process_epoch_lh_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (hrows : RowsOk s)
-    (hinv : FfgInvariant P s) (current_epoch : Epoch)
+theorem process_epoch_lh_sameResultOrBothFail [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) (hrows : ListLengthsMatch s)
+    (hinv : CheckpointsInOrder P s) (current_epoch : Epoch)
     (hcurrent : get_current_epoch P s = .ok current_epoch)
     (hgenesis : current_epoch ≠ GENESIS_EPOCH)
     (hepoch : current_epoch + P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE)
@@ -937,7 +937,7 @@ theorem process_epoch_lh_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] (o : Or
     rw [hs1]; exact hcurrent
   have hfin := process_justification_and_finalization_finalized _ s s1 current_epoch hcurrent
     hgenesis hinv h1
-  have hrows1 : RowsOk s1 := by rw [hs1]; exact hrows
+  have hrows1 : ListLengthsMatch s1 := by rw [hs1]; exact hrows
   have heff1 : ∀ i (h : i < s1.validators.length),
       rewardsEligible (current_epoch - 1) s1.validators[i] = .ok true →
         s1.validators[i].effective_balance ≤ 256 * s1.balances.getD i 0 := by
@@ -978,7 +978,7 @@ theorem process_epoch_lh_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] (o : Or
     · cases hactive
     · exact (Except.ok.inj hactive).symm
   have hactivation := compute_activation_exit_epoch_of_lt P current_epoch
-    (by simp only [P, Preset.ofVar]; epoch_omega)
+    (by simp only [P, Preset.ofValues]; epoch_omega)
   obtain ⟨adj, per, hpre⟩ := slashingsPreamble_ok tab s1.slashings hslashings htab_lo
   have hk : max P.EFFECTIVE_BALANCE_INCREMENT (totalEffectiveBalance s1) /
       P.EFFECTIVE_BALANCE_INCREMENT ≤ 1152921504 := by
@@ -1026,16 +1026,16 @@ theorem process_epoch_lh_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] (o : Or
 
 /-- The supply facts of the epoch: each balance is below `2^62`, the effective balances sum to
 less than `2^60` Gwei, and three times the slashed sum fits in a `u64`. -/
-def EpochBalanceBounds (s : BeaconState) : Prop :=
+def BalancesFarFromOverflow (s : BeaconState) : Prop :=
   (∀ i, i < s.validators.length → s.balances.getD i 0 < 2 ^ 62) ∧
     totalEffectiveBalance s < 2 ^ 60 ∧ s.slashings.sum * 3 < 2 ^ 64
 
-/-- The invariants at every `process_epoch` input of a reachable run (`EpochInputOk''`), with the
-balance bounds `EpochBalanceBounds` as its economic facts. `fulu_reachable_invariants` and
-`fulu_then_gloas_reachable_invariants` prove them on every run from a start state with the
+/-- The invariants at every `process_epoch` input of a reachable run (`EpochInputInvariantsFor`), with the
+balance bounds `BalancesFarFromOverflow` as its economic facts. `fulu_epoch_input_invariants` and
+`fulu_then_gloas_epoch_input_invariants` prove them on every run from a start state with the
 genesis invariants. -/
-def ReachableInvariants [PresetCfg] [PresetCfg.Ok] (s : BeaconState) : Prop :=
-  EpochInputOk'' EpochBalanceBounds s
+def EpochInputInvariants [CurrentPreset] [CurrentPreset.Valid] (s : BeaconState) : Prop :=
+  EpochInputInvariantsFor BalancesFarFromOverflow s
 
 /-- `SameResultOrBothFail` is symmetric. -/
 private theorem SameResultOrBothFail.symm' {α : Type} {x y : SpecM α} (h : SameResultOrBothFail x y) : SameResultOrBothFail y x :=
@@ -1043,9 +1043,9 @@ private theorem SameResultOrBothFail.symm' {α : Type} {x y : SpecM α} (h : Sam
 
 /-- On mainnet, at a state that `process_epoch` starts from, the Lighthouse epoch gives the
 same `ok` results as the spec epoch. -/
-theorem process_epoch_lh_sameResultOrBothFail' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
-    (hslot : t.slot < 2 ^ 64) (heb : EBOk P t) (hexit : ExitEpochsU64 t)
-    (hsupply : EpochBalanceBounds t) :
+theorem process_epoch_lh_sameResultOrBothFail' [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (t : BeaconState) (hb : EpochEndInvariants t)
+    (hslot : t.slot < 2 ^ 64) (heb : EffectiveBalancesValid P t) (hexit : ExitEpochsAreUint64 t)
+    (hsupply : BalancesFarFromOverflow t) :
     SameResultOrBothFail (process_epoch_lh o t) (process_epoch P o t) := by
   obtain ⟨hinv, hrows, hentry⟩ := hb
   obtain ⟨hbalance, htotal, hslashings⟩ := hsupply
@@ -1073,9 +1073,9 @@ theorem process_epoch_lh_sameResultOrBothFail' [PresetCfg] [PresetCfg.Ok] (o : O
 
 
 /-- `process_epoch_lh_sameResultOrBothFail'` in the form of the `hf` hypothesis of
-`reachable_state_transition_sameResultOrBothFail'`, with `EpochBalanceBounds` as the epoch condition. -/
-theorem process_epoch_lh_hf [PresetCfg] [PresetCfg.Ok] (o : Oracle) :
-    ∀ t, EpochInputOk EpochBalanceBounds t →
+`reachable_state_transition_sameResultOrBothFail'`, with `BalancesFarFromOverflow` as the epoch condition. -/
+theorem process_epoch_lh_hf [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) :
+    ∀ t, BasicEpochInputInvariants BalancesFarFromOverflow t →
       SameResultOrBothFail (process_epoch_lh o t) (process_epoch P o t) :=
   fun t ⟨hb, hslot, heb, hexit, hsupply⟩ =>
     process_epoch_lh_sameResultOrBothFail' o t hb hslot heb hexit hsupply

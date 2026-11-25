@@ -20,7 +20,7 @@ namespace EpochProofs.Spec
 /-! ## The Fulu proposer lookahead as a computed value and a write -/
 
 /-- The new `proposer_lookahead` that `process_proposer_lookahead_fulu` writes. -/
-def plFuluNew [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM (List ValidatorIndex) := do
+def plFuluNew [CurrentPreset] (o : Oracle) (s : BeaconState) : SpecM (List ValidatorIndex) := do
   let last_epoch_start ← uint64Sub s.proposer_lookahead.length P.SLOTS_PER_EPOCH
   let st := setPL s (s.proposer_lookahead.drop P.SLOTS_PER_EPOCH ++
     s.proposer_lookahead.drop last_epoch_start)
@@ -29,7 +29,7 @@ def plFuluNew [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM (List Validator
       P.MIN_SEED_LOOKAHEAD) 1)
   pure (st.proposer_lookahead.take last_epoch_start ++ last_epoch_proposers)
 
-theorem process_proposer_lookahead_fulu_eq [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) :
+theorem process_proposer_lookahead_fulu_eq [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) :
     process_proposer_lookahead_fulu P o s = (fun l => setPL s l) <$> plFuluNew o s := by
   unfold process_proposer_lookahead_fulu plFuluNew setPL
   simp only [get_current_epoch_mainnet, ok_bind']
@@ -52,7 +52,7 @@ theorem get_beacon_proposer_indices_fulu_congr {p : Preset} {o : Oracle} {s1 s2 
 
 /-- `plFuluNew` reads `proposer_lookahead`, `slot`, `validators` and the proposer seed two epochs
 ahead. -/
-theorem plFuluNew_congr [PresetCfg] (o : Oracle) (s1 s2 : BeaconState)
+theorem plFuluNew_congr [CurrentPreset] (o : Oracle) (s1 s2 : BeaconState)
     (hpl : s1.proposer_lookahead = s2.proposer_lookahead) (hs : s1.slot = s2.slot)
     (hv : s1.validators = s2.validators)
     (hseed : get_seed P o s1 (s2.slot / P.SLOTS_PER_EPOCH + 1 + 1)
@@ -84,7 +84,7 @@ theorem plFuluNew_congr [PresetCfg] (o : Oracle) (s1 s2 : BeaconState)
       · simp only [uint64Add_of_ge _ _ h2, error_bind']
     · simp only [uint64Add_of_ge _ _ h1, error_bind']
 
-theorem plFuluNew_set [PresetCfg] (o : Oracle) (s t : BeaconState)
+theorem plFuluNew_set [CurrentPreset] (o : Oracle) (s t : BeaconState)
     (hpl : t.proposer_lookahead = s.proposer_lookahead) (hs : t.slot = s.slot)
     (hv : t.validators = s.validators) (hr : t.randao_mixes = s.randao_mixes) :
     plFuluNew o t = plFuluNew o s :=
@@ -92,7 +92,7 @@ theorem plFuluNew_set [PresetCfg] (o : Oracle) (s t : BeaconState)
 
 /-! ## The swaps with the Fulu proposer lookahead -/
 
-theorem eth1_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) :
+theorem eth1_swaps_fulu [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) :
     SameResultOrBothFail (process_eth1_data_reset P s >>= process_proposer_lookahead_fulu P o)
       (process_proposer_lookahead_fulu P o s >>= process_eth1_data_reset P) :=
   swap_shapes _ _ eth1Cond (fun b t => if b then { t with eth1_data_votes := [] } else t)
@@ -100,14 +100,14 @@ theorem eth1_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState
     (fun b _ => by cases b <;> rfl)
     (fun _ _ => eth1Cond_slot rfl) (fun b _ => by cases b <;> rfl)
 
-theorem slashings_reset_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) :
+theorem slashings_reset_swaps_fulu [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) :
     SameResultOrBothFail (process_slashings_reset P s >>= process_proposer_lookahead_fulu P o)
       (process_proposer_lookahead_fulu P o s >>= process_slashings_reset P) :=
   swap_shapes _ _ srNew (fun v t => { t with slashings := v }) (plFuluNew o)
     (fun w t => setPL t w) s process_slashings_reset_eq (process_proposer_lookahead_fulu_eq o)
     (fun _ _ => plFuluNew_set o s _ rfl rfl rfl rfl) (fun _ _ => rfl) (fun _ _ => rfl)
 
-theorem randao_reset_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (hroom : SlotRoom s) :
+theorem randao_reset_swaps_fulu [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) (hroom : SlotRoom s) :
     SameResultOrBothFail (process_randao_mixes_reset P s >>=
         process_proposer_lookahead_fulu P o)
       (process_proposer_lookahead_fulu P o s >>=
@@ -117,7 +117,7 @@ theorem randao_reset_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : Bea
     (fun v hv => plFuluNew_congr o _ s rfl rfl rfl (rrNew_seed o s v hroom hv _))
     (fun _ _ => rfl) (fun _ _ => rfl)
 
-theorem historical_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) :
+theorem historical_swaps_fulu [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) :
     SameResultOrBothFail (process_historical_summaries_update P o s >>=
         process_proposer_lookahead_fulu P o)
       (process_proposer_lookahead_fulu P o s >>=
@@ -127,14 +127,14 @@ theorem historical_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : Beaco
     (process_proposer_lookahead_fulu_eq o)
     (fun _ _ => plFuluNew_set o s _ rfl rfl rfl rfl) (fun _ _ => rfl) (fun _ _ => rfl)
 
-theorem participation_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) :
+theorem participation_swaps_fulu [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) :
     SameResultOrBothFail (pfStep s >>= process_proposer_lookahead_fulu P o)
       (process_proposer_lookahead_fulu P o s >>= pfStep) :=
   swap_shapes _ _ pfNew (fun v t => setPF t v) (plFuluNew o) (fun w t => setPL t w) s
     pfStep_eq (process_proposer_lookahead_fulu_eq o)
     (fun _ _ => plFuluNew_set o s _ rfl rfl rfl rfl) (fun _ _ => rfl) (fun _ _ => rfl)
 
-theorem sync_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) :
+theorem sync_swaps_fulu [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) :
     SameResultOrBothFail (process_sync_committee_updates P o s >>=
         process_proposer_lookahead_fulu P o)
       (process_proposer_lookahead_fulu P o s >>=
@@ -148,21 +148,21 @@ theorem sync_swaps_fulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState
 
 /-- The Fulu spec order of the steps after the effective balance update, with the eth1 reset
 first. -/
-def specOrderFulu [PresetCfg] (o : Oracle) : List (BeaconState → SpecM BeaconState) :=
+def specOrderFulu [CurrentPreset] (o : Oracle) : List (BeaconState → SpecM BeaconState) :=
   [process_eth1_data_reset P, process_slashings_reset P,
     process_randao_mixes_reset P, process_historical_summaries_update P o,
     pfStep, process_sync_committee_updates P o,
     process_proposer_lookahead_fulu P o]
 
 /-- The Lighthouse Fulu order: the proposer lookahead first. -/
-def lhOrderFulu [PresetCfg] (o : Oracle) : List (BeaconState → SpecM BeaconState) :=
+def lhOrderFulu [CurrentPreset] (o : Oracle) : List (BeaconState → SpecM BeaconState) :=
   [process_proposer_lookahead_fulu P o,
     process_eth1_data_reset P, process_slashings_reset P,
     process_randao_mixes_reset P, process_historical_summaries_update P o,
     pfStep, process_sync_committee_updates P o]
 
 /-- The two Fulu orders give the same `ok` results. -/
-theorem specOrderFulu_lhOrderFulu [PresetCfg] [PresetCfg.Ok] (o : Oracle) (s : BeaconState) (hroom : SlotRoom s) :
+theorem specOrderFulu_lhOrderFulu [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (s : BeaconState) (hroom : SlotRoom s) :
     SameResultOrBothFail (runSteps (specOrderFulu o) s) (runSteps (lhOrderFulu o) s) := by
   let e1 := process_eth1_data_reset P
   let sr := process_slashings_reset P

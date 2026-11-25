@@ -266,7 +266,7 @@ theorem rewardsBaseReward_bound (p : Preset) (total_active_balance : Nat) (v : V
   omega
 
 /-- `rewardsBaseReward_bound` for the mainnet preset. -/
-theorem rewardsBaseReward_bound_mainnet [PresetCfg] (total_active_balance : Nat) (v : Validator)
+theorem rewardsBaseReward_bound_mainnet [CurrentPreset] (total_active_balance : Nat) (v : Validator)
     (base_reward : Nat)
     (htotal : P.EFFECTIVE_BALANCE_INCREMENT ≤ total_active_balance)
     (h : rewardsBaseReward P total_active_balance v = .ok base_reward) :
@@ -389,7 +389,7 @@ Hypotheses that replace `hrewards`, and why they hold on real states:
 
 The other hypotheses are the same as in `lhRowStep_eq_singlePassStep`. `hbalances` is true on
 mainnet, so it is not a hypothesis. -/
-theorem lhRowStep_eq_singlePassStep_of_bounds [PresetCfg] (ctx : LhStepContext)
+theorem lhRowStep_eq_singlePassStep_of_bounds [CurrentPreset] (ctx : LhStepContext)
     (hgen : ctx.after_genesis = true) (rctx : RewardsContext)
     (r : Row) (churn : Epoch × Gwei) (base_reward : Gwei) (activation_epoch : Epoch)
     (hprev : rctx.previous_epoch = ctx.previous_epoch)

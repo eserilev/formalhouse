@@ -314,7 +314,7 @@ theorem compute_seed_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle
 theorem random_value_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle)
     (hH : HashLink inst o) (seed : Array U8 32#usize) (i : Usize) :
     types.state.balance_weighted_selection.random_value inst seed i ⦃ v =>
-      v.val = Spec.leNat (((o.hash (u8s seed.val ++ Spec.uint_to_bytes 8 (i.val / 16))).toList.drop
+      v.val = Spec.littleEndianValue (((o.hash (u8s seed.val ++ Spec.uint_to_bytes 8 (i.val / 16))).toList.drop
         (i.val % 16 * 2)).take 2) ⦄ := by
   unfold types.state.balance_weighted_selection.random_value
   step*
@@ -332,7 +332,7 @@ theorem random_value_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle
   rw [UScalar.val_or, i9_post, hc _ _ i8_post, s1.1, hc _ _ i5_post, ← hrb, ← hoff]
   have hlen : (u8s rb.val).length = 32 := by simp [u8s]
   rw [List.drop_eq_getElem_cons (by omega), List.drop_eq_getElem_cons (by rw [hlen]; omega)]
-  simp [Spec.leNat, u8s, i4_post, i7_post, i6_post]
+  simp [Spec.littleEndianValue, u8s, i4_post, i7_post, i6_post]
   ring
 
 end EpochProofs

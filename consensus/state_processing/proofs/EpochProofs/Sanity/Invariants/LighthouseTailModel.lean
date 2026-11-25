@@ -21,7 +21,7 @@ namespace EpochProofs.Spec
 
 /-- The flags that Lighthouse predicts for the validator of a deposit, from the state before the
 single pass. A deposit for an unknown pubkey has neither flag. -/
-def lhDepositView [PresetCfg] (s : BeaconState) (current_epoch : Epoch) (d : PendingDeposit) :
+def lhDepositView [CurrentPreset] (s : BeaconState) (current_epoch : Epoch) (d : PendingDeposit) :
     DepositSpecView :=
   match s.validators[(s.validators.map (·.pubkey)).idxOf d.pubkey]? with
   | some v =>
@@ -55,7 +55,7 @@ def lhPlanStep (pubkeys : List BLSPubkey) (acc : List Gwei × List PendingDeposi
 
 /-- `PendingDepositsContext::new`: the decisions on the first `MAX_PENDING_DEPOSITS_PER_EPOCH`
 deposits, then the top-up sums, the postponed deposits and the new validator deposits. -/
-def lhDepositPlan [PresetCfg] (s : BeaconState) (total_active_balance : Gwei) (current_epoch : Epoch) :
+def lhDepositPlan [CurrentPreset] (s : BeaconState) (total_active_balance : Gwei) (current_epoch : Epoch) :
     SpecM LhDepositPlan := do
   let finalized_slot ←
     compute_start_slot_at_epoch P s.finalized_checkpoint.epoch
@@ -69,7 +69,7 @@ def lhDepositPlan [PresetCfg] (s : BeaconState) (total_active_balance : Gwei) (c
   pure ⟨next, dbtc, topups, post, news⟩
 
 /-- The effective balance update of one validator. -/
-def ebUpdateAt [PresetCfg] (s : BeaconState) (i : Nat) : SpecM BeaconState := do
+def ebUpdateAt [CurrentPreset] (s : BeaconState) (i : Nat) : SpecM BeaconState := do
   let v ← listGet s.validators i
   let b ← listGet s.balances i
   let (downward, upward) ← hysteresisThresholds P
@@ -82,7 +82,7 @@ def consolidationIndices (s : BeaconState) : List ValidatorIndex :=
   ((s.pending_consolidations.flatMap fun c => [c.source_index, c.target_index]).eraseDups).mergeSort
 
 /-- The steps after the builder payments: they are the same in Lighthouse and the spec. -/
-def epochRest2 [PresetCfg] (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
+def epochRest2 [CurrentPreset] (o : Oracle) (state : BeaconState) : SpecM BeaconState := do
   let state ← process_slashings_reset P state
   let state ← process_randao_mixes_reset P state
   let state ← process_historical_summaries_update P o state
@@ -94,7 +94,7 @@ def epochRest2 [PresetCfg] (o : Oracle) (state : BeaconState) : SpecM BeaconStat
 /-- The Lighthouse steps after justification and finalization, for a fork. `rt` gives the total
 that the registry churn and the deposit churn read, from the total active balance. `fin` runs
 after the effective balance updates of the validators that consolidations name. -/
-def lhFullTailG [PresetCfg] (o : Oracle) (rt : Gwei → Gwei) (fin : Gwei → BeaconState → SpecM BeaconState)
+def lhFullTailG [CurrentPreset] (o : Oracle) (rt : Gwei → Gwei) (fin : Gwei → BeaconState → SpecM BeaconState)
     (s : BeaconState) : SpecM BeaconState := do
   let current_epoch ← get_current_epoch P s
   let total_active_balance ← get_total_active_balance P s
@@ -120,18 +120,18 @@ def lhFullTailG [PresetCfg] (o : Oracle) (rt : Gwei → Gwei) (fin : Gwei → Be
   fin total_active_balance s6
 
 /-- The Gloas end of the tail: the builder payments, then the steps after them. -/
-def gloasFin [PresetCfg] (o : Oracle) (total_active_balance : Gwei) (t : BeaconState) :
+def gloasFin [CurrentPreset] (o : Oracle) (total_active_balance : Gwei) (t : BeaconState) :
     SpecM BeaconState :=
   process_builder_pending_payments P total_active_balance t >>= epochRest2 o
 
 /-- The Lighthouse steps after justification and finalization. -/
-def lhFullTail [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
+def lhFullTail [CurrentPreset] (o : Oracle) (s : BeaconState) : SpecM BeaconState :=
   lhFullTailG o id (gloasFin o) s
 
 /-- The Gloas `process_epoch` on mainnet as Lighthouse runs it, with the pending deposits and the
 effective balance updates in the single pass. At the genesis epoch the single pass skips the
 inactivity and rewards steps, through `after_genesis` in the context, as Lighthouse does. -/
-def process_epoch_lh_full [PresetCfg] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
+def process_epoch_lh_full [CurrentPreset] (o : Oracle) (s : BeaconState) : SpecM BeaconState := do
   let s1 ← lhJustificationAndFinalization P s
   lhFullTail o s1
 
@@ -152,7 +152,7 @@ def specDepositView (s : BeaconState) (next_epoch : Epoch) (d : PendingDeposit) 
   | none => ⟨d.slot, d.amount, false, false, false⟩
 
 /-- Apply the handled deposits that are not postponed, in queue order. -/
-def applyHandled [PresetCfg] (o : Oracle) (s : BeaconState) (handled : List (PendingDeposit × Bool)) :
+def applyHandled [CurrentPreset] (o : Oracle) (s : BeaconState) (handled : List (PendingDeposit × Bool)) :
     SpecM BeaconState :=
   handled.foldlM (fun s x => if x.2 then pure s else apply_pending_deposit P o s x.1) s
 

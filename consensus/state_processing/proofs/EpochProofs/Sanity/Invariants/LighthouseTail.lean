@@ -38,7 +38,7 @@ theorem rewardsCombined_lt (b : Gwei) (ds : List (Gwei × Gwei)) (x : Gwei)
   · cases hy
 
 /-- The slashing penalty does not raise the balance. -/
-theorem lhSlashingBalanceStep_le [PresetCfg] (target per : Uint64) (v : Validator) (b x : Gwei)
+theorem lhSlashingBalanceStep_le [CurrentPreset] (target per : Uint64) (v : Validator) (b x : Gwei)
     (h : slashingBalanceStep P target per v b = .ok x) : x ≤ b := by
   unfold slashingBalanceStep at h
   split at h
@@ -52,7 +52,7 @@ theorem lhSlashingBalanceStep_le [PresetCfg] (target per : Uint64) (v : Validato
     exact Nat.le_refl _
 
 /-- One Lighthouse row step keeps the balance below `2^64`. -/
-theorem lhRowStep_balance_lt [PresetCfg] (ctx : LhStepContext) (base : Gwei) (churn : Epoch × Gwei)
+theorem lhRowStep_balance_lt [CurrentPreset] (ctx : LhStepContext) (base : Gwei) (churn : Epoch × Gwei)
     (r : Row) (x : (Epoch × Gwei) × Row) (hb : r.balance < 2 ^ 64)
     (h : lhRowStep P ctx base churn r = .ok x) : x.2.balance < 2 ^ 64 := by
   unfold lhRowStep at h
@@ -68,7 +68,7 @@ theorem lhRowStep_balance_lt [PresetCfg] (ctx : LhStepContext) (base : Gwei) (ch
            | exact hb))
 
 /-- After the single pass every balance is below `2^64`, if every balance was. -/
-theorem pass_balances_lt [PresetCfg] (ctx : LhStepContext) (bf : Row → Gwei) (s : BeaconState)
+theorem pass_balances_lt [CurrentPreset] (ctx : LhStepContext) (bf : Row → Gwei) (s : BeaconState)
     (churn0 : Epoch × Gwei) (y : (Epoch × Gwei) × List Row)
     (hb : ∀ i, i < s.validators.length → s.balances.getD i 0 < 2 ^ 64)
     (h : passM (fun c r => lhRowStep P ctx (bf r) c r) churn0 (rowsOf s) = .ok y) :
@@ -91,15 +91,15 @@ theorem ok_bind'' {α β : Type} (a : α) (f : α → SpecM β) :
     (Except.ok a >>= f) = f a := rfl
 
 /-- The current epoch reads only the slot. -/
-theorem current_epoch_of_slot' [PresetCfg] {s s' : BeaconState} {e : Epoch}
+theorem current_epoch_of_slot' [CurrentPreset] {s s' : BeaconState} {e : Epoch}
     (h : get_current_epoch P s = .ok e) (hslot : s'.slot = s.slot) :
     get_current_epoch P s' = .ok e := by
   rw [← h]; simp only [get_current_epoch, hslot]
 
 /-- The four spec steps with one total keep the total active balance. -/
-theorem fourSteps_total [PresetCfg] (s1 : BeaconState) (total_active_balance : Gwei)
+theorem fourSteps_total [CurrentPreset] (s1 : BeaconState) (total_active_balance : Gwei)
     (htab : get_total_active_balance P s1 = .ok total_active_balance)
-    (hrows : RowsOk s1) (current_epoch activation_epoch : Epoch)
+    (hrows : ListLengthsMatch s1) (current_epoch activation_epoch : Epoch)
     (hcurrent : get_current_epoch P s1 = .ok current_epoch)
     (hactivation : compute_activation_exit_epoch P current_epoch =
       .ok activation_epoch)
@@ -123,7 +123,7 @@ theorem fourSteps_total [PresetCfg] (s1 : BeaconState) (total_active_balance : G
   have hc2 := current_epoch_of_slot' hcurrent hsl2
   have hc3 := current_epoch_of_slot' hc2 hsl3
   have hc4 := current_epoch_of_slot' hc3 hsl4
-  have hrows3 : RowsOk s3 :=
+  have hrows3 : ListLengthsMatch s3 :=
     ((process_inactivity_updates_len _ _ _ h2).trans
       (process_rewards_and_penalties_len _ _ _ _ h3)).rowsOk hrows
   have hkey := process_registry_updates_activeKey _ _ s3 s4 hrows3 current_epoch
@@ -163,8 +163,8 @@ theorem consolidationIndices_lt (s : BeaconState) (hcons : ConsolidationsInRange
 /-- `process_epoch_lh_full_sameResultOrBothFail'` at the genesis epoch. Justification and finalization return
 the state, the spec skips the inactivity and rewards steps, and the single pass skips them
 through `after_genesis`. -/
-theorem process_epoch_lh_full_genesis [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
-    (hexitb : ExitEpochsU64 t) (hsupply_t : EpochBalanceBounds t) (hvalid : WithdrawableValid t)
+theorem process_epoch_lh_full_genesis [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (t : BeaconState) (hb : EpochEndInvariants t)
+    (hexitb : ExitEpochsAreUint64 t) (hsupply_t : BalancesFarFromOverflow t) (hvalid : NoWithdrawableEpochWithoutExit t)
     (hcons : ConsolidationsInRange t)
     (hgen : t.slot / P.SLOTS_PER_EPOCH = GENESIS_EPOCH) :
     SameResultOrBothFail (process_epoch_lh_full o t) (process_epoch P o t) := by
@@ -225,12 +225,12 @@ theorem process_epoch_lh_full_genesis [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t
 
 /-- On mainnet, at a state that `process_epoch` starts from, the Lighthouse epoch with the
 deposits and effective balance updates in the single pass gives the same `ok` results as the
-spec epoch. Beyond the hypotheses of `process_epoch_lh_sameResultOrBothFail'` it needs `WithdrawableValid`,
+spec epoch. Beyond the hypotheses of `process_epoch_lh_sameResultOrBothFail'` it needs `NoWithdrawableEpochWithoutExit`,
 for the deposit statuses that Lighthouse predicts, and `ConsolidationsInRange`, so that the
 validators that consolidations name are existing validators. -/
-theorem process_epoch_lh_full_sameResultOrBothFail' [PresetCfg] [PresetCfg.Ok] (o : Oracle) (t : BeaconState) (hb : BoundaryOk t)
-    (hslot : t.slot < 2 ^ 64) (heb : EBOk P t) (hexitb : ExitEpochsU64 t)
-    (hsupply_t : EpochBalanceBounds t) (hvalid : WithdrawableValid t)
+theorem process_epoch_lh_full_sameResultOrBothFail' [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (t : BeaconState) (hb : EpochEndInvariants t)
+    (hslot : t.slot < 2 ^ 64) (heb : EffectiveBalancesValid P t) (hexitb : ExitEpochsAreUint64 t)
+    (hsupply_t : BalancesFarFromOverflow t) (hvalid : NoWithdrawableEpochWithoutExit t)
     (hcons : ConsolidationsInRange t) :
     SameResultOrBothFail (process_epoch_lh_full o t) (process_epoch P o t) := by
   obtain ⟨hinv, hrows, heffective⟩ := hb
@@ -245,7 +245,7 @@ theorem process_epoch_lh_full_sameResultOrBothFail' [PresetCfg] [PresetCfg.Ok] (
       Except.pure]
   have hepoch : t.slot / P.SLOTS_PER_EPOCH + P.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE :=
     P_slot_target_lt hslot
-  unfold EntryEB at heffective
+  unfold EligibleBalancesAboveFloor at heffective
   generalize hce : t.slot / P.SLOTS_PER_EPOCH = current_epoch
   rw [hce] at hcurrent hepoch hgen heffective
   have h32 : @LT.lt Nat _ (current_epoch + 32) (2 ^ 64) := P_target_bound hepoch
@@ -257,7 +257,7 @@ theorem process_epoch_lh_full_sameResultOrBothFail' [PresetCfg] [PresetCfg.Ok] (
     rw [hs1]; exact hcurrent
   have hfin := process_justification_and_finalization_finalized _ t s1 current_epoch hcurrent
     hgen hinv h1
-  have hrows1 : RowsOk s1 := by rw [hs1]; exact hrows
+  have hrows1 : ListLengthsMatch s1 := by rw [hs1]; exact hrows
   have heff1 : ∀ i (h : i < s1.validators.length),
       rewardsEligible (current_epoch - 1) s1.validators[i] = .ok true →
         s1.validators[i].effective_balance ≤ 256 * s1.balances.getD i 0 := by
@@ -369,9 +369,9 @@ theorem process_epoch_lh_full_sameResultOrBothFail' [PresetCfg] [PresetCfg.Ok] (
 
 
 /-- `process_epoch_lh_full_sameResultOrBothFail'` in the form of the `hf` hypothesis of
-`reachable_state_transition_sameResultOrBothFail'''`, with `EpochBalanceBounds` as the epoch condition. -/
-theorem process_epoch_lh_full_hf [PresetCfg] [PresetCfg.Ok] (o : Oracle) :
-    ∀ t, ReachableInvariants t →
+`reachable_state_transition_sameResultOrBothFail'''`, with `BalancesFarFromOverflow` as the epoch condition. -/
+theorem process_epoch_lh_full_hf [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) :
+    ∀ t, EpochInputInvariants t →
       SameResultOrBothFail (process_epoch_lh_full o t) (process_epoch P o t) :=
   fun t ⟨⟨⟨hb, hslot, heb, hexit, hsupply⟩, _, hcons⟩, _, hvalid⟩ =>
     process_epoch_lh_full_sameResultOrBothFail' o t hb hslot heb hexit hsupply hvalid hcons

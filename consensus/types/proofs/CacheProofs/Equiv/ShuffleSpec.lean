@@ -4,9 +4,9 @@ import CacheProofs.Spec.CommitteeCache
 /-!
 # `compute_shuffled_permutation` in closed form
 
-`sigma r` is one round of the swap-or-not shuffle on one index. `csiFold` applies the rounds
+`sigma r` is one round of the swap-or-not shuffle on one index. `shuffledIndexAfterRounds` applies the rounds
 `0, 1, ..., R - 1` in order. `compute_shuffled_permutation_eq` proves that the reference
-returns `[csiFold i for i in range(n)]` for `0 < n ≤ 2^24` and `R ≤ 256`.
+returns `[shuffledIndexAfterRounds i for i in range(n)]` for `0 < n ≤ 2^24` and `R ≤ 256`.
 
 `sha256` is any function that returns 32 bytes.
 -/
@@ -32,7 +32,7 @@ def sigma (sha256 : List Nat → List Nat) (seed : List Nat) (n r x : Nat) : Nat
   if bitOf sha256 seed r (max x flip) ≠ 0 then flip else x
 
 /-- Rounds `0, ..., R - 1` on index `x`. -/
-def csiFold (sha256 : List Nat → List Nat) (seed : List Nat) (n R x : Nat) : Nat :=
+def shuffledIndexAfterRounds (sha256 : List Nat → List Nat) (seed : List Nat) (n R x : Nat) : Nat :=
   (List.range R).foldl (fun y r => sigma sha256 seed n r y) x
 
 theorem sigma_lt (sha256 : List Nat → List Nat) (seed : List Nat) (n r x : Nat) (hn : 0 < n)
@@ -50,8 +50,8 @@ theorem foldl_sigma_lt (sha256 : List Nat → List Nat) (seed : List Nat) (n : N
   | nil => exact hx
   | cons r rs ih => exact ih _ (sigma_lt _ _ _ _ _ hn hx)
 
-theorem csiFold_lt (sha256 : List Nat → List Nat) (seed : List Nat) (n R x : Nat) (hn : 0 < n)
-    (hx : x < n) : csiFold sha256 seed n R x < n :=
+theorem shuffledIndexAfterRounds_lt (sha256 : List Nat → List Nat) (seed : List Nat) (n R x : Nat) (hn : 0 < n)
+    (hx : x < n) : shuffledIndexAfterRounds sha256 seed n R x < n :=
   foldl_sigma_lt _ _ _ hn _ _ hx
 
 /-- The inner loop body sets `indices[i]` to `sigma r indices[i]`. -/
@@ -113,7 +113,7 @@ theorem compute_shuffled_permutation_eq (p : Preset) (sha256 : List Nat → List
     (hsha : ∀ l, (sha256 l).length = 32) (seed : List Nat) (n : Nat) (hn : 0 < n)
     (hn24 : n ≤ 16777216) (hR : p.SHUFFLE_ROUND_COUNT ≤ 256) :
     compute_shuffled_permutation p sha256 n seed =
-      .ok ((List.range n).map (csiFold sha256 seed n p.SHUFFLE_ROUND_COUNT)) := by
+      .ok ((List.range n).map (shuffledIndexAfterRounds sha256 seed n p.SHUFFLE_ROUND_COUNT)) := by
   unfold compute_shuffled_permutation
   dsimp only
   rw [forIn_yield _ _ _ (fun l r => l.map (sigma sha256 seed n r)) (ValidIndices n)]

@@ -5,7 +5,7 @@ import EpochProofs.Sanity.ShuffleClosedForm
 # Lighthouse `compute_shuffled_index_with` equals the reference
 
 `compute_shuffled_index_with_spec`: for `0 < n ≤ 2^24` and `index < n`, the Lighthouse function
-returns `some (csiFold index)`. With `Spec.compute_shuffled_index_eq`, it returns the reference
+returns `some (shuffledIndexAfterRounds index)`. With `Spec.compute_shuffled_index_eq`, it returns the reference
 `compute_shuffled_index`.
 
 The hash is the trait instance `inst`. `HashLink inst o` says that `inst.hash` computes
@@ -161,18 +161,18 @@ theorem or_shift_step (acc x k : Nat) (hacc : acc < 2 ^ k) (hx : x < 256) (hk : 
       omega
     rw [hpow]; omega
 
-theorem leNat_take8 (l : List U8) (h : 8 ≤ l.length) :
-    Spec.leNat ((u8s l).take 8) =
+theorem littleEndianValue_take8 (l : List U8) (h : 8 ≤ l.length) :
+    Spec.littleEndianValue ((u8s l).take 8) =
       l[0].val + l[1].val * 2 ^ 8 + l[2].val * 2 ^ 16 + l[3].val * 2 ^ 24 + l[4].val * 2 ^ 32 +
         l[5].val * 2 ^ 40 + l[6].val * 2 ^ 48 + l[7].val * 2 ^ 56 := by
   match l, h with
   | a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: rest, _ =>
-    simp [Spec.leNat, u8s]; ring
+    simp [Spec.littleEndianValue, u8s]; ring
 
 @[step]
 theorem first_u64_spec (digest : Array U8 32#usize) :
     swap_or_not_shuffle.compute_shuffled_index_with.first_u64 digest ⦃ v =>
-      v.val = Spec.leNat ((u8s digest.val).take 8) ⦄ := by
+      v.val = Spec.littleEndianValue ((u8s digest.val).take 8) ⦄ := by
   unfold swap_or_not_shuffle.compute_shuffled_index_with.first_u64
   step*
   have hc : ∀ (x : U8) (y : U64), y = UScalar.cast UScalarTy.U64 x → y.val = x.val := by
@@ -201,7 +201,7 @@ theorem first_u64_spec (digest : Array U8 32#usize) :
   have s7 := or_shift_step _ _ 56 (e6 ▸ s6.2) (hb i26) (by norm_num)
   have e7 : (i25 ||| i28).val = i25.val + i26.val * 2 ^ 56 := by
     rw [UScalar.val_or, i28_post, hc _ _ i27_post]; exact s7.1
-  rw [e7, e6, e5, e4, e3, e2, e1, hc _ _ i1_post, leNat_take8 _ (by simp)]
+  rw [e7, e6, e5, e4, e3, e2, e1, hc _ _ i1_post, littleEndianValue_take8 _ (by simp)]
   simp [i_post, i2_post, i6_post, i10_post, i14_post, i18_post, i22_post, i26_post]
 
 theorem hash_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle) (hH : HashLink inst o)
@@ -316,21 +316,21 @@ theorem shuffle_round_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracl
     have : flip.val ≤ index.val := by scalar_tac
     exact tail index (by omega)
 
-theorem csiFold_succ (o : Spec.Oracle) (seed : List UInt8) (n r x : Nat) :
-    Spec.csiFold o seed n (r + 1) x = Spec.sigma o seed n r (Spec.csiFold o seed n r x) := by
-  simp [Spec.csiFold, List.range_succ, List.foldl_append]
+theorem shuffledIndexAfterRounds_succ (o : Spec.Oracle) (seed : List UInt8) (n r x : Nat) :
+    Spec.shuffledIndexAfterRounds o seed n (r + 1) x = Spec.sigma o seed n r (Spec.shuffledIndexAfterRounds o seed n r x) := by
+  simp [Spec.shuffledIndexAfterRounds, List.range_succ, List.foldl_append]
 
 theorem rounds_loop_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle)
     (hH : HashLink inst o) (n : Usize) (seed : Array U8 32#usize) (R : U8) (index : Usize)
     (round : U8) (x0 : Nat) (hn : 0 < n.val) (hn24 : n.val ≤ 2 ^ 24) (hr : round.val ≤ R.val)
-    (hidx : index.val = Spec.csiFold o (u8s seed.val) n.val round.val x0) (hi : index.val < n.val) :
+    (hidx : index.val = Spec.shuffledIndexAfterRounds o (u8s seed.val) n.val round.val x0) (hi : index.val < n.val) :
     swap_or_not_shuffle.compute_shuffled_index_with.compute_shuffled_index_with_loop inst n seed R
-      index round ⦃ r => r.val = Spec.csiFold o (u8s seed.val) n.val R.val x0 ⦄ := by
+      index round ⦃ r => r.val = Spec.shuffledIndexAfterRounds o (u8s seed.val) n.val R.val x0 ⦄ := by
   unfold swap_or_not_shuffle.compute_shuffled_index_with.compute_shuffled_index_with_loop
   apply loop.spec_decr_nat
     (measure := fun (x : Usize × U8) => R.val - x.2.val)
     (inv := fun (x : Usize × U8) => x.2.val ≤ R.val ∧
-      x.1.val = Spec.csiFold o (u8s seed.val) n.val x.2.val x0 ∧ x.1.val < n.val)
+      x.1.val = Spec.shuffledIndexAfterRounds o (u8s seed.val) n.val x.2.val x0 ∧ x.1.val < n.val)
   · rintro ⟨j, rd⟩ ⟨hr, hj, hjn⟩
     dsimp only at hr hj hjn ⊢
     unfold swap_or_not_shuffle.compute_shuffled_index_with.compute_shuffled_index_with_loop.body
@@ -340,7 +340,7 @@ theorem rounds_loop_spec {H : Type} (inst : ShuffleHashInst H) (o : Spec.Oracle)
       step with shuffle_round_spec inst o hH seed j rd n hn hn24 hjn as ⟨j1, hj1⟩
       step*
       refine ⟨by scalar_tac, ?_, ?_, by scalar_tac⟩
-      · rw [hj1, round1_post, csiFold_succ, hj]
+      · rw [hj1, round1_post, shuffledIndexAfterRounds_succ, hj]
       · rw [hj1]; exact Spec.sigma_lt _ _ _ _ _ hn hjn
     · rename_i hge
       have : rd.val = R.val := by scalar_tac
@@ -353,7 +353,7 @@ theorem compute_shuffled_index_with_spec {H : Type} (inst : ShuffleHashInst H)
     (R : U8) (hn24 : n.val ≤ 2 ^ 24) (hi : index.val < n.val) :
     swap_or_not_shuffle.compute_shuffled_index_with.compute_shuffled_index_with inst index n seed R
       ⦃ r => ∃ x : Usize, r = some x ∧
-        x.val = Spec.csiFold o (u8s seed.val) n.val R.val index.val ⦄ := by
+        x.val = Spec.shuffledIndexAfterRounds o (u8s seed.val) n.val R.val index.val ⦄ := by
   unfold swap_or_not_shuffle.compute_shuffled_index_with.compute_shuffled_index_with
   have hn0 : n ≠ 0#usize := by intro h; rw [h] at hi; simp at hi
   have hge : ¬ index >= n := by scalar_tac
@@ -370,7 +370,7 @@ theorem compute_shuffled_index_with_spec {H : Type} (inst : ShuffleHashInst H)
       rcases System.Platform.numBits_eq with hb | hb <;> simp [Usize.size, Usize.numBits, hb]
     scalar_tac
   step with rounds_loop_spec inst o hH n seed R index 0#u8 index.val (by omega) hn24
-      (by simp) (by simp [Spec.csiFold]) hi as ⟨r, hr⟩
+      (by simp) (by simp [Spec.shuffledIndexAfterRounds]) hi as ⟨r, hr⟩
   exact ⟨r, rfl, hr⟩
 
 /-- The Lighthouse shuffle equals the reference `compute_shuffled_index`. -/

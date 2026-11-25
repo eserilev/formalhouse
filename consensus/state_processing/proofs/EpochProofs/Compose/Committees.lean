@@ -137,7 +137,7 @@ def LookaheadN1 (L : LookaheadGlue σ) (st : σ) : Prop :=
 def PtcN1 (G : PtcGlue σ E) (st : σ) : Prop :=
   ∀ k (hk : k < (G.committees st).val.length), ((G.committees st).val[k]).val.length ≤ 2 ^ 24
 
-variable [Spec.PresetCfg]
+variable [Spec.CurrentPreset]
 
 /-- The trusted facts about the untranslated code `L`. The reads read the state they are given and
 the write writes the spec value, so each fact holds for every state `t`. -/
@@ -194,13 +194,13 @@ structure PtcLinks (L : LookaheadGlue σ) (G : PtcGlue σ E) (o : Spec.Oracle)
   /-- The end of the borrow writes the committed window, and only it. -/
   windowReturn : ∀ t w, view (G.windowReturn t w) = { view t with ptc_window := G.committed w }
 
-theorem slots_lt_2_32 [Spec.PresetCfg.Bounds] : Spec.P.SLOTS_PER_EPOCH < 2 ^ 32 := by
-  have : Spec.PresetCfg.v.SLOTS_PER_EPOCH ≤ 32 := Spec.PresetCfg.Bounds.slots_le
-  show Spec.PresetCfg.v.SLOTS_PER_EPOCH < 2 ^ 32
+theorem slots_lt_2_32 [Spec.CurrentPreset.Bounds] : Spec.P.SLOTS_PER_EPOCH < 2 ^ 32 := by
+  have : Spec.CurrentPreset.values.SLOTS_PER_EPOCH ≤ 32 := Spec.CurrentPreset.Bounds.slots_le
+  show Spec.CurrentPreset.values.SLOTS_PER_EPOCH < 2 ^ 32
   omega
 
 /-- The composed Gloas lookahead returns the state of `process_proposer_lookahead`. -/
-theorem lookahead_spec [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds] (L : LookaheadGlue σ)
+theorem lookahead_spec [Spec.CurrentPreset.Valid] [Spec.CurrentPreset.Bounds] (L : LookaheadGlue σ)
     (o : Spec.Oracle) (view : σ → Spec.BeaconState) (hL : LookaheadLinks L o view)
     (hpi : GloasProposerIndices L view) (st : σ) (hn1 : LookaheadN1 L st)
     (hpl : (view st).proposer_lookahead.length =
@@ -232,7 +232,7 @@ theorem lookahead_spec [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds] (L : Lookahea
   rfl
 
 /-- The composed PTC window returns the state of `process_ptc_window`. -/
-theorem ptcWindow_spec [Spec.PresetCfg.Ok] (L : LookaheadGlue σ) (G : PtcGlue σ E)
+theorem ptcWindow_spec [Spec.CurrentPreset.Valid] (L : LookaheadGlue σ) (G : PtcGlue σ E)
     (o : Spec.Oracle) (view : σ → Spec.BeaconState) (hL : LookaheadLinks L o view)
     (hP : PtcLinks L G o view) (st : σ) (hn1 : PtcN1 G st)
     (hptc : (view st).ptc_window.length =

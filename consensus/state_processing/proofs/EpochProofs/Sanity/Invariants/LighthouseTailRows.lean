@@ -14,7 +14,7 @@ namespace EpochProofs.Spec
 
 /-- The second half of `lhRowStepFull`: the top-up, then the effective balance update unless a
 consolidation names the validator. -/
-def lhRowStep2 [PresetCfg] (downward upward : Uint64) (topup : Gwei) (named : Bool) (r : Row) :
+def lhRowStep2 [CurrentPreset] (downward upward : Uint64) (topup : Gwei) (named : Bool) (r : Row) :
     SpecM Row := do
   let balance ← uint64Add r.balance topup
   let r := { r with balance }
@@ -25,7 +25,7 @@ def lhRowStep2 [PresetCfg] (downward upward : Uint64) (topup : Gwei) (named : Bo
     pure { r with validator := { r.validator with effective_balance } }
 
 /-- `lhRowStep` keeps the index of the row. -/
-theorem lhRowStep_index [PresetCfg] (ctx : LhStepContext) (base : Gwei) (churn : Epoch × Gwei) (r : Row)
+theorem lhRowStep_index [CurrentPreset] (ctx : LhStepContext) (base : Gwei) (churn : Epoch × Gwei) (r : Row)
     (x : (Epoch × Gwei) × Row) (h : lhRowStep P ctx base churn r = .ok x) :
     x.2.index = r.index := by
   unfold lhRowStep at h
@@ -36,7 +36,7 @@ theorem lhRowStep_index [PresetCfg] (ctx : LhStepContext) (base : Gwei) (churn :
     | (cases h; rfl)
 
 /-- One row of `lhRowStepFull` is `lhRowStep`, then `lhRowStep2` on the result. -/
-theorem lhRowStepFull_eq [PresetCfg] (ctx : LhStepContext) (downward upward : Uint64)
+theorem lhRowStepFull_eq [CurrentPreset] (ctx : LhStepContext) (downward upward : Uint64)
     (bf : Row → Gwei) (td : Nat → Gwei) (nm : Nat → Bool) (c : Epoch × Gwei) (r : Row) :
     lhRowStepFull P ctx downward upward ⟨bf r, td r.index, nm r.index⟩ c r =
       (fun x => (x.1.1, x.2)) <$> bothSteps (fun c r => lhRowStep P ctx (bf r) c r)
@@ -64,7 +64,7 @@ theorem lhRowStepFull_eq [PresetCfg] (ctx : LhStepContext) (downward upward : Ui
         cases newEffectiveBalance P downward upward r'.validator b <;> rfl
 
 /-- One pass of `lhRowStepFull` equals a pass of `lhRowStep`, then a pass of `lhRowStep2`. -/
-theorem lhRowStepFull_split [PresetCfg] (ctx : LhStepContext) (downward upward : Uint64)
+theorem lhRowStepFull_split [CurrentPreset] (ctx : LhStepContext) (downward upward : Uint64)
     (bf : Row → Gwei) (td : Nat → Gwei) (nm : Nat → Bool) (c0 : Epoch × Gwei) (rows : List Row) :
     SameResultOrBothFail (passM (fun c r => lhRowStepFull P ctx downward upward
         ⟨bf r, td r.index, nm r.index⟩ c r) c0 rows)
@@ -96,13 +96,13 @@ theorem lhRowStepFull_split [PresetCfg] (ctx : LhStepContext) (downward upward :
 /-! ## The second pass as a fold over indices -/
 
 /-- One fold step: the top-up of validator `i`, then its update unless it is named. -/
-def rowsStep [PresetCfg] (td : Nat → Gwei) (nm : Nat → Bool) (t : BeaconState) (i : Nat) :
+def rowsStep [CurrentPreset] (td : Nat → Gwei) (nm : Nat → Bool) (t : BeaconState) (i : Nat) :
     SpecM BeaconState := do
   let t ← increaseAt i (td i) t
   if nm i then pure t else ebUpdateAt t i
 
 /-- `withRows` of the rows of a state is the state, if the row lists have the right lengths. -/
-theorem withRows_rowsOf (S : BeaconState) (hrows : RowsOk S) : S.withRows (rowsOf S) = S := by
+theorem withRows_rowsOf (S : BeaconState) (hrows : ListLengthsMatch S) : S.withRows (rowsOf S) = S := by
   obtain ⟨hb, hi, -, -⟩ := hrows
   have hv := rowsOf_map_validator S
   have hbal : (rowsOf S).map (·.balance) = S.balances := by
@@ -132,7 +132,7 @@ theorem map_set_self {α β : Type} (f : α → β) (L : List α) (k : Nat) (r :
   · simp [h]
 
 /-- One fold step on the state of a list of rows is `lhRowStep2` on the row at that index. -/
-theorem rowsStep_withRows [PresetCfg] (S : BeaconState) (downward upward : Uint64)
+theorem rowsStep_withRows [CurrentPreset] (S : BeaconState) (downward upward : Uint64)
     (hthr : hysteresisThresholds P = .ok (downward, upward))
     (td : Nat → Gwei) (nm : Nat → Bool) (L : List Row) (k : Nat) (r : Row)
     (hk : L[k]? = some r) :
@@ -184,7 +184,7 @@ theorem rowsStep_withRows [PresetCfg] (S : BeaconState) (downward upward : Uint6
     rfl
 
 /-- The fold over the indices of a list of rows equals a pass of `lhRowStep2` over the rows. -/
-theorem rowsStep_fold [PresetCfg] (S : BeaconState) (downward upward : Uint64)
+theorem rowsStep_fold [CurrentPreset] (S : BeaconState) (downward upward : Uint64)
     (hthr : hysteresisThresholds P = .ok (downward, upward))
     (td : Nat → Gwei) (nm : Nat → Bool) :
     ∀ (rs pre : List Row), (∀ j (h : j < rs.length), rs[j].index = pre.length + j) →
@@ -219,7 +219,7 @@ theorem rowsStep_fold [PresetCfg] (S : BeaconState) (downward upward : Uint64)
       split <;> simp [pure, Except.pure]
 
 /-- The second pass over the rows of a state equals the fold of `rowsStep` over the indices. -/
-theorem rows_pass2_fold [PresetCfg] (S : BeaconState) (hrows : RowsOk S) (downward upward : Uint64)
+theorem rows_pass2_fold [CurrentPreset] (S : BeaconState) (hrows : ListLengthsMatch S) (downward upward : Uint64)
     (hthr : hysteresisThresholds P = .ok (downward, upward))
     (td : Nat → Gwei) (nm : Nat → Bool) :
     SameResultOrBothFail ((fun y => S.withRows y.2) <$> passM (fun _ r => (fun r' => ((), r')) <$>
@@ -265,7 +265,7 @@ theorem increaseFold_hF2 (td : Nat → Gwei) (i : Nat) :
 
 /-- Over a list of distinct indices, the interleaved fold equals all top-ups first, then the
 updates of the validators that are not named. -/
-theorem fold_interleave_gen [PresetCfg] (td : Nat → Gwei) (nm : Nat → Bool) :
+theorem fold_interleave_gen [CurrentPreset] (td : Nat → Gwei) (nm : Nat → Bool) :
     ∀ (l : List Nat), l.Nodup → ∀ S : BeaconState,
       SameResultOrBothFail (l.foldlM (rowsStep td nm) S)
         (do
@@ -307,7 +307,7 @@ theorem fold_interleave_gen [PresetCfg] (td : Nat → Gwei) (nm : Nat → Bool) 
 
 /-- The interleaved fold over `0, …, n - 1` equals all top-ups first, then the updates of the
 validators that are not named. -/
-theorem fold_interleave [PresetCfg] (td : Nat → Gwei) (nm : Nat → Bool) (n : Nat) (S : BeaconState) :
+theorem fold_interleave [CurrentPreset] (td : Nat → Gwei) (nm : Nat → Bool) (n : Nat) (S : BeaconState) :
     SameResultOrBothFail ((List.range n).foldlM (fun t i => do
         let t ← increaseAt i (td i) t
         if nm i then pure t else ebUpdateAt t i) S)

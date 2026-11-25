@@ -22,7 +22,7 @@ import EpochProofs.Sanity.RewardsAndPenalties
 - `*_agrees_pyspec`: the epoch and the hand-written transcription of the pyspec give the same state,
   or both fail.
 - `lighthouse_rust_*_of_ethlib_ok`: if EthLib succeeds, the Rust succeeds with the same state.
-- `ptc_committees_from_cache`: the committees that the PTC window step reads from a committee cache
+- `ptc_committees_correct`: the committees that the PTC window step reads from a committee cache
   are the spec committees.
 
 `toSpecState` reads an EthLib state as a state of the transcription. No two EthLib Gloas states give
@@ -36,7 +36,7 @@ open Aeneas Aeneas.Std Result
 open CacheProofs.PB (LhCache lhPreviousEpochFlagAttestingBalance
   lhCurrentEpochFlagAttestingBalance)
 
-variable [Spec.PresetCfg] [Spec.PresetCfg.Ok] [Spec.FuluCfg] [Spec.FuluCfg.Ok]
+variable [Spec.CurrentPreset] [Spec.CurrentPreset.Valid] [Spec.CurrentFuluConfig] [Spec.CurrentFuluConfig.Valid]
 variable {oracle : Spec.Oracle} {fuluOracle : Spec.FuluOracle}
   {blockConfig : Spec.FuluBlockConfig}
   {upgradeConfig : Spec.UpgradeConfig} {fuluStart : Spec.FuluState} {s : Spec.BeaconState}
@@ -44,35 +44,35 @@ variable {oracle : Spec.Oracle} {fuluOracle : Spec.FuluOracle}
 /-! ## Facts about an epoch input of a run -/
 
 /-- The reachable-state invariants at a Gloas epoch input
-(`fulu_then_gloas_reachable_invariants`). -/
-theorem GloasEpochRun.invariants (h : GloasEpochRun oracle fuluOracle blockConfig upgradeConfig
-    fuluStart s) : Spec.ReachableInvariants s :=
-  Spec.fulu_then_gloas_reachable_invariants h.startInvariants h.fuluActiveBalance h.fulu
+(`fulu_then_gloas_epoch_input_invariants`). -/
+theorem FuluThenGloasRun.invariants (h : FuluThenGloasRun oracle fuluOracle blockConfig upgradeConfig
+    fuluStart s) : Spec.EpochInputInvariants s :=
+  Spec.fulu_then_gloas_epoch_input_invariants h.startInvariants h.fuluActiveBalance h.fulu
     h.gloasActiveBalance _ h.gloasBalanceBounds h.gloas
 
-omit [Spec.PresetCfg.Ok] [Spec.FuluCfg.Ok] in
+omit [Spec.CurrentPreset.Valid] [Spec.CurrentFuluConfig.Valid] in
 /-- A Gloas epoch input is the last slot of an epoch, and the next slot fits in `u64`. With
-`HistoricalSummariesBelowLimit`, this is `AtEpochBoundary`. -/
-theorem GloasEpochRun.atEpochBoundary (h : GloasEpochRun oracle fuluOracle blockConfig
+`HistoricalSummariesBelowLimit`, this is `AtLastSlotOfEpoch`. -/
+theorem FuluThenGloasRun.atLastSlotOfEpoch (h : FuluThenGloasRun oracle fuluOracle blockConfig
     upgradeConfig fuluStart s) (hhist : Spec.HistoricalSummariesBelowLimit s) :
-    Spec.AtEpochBoundary s := by
+    Spec.AtLastSlotOfEpoch s := by
   have hs : s.slot = h.gloas.beforeLastSlot.slot :=
     (Spec.process_slot_frame _ oracle _ _ h.gloas.lastSlot).2
   exact ⟨h.gloas.atEpochEnd,
     by rw [hs]; exact Nat.lt_of_le_of_lt h.gloas.beforeTarget h.gloas.targetSlotFits, hhist⟩
 
-/-- The reachable-state invariants at a Fulu epoch input (`fulu_reachable_invariants`). -/
-theorem FuluEpochRun.invariants (h : FuluEpochRun oracle fuluOracle blockConfig fuluStart s) :
-    Spec.ReachableInvariants s := by
+/-- The reachable-state invariants at a Fulu epoch input (`fulu_epoch_input_invariants`). -/
+theorem FuluOnlyRun.invariants (h : FuluOnlyRun oracle fuluOracle blockConfig fuluStart s) :
+    Spec.EpochInputInvariants s := by
   obtain ⟨hstart, hactive, hbounds, path, rfl⟩ := h
-  exact Spec.fulu_reachable_invariants oracle fuluOracle blockConfig fuluStart hstart hactive _
+  exact Spec.fulu_epoch_input_invariants oracle fuluOracle blockConfig fuluStart hstart hactive _
     hbounds _ _ _ _ path.blocks path.targetSlotFits path.slots path.beforeTarget path.lastSlot
     path.atEpochEnd
 
-omit [Spec.PresetCfg.Ok] [Spec.FuluCfg.Ok] in
+omit [Spec.CurrentPreset.Valid] [Spec.CurrentFuluConfig.Valid] in
 /-- A Fulu epoch input is the last slot of an epoch, and the next slot fits in `u64`. -/
-theorem FuluEpochRun.atEpochBoundary (h : FuluEpochRun oracle fuluOracle blockConfig fuluStart s)
-    (hhist : Spec.HistoricalSummariesBelowLimit s) : Spec.AtEpochBoundary s := by
+theorem FuluOnlyRun.atLastSlotOfEpoch (h : FuluOnlyRun oracle fuluOracle blockConfig fuluStart s)
+    (hhist : Spec.HistoricalSummariesBelowLimit s) : Spec.AtLastSlotOfEpoch s := by
   obtain ⟨-, -, -, path, rfl⟩ := h
   have hs : path.epochInput.state.slot = path.beforeLastSlot.state.slot :=
     (Spec.process_slot_fulu_frame _ oracle fuluOracle _ _ path.lastSlot).2.1
@@ -83,11 +83,11 @@ theorem FuluEpochRun.atEpochBoundary (h : FuluEpochRun oracle fuluOracle blockCo
 
 section Caches
 
-variable [Spec.PresetCfg.Bounds]
+variable [Spec.CurrentPreset.Bounds]
 
 /-- The cache reads of the Gloas epoch give the spec values. The committee cache read of the PTC
-window step is a separate theorem, `ptc_committees_from_cache`. -/
-structure GloasCacheReadsCorrect {PubkeyMap : Type} (progressiveCache : LhCache)
+window step is a separate theorem, `ptc_committees_correct`. -/
+structure GloasCachesCorrect {PubkeyMap : Type} (progressiveCache : LhCache)
     (cachedTotal : U64)
     (pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey)
     (pubkeyMap : PubkeyMap) (state : Spec.BeaconState) : Prop where
@@ -114,7 +114,7 @@ structure GloasCacheReadsCorrect {PubkeyMap : Type} (progressiveCache : LhCache)
       if pubkey ∈ state.validators.map (·.pubkey)
       then some ((state.validators.map (·.pubkey)).idxOf pubkey) else none
 
-omit [Spec.PresetCfg.Ok] [Spec.FuluCfg] [Spec.FuluCfg.Ok] [Spec.PresetCfg.Bounds] in
+omit [Spec.CurrentPreset.Valid] [Spec.CurrentFuluConfig] [Spec.CurrentFuluConfig.Valid] [Spec.CurrentPreset.Bounds] in
 /-- Caches that are correct at the epoch input itself satisfy the cache assumptions. -/
 theorem GloasCacheAssumptions.ofCorrectAtInput {PubkeyMap : Type} {progressiveCache : LhCache}
     {cachedTotal : U64} {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
@@ -134,15 +134,15 @@ theorem GloasCacheAssumptions.ofCorrectAtInput {PubkeyMap : Type} {progressiveCa
     rw [pubkeys.1, List.drop_length]
     rfl⟩
 
-omit [Spec.PresetCfg.Bounds] in
+omit [Spec.CurrentPreset.Bounds] in
 /-- At every Gloas epoch input of a run, the cache reads give the spec values, when the cache
 assumptions hold. -/
 theorem gloas_cache_reads_correct {PubkeyMap : Type} {progressiveCache : LhCache}
     {cachedTotal : U64} {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
-    (run : GloasEpochRun oracle fuluOracle blockConfig upgradeConfig fuluStart s)
+    (run : FuluThenGloasRun oracle fuluOracle blockConfig upgradeConfig fuluStart s)
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap s) :
-    GloasCacheReadsCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap s := by
+    GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap s := by
   have hin := run.invariants
   obtain ⟨start, startCache, hstart, hupdates⟩ := caches.progressiveBalances
   obtain ⟨built, hagree, htotal⟩ := caches.epochCache
@@ -194,10 +194,10 @@ structure PtcCommitteeCache (oracle : Spec.Oracle) (state : Spec.BeaconState) (e
   readFromCache :
     CommitteesFromCache shuffling committeesPerSlot slotsPerEpoch epoch startSlot committees
 
-omit [Spec.FuluCfg] [Spec.FuluCfg.Ok] in
+omit [Spec.CurrentFuluConfig] [Spec.CurrentFuluConfig.Valid] in
 /-- The committees that the PTC window step reads from its committee cache are the spec
 committees. -/
-theorem ptc_committees_from_cache {oracle : Spec.Oracle} {state : Spec.BeaconState} {epoch : Nat}
+theorem ptc_committees_correct {oracle : Spec.Oracle} {state : Spec.BeaconState} {epoch : Nat}
     (cache : PtcCommitteeCache oracle state epoch) (k : Nat)
     (inEpoch : k < cache.committees.val.length) (expected : List Spec.ValidatorIndex)
     (specCommittees :
@@ -212,12 +212,12 @@ end Caches
 
 /-! ## Against the pyspec transcription -/
 
-omit [Spec.FuluCfg] [Spec.FuluCfg.Ok] in
+omit [Spec.CurrentFuluConfig] [Spec.CurrentFuluConfig.Valid] in
 /-- The Lean model of Lighthouse's Gloas epoch agrees with the transcription's `process_epoch`,
 at a state with the reachable-state invariants at an epoch boundary. These hypotheses hold
 together (`AssumptionsHoldForExample.lean`). -/
 theorem lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants (o : Spec.Oracle)
-    {s : Spec.BeaconState} (hin : Spec.ReachableInvariants s) (hpre : Spec.AtEpochBoundary s) :
+    {s : Spec.BeaconState} (hin : Spec.EpochInputInvariants s) (hpre : Spec.AtLastSlotOfEpoch s) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse o s)
       (Spec.process_epoch Spec.P o s) := by
   obtain ⟨⟨⟨hb, hslot, heb, hexit, hsup⟩, -, hcons⟩, -, hvalid⟩ := hin
@@ -229,21 +229,21 @@ theorem lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants (o : Spec.Oracl
 Lean model of Lighthouse's epoch and the transcription's give the same state, or both fail. No
 pyspec precondition. -/
 theorem lighthouse_model_gloas_epoch_agrees_pyspec
-    (hrun : GloasEpochRun oracle fuluOracle blockConfig upgradeConfig fuluStart s)
+    (hrun : FuluThenGloasRun oracle fuluOracle blockConfig upgradeConfig fuluStart s)
     (hhistBelowLimit : Spec.HistoricalSummariesBelowLimit s) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse oracle s)
       (Spec.process_epoch Spec.P oracle s) :=
   lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants oracle hrun.invariants
-    (hrun.atEpochBoundary hhistBelowLimit)
+    (hrun.atLastSlotOfEpoch hhistBelowLimit)
 
 /-- Fulu, against the hand-written pyspec transcription. -/
 theorem lighthouse_model_fulu_epoch_agrees_pyspec
-    (hrun : FuluEpochRun oracle fuluOracle blockConfig fuluStart s)
+    (hrun : FuluOnlyRun oracle fuluOracle blockConfig fuluStart s)
     (hhistBelowLimit : Spec.HistoricalSummariesBelowLimit s) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse_fulu oracle s)
       (Spec.process_epoch_fulu Spec.P Spec.FC oracle s) :=
   Spec.lighthouse_fulu_epoch_sameResultOrBothFail oracle s hrun.invariants
-    (hrun.atEpochBoundary hhistBelowLimit)
+    (hrun.atLastSlotOfEpoch hhistBelowLimit)
 
 /-! ## Against EthLib -/
 
@@ -254,7 +254,7 @@ open _root_.EthLib.Consensus (BeaconState Config Preset SignatureChecks processE
 
 variable {preset : Preset} {config : Config} {checks : SignatureChecks}
 
-omit [Spec.PresetCfg.Ok] [Spec.FuluCfg] [Spec.FuluCfg.Ok] in
+omit [Spec.CurrentPreset.Valid] [Spec.CurrentFuluConfig] [Spec.CurrentFuluConfig.Valid] in
 /-- The room for deposits, and the room in Lighthouse's list of historical summaries, give the room
 that EthLib needs. -/
 theorem epochRoom (presetMatches : PresetMatchesEthLib preset config)
@@ -273,9 +273,9 @@ theorem epochRoom (presetMatches : PresetMatchesEthLib preset config)
 
 section Gloas
 
-variable [Spec.PresetCfg.Bounds] {state : BeaconState preset .glamsterdam}
+variable [Spec.CurrentPreset.Bounds] {state : BeaconState preset .glamsterdam}
 
-omit [Spec.PresetCfg.Ok] [Spec.FuluCfg] [Spec.FuluCfg.Ok] in
+omit [Spec.CurrentPreset.Valid] [Spec.CurrentFuluConfig] [Spec.CurrentFuluConfig.Valid] in
 /-- The new PTCs do not end at slot `2^64` when the slot is far below it. -/
 theorem slotLimit_of_slotFarFromOverflow (presetMatches : PresetMatchesEthLib preset config)
     (slotFarFromOverflow : (toSpecState state).slot + 8192 < 2 ^ 64) :
@@ -284,58 +284,58 @@ theorem slotLimit_of_slotFarFromOverflow (presetMatches : PresetMatchesEthLib pr
   apply slotLimit_of_slot_far
   have hslots : preset.SLOTS_PER_EPOCH.toNat ≤ 32 :=
     Nat.le_trans (Nat.le_of_eq (congrArg Spec.Preset.SLOTS_PER_EPOCH presetMatches.values))
-      Spec.PresetCfg.Bounds.slots_le
+      Spec.CurrentPreset.Bounds.slots_le
   have hlookahead : preset.MIN_SEED_LOOKAHEAD.toNat = 1 :=
     congrArg Spec.Preset.MIN_SEED_LOOKAHEAD presetMatches.values
   have hslot : state.slot.toNat + 8192 < 2 ^ 64 := slotFarFromOverflow
   rw [hlookahead]
   omega
 
-omit [Spec.PresetCfg.Bounds] [Spec.FuluCfg] [Spec.FuluCfg.Ok] in
+omit [Spec.CurrentPreset.Bounds] [Spec.CurrentFuluConfig] [Spec.CurrentFuluConfig.Valid] in
 /-- The conditions of the committee steps, from the chain assumptions at the epoch input. -/
-theorem GloasChainAssumptions.atCommitteeStepState
+theorem GloasChainConditions.atCommitteeStepState
     (presetMatches : PresetMatchesEthLib preset config)
-    (invariants : Spec.ReachableInvariants (toSpecState state))
-    (chain : GloasChainAssumptions oracle (toSpecState state)) :
+    (invariants : Spec.EpochInputInvariants (toSpecState state))
+    (chain : GloasChainConditions oracle (toSpecState state)) :
     Spec.AtCommitteeStepState oracle (toSpecState state) := by
   intro committeeInput hsteps
   obtain ⟨hpreconditions, hselection⟩ := chain.committeeSteps committeeInput hsteps
   have hbalances :=
-    Spec.epochToCommittees_effective_balances oracle _ _ hsteps invariants.1.1.2.2.1
-  obtain ⟨hlookahead, hptc⟩ := Spec.epochToCommittees_windows _ _ _ _ hsteps
+    Spec.epochBeforeCommitteeSteps_effective_balances oracle _ _ hsteps invariants.1.1.2.2.1
+  obtain ⟨hlookahead, hptc⟩ := Spec.epochBeforeCommitteeSteps_windows _ _ _ _ hsteps
   obtain ⟨-, -, -, -, -, -, -, h1, -, -, h2, -⟩ :=
     vectorLengths_toSpecState (config := config) state
   rw [presetMatches.values, Spec.P_min_seed] at h1 h2
-  exact ⟨⟨hselection.regLen, fun v hv => (hbalances.1 v hv).2, by rw [hlookahead, h1],
-    by rw [hptc, h2], hselection.keys⟩, hpreconditions⟩
+  exact ⟨⟨hselection.registryBelowLimit, fun v hv => (hbalances.1 v hv).2, by rw [hlookahead, h1],
+    by rw [hptc, h2], hselection.pubkeysValid⟩, hpreconditions⟩
 
-omit [Spec.FuluCfg] [Spec.FuluCfg.Ok] in
+omit [Spec.CurrentFuluConfig] [Spec.CurrentFuluConfig.Valid] in
 /-- Gloas: at an epoch input, the Lean model of Lighthouse's epoch and EthLib's `processEpoch` give
 the same state, or both fail. -/
 theorem lighthouse_model_gloas_epoch_agrees_ethlib
     (presetMatches : PresetMatchesEthLib preset config)
-    (invariants : Spec.ReachableInvariants (toSpecState state))
-    (atEpochBoundary : Spec.AtEpochBoundary (toSpecState state))
+    (invariants : Spec.EpochInputInvariants (toSpecState state))
+    (atLastSlotOfEpoch : Spec.AtLastSlotOfEpoch (toSpecState state))
     (slotFarFromOverflow : (toSpecState state).slot + 8192 < 2 ^ 64)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse oracle (toSpecState state))
       (toSpecResult toSpecState (processEpoch config checks state)) := by
   refine (lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants oracle invariants
-    atEpochBoundary).trans ?_
+    atLastSlotOfEpoch).trans ?_
   have h := process_epoch_gloas presetMatches.divisorsNonzero presetMatches.committeeBounds
-    oracleMatches state (epochRoom presetMatches roomForDeposits atEpochBoundary.2.2)
+    oracleMatches state (epochRoom presetMatches roomForDeposits atLastSlotOfEpoch.2.2)
     (slotLimit_of_slotFarFromOverflow presetMatches slotFarFromOverflow)
   rwa [presetMatches.values] at h
 
-omit [Spec.FuluCfg] [Spec.FuluCfg.Ok] in
+omit [Spec.CurrentFuluConfig] [Spec.CurrentFuluConfig.Valid] in
 /-- Gloas: at an epoch input where the chain assumptions hold, the Lean model of Lighthouse's epoch
 and EthLib's `processEpoch` succeed with the same state. -/
 theorem lighthouse_model_gloas_epoch_eq_ethlib_of_invariants
     (presetMatches : PresetMatchesEthLib preset config)
-    (invariants : Spec.ReachableInvariants (toSpecState state))
-    (atEpochBoundary : Spec.AtEpochBoundary (toSpecState state))
-    (chain : GloasChainAssumptions oracle (toSpecState state))
+    (invariants : Spec.EpochInputInvariants (toSpecState state))
+    (atLastSlotOfEpoch : Spec.AtLastSlotOfEpoch (toSpecState state))
+    (chain : GloasChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle) :
     ∃ result, Spec.process_epoch_lighthouse oracle (toSpecState state) = .ok (toSpecState result) ∧
@@ -345,14 +345,14 @@ theorem lighthouse_model_gloas_epoch_eq_ethlib_of_invariants
   rw [presetMatches.values] at hvectors
   -- The transcription succeeds, so the model succeeds.
   obtain ⟨specResult, hspec⟩ := Spec.process_epoch_total_rows oracle (toSpecState state)
-    invariants.1.1.1.2.1 chain.slotFarFromOverflow atEpochBoundary.1 hvectors invariants.1.1.1.1
-    invariants.1.1.2.2.1 invariants.1.2.2 invariants.1.1.2.2.2.2.2.2 chain.physicalLimits
+    invariants.1.1.1.2.1 chain.slotFarFromOverflow atLastSlotOfEpoch.1 hvectors invariants.1.1.1.1
+    invariants.1.1.2.2.1 invariants.1.2.2 invariants.1.1.2.2.2.2.2.2 chain.supplyAndTimeLimits
     (Spec.committeesOk_of oracle _ chain.slotFarFromOverflow hcommittees)
   have hmodel := (lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants oracle invariants
-    atEpochBoundary specResult).mpr hspec
+    atLastSlotOfEpoch specResult).mpr hspec
   -- The model and EthLib agree.
   have hethlib := (lighthouse_model_gloas_epoch_agrees_ethlib presetMatches invariants
-    atEpochBoundary chain.slotFarFromOverflow roomForDeposits oracleMatches specResult).mp hmodel
+    atLastSlotOfEpoch chain.slotFarFromOverflow roomForDeposits oracleMatches specResult).mp hmodel
   cases hresult : processEpoch config checks state with
   | error e => rw [hresult] at hethlib; cases hethlib
   | ok result =>
@@ -366,43 +366,43 @@ of the epoch gives the spec value. -/
 theorem lighthouse_model_gloas_epoch_eq_ethlib {PubkeyMap : Type} {progressiveCache : LhCache}
     {cachedTotal : U64} {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap} (presetMatches : PresetMatchesEthLib preset config)
-    (run : GloasEpochRun oracle fuluOracle blockConfig upgradeConfig fuluStart (toSpecState state))
-    (chain : GloasChainAssumptions oracle (toSpecState state))
+    (run : FuluThenGloasRun oracle fuluOracle blockConfig upgradeConfig fuluStart (toSpecState state))
+    (chain : GloasChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle)
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state)) :
     (∃ result, Spec.process_epoch_lighthouse oracle (toSpecState state) = .ok (toSpecState result) ∧
       processEpoch config checks state = .ok result) ∧
-    GloasCacheReadsCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
+    GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state) :=
   ⟨lighthouse_model_gloas_epoch_eq_ethlib_of_invariants presetMatches run.invariants
-    (run.atEpochBoundary chain.historicalSummariesBelowLimit) chain roomForDeposits oracleMatches,
+    (run.atLastSlotOfEpoch chain.historicalSummariesBelowLimit) chain roomForDeposits oracleMatches,
     gloas_cache_reads_correct run caches⟩
 
-omit [Spec.FuluCfg] [Spec.FuluCfg.Ok] in
+omit [Spec.CurrentFuluConfig] [Spec.CurrentFuluConfig.Valid] in
 /-- Gloas, for the composed Rust: if EthLib's `processEpoch` succeeds at an epoch input, the Rust
 returns `Ok` with the same state. -/
 theorem lighthouse_rust_gloas_epoch_of_ethlib_ok
     (presetMatches : PresetMatchesEthLib preset config)
-    (invariants : Spec.ReachableInvariants (toSpecState state))
-    (atEpochBoundary : Spec.AtEpochBoundary (toSpecState state))
+    (invariants : Spec.EpochInputInvariants (toSpecState state))
+    (atLastSlotOfEpoch : Spec.AtLastSlotOfEpoch (toSpecState state))
     (slotFarFromOverflow : (toSpecState state).slot + 8192 < 2 ^ 64)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle)
-    {σ E : Type} {rustGlue : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
-    (rust : GloasRustGlueFacts rustGlue oracle view rustState (toSpecState state))
+    {σ E : Type} {rustCode : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
+    (rust : GloasUntranslatedRustFacts rustCode oracle view rustState (toSpecState state))
     {result : BeaconState preset .glamsterdam}
     (ethLibSucceeds : processEpoch config checks state = .ok result) :
-    ∃ rustResult, (Compose.epoch rustGlue rustState).run = ok (some rustResult) ∧
+    ∃ rustResult, (Compose.epoch rustCode rustState).run = ok (some rustResult) ∧
       view rustResult = toSpecState result := by
   have hmodel := (lighthouse_model_gloas_epoch_agrees_ethlib presetMatches invariants
-    atEpochBoundary slotFarFromOverflow roomForDeposits oracleMatches (toSpecState result)).mpr
+    atLastSlotOfEpoch slotFarFromOverflow roomForDeposits oracleMatches (toSpecState result)).mpr
     (by rw [ethLibSucceeds]; rfl)
   have hvectors := vectorLengths_toSpecState (config := config) state
   rw [presetMatches.values] at hvectors
-  exact Compose.epoch_spec rustGlue oracle view rustState rust.glue
-    (by rw [rust.viewEq]; exact Nat.lt_of_le_of_lt (Nat.le_succ _) atEpochBoundary.2.1)
+  exact Compose.epoch_spec rustCode oracle view rustState rust.glue
+    (by rw [rust.viewEq]; exact Nat.lt_of_le_of_lt (Nat.le_succ _) atLastSlotOfEpoch.2.1)
     (by rw [rust.viewEq]; exact hvectors) _ (by rw [rust.viewEq]; exact hmodel)
 
 /-- Gloas, for the composed Rust: at every epoch input of a run, the Rust returns `Ok`, and EthLib's
@@ -410,22 +410,22 @@ theorem lighthouse_rust_gloas_epoch_of_ethlib_ok
 theorem lighthouse_rust_gloas_epoch_eq_ethlib {PubkeyMap : Type} {progressiveCache : LhCache}
     {cachedTotal : U64} {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap} (presetMatches : PresetMatchesEthLib preset config)
-    (run : GloasEpochRun oracle fuluOracle blockConfig upgradeConfig fuluStart (toSpecState state))
-    (chain : GloasChainAssumptions oracle (toSpecState state))
+    (run : FuluThenGloasRun oracle fuluOracle blockConfig upgradeConfig fuluStart (toSpecState state))
+    (chain : GloasChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle)
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state))
-    {σ E : Type} {rustGlue : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
-    (rust : GloasRustGlueFacts rustGlue oracle view rustState (toSpecState state)) :
-    (∃ rustResult result, (Compose.epoch rustGlue rustState).run = ok (some rustResult) ∧
+    {σ E : Type} {rustCode : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
+    (rust : GloasUntranslatedRustFacts rustCode oracle view rustState (toSpecState state)) :
+    (∃ rustResult result, (Compose.epoch rustCode rustState).run = ok (some rustResult) ∧
       processEpoch config checks state = .ok result ∧ view rustResult = toSpecState result) ∧
-    GloasCacheReadsCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
+    GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state) := by
   obtain ⟨⟨result, -, hresult⟩, hreads⟩ := lighthouse_model_gloas_epoch_eq_ethlib presetMatches run
     chain roomForDeposits oracleMatches caches
   obtain ⟨rustResult, hrust, hview⟩ := lighthouse_rust_gloas_epoch_of_ethlib_ok presetMatches
-    run.invariants (run.atEpochBoundary chain.historicalSummariesBelowLimit)
+    run.invariants (run.atLastSlotOfEpoch chain.historicalSummariesBelowLimit)
     chain.slotFarFromOverflow roomForDeposits oracleMatches rust hresult
   exact ⟨⟨rustResult, result, hrust, hresult, hview⟩, hreads⟩
 
@@ -438,29 +438,29 @@ section Fulu
 variable {state : BeaconState preset .fusaka}
 
 /-- The conditions of the Fulu committee steps, from the chain assumptions at the epoch input. -/
-theorem FuluChainAssumptions.atCommitteeStepState
+theorem FuluChainConditions.atCommitteeStepState
     (presetMatches : PresetMatchesEthLib preset config)
-    (invariants : Spec.ReachableInvariants (toSpecState state))
-    (chain : FuluChainAssumptions oracle (toSpecState state)) :
-    Spec.FuluAtCommitteeStepState oracle (toSpecState state) := by
+    (invariants : Spec.EpochInputInvariants (toSpecState state))
+    (chain : FuluChainConditions oracle (toSpecState state)) :
+    Spec.AtCommitteeStepStateFulu oracle (toSpecState state) := by
   intro committeeInput hsteps
   obtain ⟨hpreconditions, hselection⟩ := chain.committeeSteps committeeInput hsteps
   have hbalances :=
-    Spec.epochToCommitteesFulu_effective_balances oracle _ _ hsteps invariants.1.1.2.2.1
-  obtain ⟨hlookahead, -⟩ := Spec.epochToCommitteesFulu_windows _ _ _ hsteps
+    Spec.epochBeforeCommitteeStepsFulu_effective_balances oracle _ _ hsteps invariants.1.1.2.2.1
+  obtain ⟨hlookahead, -⟩ := Spec.epochBeforeCommitteeStepsFulu_windows _ _ _ hsteps
   obtain ⟨-, -, -, -, -, -, -, h⟩ :=
     fuluVectorLengths_toSpecState (config := config) (by decide) state
   rw [presetMatches.values, Spec.P_min_seed] at h
-  exact ⟨⟨hselection.regLen, fun v hv => (hbalances.1 v hv).2, by rw [hlookahead, h],
-    hselection.keys⟩, hpreconditions⟩
+  exact ⟨⟨hselection.registryBelowLimit, fun v hv => (hbalances.1 v hv).2, by rw [hlookahead, h],
+    hselection.pubkeysValid⟩, hpreconditions⟩
 
 /-- Fulu: at an epoch input, the Lean model of Lighthouse's epoch and EthLib's `processEpoch` give
 the same state, or both fail. The state includes the payload header, which the epoch keeps. -/
 theorem lighthouse_model_fulu_epoch_agrees_ethlib
     (presetMatches : PresetMatchesEthLib preset config)
     (fuluConfigMatches : toSpecFuluConfig config = Spec.FC)
-    (invariants : Spec.ReachableInvariants (toSpecState state))
-    (atEpochBoundary : Spec.AtEpochBoundary (toSpecState state))
+    (invariants : Spec.EpochInputInvariants (toSpecState state))
+    (atLastSlotOfEpoch : Spec.AtLastSlotOfEpoch (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle) :
     Spec.SameResultOrBothFail
@@ -469,19 +469,19 @@ theorem lighthouse_model_fulu_epoch_agrees_ethlib
           state := ← Spec.process_epoch_lighthouse_fulu oracle (toSpecState state) })
       (toSpecResult toSpecFuluState (processEpoch config checks state)) := by
   have h := process_epoch_fulu presetMatches.divisorsNonzero presetMatches.committeeBounds
-    oracleMatches state (epochRoom presetMatches roomForDeposits atEpochBoundary.2.2)
+    oracleMatches state (epochRoom presetMatches roomForDeposits atLastSlotOfEpoch.2.2)
   rw [presetMatches.values, fuluConfigMatches] at h
   exact (Spec.SameResultOrBothFail.bind (Spec.lighthouse_fulu_epoch_sameResultOrBothFail oracle _
-    invariants atEpochBoundary) fun _ _ => .refl _).trans h
+    invariants atLastSlotOfEpoch) fun _ _ => .refl _).trans h
 
 /-- Fulu: at an epoch input where the chain assumptions hold, the Lean model of Lighthouse's epoch
 and EthLib's `processEpoch` succeed with the same state, and EthLib keeps the payload header. -/
-theorem lighthouse_model_fulu_epoch_eq_ethlib_of_invariants [Spec.PresetCfg.Bounds]
+theorem lighthouse_model_fulu_epoch_eq_ethlib_of_invariants [Spec.CurrentPreset.Bounds]
     (presetMatches : PresetMatchesEthLib preset config)
     (fuluConfigMatches : toSpecFuluConfig config = Spec.FC)
-    (invariants : Spec.ReachableInvariants (toSpecState state))
-    (atEpochBoundary : Spec.AtEpochBoundary (toSpecState state))
-    (chain : FuluChainAssumptions oracle (toSpecState state))
+    (invariants : Spec.EpochInputInvariants (toSpecState state))
+    (atLastSlotOfEpoch : Spec.AtLastSlotOfEpoch (toSpecState state))
+    (chain : FuluChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle) :
     ∃ result,
@@ -493,14 +493,14 @@ theorem lighthouse_model_fulu_epoch_eq_ethlib_of_invariants [Spec.PresetCfg.Boun
   rw [presetMatches.values] at hvectors
   -- The transcription succeeds, so the model succeeds.
   obtain ⟨specResult, hspec⟩ := Spec.process_epoch_fulu_total oracle (toSpecState state)
-    invariants.1.1.1.2.1 chain.slotFarFromOverflow atEpochBoundary.1 hvectors invariants.1.1.1.1
-    invariants.1.1.2.2.1 invariants.1.2.2 invariants.1.1.2.2.2.2.2.2 chain.physicalLimits
+    invariants.1.1.1.2.1 chain.slotFarFromOverflow atLastSlotOfEpoch.1 hvectors invariants.1.1.1.1
+    invariants.1.1.2.2.1 invariants.1.2.2 invariants.1.1.2.2.2.2.2.2 chain.supplyAndTimeLimits
     (Spec.committeesOkFulu_of oracle _ chain.slotFarFromOverflow hcommittees)
   have hmodel := (Spec.lighthouse_fulu_epoch_sameResultOrBothFail oracle _ invariants
-    atEpochBoundary specResult).mpr hspec
+    atLastSlotOfEpoch specResult).mpr hspec
   -- The model and EthLib agree.
   have hethlib := (lighthouse_model_fulu_epoch_agrees_ethlib presetMatches fuluConfigMatches
-    invariants atEpochBoundary roomForDeposits oracleMatches
+    invariants atLastSlotOfEpoch roomForDeposits oracleMatches
     { toSpecFuluState state with state := specResult }).mp
     (by rw [hmodel]; rfl)
   cases hresult : processEpoch config checks state with
@@ -513,11 +513,11 @@ theorem lighthouse_model_fulu_epoch_eq_ethlib_of_invariants [Spec.PresetCfg.Boun
 
 /-- Fulu: at every epoch input of a run, the Lean model of Lighthouse's epoch succeeds. EthLib's
 `processEpoch` succeeds with the same state, and keeps the payload header. -/
-theorem lighthouse_model_fulu_epoch_eq_ethlib [Spec.PresetCfg.Bounds]
+theorem lighthouse_model_fulu_epoch_eq_ethlib [Spec.CurrentPreset.Bounds]
     (presetMatches : PresetMatchesEthLib preset config)
     (fuluConfigMatches : toSpecFuluConfig config = Spec.FC)
-    (run : FuluEpochRun oracle fuluOracle blockConfig fuluStart (toSpecState state))
-    (chain : FuluChainAssumptions oracle (toSpecState state))
+    (run : FuluOnlyRun oracle fuluOracle blockConfig fuluStart (toSpecState state))
+    (chain : FuluChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle) :
     ∃ result,
@@ -525,29 +525,29 @@ theorem lighthouse_model_fulu_epoch_eq_ethlib [Spec.PresetCfg.Bounds]
       processEpoch config checks state = .ok result ∧
       result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader :=
   lighthouse_model_fulu_epoch_eq_ethlib_of_invariants presetMatches fuluConfigMatches run.invariants
-    (run.atEpochBoundary chain.historicalSummariesBelowLimit) chain roomForDeposits oracleMatches
+    (run.atLastSlotOfEpoch chain.historicalSummariesBelowLimit) chain roomForDeposits oracleMatches
 
 /-- Fulu, for the composed Rust: if EthLib's `processEpoch` succeeds at an epoch input, the Rust
 returns `Ok` with the same state. EthLib keeps the payload header. -/
-theorem lighthouse_rust_fulu_epoch_of_ethlib_ok [Spec.PresetCfg.Bounds]
+theorem lighthouse_rust_fulu_epoch_of_ethlib_ok [Spec.CurrentPreset.Bounds]
     (presetMatches : PresetMatchesEthLib preset config)
     (fuluConfigMatches : toSpecFuluConfig config = Spec.FC)
-    (invariants : Spec.ReachableInvariants (toSpecState state))
-    (atEpochBoundary : Spec.AtEpochBoundary (toSpecState state))
+    (invariants : Spec.EpochInputInvariants (toSpecState state))
+    (atLastSlotOfEpoch : Spec.AtLastSlotOfEpoch (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle)
-    {σ E : Type} {rustGlue : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
+    {σ E : Type} {rustCode : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
     {rustState : σ}
-    (rust : FuluRustGlueFacts rustGlue oracle view rustState (toSpecState state))
+    (rust : FuluUntranslatedRustFacts rustCode oracle view rustState (toSpecState state))
     {result : BeaconState preset .fusaka}
     (ethLibSucceeds : processEpoch config checks state = .ok result) :
-    (∃ rustResult, (Compose.epochFulu rustGlue rustState).run = ok (some rustResult) ∧
+    (∃ rustResult, (Compose.epochFulu rustCode rustState).run = ok (some rustResult) ∧
       view rustResult = toSpecState result) ∧
     result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader := by
   have hmodel : Spec.process_epoch_lighthouse_fulu oracle (toSpecState state) =
       .ok (toSpecState result) := by
     have h := (lighthouse_model_fulu_epoch_agrees_ethlib presetMatches fuluConfigMatches invariants
-      atEpochBoundary roomForDeposits oracleMatches (toSpecFuluState result)).mpr
+      atLastSlotOfEpoch roomForDeposits oracleMatches (toSpecFuluState result)).mpr
       (by rw [ethLibSucceeds]; rfl)
     obtain ⟨specResult, hspec, h⟩ := Spec.specM_bind_ok h
     have hstate : specResult = toSpecState result :=
@@ -556,31 +556,31 @@ theorem lighthouse_rust_fulu_epoch_of_ethlib_ok [Spec.PresetCfg.Bounds]
   obtain ⟨-, -, -, -, hbits, -, -, hlookahead⟩ :=
     fuluVectorLengths_toSpecState (config := config) (by decide) state
   rw [presetMatches.values] at hlookahead
-  exact ⟨Compose.epochFulu_spec rustGlue oracle view rustState rust.glue
-    (by rw [rust.viewEq]; exact Nat.lt_of_le_of_lt (Nat.le_succ _) atEpochBoundary.2.1)
+  exact ⟨Compose.epochFulu_spec rustCode oracle view rustState rust.glue
+    (by rw [rust.viewEq]; exact Nat.lt_of_le_of_lt (Nat.le_succ _) atLastSlotOfEpoch.2.1)
     (by rw [rust.viewEq]; exact hbits) (by rw [rust.viewEq]; exact hlookahead) _
     (by rw [rust.viewEq]; exact hmodel), epoch_keeps_payload_header ethLibSucceeds⟩
 
 /-- Fulu, for the composed Rust: at every epoch input of a run, the Rust returns `Ok`, and EthLib's
 `processEpoch` succeeds with the same state, and keeps the payload header. -/
-theorem lighthouse_rust_fulu_epoch_eq_ethlib [Spec.PresetCfg.Bounds]
+theorem lighthouse_rust_fulu_epoch_eq_ethlib [Spec.CurrentPreset.Bounds]
     (presetMatches : PresetMatchesEthLib preset config)
     (fuluConfigMatches : toSpecFuluConfig config = Spec.FC)
-    (run : FuluEpochRun oracle fuluOracle blockConfig fuluStart (toSpecState state))
-    (chain : FuluChainAssumptions oracle (toSpecState state))
+    (run : FuluOnlyRun oracle fuluOracle blockConfig fuluStart (toSpecState state))
+    (chain : FuluChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches preset checks oracle)
-    {σ E : Type} {rustGlue : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
+    {σ E : Type} {rustCode : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
     {rustState : σ}
-    (rust : FuluRustGlueFacts rustGlue oracle view rustState (toSpecState state)) :
-    ∃ rustResult result, (Compose.epochFulu rustGlue rustState).run = ok (some rustResult) ∧
+    (rust : FuluUntranslatedRustFacts rustCode oracle view rustState (toSpecState state)) :
+    ∃ rustResult result, (Compose.epochFulu rustCode rustState).run = ok (some rustResult) ∧
       processEpoch config checks state = .ok result ∧ view rustResult = toSpecState result ∧
       result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader := by
   obtain ⟨result, -, hresult, -⟩ := lighthouse_model_fulu_epoch_eq_ethlib presetMatches
     fuluConfigMatches run chain roomForDeposits oracleMatches
   obtain ⟨⟨rustResult, hrust, hview⟩, hheader⟩ := lighthouse_rust_fulu_epoch_of_ethlib_ok
     presetMatches fuluConfigMatches run.invariants
-    (run.atEpochBoundary chain.historicalSummariesBelowLimit) roomForDeposits oracleMatches rust
+    (run.atLastSlotOfEpoch chain.historicalSummariesBelowLimit) roomForDeposits oracleMatches rust
     hresult
   exact ⟨rustResult, result, hrust, hresult, hview, hheader⟩
 
@@ -588,12 +588,12 @@ end Fulu
 
 end EthLib
 
-omit [Spec.PresetCfg] [Spec.PresetCfg.Ok] [Spec.FuluCfg] [Spec.FuluCfg.Ok] in
-/-- Why the agreement theorems keep `EpochBalanceBounds` (each balance below `2^62`): near
+omit [Spec.CurrentPreset] [Spec.CurrentPreset.Valid] [Spec.CurrentFuluConfig] [Spec.CurrentFuluConfig.Valid] in
+/-- Why the agreement theorems keep `BalancesFarFromOverflow` (each balance below `2^62`): near
 `2^64`, Lighthouse's order of rewards and penalties (`rewardsCombined`: all rewards, then all
 penalties) overflows where the spec's (`rewardsSequential`: each reward, then its penalty) does
 not. A balance of `2^64 - 3`, a source reward and penalty of 2, and a target reward of 2. -/
-theorem rewards_overflow_example :
+theorem rewards_order_overflow_example :
     Spec.rewardsSequential (2 ^ 64 - 3) [(2, 2), (2, 0)] = .ok (2 ^ 64 - 1) ∧
     (Spec.rewardsCombined (2 ^ 64 - 3) [(2, 2), (2, 0)]).isOk = false :=
   ⟨rfl, rfl⟩

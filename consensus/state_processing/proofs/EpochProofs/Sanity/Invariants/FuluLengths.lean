@@ -4,10 +4,10 @@ import EpochProofs.Sanity.Invariants.Lengths
 /-!
 # The row lengths invariant for Fulu
 
-`RowsOk` says that `balances`, `inactivity_scores` and both participation lists have one entry
+`ListLengthsMatch` says that `balances`, `inactivity_scores` and both participation lists have one entry
 per validator. This file is `Lengths.lean` for the Fulu functions: each Fulu block function
-keeps the five row lengths (`LenStep`), and the Fulu `process_epoch` keeps `RowsOk` with the
-Gloas epoch lemmas. So `state_transition_fulu` keeps `RowsOk`.
+keeps the five row lengths (`LenStep`), and the Fulu `process_epoch` keeps `ListLengthsMatch` with the
+Gloas epoch lemmas. So `state_transition_fulu` keeps `ListLengthsMatch`.
 -/
 
 namespace EpochProofs.Spec
@@ -282,12 +282,12 @@ theorem process_withdrawals_fulu_len (p : Preset) (s s' : BeaconState)
     try simp only [update_pending_partial_withdrawals] at *
     len_close
 
-/-- The Fulu `process_block` keeps `RowsOk`. -/
-theorem process_block_fulu_rowsOk (p : Preset) (o : Oracle) (fo : FuluOracle) (f : FuluConfig)
+/-- The Fulu `process_block` keeps `ListLengthsMatch`. -/
+theorem process_block_fulu_listLengthsMatch (p : Preset) (o : Oracle) (fo : FuluOracle) (f : FuluConfig)
     (c : FuluBlockConfig) (fs fs' : FuluState) (block : FuluBeaconBlock)
-    (h : process_block_fulu p o fo f c fs block = .ok fs') (hs : RowsOk fs.state) :
-    RowsOk fs'.state :=
-  process_block_fulu_inv p o fo f c RowsOk
+    (h : process_block_fulu p o fo f c fs block = .ok fs') (hs : ListLengthsMatch fs.state) :
+    ListLengthsMatch fs'.state :=
+  process_block_fulu_inv p o fo f c ListLengthsMatch
     (fun _ _ _ h' hs => (process_block_header_fulu_len p o fo _ _ _ h').rowsOk hs)
     (fun _ _ _ h' hs => (process_withdrawals_fulu_len p _ _ _ h').rowsOk hs)
     (fun _ _ _ h' hs => (process_randao_len p o _ _ _ h').rowsOk hs)
@@ -305,24 +305,24 @@ theorem process_slot_fulu_len (p : Preset) (o : Oracle) (fo : FuluOracle) (fs fs
   len_split h
   all_goals (cases h; len_close)
 
-/-- The Fulu `process_epoch` keeps `RowsOk`. -/
-theorem process_epoch_fulu_rowsOk (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
-    (o : Oracle) (s s' : BeaconState) (h : process_epoch_fulu p f o s = .ok s') (hs : RowsOk s) :
-    RowsOk s' :=
-  process_epoch_fulu_inv p f hc o RowsOk
+/-- The Fulu `process_epoch` keeps `ListLengthsMatch`. -/
+theorem process_epoch_fulu_listLengthsMatch (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+    (o : Oracle) (s s' : BeaconState) (h : process_epoch_fulu p f o s = .ok s') (hs : ListLengthsMatch s) :
+    ListLengthsMatch s' :=
+  process_epoch_fulu_inv p f hc o ListLengthsMatch
     (fun _ _ h' hs => (process_justification_and_finalization_len p _ _ h').rowsOk hs)
     (fun _ _ h' hs => (process_inactivity_updates_len p _ _ h').rowsOk hs)
     (fun _ _ _ h' hs => (process_rewards_and_penalties_len p _ _ _ h').rowsOk hs)
     (fun _ _ _ h' hs => (process_registry_updates_len p _ _ _ h').rowsOk hs)
     (fun _ _ _ h' hs => (process_slashings_len p _ _ _ h').rowsOk hs)
     (fun _ _ h' hs => (process_eth1_data_reset_len p _ _ h').rowsOk hs)
-    (fun _ _ _ h' hs => process_pending_deposits_rowsOk p o _ _ _ h' hs)
+    (fun _ _ _ h' hs => process_pending_deposits_listLengthsMatch p o _ _ _ h' hs)
     (fun _ _ h' hs => (process_pending_consolidations_len p _ _ h').rowsOk hs)
     (fun _ _ h' hs => (process_effective_balance_updates_len p _ _ h').rowsOk hs)
     (fun _ _ h' hs => (process_slashings_reset_len p _ _ h').rowsOk hs)
     (fun _ _ h' hs => (process_randao_mixes_reset_len p _ _ h').rowsOk hs)
     (fun _ _ h' hs => (process_historical_summaries_update_len p o _ _ h').rowsOk hs)
-    (fun _ hs => process_participation_flag_updates_rowsOk _ hs)
+    (fun _ hs => process_participation_flag_updates_listLengthsMatch _ hs)
     (fun _ _ h' hs => by
       obtain ⟨_, _, rfl⟩ := process_sync_committee_updates_fulu_shape p o _ _ h'
       exact hs)
@@ -331,25 +331,25 @@ theorem process_epoch_fulu_rowsOk (p : Preset) (f : FuluConfig) (hc : FuluCompat
       exact hs)
     s s' h hs
 
-/-- `process_slots_fulu` with the Fulu `process_epoch` keeps `RowsOk`. -/
-theorem process_slots_fulu_rowsOk (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
+/-- `process_slots_fulu` with the Fulu `process_epoch` keeps `ListLengthsMatch`. -/
+theorem process_slots_fulu_listLengthsMatch (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
     (o : Oracle) (fo : FuluOracle) (fs fs' : FuluState) (slot : Slot)
     (h : process_slots_fulu p o fo (process_epoch_fulu p f o) fs slot = .ok fs')
-    (hs : RowsOk fs.state) : RowsOk fs'.state :=
-  process_slots_fulu_inv p o fo (process_epoch_fulu p f o) RowsOk
+    (hs : ListLengthsMatch fs.state) : ListLengthsMatch fs'.state :=
+  process_slots_fulu_inv p o fo (process_epoch_fulu p f o) ListLengthsMatch
     (fun _ _ h' hs => (process_slot_fulu_len p o fo _ _ h').rowsOk hs)
-    (fun _ _ h' hs => process_epoch_fulu_rowsOk p f hc o _ _ h' hs)
+    (fun _ _ h' hs => process_epoch_fulu_listLengthsMatch p f hc o _ _ h' hs)
     (fun _ _ hs => hs) fs fs' slot hs h
 
-/-- `state_transition_fulu` keeps `RowsOk`. -/
-theorem state_transition_fulu_rowsOk (p : Preset) (o : Oracle) (fo : FuluOracle) (f : FuluConfig)
+/-- `state_transition_fulu` keeps `ListLengthsMatch`. -/
+theorem state_transition_fulu_listLengthsMatch (p : Preset) (o : Oracle) (fo : FuluOracle) (f : FuluConfig)
     (hc : FuluCompat p f) (c : FuluBlockConfig) (fs fs' : FuluState)
-    (signed_block : FuluSignedBeaconBlock) (validate_result : Bool) (hs : RowsOk fs.state)
+    (signed_block : FuluSignedBeaconBlock) (validate_result : Bool) (hs : ListLengthsMatch fs.state)
     (h : state_transition_fulu p o fo f c fs signed_block validate_result = .ok fs') :
-    RowsOk fs'.state :=
-  state_transition_fulu_inv p o fo f c RowsOk
-    (fun _ _ _ h' hs => process_slots_fulu_rowsOk p f hc o fo _ _ _ h' hs)
-    (fun _ _ _ h' hs => process_block_fulu_rowsOk p o fo f c _ _ _ h' hs)
+    ListLengthsMatch fs'.state :=
+  state_transition_fulu_inv p o fo f c ListLengthsMatch
+    (fun _ _ _ h' hs => process_slots_fulu_listLengthsMatch p f hc o fo _ _ _ h' hs)
+    (fun _ _ _ h' hs => process_block_fulu_listLengthsMatch p o fo f c _ _ _ h' hs)
     fs fs' signed_block validate_result hs h
 
 end EpochProofs.Spec

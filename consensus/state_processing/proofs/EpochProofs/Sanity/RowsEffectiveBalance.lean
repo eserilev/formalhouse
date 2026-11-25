@@ -66,7 +66,7 @@ theorem rowsOf_balance_getElem? (state : BeaconState)
 the thresholds are known. -/
 theorem process_effective_balance_updates_rows (p : Preset) (state : BeaconState)
     (downward upward : Uint64) (hthresholds : hysteresisThresholds p = .ok (downward, upward))
-    (hrows : RowsOk state) :
+    (hrows : ListLengthsMatch state) :
     process_effective_balance_updates p state =
       (fun x => state.withRows x.2) <$>
         passM (effectiveBalanceRowStep p downward upward) () (rowsOf state) := by
@@ -88,7 +88,7 @@ theorem process_effective_balance_updates_rows (p : Preset) (state : BeaconState
 /-- `process_effective_balance_updates_rows` in `SameResultOrBothFail` form, for the single pass proof. -/
 theorem process_effective_balance_updates_rows_sameResultOrBothFail (p : Preset) (state : BeaconState)
     (downward upward : Uint64) (hthresholds : hysteresisThresholds p = .ok (downward, upward))
-    (hrows : RowsOk state) :
+    (hrows : ListLengthsMatch state) :
     SameResultOrBothFail (process_effective_balance_updates p state)
       ((fun x => state.withRows x.2) <$>
         passM (effectiveBalanceRowStep p downward upward) () (rowsOf state)) :=

@@ -8,7 +8,7 @@ import EpochProofs.Sanity.Rows
 - `process_sync_committee_updates_fulu_sameResultOrBothFail`: the Fulu sync committee update gives the same
   `ok` results as the Gloas one (`get_next_sync_committee_indices_fulu_iff`).
 - `process_epoch_fulu_eq_tab`: in Fulu `process_epoch`, the registry update and the pending
-  deposits are the Gloas functions at `fuluTab` (`process_registry_updates_fulu_eq`,
+  deposits are the Gloas functions at `fuluTotalActiveBalance` (`process_registry_updates_fulu_eq`,
   `process_pending_deposits_fulu_tab_eq`).
 -/
 
@@ -35,18 +35,18 @@ theorem process_sync_committee_updates_fulu_sameResultOrBothFail (p : Preset) (o
   · exact SameResultOrBothFail.refl _
 
 /-- Fulu `process_epoch` with the registry update and the pending deposits written as the Gloas
-functions at `fuluTab`. -/
+functions at `fuluTotalActiveBalance`. -/
 theorem process_epoch_fulu_eq_tab (p : Preset) (f : FuluConfig) (hc : FuluCompat p f)
     (o : Oracle) (state : BeaconState) :
     process_epoch_fulu p f o state = (do
       let state ← process_justification_and_finalization p state
       let state ← process_inactivity_updates p state
       let state ← process_rewards_and_penalties p (← get_total_active_balance p state) state
-      let state ← process_registry_updates p (fuluTab p f (← get_total_active_balance p state))
+      let state ← process_registry_updates p (fuluTotalActiveBalance p f (← get_total_active_balance p state))
         state
       let state ← process_slashings p (← get_total_active_balance p state) state
       let state ← process_eth1_data_reset p state
-      let state ← process_pending_deposits p (fuluTab p f (← get_total_active_balance p state))
+      let state ← process_pending_deposits p (fuluTotalActiveBalance p f (← get_total_active_balance p state))
         (apply_pending_deposit p o) state
       let state ← process_pending_consolidations p state
       let state ← process_effective_balance_updates p state

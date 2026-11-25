@@ -10,14 +10,14 @@ import EpochProofs.Sanity.SelectionPass
 `upgrade_to_fulu` and `upgrade_to_gloas` keep every field that the start invariants read:
 the validators, the balances, the inactivity scores, the participation flags, the checkpoints,
 the slot and the pending consolidations (`UpgradeFrame`). So each upgrade keeps the eight start
-facts of `FuluStartOk`. These are the start facts that the Gloas theorems take too
+facts of `GenesisInvariants`. These are the start facts that the Gloas theorems take too
 (`reachable_state_transition_sameResultOrBothFail'''`).
 
 At the Gloas fork, the upgrade runs on the state right after the Fulu `process_epoch` of the
-last Fulu epoch and the slot increment. `fulu_gloas_fork_startOk` proves the start facts there
+last Fulu epoch and the slot increment. `fulu_gloas_fork_genesisInvariants` proves the start facts there
 from a reachable Fulu run, and `fulu_then_gloas_sameResultOrBothFail` runs the Gloas state transitions from
-the upgraded state. `gloas_reachable_invariants` is `fulu_reachable_invariants` for Gloas: every
-input of the Gloas `process_epoch` in a reachable Gloas run has `EpochInputOk''`.
+the upgraded state. `gloas_epoch_input_invariants` is `fulu_epoch_input_invariants` for Gloas: every
+input of the Gloas `process_epoch` in a reachable Gloas run has `EpochInputInvariantsFor`.
 -/
 
 namespace EpochProofs.Spec
@@ -141,31 +141,31 @@ theorem upgrade_to_fulu_frame (p : Preset) (o : Oracle) (c : UpgradeConfig) (pre
   exact ⟨rfl, rfl, rfl, rfl, rfl, ⟨rfl, rfl, rfl, rfl⟩, rfl⟩
 
 /-- `UpgradeFrame` keeps the eight start facts. -/
-theorem FuluStartOk.of_frame [PresetCfg] {s s' : BeaconState} (hf : UpgradeFrame s s') (h : FuluStartOk s) :
-    FuluStartOk s' := by
+theorem GenesisInvariants.of_frame [CurrentPreset] {s s' : BeaconState} (hf : UpgradeFrame s s') (h : GenesisInvariants s) :
+    GenesisInvariants s' := by
   obtain ⟨hv, hb, hi, hpp, hcp, hcs, hpc⟩ := hf
-  refine ⟨h.ffg.of_checkpointsStable hcs, ?_, ExitDelay.of_validators_eq hv h.exitDelay,
-    ExitEpochsU64.of_validators_eq hv h.exitEpochs, AfterEB.of_eq hv hb h.afterEB,
-    (PkSame.of_eq hv).pubkeysUnique h.pubkeys, ?_, WithdrawableU64.of_validators_eq hv h.withdrawable⟩
-  · obtain ⟨h1, h2, h3, h4⟩ := h.rows
+  refine ⟨h.checkpointsInOrder.of_checkpointsStable hcs, ?_, ExitToWithdrawableDelay.of_validators_eq hv h.exitToWithdrawableDelay,
+    ExitEpochsAreUint64.of_validators_eq hv h.exitEpochsAreUint64, AfterEffectiveBalanceUpdates.of_eq hv hb h.afterEffectiveBalanceUpdates,
+    (PkSame.of_eq hv).pubkeysUnique h.pubkeysUnique, ?_, WithdrawableEpochsFitUint64.of_validators_eq hv h.withdrawableEpochsFitUint64⟩
+  · obtain ⟨h1, h2, h3, h4⟩ := h.listLengthsMatch
     exact ⟨by rw [hb, hv]; exact h1, by rw [hi, hv]; exact h2, by rw [hpp, hv]; exact h3,
       by rw [hcp, hv]; exact h4⟩
   · intro c hc
     rw [hpc] at hc
     rw [hv]
-    exact h.consolidations c hc
+    exact h.consolidationsInRange c hc
 
 /-- `upgrade_to_fulu` keeps the start facts of the Electra state. -/
-theorem upgrade_to_fulu_startOk [PresetCfg] (p : Preset) (o : Oracle) (c : UpgradeConfig) (pre post : FuluState)
-    (h : upgrade_to_fulu p o c pre = .ok post) (hs : FuluStartOk pre.state) :
-    FuluStartOk post.state :=
-  FuluStartOk.of_frame (upgrade_to_fulu_frame p o c pre post h) hs
+theorem upgrade_to_fulu_genesisInvariants [CurrentPreset] (p : Preset) (o : Oracle) (c : UpgradeConfig) (pre post : FuluState)
+    (h : upgrade_to_fulu p o c pre = .ok post) (hs : GenesisInvariants pre.state) :
+    GenesisInvariants post.state :=
+  GenesisInvariants.of_frame (upgrade_to_fulu_frame p o c pre post h) hs
 
 /-- `upgrade_to_gloas` keeps the start facts of the Fulu state. -/
-theorem upgrade_to_gloas_startOk [PresetCfg] (p : Preset) (o : Oracle) (c : UpgradeConfig) (pre : FuluState)
-    (g : BeaconState) (h : upgrade_to_gloas p o c pre = .ok g) (hs : FuluStartOk pre.state) :
-    FuluStartOk g :=
-  FuluStartOk.of_frame (upgrade_to_gloas_frame p o c pre g h) hs
+theorem upgrade_to_gloas_genesisInvariants [CurrentPreset] (p : Preset) (o : Oracle) (c : UpgradeConfig) (pre : FuluState)
+    (g : BeaconState) (h : upgrade_to_gloas p o c pre = .ok g) (hs : GenesisInvariants pre.state) :
+    GenesisInvariants g :=
+  GenesisInvariants.of_frame (upgrade_to_gloas_frame p o c pre g h) hs
 
 /-! ## Vector lengths after the Gloas upgrade -/
 
@@ -326,14 +326,14 @@ theorem upgrade_to_gloas_vectorLengths (p : Preset) (o : Oracle) (c : UpgradeCon
 /-- The state at the Gloas fork has the start facts. In a reachable Fulu run, the slot loop
 reaches `t`, `process_slot_fulu` gives `t1` at the last slot of an epoch, and the Fulu
 `process_epoch` gives `s2`. The slot increment gives the input of `upgrade_to_gloas`. -/
-theorem fulu_fork_state_startOk [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
-    (init : FuluState) (hi : FuluStartOk init.state) (hsupply : SupplyBoundFulu o fo c init)
-    (fs t t1 : FuluState) (s2 : BeaconState) (slot : Slot) (hr : ReachableFulu o fo c init fs)
-    (hslot64 : slot < 2 ^ 64) (hreach : SlotReachFulu o fo fs slot t) (hlt : t.state.slot < slot)
+theorem fulu_fork_state_genesisInvariants [CurrentPreset] [CurrentPreset.Valid] [CurrentFuluConfig] [CurrentFuluConfig.Valid] (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
+    (init : FuluState) (hi : GenesisInvariants init.state) (hsupply : ActiveBalanceBoundedFulu o fo c init)
+    (fs t t1 : FuluState) (s2 : BeaconState) (slot : Slot) (hr : ReachableByBlocksFulu o fo c init fs)
+    (hslot64 : slot < 2 ^ 64) (hreach : ReachableBySlotsBeforeFulu o fo fs slot t) (hlt : t.state.slot < slot)
     (ht : process_slot_fulu P o fo t = .ok t1)
     (hz : (t1.state.slot + 1) % P.SLOTS_PER_EPOCH = 0)
     (he : process_epoch_fulu_m o t1.state = .ok s2) :
-    FuluStartOk { s2 with slot := s2.slot + 1 } := by
+    GenesisInvariants { s2 with slot := s2.slot + 1 } := by
   have hst := loopInv_steps_fulu o fo slot fs.state.slot hslot64
   have hs := reachable_fulu_inv o fo c init hi hsupply fs hr
   have hinv := hst.1 _ _ ht hlt (hreach.loopInv hslot64 hs)
@@ -347,84 +347,84 @@ theorem fulu_fork_state_startOk [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok
   have hv := (process_slot_fulu_frame _ o fo _ _ ht).1.1
   have hp1 := (PkSame.of_eq hv).pubkeysUnique htail.1
   have hc1 := (process_slot_fulu_cstep _ o fo _ _ ht).inRange htail.2.1
-  have hw1 := WithdrawableU64.of_validators_eq hv htail.2.2
+  have hw1 := WithdrawableEpochsFitUint64.of_validators_eq hv htail.2.2
   have hp2 := process_epoch_fulu_pubkeysUnique _ _ fuluCompat o _ _ he hp1
   have hc2 := process_epoch_fulu_inRange _ _ fuluCompat o _ _ he hc1
   have hw2 := process_epoch_fulu_withdrawableU64 o _ _ he hw1
-  have hA2 : AfterEB P s2 := hpost.2.2.2.2.1
+  have hA2 : AfterEffectiveBalanceUpdates P s2 := hpost.2.2.2.2.1
   obtain ⟨hffg, hrows, hd, hx, -⟩ := hloop
   exact ⟨hffg, hrows, hd, hx, hA2, hp2, hc2, hw2⟩
 
 /-- The Gloas state that `upgrade_to_gloas` makes at the fork of a reachable Fulu run has the
 start facts of the Gloas theorems. -/
-theorem fulu_gloas_fork_startOk [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok]
+theorem fulu_gloas_fork_genesisInvariants [CurrentPreset] [CurrentPreset.Valid] [CurrentFuluConfig] [CurrentFuluConfig.Valid]
     (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
-    (uc : UpgradeConfig) (init : FuluState) (hi : FuluStartOk init.state)
-    (hsupply : SupplyBoundFulu o fo c init)
-    (fs t t1 : FuluState) (s2 g : BeaconState) (slot : Slot) (hr : ReachableFulu o fo c init fs)
-    (hslot64 : slot < 2 ^ 64) (hreach : SlotReachFulu o fo fs slot t) (hlt : t.state.slot < slot)
+    (uc : UpgradeConfig) (init : FuluState) (hi : GenesisInvariants init.state)
+    (hsupply : ActiveBalanceBoundedFulu o fo c init)
+    (fs t t1 : FuluState) (s2 g : BeaconState) (slot : Slot) (hr : ReachableByBlocksFulu o fo c init fs)
+    (hslot64 : slot < 2 ^ 64) (hreach : ReachableBySlotsBeforeFulu o fo fs slot t) (hlt : t.state.slot < slot)
     (ht : process_slot_fulu P o fo t = .ok t1)
     (hz : (t1.state.slot + 1) % P.SLOTS_PER_EPOCH = 0)
     (he : process_epoch_fulu_m o t1.state = .ok s2)
     (hup : upgrade_to_gloas P o uc
       { t1 with state := { s2 with slot := s2.slot + 1 } } = .ok g) :
-    FuluStartOk g :=
-  upgrade_to_gloas_startOk _ o uc _ g hup
-    (fulu_fork_state_startOk o fo c init hi hsupply fs t t1 s2 slot hr hslot64 hreach hlt ht hz he)
+    GenesisInvariants g :=
+  upgrade_to_gloas_genesisInvariants _ o uc _ g hup
+    (fulu_fork_state_genesisInvariants o fo c init hi hsupply fs t t1 s2 slot hr hslot64 hreach hlt ht hz he)
 
 /-- A Fulu run that crosses the Gloas fork: every Gloas `state_transition` from a state that the
 Gloas run reaches from the upgraded state `g` has the same `ok` results with any epoch function
-`f` that agrees with `process_epoch` on the inputs that `EpochInputOk''` describes. The Gloas
+`f` that agrees with `process_epoch` on the inputs that `EpochInputInvariantsFor` describes. The Gloas
 supply and economic hypotheses are on the Gloas run, as in `reachable_state_transition_sameResultOrBothFail'''`. -/
-theorem fulu_then_gloas_sameResultOrBothFail [PresetCfg] [PresetCfg.Ok] [FuluCfg] [FuluCfg.Ok]
+theorem fulu_then_gloas_sameResultOrBothFail [CurrentPreset] [CurrentPreset.Valid] [CurrentFuluConfig] [CurrentFuluConfig.Valid]
     (o : Oracle) (fo : FuluOracle) (c : FuluBlockConfig)
-    (uc : UpgradeConfig) (init : FuluState) (hi : FuluStartOk init.state)
-    (hsupply : SupplyBoundFulu o fo c init)
-    (fs t t1 : FuluState) (s2 g : BeaconState) (slot : Slot) (hr : ReachableFulu o fo c init fs)
-    (hslot64 : slot < 2 ^ 64) (hreach : SlotReachFulu o fo fs slot t) (hlt : t.state.slot < slot)
+    (uc : UpgradeConfig) (init : FuluState) (hi : GenesisInvariants init.state)
+    (hsupply : ActiveBalanceBoundedFulu o fo c init)
+    (fs t t1 : FuluState) (s2 g : BeaconState) (slot : Slot) (hr : ReachableByBlocksFulu o fo c init fs)
+    (hslot64 : slot < 2 ^ 64) (hreach : ReachableBySlotsBeforeFulu o fo fs slot t) (hlt : t.state.slot < slot)
     (ht : process_slot_fulu P o fo t = .ok t1)
     (hz : (t1.state.slot + 1) % P.SLOTS_PER_EPOCH = 0)
     (he : process_epoch_fulu_m o t1.state = .ok s2)
     (hup : upgrade_to_gloas P o uc
       { t1 with state := { s2 with slot := s2.slot + 1 } } = .ok g)
     (max_blobs_per_block : Epoch → Uint64) (GLOAS_FORK_EPOCH : Epoch)
-    (hsupplyG : SupplyBound o max_blobs_per_block GLOAS_FORK_EPOCH g)
-    (Econ : BeaconState → Prop) (hecon : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH g Econ)
+    (hsupplyG : ActiveBalanceBounded o max_blobs_per_block GLOAS_FORK_EPOCH g)
+    (InputCondition : BeaconState → Prop) (hinputCondition : AtEveryEpochInput o max_blobs_per_block GLOAS_FORK_EPOCH g InputCondition)
     (f : BeaconState → SpecM BeaconState)
-    (hf : ∀ t, EpochInputOk'' Econ t → SameResultOrBothFail (f t) (process_epoch P o t))
-    (s : BeaconState) (hrg : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH g s)
+    (hf : ∀ t, EpochInputInvariantsFor InputCondition t → SameResultOrBothFail (f t) (process_epoch P o t))
+    (s : BeaconState) (hrg : ReachableByBlocks o max_blobs_per_block GLOAS_FORK_EPOCH g s)
     (signed_block : SignedBeaconBlock) (validate_result : Bool)
     (hslotb : signed_block.message.slot < 2 ^ 64) :
     SameResultOrBothFail (state_transition_with o max_blobs_per_block GLOAS_FORK_EPOCH f s signed_block
         validate_result)
       (state_transition P o max_blobs_per_block GLOAS_FORK_EPOCH s signed_block
         validate_result) := by
-  have hg := fulu_gloas_fork_startOk o fo c uc init hi hsupply fs t t1 s2 g slot hr hslot64 hreach
+  have hg := fulu_gloas_fork_genesisInvariants o fo c uc init hi hsupply fs t t1 s2 g slot hr hslot64 hreach
     hlt ht hz he hup
-  exact reachable_state_transition_sameResultOrBothFail''' o _ _ g hg.ffg hg.rows hg.exitDelay hg.exitEpochs
-    hg.afterEB hg.pubkeys hg.consolidations hg.withdrawable hsupplyG Econ hecon f hf s hrg
+  exact reachable_state_transition_sameResultOrBothFail''' o _ _ g hg.checkpointsInOrder hg.listLengthsMatch hg.exitToWithdrawableDelay hg.exitEpochsAreUint64
+    hg.afterEffectiveBalanceUpdates hg.pubkeysUnique hg.consolidationsInRange hg.withdrawableEpochsFitUint64 hsupplyG InputCondition hinputCondition f hf s hrg
     signed_block validate_result hslotb
 
 /-! ## Every Gloas epoch input -/
 
 /-- The states that the Gloas `process_slots` loop with target `slot` reaches from `s` on
 mainnet, one slot at a time, below the target. -/
-inductive SlotReachG [PresetCfg] (o : Oracle) (s : BeaconState) (slot : Slot) : BeaconState → Prop
-  | refl : SlotReachG o s slot s
-  | skip {t t1 : BeaconState} : SlotReachG o s slot t → t.slot < slot →
+inductive ReachableBySlotsBefore [CurrentPreset] (o : Oracle) (s : BeaconState) (slot : Slot) : BeaconState → Prop
+  | refl : ReachableBySlotsBefore o s slot s
+  | skip {t t1 : BeaconState} : ReachableBySlotsBefore o s slot t → t.slot < slot →
       process_slot P o t = .ok t1 →
       (t1.slot + 1) % P.SLOTS_PER_EPOCH ≠ 0 →
-      SlotReachG o s slot { t1 with slot := t1.slot + 1 }
-  | epoch {t t1 t2 : BeaconState} : SlotReachG o s slot t → t.slot < slot →
+      ReachableBySlotsBefore o s slot { t1 with slot := t1.slot + 1 }
+  | epoch {t t1 t2 : BeaconState} : ReachableBySlotsBefore o s slot t → t.slot < slot →
       process_slot P o t = .ok t1 →
       (t1.slot + 1) % P.SLOTS_PER_EPOCH = 0 →
       process_epoch P o t1 = .ok t2 →
-      SlotReachG o s slot { t2 with slot := t2.slot + 1 }
+      ReachableBySlotsBefore o s slot { t2 with slot := t2.slot + 1 }
 
-/-- The Gloas slot loop keeps `LoopInv`. -/
-theorem SlotReachG.loopInv [PresetCfg] [PresetCfg.Ok] {o : Oracle} {s t : BeaconState} {slot : Slot}
-    (hslot64 : slot < 2 ^ 64) (hr : SlotReachG o s slot t) (hs : ReachInv s) :
-    LoopInv s.slot t := by
+/-- The Gloas slot loop keeps `SlotLoopInvariants`. -/
+theorem ReachableBySlotsBefore.loopInv [CurrentPreset] [CurrentPreset.Valid] {o : Oracle} {s t : BeaconState} {slot : Slot}
+    (hslot64 : slot < 2 ^ 64) (hr : ReachableBySlotsBefore o s slot t) (hs : StateInvariants s) :
+    SlotLoopInvariants s.slot t := by
   have hst := loopInv_steps o slot s.slot hslot64
   induction hr with
   | refl => exact hs
@@ -440,45 +440,45 @@ theorem SlotReachG.loopInv [PresetCfg] [PresetCfg.Ok] {o : Oracle} {s t : Beacon
     rw [← hs2] at hz
     exact hst.2.2.2.1 _ hz hQ
 
-/-- A target-bounded run of the loop is a run of `SlotReach`. -/
-theorem SlotReachG.slotReach [PresetCfg] {o : Oracle} {s t : BeaconState} {slot : Slot}
-    (hr : SlotReachG o s slot t) : SlotReach o s t := by
+/-- A target-bounded run of the loop is a run of `ReachableBySlots`. -/
+theorem ReachableBySlotsBefore.slotReach [CurrentPreset] {o : Oracle} {s t : BeaconState} {slot : Slot}
+    (hr : ReachableBySlotsBefore o s slot t) : ReachableBySlots o s t := by
   induction hr with
   | refl => exact .refl
   | skip _ _ ht hz ih => exact .skip ih ht hz
   | epoch _ _ ht hz he ih => exact .epoch ih ht hz he
 
 /-- On mainnet, every input of the Gloas `process_epoch` in a reachable Gloas run has the
-facts of `EpochInputOk''`, if the start state has the eight start facts. The supply bound and
-`Econ` are hypotheses on the run. -/
-theorem gloas_reachable_invariants [PresetCfg] [PresetCfg.Ok] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
-    (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState) (hi : FuluStartOk init)
-    (hsupply : SupplyBound o max_blobs_per_block GLOAS_FORK_EPOCH init)
-    (Econ : BeaconState → Prop) (hecon : EpochEcon o max_blobs_per_block GLOAS_FORK_EPOCH init Econ)
+facts of `EpochInputInvariantsFor`, if the start state has the eight start facts. The supply bound and
+`InputCondition` are hypotheses on the run. -/
+theorem gloas_epoch_input_invariants [CurrentPreset] [CurrentPreset.Valid] (o : Oracle) (max_blobs_per_block : Epoch → Uint64)
+    (GLOAS_FORK_EPOCH : Epoch) (init : BeaconState) (hi : GenesisInvariants init)
+    (hsupply : ActiveBalanceBounded o max_blobs_per_block GLOAS_FORK_EPOCH init)
+    (InputCondition : BeaconState → Prop) (hinputCondition : AtEveryEpochInput o max_blobs_per_block GLOAS_FORK_EPOCH init InputCondition)
     (s t t1 : BeaconState) (slot : Slot)
-    (hr : Reachable o max_blobs_per_block GLOAS_FORK_EPOCH init s)
-    (hslot64 : slot < 2 ^ 64) (hreach : SlotReachG o s slot t) (hlt : t.slot < slot)
+    (hr : ReachableByBlocks o max_blobs_per_block GLOAS_FORK_EPOCH init s)
+    (hslot64 : slot < 2 ^ 64) (hreach : ReachableBySlotsBefore o s slot t) (hlt : t.slot < slot)
     (ht : process_slot P o t = .ok t1)
     (hz : (t1.slot + 1) % P.SLOTS_PER_EPOCH = 0) :
-    EpochInputOk'' Econ t1 := by
+    EpochInputInvariantsFor InputCondition t1 := by
   have hst := loopInv_steps o slot s.slot hslot64
-  have hs := reachable_inv o _ _ init hi.ffg hi.rows hi.exitDelay hi.exitEpochs hi.afterEB
+  have hs := reachable_inv o _ _ init hi.checkpointsInOrder hi.listLengthsMatch hi.exitToWithdrawableDelay hi.exitEpochsAreUint64 hi.afterEffectiveBalanceUpdates
     hsupply s hr
   have hinv := hst.1 _ _ ht hlt (hreach.loopInv hslot64 hs)
   have hs1 := (process_slot_frame _ o _ _ ht).2
   have hlt1 : t1.slot < slot := hs1 ▸ hlt
   have hok := hst.2.2.1 _ hlt1 hz hinv
-  have htail := hreach.slotReach.tail (reachable_tail o _ _ init hi.pubkeys hi.consolidations s hr)
+  have htail := hreach.slotReach.tail (reachable_tail o _ _ init hi.pubkeysUnique hi.consolidationsInRange s hr)
   have hwd := hreach.slotReach.withdrawable
-    ⟨(reachable_inv o _ _ init hi.ffg hi.rows hi.exitDelay hi.exitEpochs hi.afterEB hsupply s hr).2.2.1,
-      reachable_withdrawableU64 o _ _ init hi.withdrawable s hr⟩
+    ⟨(reachable_inv o _ _ init hi.checkpointsInOrder hi.listLengthsMatch hi.exitToWithdrawableDelay hi.exitEpochsAreUint64 hi.afterEffectiveBalanceUpdates hsupply s hr).2.2.1,
+      reachable_withdrawableU64 o _ _ init hi.withdrawableEpochsFitUint64 s hr⟩
   have hv := (process_slot_frame _ o _ _ ht).1.1
   have hp1 := (PkSame.of_eq hv).pubkeysUnique htail.1
   have hc1 := (process_slot_cstep _ o _ _ ht).inRange htail.2
-  have hd1 := ExitDelay.of_validators_eq hv hwd.1
-  have hw1 := WithdrawableU64.of_validators_eq hv hwd.2
+  have hd1 := ExitToWithdrawableDelay.of_validators_eq hv hwd.1
+  have hw1 := WithdrawableEpochsFitUint64.of_validators_eq hv hwd.2
   obtain ⟨-, -, -, hx, -, s0, n, hA, hb, -⟩ := hinv
   exact ⟨⟨⟨hok, Nat.lt_trans hlt1 hslot64, hb.ebOk hA, hx,
-    hecon s t t1 hr hreach.slotReach ht hz⟩, hp1, hc1⟩, hw1, withdrawableValid_of hd1 hw1⟩
+    hinputCondition s t t1 hr hreach.slotReach ht hz⟩, hp1, hc1⟩, hw1, withdrawableValid_of hd1 hw1⟩
 
 end EpochProofs.Spec

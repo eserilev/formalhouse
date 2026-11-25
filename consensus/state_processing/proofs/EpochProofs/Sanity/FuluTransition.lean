@@ -10,10 +10,10 @@ This file mirrors `Sanity/Driver` for Fulu.
 - `process_slots_fulu` keeps every property of the inner `BeaconState` that `process_slot_fulu`,
   `process_epoch` and the slot increment keep, and it ends at the target slot.
 - Each step of the Fulu `process_epoch` after `process_justification_and_finalization` keeps
-  the slot and the checkpoints. So the Fulu `process_epoch` turns `FfgInvariant` into
-  `FfgInvariantAfter`.
+  the slot and the checkpoints. So the Fulu `process_epoch` turns `CheckpointsInOrder` into
+  `CheckpointsInOrderAfterJustification`.
 - Each step of the Fulu `process_block` keeps the slot and the checkpoints.
-- So `state_transition_fulu` keeps `FfgInvariant`.
+- So `state_transition_fulu` keeps `CheckpointsInOrder`.
 -/
 
 namespace EpochProofs.Spec
@@ -247,17 +247,17 @@ private theorem epochOf_succ_of_mod (p : Preset) (s : BeaconState)
     simp only [Slot] at *
     omega
 
-/-- The Fulu `process_slots` keeps `FfgInvariant`. Each `processEpoch` call starts from a state
-with `FfgInvariant` and must end in a state with `FfgInvariantAfter` at the same slot. -/
+/-- The Fulu `process_slots` keeps `CheckpointsInOrder`. Each `processEpoch` call starts from a state
+with `CheckpointsInOrder` and must end in a state with `CheckpointsInOrderAfterJustification` at the same slot. -/
 theorem process_slots_fulu_ffg (p : Preset) (o : Oracle) (fo : FuluOracle)
     (processEpoch : BeaconState → SpecM BeaconState)
-    (hepoch : ∀ s s', processEpoch s = .ok s' → FfgInvariant p s →
-      FfgInvariantAfter p s' ∧ s'.slot = s.slot)
-    (fs fs' : FuluState) (slot : Slot) (hinv : FfgInvariant p fs.state)
+    (hepoch : ∀ s s', processEpoch s = .ok s' → CheckpointsInOrder p s →
+      CheckpointsInOrderAfterJustification p s' ∧ s'.slot = s.slot)
+    (fs fs' : FuluState) (slot : Slot) (hinv : CheckpointsInOrder p fs.state)
     (h : process_slots_fulu p o fo processEpoch fs slot = .ok fs') :
-    FfgInvariant p fs'.state := by
-  refine process_slots_fulu_invariant_mono p o fo processEpoch (FfgInvariant p)
-    (FfgInvariantAfter p)
+    CheckpointsInOrder p fs'.state := by
+  refine process_slots_fulu_invariant_mono p o fo processEpoch (CheckpointsInOrder p)
+    (CheckpointsInOrderAfterJustification p)
     (fun fs fs' hs hP => hP.of_checkpointsStable (process_slot_fulu_frame p o fo fs fs' hs).2)
     (fun s s' _ hs hP => hepoch s s' hs hP) ?_ ?_ fs fs' slot hinv h
   · intro s hz ⟨hord, hc⟩
@@ -407,11 +407,11 @@ theorem process_epoch_fulu_slot (p : Preset) (f : FuluConfig) (o : Oracle) (s s'
   obtain ⟨s1, h1, hs⟩ := process_epoch_fulu_split p f o s s' h
   exact hs.1.trans (process_justification_and_finalization_frame p s s1 h1).2
 
-/-- The Fulu `process_epoch` turns `FfgInvariant` into `FfgInvariantAfter` and keeps the
+/-- The Fulu `process_epoch` turns `CheckpointsInOrder` into `CheckpointsInOrderAfterJustification` and keeps the
 slot. -/
 theorem process_epoch_fulu_ffg (p : Preset) (f : FuluConfig) (o : Oracle) (s s' : BeaconState)
-    (h : process_epoch_fulu p f o s = .ok s') (hinv : FfgInvariant p s) :
-    FfgInvariantAfter p s' ∧ s'.slot = s.slot := by
+    (h : process_epoch_fulu p f o s = .ok s') (hinv : CheckpointsInOrder p s) :
+    CheckpointsInOrderAfterJustification p s' ∧ s'.slot = s.slot := by
   obtain ⟨s1, h1, hs⟩ := process_epoch_fulu_split p f o s s' h
   exact ⟨(process_justification_and_finalization_ffg p s s1 h1 hinv).1.of_checkpointsStable hs,
     process_epoch_fulu_slot p f o s s' h⟩
@@ -424,11 +424,11 @@ theorem process_slots_fulu_process_epoch_slot (p : Preset) (f : FuluConfig) (o :
   process_slots_fulu_slot p o fo (process_epoch_fulu p f o) (process_epoch_fulu_slot p f o)
     fs fs' slot h
 
-/-- The Fulu `process_slots` with the Fulu `process_epoch` keeps `FfgInvariant`. -/
+/-- The Fulu `process_slots` with the Fulu `process_epoch` keeps `CheckpointsInOrder`. -/
 theorem process_slots_fulu_process_epoch_ffg (p : Preset) (f : FuluConfig) (o : Oracle)
-    (fo : FuluOracle) (fs fs' : FuluState) (slot : Slot) (hinv : FfgInvariant p fs.state)
+    (fo : FuluOracle) (fs fs' : FuluState) (slot : Slot) (hinv : CheckpointsInOrder p fs.state)
     (h : process_slots_fulu p o fo (process_epoch_fulu p f o) fs slot = .ok fs') :
-    FfgInvariant p fs'.state :=
+    CheckpointsInOrder p fs'.state :=
   process_slots_fulu_ffg p o fo (process_epoch_fulu p f o)
     (fun s s' hs hP => process_epoch_fulu_ffg p f o s s' hs hP) fs fs' slot hinv h
 
@@ -642,12 +642,12 @@ theorem process_block_fulu_checkpointsStable (p : Preset) (o : Oracle) (fo : Ful
 
 /-! ## `state_transition_fulu` -/
 
-/-- The Fulu `state_transition` keeps `FfgInvariant`. -/
+/-- The Fulu `state_transition` keeps `CheckpointsInOrder`. -/
 theorem state_transition_fulu_ffg (p : Preset) (o : Oracle) (fo : FuluOracle) (f : FuluConfig)
     (c : FuluBlockConfig) (fs fs' : FuluState) (signed_block : FuluSignedBeaconBlock)
-    (validate_result : Bool) (hinv : FfgInvariant p fs.state)
+    (validate_result : Bool) (hinv : CheckpointsInOrder p fs.state)
     (h : state_transition_fulu p o fo f c fs signed_block validate_result = .ok fs') :
-    FfgInvariant p fs'.state := by
+    CheckpointsInOrder p fs'.state := by
   unfold state_transition_fulu at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h

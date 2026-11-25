@@ -40,8 +40,8 @@ theorem rowsOf_withRows (state : BeaconState) (rows : List Row)
     simp only [h] at hidx
     simp [hidx]
 
-theorem rowsOk_withRows (state : BeaconState) (rows : List Row) (hrows : RowsOk state)
-    (hlen : rows.length = state.validators.length) : RowsOk (state.withRows rows) := by
+theorem rowsOk_withRows (state : BeaconState) (rows : List Row) (hrows : ListLengthsMatch state)
+    (hlen : rows.length = state.validators.length) : ListLengthsMatch (state.withRows rows) := by
   obtain ⟨_, _, hp, hc⟩ := hrows
   refine ⟨?_, ?_, ?_, ?_⟩ <;> simp [BeaconState.withRows, hlen, hp, hc]
 

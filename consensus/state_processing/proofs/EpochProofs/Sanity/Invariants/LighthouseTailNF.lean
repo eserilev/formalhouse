@@ -15,7 +15,7 @@ namespace EpochProofs.Spec
 /-- The epoch tail after the four steps, in the Lighthouse order with every deposit and
 effective balance step written out. `total_active_balance` is the total of the deposit churn, and
 `K` runs after the effective balance updates of the validators that consolidations name. -/
-def tailNFG [PresetCfg] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 S4 : BeaconState)
+def tailNFG [CurrentPreset] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1 S4 : BeaconState)
     (total_active_balance : Gwei) (current_epoch : Epoch) : SpecM BeaconState := do
   let finalized_slot ←
     compute_start_slot_at_epoch P s1.finalized_checkpoint.epoch
@@ -41,7 +41,7 @@ def tailNFG [PresetCfg] (o : Oracle) (K : BeaconState → SpecM BeaconState) (s1
   K t8
 
 /-- `tailNFG` for Gloas: the builder payments, then the steps after them. -/
-def tailNF [PresetCfg] (o : Oracle) (s1 S4 : BeaconState) (total_active_balance : Gwei)
+def tailNF [CurrentPreset] (o : Oracle) (s1 S4 : BeaconState) (total_active_balance : Gwei)
     (current_epoch : Epoch) : SpecM BeaconState :=
   tailNFG o (gloasFin o total_active_balance) s1 S4 total_active_balance current_epoch
 

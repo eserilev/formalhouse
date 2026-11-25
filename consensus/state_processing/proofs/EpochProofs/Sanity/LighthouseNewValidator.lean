@@ -100,7 +100,7 @@ theorem lhApplyPendingDeposit_eq (p : Preset) (h : 0 < p.EFFECTIVE_BALANCE_INCRE
   funext state deposit
   simp only [lhApplyPendingDeposit, apply_pending_deposit, add_validator_to_registry_lh p h]
 
-theorem lhApplyPendingDeposit_mainnet [PresetCfg] (o : Oracle) :
+theorem lhApplyPendingDeposit_mainnet [CurrentPreset] (o : Oracle) :
     lhApplyPendingDeposit P o = apply_pending_deposit P o :=
   lhApplyPendingDeposit_eq P (by pdecide) o
 

@@ -29,7 +29,7 @@ theorem flagSum_le (vs : List CacheProofs.Spec.Validator) (ps : List Nat) (e f :
       have := ih ps
       split <;> omega
 
-theorem flagSum_lt [EpochProofs.Spec.PresetCfg] (s : EpochProofs.Spec.BeaconState) (ps : List Nat) (e f : Nat)
+theorem flagSum_lt [EpochProofs.Spec.CurrentPreset] (s : EpochProofs.Spec.BeaconState) (ps : List Nat) (e f : Nat)
     (h : EpochProofs.Spec.totalEffectiveBalance s < 2 ^ 60) :
     max EpochProofs.Spec.P.EFFECTIVE_BALANCE_INCREMENT
       (flagSum (s.validators.map pbValidator) ps e f) < 2 ^ 64 := by
@@ -44,7 +44,7 @@ theorem flagSum_lt [EpochProofs.Spec.PresetCfg] (s : EpochProofs.Spec.BeaconStat
   have h6064 : (2 : Nat) ^ 60 < 2 ^ 64 := by norm_num
   exact Nat.max_lt.mpr ⟨hinc, Nat.lt_of_le_of_lt h1 (Nat.lt_trans h h6064)⟩
 
-theorem current_epoch_mainnet [EpochProofs.Spec.PresetCfg] [EpochProofs.Spec.PresetCfg.Ok]
+theorem current_epoch_mainnet [EpochProofs.Spec.CurrentPreset] [EpochProofs.Spec.CurrentPreset.Valid]
     (s : EpochProofs.Spec.BeaconState) :
     EpochProofs.Spec.get_current_epoch EpochProofs.Spec.P s =
       .ok (s.slot / EpochProofs.Spec.P.SLOTS_PER_EPOCH) := by
@@ -52,7 +52,7 @@ theorem current_epoch_mainnet [EpochProofs.Spec.PresetCfg] [EpochProofs.Spec.Pre
   simp [EpochProofs.Spec.get_current_epoch, EpochProofs.Spec.compute_epoch_at_slot,
     EpochProofs.Spec.uint64Div, h, pure, Except.pure]
 
-theorem previous_epoch_mainnet [EpochProofs.Spec.PresetCfg] [EpochProofs.Spec.PresetCfg.Ok] (s : EpochProofs.Spec.BeaconState) :
+theorem previous_epoch_mainnet [EpochProofs.Spec.CurrentPreset] [EpochProofs.Spec.CurrentPreset.Valid] (s : EpochProofs.Spec.BeaconState) :
     EpochProofs.Spec.get_previous_epoch EpochProofs.Spec.P s =
       .ok (EpochProofs.Spec.saturating_sub
         (s.slot / EpochProofs.Spec.P.SLOTS_PER_EPOCH) 1) := by
@@ -72,8 +72,8 @@ mainnet, equal the spec values that the epoch model computes:
 The caches satisfy their build invariants: the progressive balances cache is `Coherent` with
 the state, and the epoch cache total is the sum of the effective balances of the validators
 active in the current epoch. -/
-theorem lh_cache_reads_mainnet [EpochProofs.Spec.PresetCfg] [EpochProofs.Spec.PresetCfg.Ok] (s : EpochProofs.Spec.BeaconState)
-    (hrows : EpochProofs.Spec.RowsOk s) (hsupply : EpochProofs.Spec.EpochBalanceBounds s)
+theorem lh_cache_reads_mainnet [EpochProofs.Spec.CurrentPreset] [EpochProofs.Spec.CurrentPreset.Valid] (s : EpochProofs.Spec.BeaconState)
+    (hrows : EpochProofs.Spec.ListLengthsMatch s) (hsupply : EpochProofs.Spec.BalancesFarFromOverflow s)
     (c : LhCache)
     (hc : Coherent EpochProofs.Spec.P.EFFECTIVE_BALANCE_INCREMENT
       (pbState s (s.slot / EpochProofs.Spec.P.SLOTS_PER_EPOCH)) c)

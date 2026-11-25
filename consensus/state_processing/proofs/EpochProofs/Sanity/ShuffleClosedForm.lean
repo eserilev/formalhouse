@@ -3,10 +3,10 @@ import EpochProofs.Spec.Committees
 /-!
 # `compute_shuffled_permutation` in closed form
 
-`sigma o seed n r` is one round of the swap-or-not shuffle on one index. `csiFold` runs rounds
+`sigma o seed n r` is one round of the swap-or-not shuffle on one index. `shuffledIndexAfterRounds` runs rounds
 `0, 1, ..., R - 1` on one index. `compute_shuffled_permutation_eq` proves that the reference
-returns `[csiFold i for i in range(n)]` for `0 < n < 2^40` and `R ≤ 256`. So
-`compute_shuffled_index_eq` gives `compute_shuffled_index(i) = csiFold i`.
+returns `[shuffledIndexAfterRounds i for i in range(n)]` for `0 < n < 2^40` and `R ≤ 256`. So
+`compute_shuffled_index_eq` gives `compute_shuffled_index(i) = shuffledIndexAfterRounds i`.
 
 Ported from `CacheProofs/Equiv/ShuffleSpec.lean` (the committee shuffle proof, #29), for the
 `Oracle` hash of this reference.
@@ -15,11 +15,11 @@ Ported from `CacheProofs/Equiv/ShuffleSpec.lean` (the committee shuffle proof, #
 namespace EpochProofs.Spec
 
 /-- `int.from_bytes(l, 'little')`. -/
-def leNat (l : List UInt8) : Nat := l.foldr (fun b acc => b.toNat + 256 * acc) 0
+def littleEndianValue (l : List UInt8) : Nat := l.foldr (fun b acc => b.toNat + 256 * acc) 0
 
 /-- The pivot of round `r`. -/
 def pivotOf (o : Oracle) (seed : List UInt8) (n r : Nat) : Nat :=
-  leNat ((o.hash (seed ++ [UInt8.ofNat r])).toList.take 8) % n
+  littleEndianValue ((o.hash (seed ++ [UInt8.ofNat r])).toList.take 8) % n
 
 /-- The bit of round `r` at `position`. -/
 def bitOf (o : Oracle) (seed : List UInt8) (r position : Nat) : Nat :=
@@ -32,7 +32,7 @@ def sigma (o : Oracle) (seed : List UInt8) (n r x : Nat) : Nat :=
   if bitOf o seed r (max x flip) ≠ 0 then flip else x
 
 /-- Rounds `0, ..., R - 1` on index `x`. -/
-def csiFold (o : Oracle) (seed : List UInt8) (n R x : Nat) : Nat :=
+def shuffledIndexAfterRounds (o : Oracle) (seed : List UInt8) (n R x : Nat) : Nat :=
   (List.range R).foldl (fun y r => sigma o seed n r y) x
 
 theorem sigma_lt (o : Oracle) (seed : List UInt8) (n r x : Nat) (hn : 0 < n) (hx : x < n) :
@@ -49,15 +49,15 @@ theorem foldl_sigma_lt (o : Oracle) (seed : List UInt8) (n : Nat) (hn : 0 < n) (
   | nil => exact hx
   | cons r rs ih => exact ih _ (sigma_lt _ _ _ _ _ hn hx)
 
-theorem csiFold_lt (o : Oracle) (seed : List UInt8) (n R x : Nat) (hn : 0 < n) (hx : x < n) :
-    csiFold o seed n R x < n :=
+theorem shuffledIndexAfterRounds_lt (o : Oracle) (seed : List UInt8) (n R x : Nat) (hn : 0 < n) (hx : x < n) :
+    shuffledIndexAfterRounds o seed n R x < n :=
   foldl_sigma_lt _ _ _ hn _ _ hx
 
-theorem leNat_lt (l : List UInt8) : leNat l < 256 ^ l.length := by
+theorem littleEndianValue_lt (l : List UInt8) : littleEndianValue l < 256 ^ l.length := by
   induction l with
-  | nil => simp [leNat]
+  | nil => simp [littleEndianValue]
   | cons b l ih =>
-    simp only [leNat, List.foldr_cons, List.length_cons] at *
+    simp only [littleEndianValue, List.foldr_cons, List.length_cons] at *
     have := b.toNat_lt
     rw [Nat.pow_succ]
     have : 256 * l.foldr (fun b acc => b.toNat + 256 * acc) 0 ≤ 256 * (256 ^ l.length - 1) :=
@@ -138,18 +138,18 @@ theorem foldl_map_sigma (o : Oracle) (seed : List UInt8) (n : Nat) (rs : List Na
 def ValidIndices (n : Nat) (l : List Nat) : Prop := l.length = n ∧ ∀ y ∈ l, y < n
 
 theorem bytes_to_uint64_take8 (l : List UInt8) :
-    bytes_to_uint64 (l.take 8) = .ok (leNat (l.take 8)) := by
-  have h := leNat_lt (l.take 8)
+    bytes_to_uint64 (l.take 8) = .ok (littleEndianValue (l.take 8)) := by
+  have h := littleEndianValue_lt (l.take 8)
   have hl : (l.take 8).length ≤ 8 := by simp [Nat.min_le_left]
   have : 256 ^ (l.take 8).length ≤ 256 ^ 8 := Nat.pow_le_pow_right (by decide) hl
-  simp only [bytes_to_uint64, leNat] at h ⊢
+  simp only [bytes_to_uint64, littleEndianValue] at h ⊢
   rw [if_pos (by unfold UINT64_SIZE; omega)]
   rfl
 
 theorem compute_shuffled_permutation_eq (p : Preset) (o : Oracle) (seed : Bytes32) (n : Nat)
     (hn : 0 < n) (hn40 : n ≤ 2 ^ 40) (hR : p.SHUFFLE_ROUND_COUNT ≤ 256) :
     compute_shuffled_permutation p o n seed =
-      .ok ((List.range n).map (csiFold o seed.toList n p.SHUFFLE_ROUND_COUNT)) := by
+      .ok ((List.range n).map (shuffledIndexAfterRounds o seed.toList n p.SHUFFLE_ROUND_COUNT)) := by
   unfold compute_shuffled_permutation
   dsimp only
   rw [forIn_yield _ _ _ (fun l r => l.map (sigma o seed.toList n r)) (ValidIndices n)]
@@ -185,7 +185,7 @@ theorem compute_shuffled_permutation_eq (p : Preset) (o : Oracle) (seed : Bytes3
       have hget : listGet b i = .ok (b.getD i 0) := by
         simp [listGet, List.getElem?_eq_getElem hib, List.getD_eq_getElem?_getD]; rfl
       generalize hx : b.getD i 0 = x at hidx hget
-      have hpiv : leNat ((o.hash (seed.toList ++ [UInt8.ofNat r])).toList.take 8) % n =
+      have hpiv : littleEndianValue ((o.hash (seed.toList ++ [UInt8.ofNat r])).toList.take 8) % n =
           pivotOf o seed.toList n r := rfl
       generalize hflip : (pivotOf o seed.toList n r + n - x) % n = flip
       have hflipn : flip < n := by rw [← hflip]; exact Nat.mod_lt _ hn
@@ -227,7 +227,7 @@ theorem compute_shuffled_permutation_eq (p : Preset) (o : Oracle) (seed : Bytes3
 theorem compute_shuffled_index_eq (p : Preset) (o : Oracle) (seed : Bytes32) (index n : Nat)
     (hi : index < n) (hn40 : n ≤ 2 ^ 40) (hR : p.SHUFFLE_ROUND_COUNT ≤ 256) :
     compute_shuffled_index p o index n seed =
-      .ok (csiFold o seed.toList n p.SHUFFLE_ROUND_COUNT index) := by
+      .ok (shuffledIndexAfterRounds o seed.toList n p.SHUFFLE_ROUND_COUNT index) := by
   unfold compute_shuffled_index
   rw [if_neg (Decidable.not_not.mpr hi), compute_shuffled_permutation_eq p o seed n (by omega) hn40 hR]
   simp [Bind.bind, Except.bind, listGet, hi]

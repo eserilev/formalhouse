@@ -59,7 +59,7 @@ theorem lhRowStep_genesis (p : Preset) (ctx : LhStepContext) (hgen : ctx.after_g
 /-- At the genesis epoch the spec's four steps are the registry pass, then the slashings pass,
 and these give the same `ok` results as one pass of both row steps. -/
 theorem genesis_passes_eq_single_pass (p : Preset) (total_active_balance : Gwei)
-    (state : BeaconState) (hrows : RowsOk state)
+    (state : BeaconState) (hrows : ListLengthsMatch state)
     (hcurrent : get_current_epoch p state = .ok GENESIS_EPOCH) (activation_epoch : Epoch)
     (hactivation : compute_activation_exit_epoch p GENESIS_EPOCH = .ok activation_epoch)
     (htarget : GENESIS_EPOCH + p.EPOCHS_PER_SLASHINGS_VECTOR / 2 < UINT64_SIZE)
@@ -89,7 +89,7 @@ theorem genesis_passes_eq_single_pass (p : Preset) (total_active_balance : Gwei)
       rw [registryRowStep_preserves p total_active_balance GENESIS_EPOCH
         state.finalized_checkpoint.epoch activation_epoch a r x h]; rfl) _ _ y3 hy3
   have hR3 : rowsOf (state.withRowsChurn y3.1 y3.2) = y3.2 := rowsOf_withRows state y3.2 hk3
-  have hok3 : RowsOk (state.withRowsChurn y3.1 y3.2) :=
+  have hok3 : ListLengthsMatch (state.withRowsChurn y3.1 y3.2) :=
     rowsOk_withRows_of_key state y3.2 hrows hk3
   have h4 := process_slashings_rows_sameResultOrBothFail p total_active_balance
     (state.withRowsChurn y3.1 y3.2) GENESIS_EPOCH hcurrent htarget adjusted per hpre hok3
@@ -101,8 +101,8 @@ theorem genesis_passes_eq_single_pass (p : Preset) (total_active_balance : Gwei)
 
 /-- On mainnet, at the genesis epoch, one pass of `lhRowStep` with `after_genesis = false`
 gives the same `ok` results as the spec's inactivity, rewards, registry and slashings steps. -/
-theorem lighthouse_single_pass_eq_spec_genesis [PresetCfg] [PresetCfg.Ok] (total_active_balance : Gwei)
-    (state : BeaconState) (hrows : RowsOk state)
+theorem lighthouse_single_pass_eq_spec_genesis [CurrentPreset] [CurrentPreset.Valid] (total_active_balance : Gwei)
+    (state : BeaconState) (hrows : ListLengthsMatch state)
     (hcurrent : get_current_epoch P state = .ok GENESIS_EPOCH)
     (rctx : RewardsContext) (hprev : rctx.previous_epoch = GENESIS_EPOCH)
     (hexit : ∀ i (h : i < state.validators.length),

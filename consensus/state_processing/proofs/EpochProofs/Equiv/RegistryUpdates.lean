@@ -12,7 +12,7 @@ import EpochProofs.Sanity.RegistryUpdates
 `ConstantsMatch` holds the Gloas constants: the exit churn has no upper limit, so
 `exit_churn_cap` is `u64::MAX`. The `_churn` theorems take any constants whose
 `exit_churn_limit` is the Gloas `get_exit_churn_limit` of `T total_active_balance`
-(`ChurnSpec`). Fulu uses them with `T = fuluTab` (`Equiv/FuluRegistry.lean`). Lighthouse reads the validator fields, the churn state and the finalized epoch in
+(`ChurnSpec`). Fulu uses them with `T = fuluTotalActiveBalance` (`Equiv/FuluRegistry.lean`). Lighthouse reads the validator fields, the churn state and the finalized epoch in
 `single_pass.rs`. The theorems take them as inputs.
 -/
 

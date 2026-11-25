@@ -17,7 +17,7 @@ the writes are untranslated code (`TailGlue`), each with the fact that links it 
 namespace EpochProofs.Spec
 
 /-- The steps of `lhRestOrder` after the PTC window. -/
-def lhTailOrder [PresetCfg] (o : Oracle) (t : BeaconState) : SpecM BeaconState := do
+def lhTailOrder [CurrentPreset] (o : Oracle) (t : BeaconState) : SpecM BeaconState := do
   let t ← lhEth1DataReset t
   let t ← lhSlashingsReset t
   let t ← lhRandaoMixesReset t
@@ -26,18 +26,18 @@ def lhTailOrder [PresetCfg] (o : Oracle) (t : BeaconState) : SpecM BeaconState :
   process_sync_committee_updates P o t
 
 /-- The steps of `lhTailOrder` before the sync committee update. -/
-def lhResets [PresetCfg] (o : Oracle) (t : BeaconState) : SpecM BeaconState := do
+def lhResets [CurrentPreset] (o : Oracle) (t : BeaconState) : SpecM BeaconState := do
   let t ← lhEth1DataReset t
   let t ← lhSlashingsReset t
   let t ← lhRandaoMixesReset t
   let t ← lhHistoricalSummariesUpdate o t
   pure (process_participation_flag_updates t)
 
-theorem lhTailOrder_eq [PresetCfg] (o : Oracle) (t : BeaconState) :
+theorem lhTailOrder_eq [CurrentPreset] (o : Oracle) (t : BeaconState) :
     lhTailOrder o t = lhResets o t >>= process_sync_committee_updates P o := by
   simp only [lhTailOrder, lhResets, bind_assoc, pure_bind]
 
-theorem lhRestOrder_eq [PresetCfg] (o : Oracle) (t : BeaconState) :
+theorem lhRestOrder_eq [CurrentPreset] (o : Oracle) (t : BeaconState) :
     lhRestOrder o t = (do
       let t ← process_proposer_lookahead P o t
       let t ← process_ptc_window P o t
@@ -182,7 +182,7 @@ shuffle. -/
 def SyncN1 (G : TailGlue σ) (st : σ) : Prop :=
   ∀ st', G.writeCurrentSync st = some st' → (G.syncIndices st').val.length ≤ 2 ^ 24
 
-variable [Spec.PresetCfg]
+variable [Spec.CurrentPreset]
 
 /-- The trusted facts about the untranslated code `G`. Each read reads the state it is given and
 each write writes the spec value, so each fact holds for every state `t`. -/
@@ -239,7 +239,7 @@ structure TailLinks (G : TailGlue σ) (o : Spec.Oracle) (view : σ → Spec.Beac
   usize64 : Usize.max = U64.max
 
 /-- The composed resets return the state of the model `lhResets`. -/
-theorem resets_spec [Spec.PresetCfg.Ok] (G : TailGlue σ) (o : Spec.Oracle)
+theorem resets_spec [Spec.CurrentPreset.Valid] (G : TailGlue σ) (o : Spec.Oracle)
     (view : σ → Spec.BeaconState) (hL : TailLinks G o view) (st : σ) (t5 : Spec.BeaconState)
     (h : Spec.lhResets o (view st) = .ok t5) :
     ∃ st5, resets G st = ok (some st5) ∧ view st5 = t5 := by
@@ -394,7 +394,7 @@ theorem syncUpdate_spec (G : TailGlue σ) (o : Spec.Oracle) (view : σ → Spec.
 
 /-- The composed tail returns the state of the model: when `lhTailOrder` returns `ok`, the Rust
 returns `Ok` with that state. -/
-theorem tail_spec [Spec.PresetCfg.Ok] (G : TailGlue σ) (o : Spec.Oracle)
+theorem tail_spec [Spec.CurrentPreset.Valid] (G : TailGlue σ) (o : Spec.Oracle)
     (view : σ → Spec.BeaconState) (hL : TailLinks G o view) (st : σ)
     (hn1 : ∀ st5, resets G st = ok (some st5) → SyncN1 G st5) (T : Spec.BeaconState)
     (h : Spec.lhTailOrder o (view st) = .ok T) :

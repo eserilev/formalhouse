@@ -334,7 +334,7 @@ theorem increase_balance_set (bs : List Gwei) (j k : Nat) (x a : Gwei) (hkj : k 
       · rfl
 
 /-- `add_validator_to_registry` commutes with a balance write at an existing validator. -/
-theorem add_validator_setBal [PresetCfg] (T : BeaconState) (j : Nat) (x : Gwei)
+theorem add_validator_setBal [CurrentPreset] (T : BeaconState) (j : Nat) (x : Gwei)
     (hj : j < T.balances.length) (hjL : j < T.validators.length) (pubkey : BLSPubkey)
     (withdrawal_credentials : Bytes32) (amount : Gwei) :
     add_validator_to_registry P (setBal T j x) pubkey withdrawal_credentials amount =
@@ -362,7 +362,7 @@ theorem add_validator_setBal [PresetCfg] (T : BeaconState) (j : Nat) (x : Gwei)
           cases set_or_append_list T.inactivity_scores T.validators.length 0 <;> rfl
 
 /-- `apply_pending_deposit` commutes with a balance write at a validator with another pubkey. -/
-theorem apply_setBal [PresetCfg] (o : Oracle) (d : PendingDeposit) (T : BeaconState) (j : Nat) (x : Gwei)
+theorem apply_setBal [CurrentPreset] (o : Oracle) (d : PendingDeposit) (T : BeaconState) (j : Nat) (x : Gwei)
     (hj : j < T.balances.length) (hP : ApplyOther j d T) :
     apply_pending_deposit P o (setBal T j x) d =
       (fun T' => setBal T' j x) <$> apply_pending_deposit P o T d := by
@@ -414,7 +414,7 @@ theorem increaseAt_validators {j : Nat} {a : Gwei} {T T' : BeaconState}
     · cases h
 
 /-- A balance increase at a validator with another pubkey commutes with a deposit. -/
-theorem increaseAt_apply_comm [PresetCfg] (o : Oracle) (d : PendingDeposit) (T : BeaconState) (j : Nat)
+theorem increaseAt_apply_comm [CurrentPreset] (o : Oracle) (d : PendingDeposit) (T : BeaconState) (j : Nat)
     (a : Gwei) (hP : ApplyOther j d T) :
     SameResultOrBothFail (increaseAt j a T >>= fun t => apply_pending_deposit P o t d)
       (apply_pending_deposit P o T d >>= increaseAt j a) := by
@@ -465,7 +465,7 @@ def topupsF (L : List (ValidatorIndex × Gwei)) (T : BeaconState) : SpecM Beacon
   L.foldlM (fun t x => increaseAt x.1 x.2 t) T
 
 /-- Balance increases at validators with other pubkeys commute with a deposit. -/
-theorem topups_apply_comm [PresetCfg] (o : Oracle) (d : PendingDeposit) :
+theorem topups_apply_comm [CurrentPreset] (o : Oracle) (d : PendingDeposit) :
     ∀ (L : List (ValidatorIndex × Gwei)) (T : BeaconState), (∀ x ∈ L, ApplyOther x.1 d T) →
       SameResultOrBothFail (apply_pending_deposit P o T d >>= topupsF L)
         (topupsF L T >>= fun t => apply_pending_deposit P o t d)
@@ -489,7 +489,7 @@ theorem topups_apply_comm [PresetCfg] (o : Oracle) (d : PendingDeposit) :
     exact ⟨by rw [hv]; exact h.1, by rw [hv]; exact h.2⟩
 
 /-- A deposit for a pubkey of `S` is a balance increase, in a state that extends `S`. -/
-theorem apply_known [PresetCfg] (o : Oracle) (d : PendingDeposit) (S T : BeaconState) (hT : ValExt S T)
+theorem apply_known [CurrentPreset] (o : Oracle) (d : PendingDeposit) (S T : BeaconState) (hT : ValExt S T)
     (hm : d.pubkey ∈ S.validators.map (·.pubkey)) :
     apply_pending_deposit P o T d =
       increaseAt ((S.validators.map (·.pubkey)).idxOf d.pubkey) d.amount T := by
@@ -529,7 +529,7 @@ theorem increaseAt_valExt {S T T' : BeaconState} {j : Nat} {a : Gwei} (hT : ValE
     · cases h
 
 /-- The general split: from any state that extends `S`. -/
-theorem applyHandled_split_gen [PresetCfg] (o : Oracle) (S : BeaconState) :
+theorem applyHandled_split_gen [CurrentPreset] (o : Oracle) (S : BeaconState) :
     ∀ (handled : List (PendingDeposit × Bool)) (T : BeaconState), ValExt S T →
       SameResultOrBothFail (applyHandled o T handled)
         (topupsF (knownTopups (S.validators.map (·.pubkey)) handled) T >>= fun t =>
@@ -602,7 +602,7 @@ theorem applyHandled_split_gen [PresetCfg] (o : Oracle) (S : BeaconState) :
 
 /-- The spec's deposits split into the top-ups of known validators, then the deposits for new
 pubkeys in order. -/
-theorem applyHandled_split [PresetCfg] (o : Oracle) (S : BeaconState)
+theorem applyHandled_split [CurrentPreset] (o : Oracle) (S : BeaconState)
     (handled : List (PendingDeposit × Bool)) :
     SameResultOrBothFail (applyHandled o S handled)
       (do

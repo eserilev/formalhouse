@@ -5,7 +5,7 @@ import EpochProofs.Sanity.Invariants.TotalityFulu
 # The committee steps succeed when their selections do
 
 `TotalityCommittees.lean` and `TotalityFulu.lean` prove that the committee steps succeed from the
-pyspec preconditions (`CommitteeStepPreconds`: a candidate for each selection, at least
+pyspec preconditions (`CommitteeStepPreconditions`: a candidate for each selection, at least
 `SLOTS_PER_EPOCH` active validators for the PTC, and selections that end within `2^64` passes).
 Each precondition is there for one reason: so that each balance weighted selection that the step
 runs returns.
@@ -43,29 +43,29 @@ theorem SelOk.congr {p : Preset} {o : Oracle} {s1 s2 : BeaconState}
 without them: `eth_aggregate_pubkeys` asserts `KeyValidate` on each key, and the `uint64` products
 and the shuffle arithmetic are checked. Each holds on reachable states: the slot is far from `2^64`, the RANDAO vector
 has its SSZ length, the registry limit is `2^40`, the effective balance is at most
-`MAX_EFFECTIVE_BALANCE_ELECTRA` (`EBOk`), and a deposit adds a validator only after its signature
+`MAX_EFFECTIVE_BALANCE_ELECTRA` (`EffectiveBalancesValid`), and a deposit adds a validator only after its signature
 checks. `CommFacts` without the two vector lengths, which hold on every EthLib state. -/
-structure SelFacts [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
+structure SelFacts [CurrentPreset] (o : Oracle) (s : BeaconState) : Prop where
   slot : s.slot + 8192 < 2 ^ 64
   randao : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR
-  regLen : s.validators.length ≤ 2 ^ 40
-  ebMax : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000
+  registryBelowLimit : s.validators.length ≤ 2 ^ 40
+  effectiveBalancesBelowMax : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000
   keys : ∀ v ∈ s.validators, o.bls_KeyValidate v.pubkey = true
 
 /-- `SelFacts` at the state `s` that the epoch passes to the committee steps, from the epoch
 input `t`: the slot and RANDAO length come from `CommFrame`. -/
-theorem SelFacts.of_frame [PresetCfg] {o : Oracle} {t s : BeaconState} (hfr : CommFrame t s)
-    (hslot : t.slot + 8192 < 2 ^ 64) (h : SelectionStateFacts o s)
+theorem SelFacts.of_frame [CurrentPreset] {o : Oracle} {t s : BeaconState} (hfr : CommFrame t s)
+    (hslot : t.slot + 8192 < 2 ^ 64) (h : RegistryAllowsSelection o s)
     (hebMax : ∀ v ∈ s.validators, v.effective_balance ≤ 2048000000000) : SelFacts o s :=
-  ⟨hfr.slot ▸ hslot, hfr.randao, h.regLen, hebMax, h.keys⟩
+  ⟨hfr.slot ▸ hslot, hfr.randao, h.registryBelowLimit, hebMax, h.pubkeysValid⟩
 
 /-- `SelFacts` reads the slot, the RANDAO mixes and the validators. -/
-theorem SelFacts.congr [PresetCfg] {o : Oracle} {s1 s2 : BeaconState} (hs : s1.slot = s2.slot)
+theorem SelFacts.congr [CurrentPreset] {o : Oracle} {s1 s2 : BeaconState} (hs : s1.slot = s2.slot)
     (hv : s1.validators = s2.validators) (hr : s1.randao_mixes = s2.randao_mixes)
     (h : SelFacts o s2) : SelFacts o s1 :=
-  ⟨hs ▸ h.slot, hr ▸ h.randao, hv ▸ h.regLen, hv ▸ h.ebMax, hv ▸ h.keys⟩
+  ⟨hs ▸ h.slot, hr ▸ h.randao, hv ▸ h.registryBelowLimit, hv ▸ h.effectiveBalancesBelowMax, hv ▸ h.keys⟩
 
-variable [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds]
+variable [CurrentPreset] [CurrentPreset.Valid] [CurrentPreset.Bounds]
 
 /-! ## Sync committee -/
 
@@ -76,7 +76,7 @@ def SyncSelOk (o : Oracle) (s : BeaconState) : Prop :=
     SelOk P o s (get_active_validator_indices s (s.slot / P.SLOTS_PER_EPOCH + 1)) seed
       P.SYNC_COMMITTEE_SIZE true
 
-omit [PresetCfg.Ok] [PresetCfg.Bounds] in
+omit [CurrentPreset.Valid] [CurrentPreset.Bounds] in
 theorem SyncSelOk.congr {o : Oracle} {s1 s2 : BeaconState} (hs : s1.slot = s2.slot)
     (hv : s1.validators = s2.validators) (hr : s1.randao_mixes = s2.randao_mixes)
     (h : SyncSelOk o s2) : SyncSelOk o s1 := by
@@ -85,7 +85,7 @@ theorem SyncSelOk.congr {o : Oracle} {s1 s2 : BeaconState} (hs : s1.slot = s2.sl
   rw [get_active_validator_indices_congr hv, hs]
   exact SelOk.congr hv (h seed hseed)
 
-omit [PresetCfg.Bounds] in
+omit [CurrentPreset.Bounds] in
 /-- `get_next_sync_committee_total` with the sync committee selection as a hypothesis. -/
 theorem get_next_sync_committee_total_of_sel (o : Oracle) (s : BeaconState)
     (hslot : s.slot + 8192 < 2 ^ 64) (hr : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
@@ -164,7 +164,7 @@ def ProposerSelOk (o : Oracle) (s : BeaconState) (e : Nat) (indices : List Valid
     SelOk P o s indices (o.hash (seed.toList ++ uint_to_bytes 8 (e * P.SLOTS_PER_EPOCH + i))) 1
       true
 
-omit [PresetCfg.Ok] [PresetCfg.Bounds] in
+omit [CurrentPreset.Valid] [CurrentPreset.Bounds] in
 theorem ProposerSelOk.congr {o : Oracle} {s1 s2 : BeaconState}
     (hv : s1.validators = s2.validators) (hr : s1.randao_mixes = s2.randao_mixes) {e : Nat}
     {indices : List ValidatorIndex} (h : ProposerSelOk o s2 e indices) :
@@ -173,7 +173,7 @@ theorem ProposerSelOk.congr {o : Oracle} {s1 s2 : BeaconState}
   rw [get_seed_congr hr] at hseed
   exact SelOk.congr hv (h seed hseed i hi)
 
-omit [PresetCfg.Ok] [PresetCfg.Bounds] in
+omit [CurrentPreset.Valid] [CurrentPreset.Bounds] in
 /-- `compute_proposer_indices` succeeds when each of its selections does. -/
 theorem compute_proposer_indices_total_of_sel (o : Oracle) (s : BeaconState) (e : Nat)
     (seed : Bytes32) (indices : List ValidatorIndex)
@@ -201,17 +201,17 @@ theorem compute_proposer_indices_total_of_sel (o : Oracle) (s : BeaconState) (e 
   rw [hr1, tot_bind_ok, tot_get (show 0 < r.length by omega)]
   exact ⟨_, rfl⟩
 
-omit [PresetCfg.Bounds] in
+omit [CurrentPreset.Bounds] in
 /-- `get_beacon_proposer_indices_total` with the proposer selections as a hypothesis. -/
 theorem get_beacon_proposer_indices_total_of_sel (o : Oracle) (s : BeaconState) (e : Nat)
     (he : e + P.EPOCHS_PER_HISTORICAL_VECTOR < 2 ^ 64)
     (hstart : e * P.SLOTS_PER_EPOCH + P.SLOTS_PER_EPOCH < 2 ^ 64)
     (hr : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
-    (hsel : ProposerSelOk o s e (unslashedActive s e)) :
+    (hsel : ProposerSelOk o s e (activeUnslashedIndices s e)) :
     ∃ r, get_beacon_proposer_indices P o s e = .ok r := by
   have hfil : (get_active_validator_indices s e).filterM (fun index => do
       pure !(← listGet s.validators index).slashed : ValidatorIndex → SpecM Bool) =
-      .ok (unslashedActive s e) := by
+      .ok (activeUnslashedIndices s e) := by
     apply tot_filterM
     intro j hj
     have hjl := active_lt s e j hj
@@ -229,7 +229,7 @@ theorem process_proposer_lookahead_total_of_sel (o : Oracle) (s : BeaconState)
     (hslot : s.slot + 8192 < 2 ^ 64) (hr : s.randao_mixes.length = P.EPOCHS_PER_HISTORICAL_VECTOR)
     (hlen : s.proposer_lookahead.length = 2 * P.SLOTS_PER_EPOCH)
     (hsel : ProposerSelOk o s (s.slot / P.SLOTS_PER_EPOCH + 2)
-      (unslashedActive s (s.slot / P.SLOTS_PER_EPOCH + 2))) :
+      (activeUnslashedIndices s (s.slot / P.SLOTS_PER_EPOCH + 2))) :
     OkWith (process_proposer_lookahead P o s) (fun s' =>
       s'.slot = s.slot ∧ s'.validators = s.validators ∧ s'.randao_mixes = s.randao_mixes ∧
         s'.ptc_window = s.ptc_window) := by
@@ -254,7 +254,7 @@ theorem process_proposer_lookahead_total_of_sel (o : Oracle) (s : BeaconState)
     rw [Nat.add_assoc], hr1, tot_bind_ok]
   exact OkWith.pure ⟨rfl, rfl, rfl, rfl⟩
 
-omit [PresetCfg.Bounds] in
+omit [CurrentPreset.Bounds] in
 /-- `get_beacon_proposer_indices_fulu_total` with the proposer selections as a hypothesis. The
 Fulu candidates are all active validators. -/
 theorem get_beacon_proposer_indices_fulu_total_of_sel (o : Oracle) (s : BeaconState) (e : Nat)
@@ -308,7 +308,7 @@ def PtcSelOk (o : Oracle) (s : BeaconState) (slot : Nat) : Prop :=
     ptcIndices P o s (slot / P.SLOTS_PER_EPOCH) slot = .ok l →
       SelOk P o s l (o.hash (seed.toList ++ uint_to_bytes 8 slot)) P.PTC_SIZE false
 
-omit [PresetCfg.Ok] [PresetCfg.Bounds] in
+omit [CurrentPreset.Valid] [CurrentPreset.Bounds] in
 theorem PtcSelOk.congr {o : Oracle} {s1 s2 : BeaconState} (hv : s1.validators = s2.validators)
     (hr : s1.randao_mixes = s2.randao_mixes) {slot : Nat} (h : PtcSelOk o s2 slot) :
     PtcSelOk o s1 slot := by

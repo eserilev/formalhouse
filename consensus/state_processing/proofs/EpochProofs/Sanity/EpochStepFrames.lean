@@ -231,9 +231,9 @@ theorem process_historical_summaries_update_windows (p : Preset) (o : Oracle)
   windows_tac h
 
 /-- The Gloas steps before the committee steps keep the committee windows. -/
-theorem epochToCommittees_windows (p : Preset) (o : Oracle) (s s' : BeaconState)
-    (h : epochToCommittees p o s = .ok s') : SameCommitteeWindows s s' := by
-  unfold epochToCommittees at h
+theorem epochBeforeCommitteeSteps_windows (p : Preset) (o : Oracle) (s s' : BeaconState)
+    (h : epochBeforeCommitteeSteps p o s = .ok s') : SameCommitteeWindows s s' := by
+  unfold epochBeforeCommitteeSteps at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
   obtain ⟨s2, h2, h⟩ := specM_bind_ok h
   obtain ⟨_, -, h⟩ := specM_bind_ok h
@@ -268,10 +268,10 @@ theorem epochToCommittees_windows (p : Preset) (o : Oracle) (s s' : BeaconState)
     (process_historical_summaries_update_windows _ _ _ _ h13).trans ⟨rfl, rfl⟩
 
 /-- The Fulu steps before the committee steps keep the committee windows. -/
-theorem epochToCommitteesFulu_windows [PresetCfg] [FuluCfg] [FuluCfg.Ok] (o : Oracle)
-    (s s' : BeaconState) (h : epochToCommitteesFulu P FC o s = .ok s') :
+theorem epochBeforeCommitteeStepsFulu_windows [CurrentPreset] [CurrentFuluConfig] [CurrentFuluConfig.Valid] (o : Oracle)
+    (s s' : BeaconState) (h : epochBeforeCommitteeStepsFulu P FC o s = .ok s') :
     SameCommitteeWindows s s' := by
-  rw [epochToCommitteesFulu_parts] at h
+  rw [epochBeforeCommitteeStepsFulu_parts] at h
   unfold specFourStepsFulu epochRestToCommitteesFulu at h
   obtain ⟨s1, h1, h⟩ := specM_bind_ok h
   obtain ⟨s5, hfour, h⟩ := specM_bind_ok h

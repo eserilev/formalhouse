@@ -93,7 +93,7 @@ def justification (G : JustificationGlue σ) (st : σ) : Result (Option σ) :=
   | .Err _ => ok none
   | .Ok outcome => ok (G.write st outcome)
 
-variable [Spec.PresetCfg]
+variable [Spec.CurrentPreset]
 
 /-- The trusted facts about the untranslated code `G` at the state `st`: each read is the spec
 value, and the writes are the spec writes (`lhJustificationWrite`). The balances are cache reads. -/

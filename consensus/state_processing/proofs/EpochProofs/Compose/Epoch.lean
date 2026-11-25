@@ -74,7 +74,7 @@ theorem run_bind_ok {α β : Type} {x : OptionT Result α} {f : α → OptionT R
   rw [OptionT.run_bind, hx]
   simpa [Option.elimM] using hf
 
-variable [Spec.PresetCfg]
+variable [Spec.CurrentPreset]
 
 /-- What the proofs assume about the untranslated code `G` of the epoch with input `st`. The facts
 that read a state in the middle of the epoch are stated at that state. -/
@@ -113,7 +113,7 @@ structure EpochLinks (G : EpochGlue σ E) (o : Spec.Oracle) (view : σ → Spec.
 /-- The composed Gloas epoch returns the state of the model: when `process_epoch_lighthouse`
 returns `ok`, the Rust returns `Ok` with a state whose view is the model's. The facts about the
 input are the vector lengths and the slot bound. -/
-theorem epoch_spec [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds] (G : EpochGlue σ E)
+theorem epoch_spec [Spec.CurrentPreset.Valid] [Spec.CurrentPreset.Bounds] (G : EpochGlue σ E)
     (o : Spec.Oracle) (view : σ → Spec.BeaconState) (st : σ) (hL : EpochLinks G o view st)
     (hslot : (view st).slot < 2 ^ 64) (hvec : (view st).VectorLengths Spec.P)
     (s' : Spec.BeaconState) (h : Spec.process_epoch_lighthouse o (view st) = .ok s') :

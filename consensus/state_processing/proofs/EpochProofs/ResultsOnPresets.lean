@@ -17,10 +17,10 @@ variable {oracle : Spec.Oracle} {fuluOracle : Spec.FuluOracle} {blockConfig : Sp
 
 section Mainnet
 
-attribute [local instance] Spec.mainnetCfg Spec.fuluMainnetCfg
-local instance : @Spec.PresetCfg.Ok Spec.mainnetCfg := Spec.mainnetCfg_ok
-local instance : @Spec.PresetCfg.Bounds Spec.mainnetCfg := Spec.mainnetCfg_bounds
-local instance : Spec.FuluCfg.Ok := ⟨Spec.fuluCompat_mainnet⟩
+attribute [local instance] Spec.currentPresetMainnet Spec.currentFuluConfigMainnet
+local instance : @Spec.CurrentPreset.Valid Spec.currentPresetMainnet := Spec.currentPresetMainnet_ok
+local instance : @Spec.CurrentPreset.Bounds Spec.currentPresetMainnet := Spec.currentPresetMainnet_bounds
+local instance : Spec.CurrentFuluConfig.Valid := ⟨Spec.fuluCompat_mainnet⟩
 
 /-- `lighthouse_model_gloas_epoch_eq_ethlib` on mainnet. -/
 theorem lighthouse_model_gloas_epoch_eq_ethlib_mainnet {PubkeyMap : Type}
@@ -28,15 +28,15 @@ theorem lighthouse_model_gloas_epoch_eq_ethlib_mainnet {PubkeyMap : Type}
     {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
     {state : BeaconState Preset.mainnet .glamsterdam}
-    (run : GloasEpochRun oracle fuluOracle blockConfig upgradeConfig fuluStart (toSpecState state))
-    (chain : GloasChainAssumptions oracle (toSpecState state))
+    (run : FuluThenGloasRun oracle fuluOracle blockConfig upgradeConfig fuluStart (toSpecState state))
+    (chain : GloasChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle)
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state)) :
     (∃ result, Spec.process_epoch_lighthouse oracle (toSpecState state) = .ok (toSpecState result) ∧
       processEpoch Config.mainnet checks state = .ok result) ∧
-    GloasCacheReadsCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
+    GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state) :=
   lighthouse_model_gloas_epoch_eq_ethlib presetMatchesEthLib_mainnet run chain roomForDeposits
     oracleMatches caches
@@ -47,18 +47,18 @@ theorem lighthouse_rust_gloas_epoch_eq_ethlib_mainnet {PubkeyMap : Type}
     {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
     {state : BeaconState Preset.mainnet .glamsterdam}
-    (run : GloasEpochRun oracle fuluOracle blockConfig upgradeConfig fuluStart (toSpecState state))
-    (chain : GloasChainAssumptions oracle (toSpecState state))
+    (run : FuluThenGloasRun oracle fuluOracle blockConfig upgradeConfig fuluStart (toSpecState state))
+    (chain : GloasChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle)
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state))
-    {σ E : Type} {rustGlue : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
-    (rust : GloasRustGlueFacts rustGlue oracle view rustState (toSpecState state)) :
-    (∃ rustResult result, (Compose.epoch rustGlue rustState).run = ok (some rustResult) ∧
+    {σ E : Type} {rustCode : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
+    (rust : GloasUntranslatedRustFacts rustCode oracle view rustState (toSpecState state)) :
+    (∃ rustResult result, (Compose.epoch rustCode rustState).run = ok (some rustResult) ∧
       processEpoch Config.mainnet checks state = .ok result ∧
       view rustResult = toSpecState result) ∧
-    GloasCacheReadsCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
+    GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state) :=
   lighthouse_rust_gloas_epoch_eq_ethlib presetMatchesEthLib_mainnet run chain roomForDeposits
     oracleMatches caches rust
@@ -66,38 +66,38 @@ theorem lighthouse_rust_gloas_epoch_eq_ethlib_mainnet {PubkeyMap : Type}
 /-- `lighthouse_model_gloas_epoch_agrees_ethlib` on mainnet. -/
 theorem lighthouse_model_gloas_epoch_agrees_ethlib_mainnet
     {state : BeaconState Preset.mainnet .glamsterdam}
-    (invariants : Spec.ReachableInvariants (toSpecState state))
-    (atEpochBoundary : Spec.AtEpochBoundary (toSpecState state))
+    (invariants : Spec.EpochInputInvariants (toSpecState state))
+    (atLastSlotOfEpoch : Spec.AtLastSlotOfEpoch (toSpecState state))
     (slotFarFromOverflow : (toSpecState state).slot + 8192 < 2 ^ 64)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse oracle (toSpecState state))
       (toSpecResult toSpecState (processEpoch Config.mainnet checks state)) :=
-  lighthouse_model_gloas_epoch_agrees_ethlib presetMatchesEthLib_mainnet invariants atEpochBoundary
+  lighthouse_model_gloas_epoch_agrees_ethlib presetMatchesEthLib_mainnet invariants atLastSlotOfEpoch
     slotFarFromOverflow roomForDeposits oracleMatches
 
 /-- `lighthouse_rust_gloas_epoch_of_ethlib_ok` on mainnet. -/
 theorem lighthouse_rust_gloas_epoch_of_ethlib_ok_mainnet
     {state : BeaconState Preset.mainnet .glamsterdam}
-    (invariants : Spec.ReachableInvariants (toSpecState state))
-    (atEpochBoundary : Spec.AtEpochBoundary (toSpecState state))
+    (invariants : Spec.EpochInputInvariants (toSpecState state))
+    (atLastSlotOfEpoch : Spec.AtLastSlotOfEpoch (toSpecState state))
     (slotFarFromOverflow : (toSpecState state).slot + 8192 < 2 ^ 64)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle)
-    {σ E : Type} {rustGlue : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
-    (rust : GloasRustGlueFacts rustGlue oracle view rustState (toSpecState state))
+    {σ E : Type} {rustCode : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
+    (rust : GloasUntranslatedRustFacts rustCode oracle view rustState (toSpecState state))
     {result : BeaconState Preset.mainnet .glamsterdam}
     (ethLibSucceeds : processEpoch Config.mainnet checks state = .ok result) :
-    ∃ rustResult, (Compose.epoch rustGlue rustState).run = ok (some rustResult) ∧
+    ∃ rustResult, (Compose.epoch rustCode rustState).run = ok (some rustResult) ∧
       view rustResult = toSpecState result :=
-  lighthouse_rust_gloas_epoch_of_ethlib_ok presetMatchesEthLib_mainnet invariants atEpochBoundary
+  lighthouse_rust_gloas_epoch_of_ethlib_ok presetMatchesEthLib_mainnet invariants atLastSlotOfEpoch
     slotFarFromOverflow roomForDeposits oracleMatches rust ethLibSucceeds
 
 /-- `lighthouse_model_fulu_epoch_eq_ethlib` on mainnet. -/
 theorem lighthouse_model_fulu_epoch_eq_ethlib_mainnet
     {state : BeaconState Preset.mainnet .fusaka}
-    (run : FuluEpochRun oracle fuluOracle blockConfig fuluStart (toSpecState state))
-    (chain : FuluChainAssumptions oracle (toSpecState state))
+    (run : FuluOnlyRun oracle fuluOracle blockConfig fuluStart (toSpecState state))
+    (chain : FuluChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle) :
     ∃ result,
@@ -110,14 +110,14 @@ theorem lighthouse_model_fulu_epoch_eq_ethlib_mainnet
 /-- `lighthouse_rust_fulu_epoch_eq_ethlib` on mainnet. -/
 theorem lighthouse_rust_fulu_epoch_eq_ethlib_mainnet
     {state : BeaconState Preset.mainnet .fusaka}
-    (run : FuluEpochRun oracle fuluOracle blockConfig fuluStart (toSpecState state))
-    (chain : FuluChainAssumptions oracle (toSpecState state))
+    (run : FuluOnlyRun oracle fuluOracle blockConfig fuluStart (toSpecState state))
+    (chain : FuluChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle)
-    {σ E : Type} {rustGlue : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
+    {σ E : Type} {rustCode : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
     {rustState : σ}
-    (rust : FuluRustGlueFacts rustGlue oracle view rustState (toSpecState state)) :
-    ∃ rustResult result, (Compose.epochFulu rustGlue rustState).run = ok (some rustResult) ∧
+    (rust : FuluUntranslatedRustFacts rustCode oracle view rustState (toSpecState state)) :
+    ∃ rustResult result, (Compose.epochFulu rustCode rustState).run = ok (some rustResult) ∧
       processEpoch Config.mainnet checks state = .ok result ∧
       view rustResult = toSpecState result ∧
       result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader :=
@@ -127,8 +127,8 @@ theorem lighthouse_rust_fulu_epoch_eq_ethlib_mainnet
 /-- `lighthouse_model_fulu_epoch_agrees_ethlib` on mainnet. -/
 theorem lighthouse_model_fulu_epoch_agrees_ethlib_mainnet
     {state : BeaconState Preset.mainnet .fusaka}
-    (invariants : Spec.ReachableInvariants (toSpecState state))
-    (atEpochBoundary : Spec.AtEpochBoundary (toSpecState state))
+    (invariants : Spec.EpochInputInvariants (toSpecState state))
+    (atLastSlotOfEpoch : Spec.AtLastSlotOfEpoch (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle) :
     Spec.SameResultOrBothFail
@@ -137,29 +137,29 @@ theorem lighthouse_model_fulu_epoch_agrees_ethlib_mainnet
           state := ← Spec.process_epoch_lighthouse_fulu oracle (toSpecState state) })
       (toSpecResult toSpecFuluState (processEpoch Config.mainnet checks state)) :=
   lighthouse_model_fulu_epoch_agrees_ethlib presetMatchesEthLib_mainnet toSpecFuluConfig_mainnet
-    invariants atEpochBoundary roomForDeposits oracleMatches
+    invariants atLastSlotOfEpoch roomForDeposits oracleMatches
 
 /-- `lighthouse_rust_fulu_epoch_of_ethlib_ok` on mainnet. -/
 theorem lighthouse_rust_fulu_epoch_of_ethlib_ok_mainnet
     {state : BeaconState Preset.mainnet .fusaka}
-    (invariants : Spec.ReachableInvariants (toSpecState state))
-    (atEpochBoundary : Spec.AtEpochBoundary (toSpecState state))
+    (invariants : Spec.EpochInputInvariants (toSpecState state))
+    (atLastSlotOfEpoch : Spec.AtLastSlotOfEpoch (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.mainnet checks oracle)
-    {σ E : Type} {rustGlue : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
+    {σ E : Type} {rustCode : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
     {rustState : σ}
-    (rust : FuluRustGlueFacts rustGlue oracle view rustState (toSpecState state))
+    (rust : FuluUntranslatedRustFacts rustCode oracle view rustState (toSpecState state))
     {result : BeaconState Preset.mainnet .fusaka}
     (ethLibSucceeds : processEpoch Config.mainnet checks state = .ok result) :
-    (∃ rustResult, (Compose.epochFulu rustGlue rustState).run = ok (some rustResult) ∧
+    (∃ rustResult, (Compose.epochFulu rustCode rustState).run = ok (some rustResult) ∧
       view rustResult = toSpecState result) ∧
     result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader :=
   lighthouse_rust_fulu_epoch_of_ethlib_ok presetMatchesEthLib_mainnet toSpecFuluConfig_mainnet
-    invariants atEpochBoundary roomForDeposits oracleMatches rust ethLibSucceeds
+    invariants atLastSlotOfEpoch roomForDeposits oracleMatches rust ethLibSucceeds
 
 /-- `lighthouse_model_gloas_epoch_agrees_pyspec` on mainnet. -/
 theorem lighthouse_model_gloas_epoch_agrees_pyspec_mainnet {s : Spec.BeaconState}
-    (hrun : GloasEpochRun oracle fuluOracle blockConfig upgradeConfig fuluStart s)
+    (hrun : FuluThenGloasRun oracle fuluOracle blockConfig upgradeConfig fuluStart s)
     (hhistBelowLimit : Spec.HistoricalSummariesBelowLimit s) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse oracle s)
       (Spec.process_epoch Spec.P oracle s) :=
@@ -167,7 +167,7 @@ theorem lighthouse_model_gloas_epoch_agrees_pyspec_mainnet {s : Spec.BeaconState
 
 /-- `lighthouse_model_fulu_epoch_agrees_pyspec` on mainnet. -/
 theorem lighthouse_model_fulu_epoch_agrees_pyspec_mainnet {s : Spec.BeaconState}
-    (hrun : FuluEpochRun oracle fuluOracle blockConfig fuluStart s)
+    (hrun : FuluOnlyRun oracle fuluOracle blockConfig fuluStart s)
     (hhistBelowLimit : Spec.HistoricalSummariesBelowLimit s) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse_fulu oracle s)
       (Spec.process_epoch_fulu Spec.P Spec.FC oracle s) :=
@@ -177,10 +177,10 @@ end Mainnet
 
 section Minimal
 
-attribute [local instance] Spec.minimalCfg Spec.fuluMinimalCfg
-local instance : @Spec.PresetCfg.Ok Spec.minimalCfg := Spec.minimalCfg_ok
-local instance : @Spec.PresetCfg.Bounds Spec.minimalCfg := Spec.minimalCfg_bounds
-local instance : Spec.FuluCfg.Ok := ⟨Spec.fuluCompat_minimal⟩
+attribute [local instance] Spec.currentPresetMinimal Spec.currentFuluConfigMinimal
+local instance : @Spec.CurrentPreset.Valid Spec.currentPresetMinimal := Spec.currentPresetMinimal_ok
+local instance : @Spec.CurrentPreset.Bounds Spec.currentPresetMinimal := Spec.currentPresetMinimal_bounds
+local instance : Spec.CurrentFuluConfig.Valid := ⟨Spec.fuluCompat_minimal⟩
 
 /-- `lighthouse_model_gloas_epoch_eq_ethlib` on minimal. -/
 theorem lighthouse_model_gloas_epoch_eq_ethlib_minimal {PubkeyMap : Type}
@@ -188,15 +188,15 @@ theorem lighthouse_model_gloas_epoch_eq_ethlib_minimal {PubkeyMap : Type}
     {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
     {state : BeaconState Preset.minimal .glamsterdam}
-    (run : GloasEpochRun oracle fuluOracle blockConfig upgradeConfig fuluStart (toSpecState state))
-    (chain : GloasChainAssumptions oracle (toSpecState state))
+    (run : FuluThenGloasRun oracle fuluOracle blockConfig upgradeConfig fuluStart (toSpecState state))
+    (chain : GloasChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle)
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state)) :
     (∃ result, Spec.process_epoch_lighthouse oracle (toSpecState state) = .ok (toSpecState result) ∧
       processEpoch Config.minimal checks state = .ok result) ∧
-    GloasCacheReadsCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
+    GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state) :=
   lighthouse_model_gloas_epoch_eq_ethlib presetMatchesEthLib_minimal run chain roomForDeposits
     oracleMatches caches
@@ -207,18 +207,18 @@ theorem lighthouse_rust_gloas_epoch_eq_ethlib_minimal {PubkeyMap : Type}
     {pubkeyMapOps : types.state.pubkey_index.IndexMap PubkeyMap Spec.BLSPubkey}
     {pubkeyMap : PubkeyMap}
     {state : BeaconState Preset.minimal .glamsterdam}
-    (run : GloasEpochRun oracle fuluOracle blockConfig upgradeConfig fuluStart (toSpecState state))
-    (chain : GloasChainAssumptions oracle (toSpecState state))
+    (run : FuluThenGloasRun oracle fuluOracle blockConfig upgradeConfig fuluStart (toSpecState state))
+    (chain : GloasChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle)
     (caches : GloasCacheAssumptions progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state))
-    {σ E : Type} {rustGlue : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
-    (rust : GloasRustGlueFacts rustGlue oracle view rustState (toSpecState state)) :
-    (∃ rustResult result, (Compose.epoch rustGlue rustState).run = ok (some rustResult) ∧
+    {σ E : Type} {rustCode : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
+    (rust : GloasUntranslatedRustFacts rustCode oracle view rustState (toSpecState state)) :
+    (∃ rustResult result, (Compose.epoch rustCode rustState).run = ok (some rustResult) ∧
       processEpoch Config.minimal checks state = .ok result ∧
       view rustResult = toSpecState result) ∧
-    GloasCacheReadsCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
+    GloasCachesCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
       (toSpecState state) :=
   lighthouse_rust_gloas_epoch_eq_ethlib presetMatchesEthLib_minimal run chain roomForDeposits
     oracleMatches caches rust
@@ -226,38 +226,38 @@ theorem lighthouse_rust_gloas_epoch_eq_ethlib_minimal {PubkeyMap : Type}
 /-- `lighthouse_model_gloas_epoch_agrees_ethlib` on minimal. -/
 theorem lighthouse_model_gloas_epoch_agrees_ethlib_minimal
     {state : BeaconState Preset.minimal .glamsterdam}
-    (invariants : Spec.ReachableInvariants (toSpecState state))
-    (atEpochBoundary : Spec.AtEpochBoundary (toSpecState state))
+    (invariants : Spec.EpochInputInvariants (toSpecState state))
+    (atLastSlotOfEpoch : Spec.AtLastSlotOfEpoch (toSpecState state))
     (slotFarFromOverflow : (toSpecState state).slot + 8192 < 2 ^ 64)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse oracle (toSpecState state))
       (toSpecResult toSpecState (processEpoch Config.minimal checks state)) :=
-  lighthouse_model_gloas_epoch_agrees_ethlib presetMatchesEthLib_minimal invariants atEpochBoundary
+  lighthouse_model_gloas_epoch_agrees_ethlib presetMatchesEthLib_minimal invariants atLastSlotOfEpoch
     slotFarFromOverflow roomForDeposits oracleMatches
 
 /-- `lighthouse_rust_gloas_epoch_of_ethlib_ok` on minimal. -/
 theorem lighthouse_rust_gloas_epoch_of_ethlib_ok_minimal
     {state : BeaconState Preset.minimal .glamsterdam}
-    (invariants : Spec.ReachableInvariants (toSpecState state))
-    (atEpochBoundary : Spec.AtEpochBoundary (toSpecState state))
+    (invariants : Spec.EpochInputInvariants (toSpecState state))
+    (atLastSlotOfEpoch : Spec.AtLastSlotOfEpoch (toSpecState state))
     (slotFarFromOverflow : (toSpecState state).slot + 8192 < 2 ^ 64)
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle)
-    {σ E : Type} {rustGlue : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
-    (rust : GloasRustGlueFacts rustGlue oracle view rustState (toSpecState state))
+    {σ E : Type} {rustCode : Compose.EpochGlue σ E} {view : σ → Spec.BeaconState} {rustState : σ}
+    (rust : GloasUntranslatedRustFacts rustCode oracle view rustState (toSpecState state))
     {result : BeaconState Preset.minimal .glamsterdam}
     (ethLibSucceeds : processEpoch Config.minimal checks state = .ok result) :
-    ∃ rustResult, (Compose.epoch rustGlue rustState).run = ok (some rustResult) ∧
+    ∃ rustResult, (Compose.epoch rustCode rustState).run = ok (some rustResult) ∧
       view rustResult = toSpecState result :=
-  lighthouse_rust_gloas_epoch_of_ethlib_ok presetMatchesEthLib_minimal invariants atEpochBoundary
+  lighthouse_rust_gloas_epoch_of_ethlib_ok presetMatchesEthLib_minimal invariants atLastSlotOfEpoch
     slotFarFromOverflow roomForDeposits oracleMatches rust ethLibSucceeds
 
 /-- `lighthouse_model_fulu_epoch_eq_ethlib` on minimal. -/
 theorem lighthouse_model_fulu_epoch_eq_ethlib_minimal
     {state : BeaconState Preset.minimal .fusaka}
-    (run : FuluEpochRun oracle fuluOracle blockConfig fuluStart (toSpecState state))
-    (chain : FuluChainAssumptions oracle (toSpecState state))
+    (run : FuluOnlyRun oracle fuluOracle blockConfig fuluStart (toSpecState state))
+    (chain : FuluChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle) :
     ∃ result,
@@ -270,14 +270,14 @@ theorem lighthouse_model_fulu_epoch_eq_ethlib_minimal
 /-- `lighthouse_rust_fulu_epoch_eq_ethlib` on minimal. -/
 theorem lighthouse_rust_fulu_epoch_eq_ethlib_minimal
     {state : BeaconState Preset.minimal .fusaka}
-    (run : FuluEpochRun oracle fuluOracle blockConfig fuluStart (toSpecState state))
-    (chain : FuluChainAssumptions oracle (toSpecState state))
+    (run : FuluOnlyRun oracle fuluOracle blockConfig fuluStart (toSpecState state))
+    (chain : FuluChainConditions oracle (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle)
-    {σ E : Type} {rustGlue : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
+    {σ E : Type} {rustCode : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
     {rustState : σ}
-    (rust : FuluRustGlueFacts rustGlue oracle view rustState (toSpecState state)) :
-    ∃ rustResult result, (Compose.epochFulu rustGlue rustState).run = ok (some rustResult) ∧
+    (rust : FuluUntranslatedRustFacts rustCode oracle view rustState (toSpecState state)) :
+    ∃ rustResult result, (Compose.epochFulu rustCode rustState).run = ok (some rustResult) ∧
       processEpoch Config.minimal checks state = .ok result ∧
       view rustResult = toSpecState result ∧
       result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader :=
@@ -287,8 +287,8 @@ theorem lighthouse_rust_fulu_epoch_eq_ethlib_minimal
 /-- `lighthouse_model_fulu_epoch_agrees_ethlib` on minimal. -/
 theorem lighthouse_model_fulu_epoch_agrees_ethlib_minimal
     {state : BeaconState Preset.minimal .fusaka}
-    (invariants : Spec.ReachableInvariants (toSpecState state))
-    (atEpochBoundary : Spec.AtEpochBoundary (toSpecState state))
+    (invariants : Spec.EpochInputInvariants (toSpecState state))
+    (atLastSlotOfEpoch : Spec.AtLastSlotOfEpoch (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle) :
     Spec.SameResultOrBothFail
@@ -297,29 +297,29 @@ theorem lighthouse_model_fulu_epoch_agrees_ethlib_minimal
           state := ← Spec.process_epoch_lighthouse_fulu oracle (toSpecState state) })
       (toSpecResult toSpecFuluState (processEpoch Config.minimal checks state)) :=
   lighthouse_model_fulu_epoch_agrees_ethlib presetMatchesEthLib_minimal toSpecFuluConfig_minimal
-    invariants atEpochBoundary roomForDeposits oracleMatches
+    invariants atLastSlotOfEpoch roomForDeposits oracleMatches
 
 /-- `lighthouse_rust_fulu_epoch_of_ethlib_ok` on minimal. -/
 theorem lighthouse_rust_fulu_epoch_of_ethlib_ok_minimal
     {state : BeaconState Preset.minimal .fusaka}
-    (invariants : Spec.ReachableInvariants (toSpecState state))
-    (atEpochBoundary : Spec.AtEpochBoundary (toSpecState state))
+    (invariants : Spec.EpochInputInvariants (toSpecState state))
+    (atLastSlotOfEpoch : Spec.AtLastSlotOfEpoch (toSpecState state))
     (roomForDeposits : RoomForDeposits (by decide) state)
     (oracleMatches : OracleMatches Preset.minimal checks oracle)
-    {σ E : Type} {rustGlue : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
+    {σ E : Type} {rustCode : Compose.EpochGlueFulu σ E} {view : σ → Spec.BeaconState}
     {rustState : σ}
-    (rust : FuluRustGlueFacts rustGlue oracle view rustState (toSpecState state))
+    (rust : FuluUntranslatedRustFacts rustCode oracle view rustState (toSpecState state))
     {result : BeaconState Preset.minimal .fusaka}
     (ethLibSucceeds : processEpoch Config.minimal checks state = .ok result) :
-    (∃ rustResult, (Compose.epochFulu rustGlue rustState).run = ok (some rustResult) ∧
+    (∃ rustResult, (Compose.epochFulu rustCode rustState).run = ok (some rustResult) ∧
       view rustResult = toSpecState result) ∧
     result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader :=
   lighthouse_rust_fulu_epoch_of_ethlib_ok presetMatchesEthLib_minimal toSpecFuluConfig_minimal
-    invariants atEpochBoundary roomForDeposits oracleMatches rust ethLibSucceeds
+    invariants atLastSlotOfEpoch roomForDeposits oracleMatches rust ethLibSucceeds
 
 /-- `lighthouse_model_gloas_epoch_agrees_pyspec` on minimal. -/
 theorem lighthouse_model_gloas_epoch_agrees_pyspec_minimal {s : Spec.BeaconState}
-    (hrun : GloasEpochRun oracle fuluOracle blockConfig upgradeConfig fuluStart s)
+    (hrun : FuluThenGloasRun oracle fuluOracle blockConfig upgradeConfig fuluStart s)
     (hhistBelowLimit : Spec.HistoricalSummariesBelowLimit s) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse oracle s)
       (Spec.process_epoch Spec.P oracle s) :=
@@ -327,7 +327,7 @@ theorem lighthouse_model_gloas_epoch_agrees_pyspec_minimal {s : Spec.BeaconState
 
 /-- `lighthouse_model_fulu_epoch_agrees_pyspec` on minimal. -/
 theorem lighthouse_model_fulu_epoch_agrees_pyspec_minimal {s : Spec.BeaconState}
-    (hrun : FuluEpochRun oracle fuluOracle blockConfig fuluStart s)
+    (hrun : FuluOnlyRun oracle fuluOracle blockConfig fuluStart s)
     (hhistBelowLimit : Spec.HistoricalSummariesBelowLimit s) :
     Spec.SameResultOrBothFail (Spec.process_epoch_lighthouse_fulu oracle s)
       (Spec.process_epoch_fulu Spec.P Spec.FC oracle s) :=
