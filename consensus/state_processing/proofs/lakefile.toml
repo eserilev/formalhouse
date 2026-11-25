@@ -29,10 +29,5 @@ maxHeartbeats = 1000000
 # Use the standard `do`, as the proofs expect.
 weak.Aeneas.customDoElab = false
 
-# The fork-replay commands (`fork_family`, `forkproof`): a proof written once and elaborated for
-# each fork. Its own library, so other proof folders and packages can depend on it.
-[[lean_lib]]
-name = "ForkReplay"
-
 [[lean_lib]]
 name = "EpochProofs"

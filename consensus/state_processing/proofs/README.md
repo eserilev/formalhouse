@@ -749,19 +749,16 @@ where the spec succeeds.
 | `EpochProofs/Trusted/` | The Rust contracts and glue facts. |
 | `EpochProofs/Spec/` | The transcription of the pyspec (v1.7.0-beta.4). |
 | `EpochProofs/Sanity/` | Facts about the transcription, the reachable-state invariants and the order proofs. |
-| `EpochProofs/Etheorem/` | The transcription's epoch equals Etheorem's, for Gloas and Fulu. |
-| `ForkReplay.lean` | `forkproof`: a proof written once and elaborated for each fork. |
 | `EpochProofs/CacheBridge/` | The cache reads equal the spec values. |
 | `EpochProofs/Assumptions.lean` | Every hypothesis bundle of the headline theorems, each field with a docstring. |
-| `EpochProofs/Assumptions/Etheorem.lean` | The preset, Etheorem and oracle bundles, which the `Etheorem/` step proofs read. |
-| `EpochProofs/Headline.lean` | The conclusions and the headline theorems with their proofs (`HeadlinePresets.lean`: mainnet and minimal). |
-| `EpochProofs/NonVacuity.lean` | A witness at which the hypothesis bundles hold together. |
+| `EpochProofs/EthLib/` | The transcription's epoch equals EthLib's, for Gloas and Fulu. |
+| `EpochProofs/Results.lean` | The main theorems (`ResultsOnPresets.lean`: mainnet and minimal). |
+| `EpochProofs/AssumptionsHoldForExample.lean` | An example state at which the assumptions hold together. |
 | `EpochProofs/Axioms.lean` | The axiom audit. |
 
 ## Building
 
-`setup.sh` fetches Etheorem's native dependencies (blst, c-kzg-4844 and ISA-L, which needs
-`nasm`) and applies the Aeneas patch.
+`setup.sh` applies the Aeneas patch.
 
 ```sh
 cd consensus/state_processing/proofs
@@ -771,7 +768,7 @@ lake build
 lake lean EpochProofs/Axioms.lean
 ```
 
-Use `lake lean`, not `lake env lean`. Etheorem's modules are precompiled, and only `lake lean`
+Use `lake lean`, not `lake env lean`. EthLib's modules are precompiled, and only `lake lean`
 loads their native code.
 
 ## Regenerating `Generated.lean`

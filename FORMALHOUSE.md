@@ -35,10 +35,10 @@ Pull requests and Workflows.
 
 - Index of all proofs: issue #44. Tracking issues: #32 slashing protection, #33 epoch
   processing, #34 Lean spec, #35 caches.
-- The main results for epoch processing are `lighthouse_model_gloas_epoch_eq_etheorem` and
-  `lighthouse_model_fulu_epoch_eq_etheorem` (`EpochProofs/Headline.lean`, with their assumptions
-  in `EpochProofs/Assumptions.lean`), each for mainnet and minimal (`HeadlinePresets.lean`). On every epoch input of a reachable run, Lighthouse's epoch processing returns Ok and
-  gives the same state as Etheorem, an independent Lean spec that passes the EF test vectors.
+- The main results for epoch processing are `lighthouse_model_gloas_epoch_eq_ethlib` and
+  `lighthouse_model_fulu_epoch_eq_ethlib` (`EpochProofs/Results.lean`, with their assumptions
+  in `EpochProofs/Assumptions.lean`), each for mainnet and minimal (`ResultsOnPresets.lean`). On every epoch input of a reachable run, Lighthouse's epoch processing returns Ok and
+  gives the same state as [EthLib](https://github.com/ethereum/EthLib), an independent Lean spec.
 
 ## Trusted base
 
@@ -50,5 +50,5 @@ The full list, with counts, is the "Trusted base" section of
   for example `RowsContract` for the single-pass loop.
 - Glue facts: Rust expressions that Aeneas does not translate, each linked to the model.
 - Cache build facts, spec preconditions, supply and time bounds, probability facts and the
-  registry room that the Etheorem bridge needs.
+  registry room that the proofs against EthLib need.
 - The hash function and BLS, given as an Oracle.

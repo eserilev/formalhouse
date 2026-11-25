@@ -328,6 +328,38 @@ theorem lighthouse_model_gloas_epoch_agrees_ethlib
     (slotLimit_of_slotFarFromOverflow presetMatches slotFarFromOverflow)
   rwa [presetMatches.values] at h
 
+omit [Spec.FuluCfg] [Spec.FuluCfg.Ok] in
+/-- Gloas: at an epoch input where the chain assumptions hold, the Lean model of Lighthouse's epoch
+and EthLib's `processEpoch` succeed with the same state. -/
+theorem lighthouse_model_gloas_epoch_eq_ethlib_of_invariants
+    (presetMatches : PresetMatchesEthLib preset config)
+    (invariants : Spec.ReachableInvariants (toSpecState state))
+    (atEpochBoundary : Spec.AtEpochBoundary (toSpecState state))
+    (chain : GloasChainAssumptions oracle (toSpecState state))
+    (roomForDeposits : RoomForDeposits (by decide) state)
+    (oracleMatches : OracleMatches preset checks oracle) :
+    ∃ result, Spec.process_epoch_lighthouse oracle (toSpecState state) = .ok (toSpecState result) ∧
+      processEpoch config checks state = .ok result := by
+  have hcommittees := chain.atCommitteeStepState presetMatches invariants
+  have hvectors := vectorLengths_toSpecState (config := config) state
+  rw [presetMatches.values] at hvectors
+  -- The transcription succeeds, so the model succeeds.
+  obtain ⟨specResult, hspec⟩ := Spec.process_epoch_total_rows oracle (toSpecState state)
+    invariants.1.1.1.2.1 chain.slotFarFromOverflow atEpochBoundary.1 hvectors invariants.1.1.1.1
+    invariants.1.1.2.2.1 invariants.1.2.2 invariants.1.1.2.2.2.2.2.2 chain.physicalLimits
+    (Spec.committeesOk_of oracle _ chain.slotFarFromOverflow hcommittees)
+  have hmodel := (lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants oracle invariants
+    atEpochBoundary specResult).mpr hspec
+  -- The model and EthLib agree.
+  have hethlib := (lighthouse_model_gloas_epoch_agrees_ethlib presetMatches invariants
+    atEpochBoundary chain.slotFarFromOverflow roomForDeposits oracleMatches specResult).mp hmodel
+  cases hresult : processEpoch config checks state with
+  | error e => rw [hresult] at hethlib; cases hethlib
+  | ok result =>
+    rw [hresult] at hethlib
+    cases hethlib
+    exact ⟨result, hmodel, rfl⟩
+
 /-- Gloas: at every epoch input of a run that starts in Fulu and crosses the fork, the Lean model of
 Lighthouse's epoch succeeds. EthLib's `processEpoch` succeeds with the same state. Each cache read
 of the epoch gives the spec value. -/
@@ -343,29 +375,10 @@ theorem lighthouse_model_gloas_epoch_eq_ethlib {PubkeyMap : Type} {progressiveCa
     (∃ result, Spec.process_epoch_lighthouse oracle (toSpecState state) = .ok (toSpecState result) ∧
       processEpoch config checks state = .ok result) ∧
     GloasCacheReadsCorrect progressiveCache cachedTotal pubkeyMapOps pubkeyMap
-      (toSpecState state) := by
-  refine ⟨?_, gloas_cache_reads_correct run caches⟩
-  have hin := run.invariants
-  have hboundary := run.atEpochBoundary chain.historicalSummariesBelowLimit
-  have hcommittees := chain.atCommitteeStepState presetMatches hin
-  have hvectors := vectorLengths_toSpecState (config := config) state
-  rw [presetMatches.values] at hvectors
-  -- The transcription succeeds, so the model succeeds.
-  obtain ⟨specResult, hspec⟩ := Spec.process_epoch_total_rows oracle (toSpecState state)
-    hin.1.1.1.2.1 chain.slotFarFromOverflow hboundary.1 hvectors hin.1.1.1.1 hin.1.1.2.2.1
-    hin.1.2.2 hin.1.1.2.2.2.2.2.2 chain.physicalLimits
-    (Spec.committeesOk_of oracle _ chain.slotFarFromOverflow hcommittees)
-  have hmodel := (lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants oracle hin hboundary
-    specResult).mpr hspec
-  -- The model and EthLib agree.
-  have hethlib := (lighthouse_model_gloas_epoch_agrees_ethlib presetMatches hin hboundary
-    chain.slotFarFromOverflow roomForDeposits oracleMatches specResult).mp hmodel
-  cases hresult : processEpoch config checks state with
-  | error e => rw [hresult] at hethlib; cases hethlib
-  | ok result =>
-    rw [hresult] at hethlib
-    cases hethlib
-    exact ⟨result, hmodel, rfl⟩
+      (toSpecState state) :=
+  ⟨lighthouse_model_gloas_epoch_eq_ethlib_of_invariants presetMatches run.invariants
+    (run.atEpochBoundary chain.historicalSummariesBelowLimit) chain roomForDeposits oracleMatches,
+    gloas_cache_reads_correct run caches⟩
 
 omit [Spec.FuluCfg] [Spec.FuluCfg.Ok] in
 /-- Gloas, for the composed Rust: if EthLib's `processEpoch` succeeds at an epoch input, the Rust
@@ -461,6 +474,43 @@ theorem lighthouse_model_fulu_epoch_agrees_ethlib
   exact (Spec.SameResultOrBothFail.bind (Spec.lighthouse_fulu_epoch_sameResultOrBothFail oracle _
     invariants atEpochBoundary) fun _ _ => .refl _).trans h
 
+/-- Fulu: at an epoch input where the chain assumptions hold, the Lean model of Lighthouse's epoch
+and EthLib's `processEpoch` succeed with the same state, and EthLib keeps the payload header. -/
+theorem lighthouse_model_fulu_epoch_eq_ethlib_of_invariants [Spec.PresetCfg.Bounds]
+    (presetMatches : PresetMatchesEthLib preset config)
+    (fuluConfigMatches : toSpecFuluConfig config = Spec.FC)
+    (invariants : Spec.ReachableInvariants (toSpecState state))
+    (atEpochBoundary : Spec.AtEpochBoundary (toSpecState state))
+    (chain : FuluChainAssumptions oracle (toSpecState state))
+    (roomForDeposits : RoomForDeposits (by decide) state)
+    (oracleMatches : OracleMatches preset checks oracle) :
+    ∃ result,
+      Spec.process_epoch_lighthouse_fulu oracle (toSpecState state) = .ok (toSpecState result) ∧
+      processEpoch config checks state = .ok result ∧
+      result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader := by
+  have hcommittees := chain.atCommitteeStepState presetMatches invariants
+  have hvectors := fuluVectorLengths_toSpecState (config := config) (by decide) state
+  rw [presetMatches.values] at hvectors
+  -- The transcription succeeds, so the model succeeds.
+  obtain ⟨specResult, hspec⟩ := Spec.process_epoch_fulu_total oracle (toSpecState state)
+    invariants.1.1.1.2.1 chain.slotFarFromOverflow atEpochBoundary.1 hvectors invariants.1.1.1.1
+    invariants.1.1.2.2.1 invariants.1.2.2 invariants.1.1.2.2.2.2.2.2 chain.physicalLimits
+    (Spec.committeesOkFulu_of oracle _ chain.slotFarFromOverflow hcommittees)
+  have hmodel := (Spec.lighthouse_fulu_epoch_sameResultOrBothFail oracle _ invariants
+    atEpochBoundary specResult).mpr hspec
+  -- The model and EthLib agree.
+  have hethlib := (lighthouse_model_fulu_epoch_agrees_ethlib presetMatches fuluConfigMatches
+    invariants atEpochBoundary roomForDeposits oracleMatches
+    { toSpecFuluState state with state := specResult }).mp
+    (by rw [hmodel]; rfl)
+  cases hresult : processEpoch config checks state with
+  | error e => rw [hresult] at hethlib; cases hethlib
+  | ok result =>
+    rw [hresult] at hethlib
+    have hstate : toSpecState result = specResult :=
+      congrArg Spec.FuluState.state (Except.ok.inj hethlib)
+    exact ⟨result, by rw [hstate, hmodel], rfl, epoch_keeps_payload_header hresult⟩
+
 /-- Fulu: at every epoch input of a run, the Lean model of Lighthouse's epoch succeeds. EthLib's
 `processEpoch` succeeds with the same state, and keeps the payload header. -/
 theorem lighthouse_model_fulu_epoch_eq_ethlib [Spec.PresetCfg.Bounds]
@@ -473,30 +523,9 @@ theorem lighthouse_model_fulu_epoch_eq_ethlib [Spec.PresetCfg.Bounds]
     ∃ result,
       Spec.process_epoch_lighthouse_fulu oracle (toSpecState state) = .ok (toSpecState result) ∧
       processEpoch config checks state = .ok result ∧
-      result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader := by
-  have hin := run.invariants
-  have hboundary := run.atEpochBoundary chain.historicalSummariesBelowLimit
-  have hcommittees := chain.atCommitteeStepState presetMatches hin
-  have hvectors := fuluVectorLengths_toSpecState (config := config) (by decide) state
-  rw [presetMatches.values] at hvectors
-  -- The transcription succeeds, so the model succeeds.
-  obtain ⟨specResult, hspec⟩ := Spec.process_epoch_fulu_total oracle (toSpecState state)
-    hin.1.1.1.2.1 chain.slotFarFromOverflow hboundary.1 hvectors hin.1.1.1.1 hin.1.1.2.2.1
-    hin.1.2.2 hin.1.1.2.2.2.2.2.2 chain.physicalLimits
-    (Spec.committeesOkFulu_of oracle _ chain.slotFarFromOverflow hcommittees)
-  have hmodel := (Spec.lighthouse_fulu_epoch_sameResultOrBothFail oracle _ hin hboundary
-    specResult).mpr hspec
-  -- The model and EthLib agree.
-  have hethlib := (lighthouse_model_fulu_epoch_agrees_ethlib presetMatches fuluConfigMatches hin
-    hboundary roomForDeposits oracleMatches { toSpecFuluState state with state := specResult }).mp
-    (by rw [hmodel]; rfl)
-  cases hresult : processEpoch config checks state with
-  | error e => rw [hresult] at hethlib; cases hethlib
-  | ok result =>
-    rw [hresult] at hethlib
-    have hstate : toSpecState result = specResult :=
-      congrArg Spec.FuluState.state (Except.ok.inj hethlib)
-    exact ⟨result, by rw [hstate, hmodel], rfl, epoch_keeps_payload_header hresult⟩
+      result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader :=
+  lighthouse_model_fulu_epoch_eq_ethlib_of_invariants presetMatches fuluConfigMatches run.invariants
+    (run.atEpochBoundary chain.historicalSummariesBelowLimit) chain roomForDeposits oracleMatches
 
 /-- Fulu, for the composed Rust: if EthLib's `processEpoch` succeeds at an epoch input, the Rust
 returns `Ok` with the same state. EthLib keeps the payload header. -/

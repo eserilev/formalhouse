@@ -495,98 +495,69 @@ local instance : FuluCfg.Ok := ⟨fuluCompat_minimal⟩
 /-- The Gloas assumptions about the oracle, the chain, the state and the room hold together for an
 EthLib state, and the epoch succeeds there: the model and EthLib give the same state. -/
 theorem gloas_ethlib_assumptions_hold_for_example (checks : SignatureChecks) :
+    let state := exampleEthLibState .glamsterdam
     ∃ oracle, OracleMatches Preset.minimal checks oracle ∧
-      Formalhouse.GloasChainAssumptions oracle (toSpecState (exampleEthLibState .glamsterdam)) ∧
-      ReachableInvariants (toSpecState (exampleEthLibState .glamsterdam)) ∧
-      AtEpochBoundary (toSpecState (exampleEthLibState .glamsterdam)) ∧
-      RoomForDeposits (by decide) (exampleEthLibState .glamsterdam) ∧
-      ∃ result, processEpoch Config.minimal checks (exampleEthLibState .glamsterdam) = .ok result ∧
-        process_epoch_lighthouse oracle (toSpecState (exampleEthLibState .glamsterdam)) =
-          .ok (toSpecState result) := by
+      Formalhouse.GloasChainAssumptions oracle (toSpecState state) ∧
+      ReachableInvariants (toSpecState state) ∧ AtEpochBoundary (toSpecState state) ∧
+      RoomForDeposits (by decide) state ∧
+      ∃ result, process_epoch_lighthouse oracle (toSpecState state) = .ok (toSpecState result) ∧
+        processEpoch Config.minimal checks state = .ok result := by
   obtain ⟨oracle, ho⟩ := exists_oracle (preset := Preset.minimal) checks (by decide)
   have hcommittees := exampleGloasState_atCommitteeStepState oracle (exampleGloasState_keys ho)
   have hroom : RoomForDeposits (by decide) (exampleEthLibState .glamsterdam) := by
     unfold RoomForDeposits
     decide +kernel
-  have hslot : (toSpecState (exampleEthLibState .glamsterdam)).slot + 8192 < 2 ^ 64 := by
+  have hinvariants : ReachableInvariants (toSpecState (exampleEthLibState .glamsterdam)) :=
+    toSpecState_exampleGloas ▸ exampleGloasState_reachableInvariants
+  have hboundary : AtEpochBoundary (toSpecState (exampleEthLibState .glamsterdam)) :=
+    toSpecState_exampleGloas ▸ exampleGloasState_atEpochBoundary
+  have hchain : Formalhouse.GloasChainAssumptions oracle
+      (toSpecState (exampleEthLibState .glamsterdam)) := by
     rw [toSpecState_exampleGloas]
-    decide +kernel
-  have hinvariants : ReachableInvariants (toSpecState (exampleEthLibState .glamsterdam)) := by
-    rw [toSpecState_exampleGloas]
-    exact exampleGloasState_reachableInvariants
-  have hboundary : AtEpochBoundary (toSpecState (exampleEthLibState .glamsterdam)) := by
-    rw [toSpecState_exampleGloas]
-    exact exampleGloasState_atEpochBoundary
-  have hagrees := Formalhouse.lighthouse_model_gloas_epoch_agrees_ethlib_minimal hinvariants
-    hboundary hslot hroom ho
-  refine ⟨oracle, ho, ?_, hinvariants, hboundary, hroom, ?_⟩
-  · rw [toSpecState_exampleGloas] at hslot ⊢
     exact {
       committeeSteps := fun t h =>
         ⟨(hcommittees t h).2, (hcommittees t h).1.regLen, (hcommittees t h).1.keys⟩
       physicalLimits := exampleGloasState_physicalLimits
-      slotFarFromOverflow := hslot
+      slotFarFromOverflow := by decide +kernel
       historicalSummariesBelowLimit := exampleGloasState_atEpochBoundary.2.2 }
-  · obtain ⟨-, -, -, -, -, -, -, -, -, specResult, hspec⟩ :=
-      gloas_assumptions_hold_for_example oracle (exampleGloasState_keys ho)
-    rw [← toSpecState_exampleGloas] at hspec
-    have hmodel := (Formalhouse.lighthouse_model_gloas_epoch_agrees_pyspec_of_invariants oracle
-      hinvariants hboundary specResult).mpr hspec
-    have hethlib := (hagrees specResult).mp hmodel
-    cases hresult : processEpoch Config.minimal checks (exampleEthLibState .glamsterdam) with
-    | error e => rw [hresult] at hethlib; cases hethlib
-    | ok result =>
-      rw [hresult] at hethlib
-      cases hethlib
-      exact ⟨result, rfl, hmodel⟩
+  exact ⟨oracle, ho, hchain, hinvariants, hboundary, hroom,
+    Formalhouse.lighthouse_model_gloas_epoch_eq_ethlib_of_invariants
+      Formalhouse.presetMatchesEthLib_minimal hinvariants hboundary hchain hroom ho⟩
 
 /-- The Fulu assumptions about the oracle, the chain, the state and the room hold together for an
 EthLib state, and the epoch succeeds there: the model and EthLib give the same state. -/
 theorem fulu_ethlib_assumptions_hold_for_example (checks : SignatureChecks) :
+    let state := exampleEthLibState .fusaka
     ∃ oracle, OracleMatches Preset.minimal checks oracle ∧
-      Formalhouse.FuluChainAssumptions oracle (toSpecState (exampleEthLibState .fusaka)) ∧
-      ReachableInvariants (toSpecState (exampleEthLibState .fusaka)) ∧
-      AtEpochBoundary (toSpecState (exampleEthLibState .fusaka)) ∧
-      RoomForDeposits (by decide) (exampleEthLibState .fusaka) ∧
-      ∃ result, processEpoch Config.minimal checks (exampleEthLibState .fusaka) = .ok result ∧
-        process_epoch_lighthouse_fulu oracle (toSpecState (exampleEthLibState .fusaka)) =
-          .ok (toSpecState result) := by
+      Formalhouse.FuluChainAssumptions oracle (toSpecState state) ∧
+      ReachableInvariants (toSpecState state) ∧ AtEpochBoundary (toSpecState state) ∧
+      RoomForDeposits (by decide) state ∧
+      ∃ result,
+        process_epoch_lighthouse_fulu oracle (toSpecState state) = .ok (toSpecState result) ∧
+        processEpoch Config.minimal checks state = .ok result ∧
+        result.latestExecutionPayloadHeader = state.latestExecutionPayloadHeader := by
   obtain ⟨oracle, ho⟩ := exists_oracle (preset := Preset.minimal) checks (by decide)
   have hcommittees := exampleFuluState_atCommitteeStepState oracle (exampleGloasState_keys ho)
   have hroom : RoomForDeposits (by decide) (exampleEthLibState .fusaka) := by
     unfold RoomForDeposits
     decide +kernel
-  have hinvariants : ReachableInvariants (toSpecState (exampleEthLibState .fusaka)) := by
+  have hinvariants : ReachableInvariants (toSpecState (exampleEthLibState .fusaka)) :=
+    toSpecState_exampleFulu ▸ exampleFuluState_reachableInvariants
+  have hboundary : AtEpochBoundary (toSpecState (exampleEthLibState .fusaka)) :=
+    toSpecState_exampleFulu ▸ exampleFuluState_atEpochBoundary
+  have hchain : Formalhouse.FuluChainAssumptions oracle
+      (toSpecState (exampleEthLibState .fusaka)) := by
     rw [toSpecState_exampleFulu]
-    exact exampleFuluState_reachableInvariants
-  have hboundary : AtEpochBoundary (toSpecState (exampleEthLibState .fusaka)) := by
-    rw [toSpecState_exampleFulu]
-    exact exampleFuluState_atEpochBoundary
-  have hagrees := Formalhouse.lighthouse_model_fulu_epoch_agrees_ethlib_minimal hinvariants
-    hboundary hroom ho
-  refine ⟨oracle, ho, ?_, hinvariants, hboundary, hroom, ?_⟩
-  · rw [toSpecState_exampleFulu]
     exact {
       committeeSteps := fun t h =>
         ⟨(hcommittees t h).2, (hcommittees t h).1.regLen, (hcommittees t h).1.keys⟩
       physicalLimits := exampleFuluState_physicalLimits
       slotFarFromOverflow := by decide +kernel
       historicalSummariesBelowLimit := exampleFuluState_atEpochBoundary.2.2 }
-  · obtain ⟨-, -, -, -, -, -, -, -, specResult, hspec⟩ :=
-      fulu_assumptions_hold_for_example oracle (exampleGloasState_keys ho)
-    rw [← toSpecState_exampleFulu] at hspec
-    have hmodel := (lighthouse_fulu_epoch_sameResultOrBothFail oracle _ hinvariants hboundary
-      specResult).mpr hspec
-    have hethlib := (hagrees
-      { toSpecFuluState (exampleEthLibState .fusaka) with state := specResult }).mp
-      (by rw [hmodel]; rfl)
-    cases hresult : processEpoch Config.minimal checks (exampleEthLibState .fusaka) with
-    | error e => rw [hresult] at hethlib; cases hethlib
-    | ok result =>
-      rw [hresult] at hethlib
-      have hstate : toSpecState result = specResult :=
-        congrArg FuluState.state (Except.ok.inj hethlib)
-      exact ⟨result, rfl, by rw [hstate, hmodel]⟩
+  exact ⟨oracle, ho, hchain, hinvariants, hboundary, hroom,
+    Formalhouse.lighthouse_model_fulu_epoch_eq_ethlib_of_invariants
+      Formalhouse.presetMatchesEthLib_minimal toSpecFuluConfig_minimal hinvariants hboundary hchain
+      hroom ho⟩
 
 end EthLib
 

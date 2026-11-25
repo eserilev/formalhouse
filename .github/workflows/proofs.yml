@@ -161,7 +161,6 @@ jobs:
           lake exe cache get
           # A project can name a script that prepares its dependencies (see proofs.json).
           if [ -n "$SETUP" ]; then
-            sudo apt-get update -qq && sudo apt-get install -y -qq nasm libssl-dev pkg-config
             "./$SETUP"
           fi
           lake build 2>&1 | tee build.log

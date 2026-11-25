@@ -779,10 +779,12 @@ open EpochProofs.Spec
 #print axioms EpochProofs.Formalhouse.presetMatchesEthLib_minimal
 #print axioms EpochProofs.Formalhouse.epochRoom
 #print axioms EpochProofs.Formalhouse.slotLimit_of_slotFarFromOverflow
+#print axioms EpochProofs.Formalhouse.lighthouse_model_gloas_epoch_eq_ethlib_of_invariants
 #print axioms EpochProofs.Formalhouse.lighthouse_model_gloas_epoch_eq_ethlib
 #print axioms EpochProofs.Formalhouse.lighthouse_rust_gloas_epoch_eq_ethlib
 #print axioms EpochProofs.Formalhouse.lighthouse_model_gloas_epoch_agrees_ethlib
 #print axioms EpochProofs.Formalhouse.lighthouse_rust_gloas_epoch_of_ethlib_ok
+#print axioms EpochProofs.Formalhouse.lighthouse_model_fulu_epoch_eq_ethlib_of_invariants
 #print axioms EpochProofs.Formalhouse.lighthouse_model_fulu_epoch_eq_ethlib
 #print axioms EpochProofs.Formalhouse.lighthouse_rust_fulu_epoch_eq_ethlib
 #print axioms EpochProofs.Formalhouse.lighthouse_model_fulu_epoch_agrees_ethlib
