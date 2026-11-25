@@ -78,4 +78,36 @@ theorem SameOutcome.forIn_indices {ε α β : Type} {f : α → UInt64 → Excep
       exact hstep index a b (List.mem_of_getElem? hindex) hR)
   simpa [Function.comp_def] using this
 
+/-- A `mapM` over a list, and a `mapM` over the same values as the reference reads them. -/
+theorem SameOutcome.mapM {ε α α' β β' : Type} {f : α → Except ε β} {g : α' → Spec.SpecM β'}
+    (readArg : α → α') (read : β → β') :
+    ∀ (l : List α), (∀ a ∈ l, SameOutcome (fun b b' => b' = read b) (f a) (g (readArg a))) →
+      SameOutcome (fun bs bs' => bs' = bs.map read) (l.mapM f) ((l.map readArg).mapM g)
+  | [], _ => .returned rfl
+  | a :: l, h => by
+    rw [List.map_cons, List.mapM_cons, List.mapM_cons]
+    refine .bind (h a List.mem_cons_self) ?_
+    rintro b _ rfl -
+    refine .bind (SameOutcome.mapM readArg read l fun a ha => h a (List.mem_cons_of_mem _ ha)) ?_
+    rintro bs _ rfl -
+    exact .returned rfl
+
+theorem mapM_length {ε α β : Type} {f : α → Except ε β} :
+    ∀ {l : List α} {r : List β}, l.mapM f = .ok r → r.length = l.length
+  | [], r, h => by
+    cases h
+    rfl
+  | a :: l, r, h => by
+    rw [List.mapM_cons] at h
+    cases hf : f a with
+    | error e => rw [hf] at h; cases h
+    | ok b =>
+      rw [hf] at h
+      cases hl : l.mapM f with
+      | error e => rw [hl] at h; cases h
+      | ok bs =>
+        rw [hl] at h
+        cases h
+        simp [mapM_length hl]
+
 end EpochProofs.EthLib
