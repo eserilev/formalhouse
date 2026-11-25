@@ -147,6 +147,18 @@ theorem toNat_min (a b : UInt64) : (min a b).toNat = min a.toNat b.toNat := by
 
 theorem bind_ok {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
 
+theorem liftArith_bind {α β : Type} (x : Except ArithError α) (f : α → Except ArithError β) :
+    _root_.EthLib.Consensus.liftArith (x >>= f) =
+      _root_.EthLib.Consensus.liftArith x >>= fun a => _root_.EthLib.Consensus.liftArith (f a) := by
+  cases x <;> rfl
+
+theorem liftAccessor_bind {α β : Type} (x : Except AccessorError α)
+    (f : α → Except AccessorError β) :
+    _root_.EthLib.Consensus.liftAccessor (x >>= f) =
+      _root_.EthLib.Consensus.liftAccessor x >>= fun a =>
+        _root_.EthLib.Consensus.liftAccessor (f a) := by
+  cases x <;> rfl
+
 theorem pure_eq_ok {ε α : Type} (a : α) : (Pure.pure a : Except ε α) = .ok a := rfl
 
 end EpochProofs.EthLib

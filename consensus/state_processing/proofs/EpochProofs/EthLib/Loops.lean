@@ -63,4 +63,19 @@ theorem SameOutcome.forIn_zipIdx {ε α β γ : Type} {f : α → Nat → Except
       exact hstep i a b _ hp hR)
   simpa [Function.comp_def, List.zipIdx_map_snd, List.range_eq_range'] using this
 
+/-- A fold and a `for` loop over the same validator indices. -/
+theorem SameOutcome.forIn_indices {ε α β : Type} {f : α → UInt64 → Except ε α}
+    {body : Nat → β → Spec.SpecM (ForInStep β)} {R : α → β → Prop} (indices : List UInt64) {a : α}
+    {b : β} (h : R a b)
+    (hstep : ∀ index a b, index ∈ indices → R a b →
+      SameOutcome (fun a' r => ∃ b', r = .yield b' ∧ R a' b') (f a index) (body index.toNat b)) :
+    SameOutcome R (indices.foldlM f a) (forIn (indices.map UInt64.toNat) b body) := by
+  have := SameOutcome.forIn_pairs (f := f) (body := body) (R := fun _ => R)
+    (indices.map fun index => (index, index.toNat)) 0 h (by
+      intro i a b x y hi hR
+      simp only [List.getElem?_map, Option.map_eq_some_iff, Prod.mk.injEq] at hi
+      obtain ⟨index, hindex, rfl, rfl⟩ := hi
+      exact hstep index a b (List.mem_of_getElem? hindex) hR)
+  simpa [Function.comp_def] using this
+
 end EpochProofs.EthLib

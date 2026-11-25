@@ -15,6 +15,19 @@ open _root_.EthLib.Consensus
 
 variable {preset : Preset} {config : Config} {fork : _root_.EthLib.Base.Fork}
 
+theorem listGet_readList {data : Array UInt64} {i : Nat} (h : i < data.size) :
+    Spec.listGet (readList UInt64.toNat data) i = .ok data[i].toNat := by
+  simp [Spec.listGet, readList, h, pure, Except.pure]
+
+theorem listSet_readList {data : Array UInt64} {i : Nat} (h : i < data.size) (value : UInt64) :
+    Spec.listSet (readList UInt64.toNat data) i value.toNat =
+      .ok (readList UInt64.toNat (data.set i value h)) := by
+  simp [Spec.listSet, readList, h, pure, Except.pure, List.map_set]
+
+theorem listGet_readList_error {data : Array UInt64} {i : Nat} (h : ¬i < data.size) :
+    Spec.listGet (readList UInt64.toNat data) i = .error .indexOutOfRange := by
+  simp [Spec.listGet, readList, h, throw, throwThe, MonadExceptOf.throw]
+
 /-- The EthLib state has the balances of the reference list. No other field differs from `s`. -/
 def OnlyBalancesChanged (s : BeaconState preset fork) (st : BeaconState preset fork)
     (balances : List Nat) : Prop :=
