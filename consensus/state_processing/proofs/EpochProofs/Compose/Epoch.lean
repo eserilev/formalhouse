@@ -33,40 +33,61 @@ structure EpochGlue (σ E : Type) where
 
 variable {σ E : Type}
 
+/-! ## The epoch
+
+`OptionT Result` stops at the first `none`. `none` means that the Rust returns an error. -/
+
+/-- The Rust state after justification and finalization. -/
+def afterJustification (G : EpochGlue σ E) (st : σ) : OptionT Result σ :=
+  OptionT.mk (justification G.justification st)
+
+/-- The Rust state after the single pass: the loop, the deposits, the consolidations and the
+builder payments. -/
+def afterSinglePass (G : EpochGlue σ E) (st : σ) : OptionT Result σ := do
+  let st1 ← afterJustification G st
+  OptionT.mk (singlePass G.singlePass G.payments st1)
+
+/-- The Rust state after the proposer lookahead. -/
+def afterLookahead (G : EpochGlue σ E) (st : σ) : OptionT Result σ := do
+  let st2 ← afterSinglePass G st
+  OptionT.mk (lookahead G.lookahead st2)
+
+/-- The Rust state after the PTC window. -/
+def afterPtcWindow (G : EpochGlue σ E) (st : σ) : OptionT Result σ := do
+  let st3 ← afterLookahead G st
+  OptionT.mk (ptcWindow G.lookahead G.ptc st3)
+
+/-- The Rust state after the resets, the historical summaries and the participation rotation. -/
+def afterResets (G : EpochGlue σ E) (st : σ) : OptionT Result σ := do
+  let st4 ← afterPtcWindow G st
+  OptionT.mk (resets G.tail st4)
+
 /-- Lighthouse's Gloas `process_epoch`, as the calls of the translated functions joined by the
-untranslated code `G`: justification and finalization, the single pass (the loop, the deposits, the
-consolidations, the builder payments), the proposer lookahead, the PTC window, then the resets,
-the historical summaries, the participation rotation and the sync committee update. `none`: the
-Rust returns an error. -/
-def epoch (G : EpochGlue σ E) (st : σ) : Result (Option σ) := do
-  let r ← justification G.justification st
-  match r with
-  | none => ok none
-  | some st1 =>
-  let r ← singlePass G.singlePass G.payments st1
-  match r with
-  | none => ok none
-  | some st2 =>
-  let r ← lookahead G.lookahead st2
-  match r with
-  | none => ok none
-  | some st3 =>
-  let r ← ptcWindow G.lookahead G.ptc st3
-  match r with
-  | none => ok none
-  | some st4 => tail G.tail st4
+untranslated code `G`. -/
+def epoch (G : EpochGlue σ E) (st : σ) : OptionT Result σ := do
+  let st4 ← afterPtcWindow G st
+  OptionT.mk (tail G.tail st4)
+
+/-- Two steps that both return a state. -/
+theorem run_bind_ok {α β : Type} {x : OptionT Result α} {f : α → OptionT Result β} {a : α} {b : β}
+    (hx : x.run = ok (some a)) (hf : (f a).run = ok (some b)) : (x >>= f).run = ok (some b) := by
+  rw [OptionT.run_bind, hx]
+  simpa [Option.elimM] using hf
 
 variable [Spec.PresetCfg]
 
-/-- The trusted facts about the untranslated code `G` with input `st`. The facts about the reads of
-the single pass and the shuffle sizes are stated at the states where the Rust makes these reads. -/
+/-- What the proofs assume about the untranslated code `G` of the epoch with input `st`. The facts
+that read a state in the middle of the epoch are stated at that state. -/
 structure EpochLinks (G : EpochGlue σ E) (o : Spec.Oracle) (view : σ → Spec.BeaconState)
     (st : σ) : Prop where
   /-- Justification and finalization. -/
   justification : JustificationLinks G.justification view st
-  /-- The single pass and the builder payments, at the state after justification. -/
-  singlePass : ∀ st1, EpochProofs.Compose.justification G.justification st = ok (some st1) →
-    SinglePassLinks G.singlePass o view st1 id ∧ PaymentsLinks G.payments view st1
+  /-- The single pass, at the state after justification. -/
+  singlePass : ∀ st1, (afterJustification G st).run = ok (some st1) →
+    SinglePassLinks G.singlePass o view st1 id
+  /-- The builder payments, with the input of the single pass. -/
+  payments : ∀ st1, (afterJustification G st).run = ok (some st1) →
+    PaymentsLinks G.payments view st1
   /-- `registry_constants` for Gloas. -/
   registryConstants : ConstantsMatch Spec.P G.singlePass.registryConstants
   /-- The proposer lookahead. -/
@@ -77,16 +98,17 @@ structure EpochLinks (G : EpochGlue σ E) (o : Spec.Oracle) (view : σ → Spec.
   ptc : PtcLinks G.lookahead G.ptc o view
   /-- The resets, the historical summaries, the participation rotation and the sync committees. -/
   tail : TailLinks G.tail o view
-  /-- At most `2^24` validators enter each of the three shuffles of the epoch. -/
-  lookaheadN1 : ∀ st1 st2, EpochProofs.Compose.justification G.justification st = ok (some st1) →
-    EpochProofs.Compose.singlePass G.singlePass G.payments st1 = ok (some st2) → LookaheadN1 G.lookahead st2
-  ptcN1 : ∀ st1 st2 st3, EpochProofs.Compose.justification G.justification st = ok (some st1) →
-    EpochProofs.Compose.singlePass G.singlePass G.payments st1 = ok (some st2) →
-    EpochProofs.Compose.lookahead G.lookahead st2 = ok (some st3) → PtcN1 G.ptc st3
-  syncN1 : ∀ st1 st2 st3 st4 st5, EpochProofs.Compose.justification G.justification st = ok (some st1) →
-    EpochProofs.Compose.singlePass G.singlePass G.payments st1 = ok (some st2) →
-    EpochProofs.Compose.lookahead G.lookahead st2 = ok (some st3) → ptcWindow G.lookahead G.ptc st3 = ok (some st4) →
-    resets G.tail st4 = ok (some st5) → SyncN1 G.tail st5
+  /-- At most `2^24` proposer candidates enter the shuffle. -/
+  proposersFitShuffle : ∀ st2, (afterSinglePass G st).run = ok (some st2) →
+    (G.lookahead.proposerIndices st2).val.length ≤ 2 ^ 24
+  /-- At most `2^24` validators of each slot enter the PTC selection. -/
+  ptcCommitteesFitSelection : ∀ st3, (afterLookahead G st).run = ok (some st3) →
+    ∀ k (hk : k < (G.ptc.committees st3).val.length),
+      ((G.ptc.committees st3).val[k]).val.length ≤ 2 ^ 24
+  /-- At most `2^24` sync committee candidates enter the shuffle. -/
+  syncCandidatesFitShuffle : ∀ st5, (afterResets G st).run = ok (some st5) →
+    ∀ st6, G.tail.writeCurrentSync st5 = some st6 →
+      (G.tail.syncIndices st6).val.length ≤ 2 ^ 24
 
 /-- The composed Gloas epoch returns the state of the model: when `process_epoch_lighthouse`
 returns `ok`, the Rust returns `Ok` with a state whose view is the model's. The facts about the
@@ -95,7 +117,7 @@ theorem epoch_spec [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds] (G : EpochGlue σ
     (o : Spec.Oracle) (view : σ → Spec.BeaconState) (st : σ) (hL : EpochLinks G o view st)
     (hslot : (view st).slot < 2 ^ 64) (hvec : (view st).VectorLengths Spec.P)
     (s' : Spec.BeaconState) (h : Spec.process_epoch_lighthouse o (view st) = .ok s') :
-    ∃ st', epoch G st = ok (some st') ∧ view st' = s' := by
+    ∃ st', (epoch G st).run = ok (some st') ∧ view st' = s' := by
   obtain ⟨-, -, -, -, hjb, -, -, hpl, -, hbpp, hptc, -⟩ := hvec
   unfold Spec.process_epoch_lighthouse at h
   obtain ⟨s1, h1, h⟩ := Spec.specM_bind_ok h
@@ -109,30 +131,23 @@ theorem epoch_spec [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds] (G : EpochGlue σ
     ((Spec.lhJustificationAndFinalization_sameResultOrBothFail _ _ s1).mp h1)
   obtain ⟨st1, hj, hv1⟩ := justification_spec G.justification view st hL.justification hjb s1 h1
   obtain ⟨st2, hsp, hv2⟩ := singlePass_spec G.singlePass G.payments o view st1
-    (hL.singlePass st1 hj).1 (hL.singlePass st1 hj).2 hL.registryConstants
+    (hL.singlePass st1 hj) (hL.payments st1 hj) hL.registryConstants
     (by rw [hv1, hs1]; exact hslot) (by rw [hv1, hs1]; exact hbpp) T (by rw [hv1]; exact hT)
+  have r2 : (afterSinglePass G st).run = ok (some st2) := run_bind_ok hj hsp
   obtain ⟨hTpl, hTptc⟩ := Spec.lhSinglePass_keep o s1 T hT
   obtain ⟨st3, hla, hv3⟩ := lookahead_spec G.lookahead o view hL.lookahead hL.proposerIndices st2
-    (hL.lookaheadN1 st1 st2 hj hsp) (by rw [hv2, hTpl, hs1]; exact hpl) t1
+    (hL.proposersFitShuffle st2 r2) (by rw [hv2, hTpl, hs1]; exact hpl) t1
     (by rw [hv2]; exact ht1)
+  have r3 : (afterLookahead G st).run = ok (some st3) := run_bind_ok r2 hla
   have ht1ptc : t1.ptc_window = T.ptc_window := by
     obtain ⟨l, -, hl⟩ := Spec.map_ok_inv ((Spec.process_proposer_lookahead_eq o T).symm.trans ht1)
     rw [hl]; rfl
   obtain ⟨st4, hpw, hv4⟩ := ptcWindow_spec G.lookahead G.ptc o view hL.lookahead hL.ptc st3
-    (hL.ptcN1 st1 st2 st3 hj hsp hla) (by rw [hv3, ht1ptc, hTptc, hs1]; exact hptc) t2
+    (hL.ptcCommitteesFitSelection st3 r3) (by rw [hv3, ht1ptc, hTptc, hs1]; exact hptc) t2
     (by rw [hv3]; exact ht2)
+  have r4 : (afterPtcWindow G st).run = ok (some st4) := run_bind_ok r3 hpw
   obtain ⟨st5, ht, hv5⟩ := tail_spec G.tail o view hL.tail st4
-    (fun st5 hr => hL.syncN1 st1 st2 st3 st4 st5 hj hsp hla hpw hr) s' (by rw [hv4]; exact h)
-  refine ⟨st5, ?_, hv5⟩
-  unfold epoch
-  rw [hj]
-  simp only [bind_tc_ok]
-  rw [hsp]
-  simp only [bind_tc_ok]
-  rw [hla]
-  simp only [bind_tc_ok]
-  rw [hpw]
-  simp only [bind_tc_ok]
-  exact ht
+    (fun st5 hr => hL.syncCandidatesFitShuffle st5 (run_bind_ok r4 hr)) s' (by rw [hv4]; exact h)
+  exact ⟨st5, run_bind_ok r4 ht, hv5⟩
 
 end EpochProofs.Compose

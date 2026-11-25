@@ -256,32 +256,44 @@ structure EpochGlueFulu (σ E : Type) where
   lookahead : LookaheadGlue σ
   tail : TailGlue σ
 
-omit [Spec.PresetCfg] [Spec.FuluCfg] in
-/-- Lighthouse's Fulu `process_epoch`, as the calls of the translated functions joined by the
-untranslated code `G`: justification and finalization, the single pass (the loop, the deposits, the
-consolidations), the proposer lookahead, then the resets, the historical summaries, the
-participation rotation and the sync committee update. `none`: the Rust returns an error. -/
-def epochFulu (G : EpochGlueFulu σ E) (st : σ) : Result (Option σ) := do
-  let r ← justification G.justification st
-  match r with
-  | none => ok none
-  | some st1 =>
-  let r ← singlePassCore G.singlePass st1
-  match r with
-  | none => ok none
-  | some st2 =>
-  let r ← lookahead G.lookahead st2
-  match r with
-  | none => ok none
-  | some st3 => tail G.tail st3
+section
+omit [Spec.PresetCfg] [Spec.FuluCfg]
 
-/-- The trusted facts about the untranslated code `G` with input `st`, as `EpochLinks`. -/
+/-- The Rust state after justification and finalization. -/
+def afterJustificationFulu (G : EpochGlueFulu σ E) (st : σ) : OptionT Result σ :=
+  OptionT.mk (justification G.justification st)
+
+/-- The Rust state after the single pass: the loop, the deposits and the consolidations. -/
+def afterSinglePassFulu (G : EpochGlueFulu σ E) (st : σ) : OptionT Result σ := do
+  let st1 ← afterJustificationFulu G st
+  OptionT.mk (singlePassCore G.singlePass st1)
+
+/-- The Rust state after the proposer lookahead. -/
+def afterLookaheadFulu (G : EpochGlueFulu σ E) (st : σ) : OptionT Result σ := do
+  let st2 ← afterSinglePassFulu G st
+  OptionT.mk (lookahead G.lookahead st2)
+
+/-- The Rust state after the resets, the historical summaries and the participation rotation. -/
+def afterResetsFulu (G : EpochGlueFulu σ E) (st : σ) : OptionT Result σ := do
+  let st3 ← afterLookaheadFulu G st
+  OptionT.mk (resets G.tail st3)
+
+/-- Lighthouse's Fulu `process_epoch`, as the calls of the translated functions joined by the
+untranslated code `G`. -/
+def epochFulu (G : EpochGlueFulu σ E) (st : σ) : OptionT Result σ := do
+  let st3 ← afterLookaheadFulu G st
+  OptionT.mk (tail G.tail st3)
+
+end
+
+/-- What the proofs assume about the untranslated code `G` of the Fulu epoch with input `st`, as
+`EpochLinks`. -/
 structure EpochLinksFulu (G : EpochGlueFulu σ E) (o : Spec.Oracle)
     (view : σ → Spec.BeaconState) (st : σ) : Prop where
   /-- Justification and finalization. -/
   justification : JustificationLinks G.justification view st
   /-- The single pass, at the state after justification. -/
-  singlePass : ∀ st1, EpochProofs.Compose.justification G.justification st = ok (some st1) →
+  singlePass : ∀ st1, (afterJustificationFulu G st).run = ok (some st1) →
     SinglePassLinks G.singlePass o view st1 Spec.fuluTabM
   /-- `registry_constants` for Fulu. -/
   registryConstants : ConstantsMatchBase Spec.P G.singlePass.registryConstants
@@ -293,15 +305,17 @@ structure EpochLinksFulu (G : EpochGlueFulu σ E) (o : Spec.Oracle)
   proposerIndices : FuluProposerIndices G.lookahead view
   /-- The resets, the historical summaries, the participation rotation and the sync committees. -/
   tail : TailLinks G.tail o view
-  /-- At most `2^24` proposer candidates enter the shuffle, and each Electra proposer loop ends. -/
-  lookaheadN1 : ∀ st1 st2, EpochProofs.Compose.justification G.justification st = ok (some st1) →
-    singlePassCore G.singlePass st1 = ok (some st2) →
-    LookaheadN1 G.lookahead st2 ∧ LookaheadFin G.lookahead o view st2
+  /-- At most `2^24` proposer candidates enter the shuffle. -/
+  proposersFitShuffle : ∀ st2, (afterSinglePassFulu G st).run = ok (some st2) →
+    (G.lookahead.proposerIndices st2).val.length ≤ 2 ^ 24
+  /-- A fact about hash values: each Electra proposer loop ends before its last pass. -/
+  proposerSelectionEnds : ∀ st2, (afterSinglePassFulu G st).run = ok (some st2) →
+    ∀ seed, Spec.ProposerFin Spec.P o (view st2)
+      (Spec.get_active_validator_indices (view st2) (G.lookahead.epoch st2).val) seed
   /-- At most `2^24` sync committee candidates enter the shuffle. -/
-  syncN1 : ∀ st1 st2 st3 st5, EpochProofs.Compose.justification G.justification st = ok (some st1) →
-    singlePassCore G.singlePass st1 = ok (some st2) →
-    EpochProofs.Compose.lookahead G.lookahead st2 = ok (some st3) →
-    resets G.tail st3 = ok (some st5) → SyncN1 G.tail st5
+  syncCandidatesFitShuffle : ∀ st5, (afterResetsFulu G st).run = ok (some st5) →
+    ∀ st6, G.tail.writeCurrentSync st5 = some st6 →
+      (G.tail.syncIndices st6).val.length ≤ 2 ^ 24
 
 /-- The composed Fulu epoch returns the state of the model: when
 `process_epoch_lighthouse_fulu` returns `ok`, the Rust returns `Ok` with a state whose view is the
@@ -313,7 +327,7 @@ theorem epochFulu_spec [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds] [Spec.FuluCfg
     (hpl : (view st).proposer_lookahead.length =
       (Spec.P.MIN_SEED_LOOKAHEAD + 1) * Spec.P.SLOTS_PER_EPOCH)
     (s' : Spec.BeaconState) (h : Spec.process_epoch_lighthouse_fulu o (view st) = .ok s') :
-    ∃ st', epochFulu G st = ok (some st') ∧ view st' = s' := by
+    ∃ st', (epochFulu G st).run = ok (some st') ∧ view st' = s' := by
   unfold Spec.process_epoch_lighthouse_fulu at h
   obtain ⟨s1, h1, h⟩ := Spec.specM_bind_ok h
   rw [Spec.lhFullTailWithFulu_order_eq] at h
@@ -327,20 +341,14 @@ theorem epochFulu_spec [Spec.PresetCfg.Ok] [Spec.PresetCfg.Bounds] [Spec.FuluCfg
     hL.registryConstants hL.registryConstantsFulu (by rw [hv1, hs1]; exact hslot) T
     (by rw [hv1]; exact hT)
   have hTpl := Spec.lhSinglePassFulu_keep o s1 T hT
-  obtain ⟨hn1, hfin⟩ := hL.lookaheadN1 st1 st2 hj hsp
+  have r2 : (afterSinglePassFulu G st).run = ok (some st2) := run_bind_ok hj hsp
   obtain ⟨st3, hla, hv3⟩ := lookahead_spec_fulu G.lookahead o view hL.lookahead
-    hL.proposerIndices st2 hn1 hfin (by rw [hv2, hTpl, hs1]; exact hpl) t1
+    hL.proposerIndices st2 (hL.proposersFitShuffle st2 r2)
+    (hL.proposerSelectionEnds st2 r2) (by rw [hv2, hTpl, hs1]; exact hpl) t1
     (by rw [hv2]; exact ht1)
+  have r3 : (afterLookaheadFulu G st).run = ok (some st3) := run_bind_ok r2 hla
   obtain ⟨st4, ht, hv4⟩ := tail_spec G.tail o view hL.tail st3
-    (fun st5 hr => hL.syncN1 st1 st2 st3 st5 hj hsp hla hr) s' (by rw [hv3]; exact h)
-  refine ⟨st4, ?_, hv4⟩
-  unfold epochFulu
-  rw [hj]
-  simp only [bind_tc_ok]
-  rw [hsp]
-  simp only [bind_tc_ok]
-  rw [hla]
-  simp only [bind_tc_ok]
-  exact ht
+    (fun st5 hr => hL.syncCandidatesFitShuffle st5 (run_bind_ok r3 hr)) s' (by rw [hv3]; exact h)
+  exact ⟨st4, run_bind_ok r3 ht, hv4⟩
 
 end EpochProofs.Compose
