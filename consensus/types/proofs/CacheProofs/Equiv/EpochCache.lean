@@ -1,3 +1,4 @@
+import CacheProofs.AeneasCompat
 import Mathlib.Data.Nat.Sqrt
 import Mathlib.Tactic
 import CacheProofs.Generated
@@ -18,7 +19,7 @@ open CacheProofs.Spec CacheProofs.Spec.EpochCache
 
 theorem iter_eq_sqrt (n : Nat) (hn : 1 ≤ n) : Nat.sqrt.iter n n = Nat.sqrt n := by
   apply Nat.eq_sqrt.mpr
-  refine ⟨Nat.sqrt.iter_sq_le n n, Nat.sqrt.lt_iter_succ_sq n n ?_⟩
+  refine ⟨IntegerSqrt.iter_sq_le n n, IntegerSqrt.lt_iter_succ_sq n n ?_⟩
   nlinarith
 
 theorem uint64_max_sqrt : Nat.sqrt (2 ^ 64 - 1) = 4294967295 := by
@@ -172,7 +173,7 @@ theorem integer_sqrt_spec (n : U64) :
       unfold state.base_rewards.integer_sqrt_loop.body
       have : ¬ y < n := by
         intro h; have : y.val < n.val := h; omega
-      simp only [this, if_false]
+      simp only [this, if_false, bind_ok]
       exact ⟨n, rfl, by rw [h0]; rfl⟩
     · obtain ⟨r, hr, hrv⟩ := integer_sqrt_loop_spec n n y hpos hn' hpos
         (by rw [hyv, hsat, Nat.div_self hpos]) (fun _ => by rw [hyv, hsat])
@@ -844,7 +845,7 @@ theorem get_effective_balance_spec (ebs : Slice U64) (index : Usize) :
         | none => .Err .ValidatorIndexOutOfBounds) := by
   unfold state.base_rewards.get_effective_balance
   rw [slice_get]
-  cases ebs.val[index.val]? <;> rfl
+  cases ebs.val[index.val]? <;> simp
 
 theorem get_base_reward_spec (ebs table : Slice U64) (inc : U64) (index : Usize)
     (hindex : index.val < ebs.val.length) (hinc : inc.val ≠ 0)

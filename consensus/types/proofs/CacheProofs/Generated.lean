@@ -222,6 +222,7 @@ def swap_or_not_shuffle.shuffle_list.PIVOT_VIEW_SIZE : Result Std.Usize :=
 @[reducible, rust_type "swap_or_not_shuffle::shuffle_list::Buf"]
 def swap_or_not_shuffle.shuffle_list.Buf := Array Std.U8 37#usize
 
+set_option Aeneas.customDoElab true in
 /-- [swap_or_not_shuffle::shuffle_list::{swap_or_not_shuffle::shuffle_list::Buf}::new]:
     Source: 'consensus/swap_or_not_shuffle/src/shuffle_list.rs', lines 18:4-18:31
     Name pattern: [swap_or_not_shuffle::shuffle_list::{swap_or_not_shuffle::shuffle_list::Buf}::new] -/

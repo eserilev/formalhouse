@@ -248,7 +248,7 @@ theorem quorum_equiv (p : Spec.Preset) (total_active_balance slots_per_epoch : U
   | none =>
     simp only [hc1] at h1
     simp [h1, core.result.Result.Insts.CoreOpsTry.branch,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       absResult, absArithError]
     rfl
   | some q1 =>
@@ -261,7 +261,7 @@ theorem quorum_equiv (p : Spec.Preset) (total_active_balance slots_per_epoch : U
       have hov : ¬ q1.val * 6 < 18446744073709551616 := by
         simp only [U64.max_eq] at h2; simp at h2; omega
       simp [h1.1, hq1, hov, hc2, core.result.Result.Insts.CoreOpsTry.branch,
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         absResult, absArithError]
       rfl
     | some q2 =>

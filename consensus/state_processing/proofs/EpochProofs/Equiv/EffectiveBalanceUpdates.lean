@@ -33,7 +33,7 @@ theorem hysteresis_thresholds_equiv (p : Spec.Preset)
   | none =>
     simp only [hc1] at h1
     simp [h1, core.result.Result.Insts.CoreOpsTry.branch,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       absResult, absArithError]
     rfl
   | some q =>
@@ -46,7 +46,7 @@ theorem hysteresis_thresholds_equiv (p : Spec.Preset)
       have hov : ¬ q.val * downward_multiplier.val < 18446744073709551616 := by
         simp only [U64.max_eq] at h2; omega
       simp [h1.1, hq, hov, hc2, core.result.Result.Insts.CoreOpsTry.branch,
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         absResult, absArithError]
       rfl
     | some d =>
@@ -60,7 +60,7 @@ theorem hysteresis_thresholds_equiv (p : Spec.Preset)
         have hov : ¬ q.val * upward_multiplier.val < 18446744073709551616 := by
           simp only [U64.max_eq] at h3; omega
         simp [h1.1, hq, hfit, hov, hc2, hc3, core.result.Result.Insts.CoreOpsTry.branch,
-          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+          core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
           absResult, absArithError]
         rfl
       | some u =>
@@ -97,7 +97,7 @@ theorem new_effective_balance_equiv (p : Spec.Preset) (validator : Spec.Validato
   cases hc1 : balance.checked_add downward <;> simp only [hc1] at h1
   · have hov : ¬ balance.val + downward.val < 18446744073709551616 := by omega
     simp [hov, core.result.Result.Insts.CoreOpsTry.branch,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       absResult, absArithError]
     rfl
   rename_i below
@@ -119,10 +119,10 @@ theorem new_effective_balance_equiv (p : Spec.Preset) (validator : Spec.Validato
             let i ← core.cmp.min core.cmp.OrdU64 val2 limit
             ok (core.result.Result.Ok i)
           | core.ops.control_flow.ControlFlow.Break residual =>
-            core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual U64
+            core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual U64
               (core.convert.FromSame safe_arith.ArithError) residual
         | core.ops.control_flow.ControlFlow.Break residual =>
-          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual U64
+          core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual U64
             (core.convert.FromSame safe_arith.ArithError) residual)
         ⦃ r => absResult (·.val) r =
           (do
@@ -134,7 +134,7 @@ theorem new_effective_balance_equiv (p : Spec.Preset) (validator : Spec.Validato
     have hr := U64.checked_rem_bv_spec balance increment
     cases hcr : balance.checked_rem increment <;> simp only [hcr] at hr
     · simp [hr, core.result.Result.Insts.CoreOpsTry.branch,
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         absResult, absArithError]
       rfl
     rename_i remainder
@@ -161,7 +161,7 @@ theorem new_effective_balance_equiv (p : Spec.Preset) (validator : Spec.Validato
         branch_ok, hA', if_false]
       have hov' : ¬ effective_balance.val + upward.val < 18446744073709551616 := by omega
       simp [hfit1, hA, hov', core.result.Result.Insts.CoreOpsTry.branch,
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         absResult, absArithError]
       rfl
     rename_i above

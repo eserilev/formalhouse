@@ -54,7 +54,7 @@ theorem flag_delta_equiv (base_reward weight increments active_increments : U64)
     · cases hc1 : base_reward.checked_mul weight <;> simp only [hc1] at h1
       · have hov : ¬ base_reward.val * weight.val < 18446744073709551616 := by omega
         simp [hp, hl, hov, core.result.Result.Insts.CoreOpsTry.branch,
-          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+          core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
           absResult, absArithError, Bind.bind, Except.bind, throw,
           throwThe, MonadExceptOf.throw]
       rename_i v1
@@ -66,7 +66,7 @@ theorem flag_delta_equiv (base_reward weight increments active_increments : U64)
       · have hov : ¬ base_reward.val * weight.val * increments.val < 18446744073709551616 := by
           omega
         simp [hp, hl, hov, hfit1, hc2, core.result.Result.Insts.CoreOpsTry.branch,
-          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+          core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
           absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, throw,
           throwThe, MonadExceptOf.throw]
       rename_i v2
@@ -80,7 +80,7 @@ theorem flag_delta_equiv (base_reward weight increments active_increments : U64)
       · have hov : ¬ active_increments.val * 64 < 18446744073709551616 := by omega
         simp [hp, hl, hov, hfit1, hfit2, hc2, 
           core.result.Result.Insts.CoreOpsTry.branch,
-          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+          core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
           absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, throw,
           throwThe, MonadExceptOf.throw]
       rename_i v3
@@ -91,7 +91,7 @@ theorem flag_delta_equiv (base_reward weight increments active_increments : U64)
       cases hc4 : v2.checked_div v3 <;> simp only [hc4] at h4
       · simp [hp, hl, hfit1, hc2, hc4, ← h2.2.1, ← h3.2.1, hv2, h4,
           core.result.Result.Insts.CoreOpsTry.branch,
-          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+          core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
           absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, throw,
           throwThe, MonadExceptOf.throw]
       · simp [hp, hl, hfit1, hc2, hc4, ← h2.2.1, ← h3.2.1, hv2, hv3, h4.1,
@@ -102,7 +102,7 @@ theorem flag_delta_equiv (base_reward weight increments active_increments : U64)
     · cases hc1 : base_reward.checked_mul weight <;> simp only [hc1] at h1
       · have hov : ¬ base_reward.val * weight.val < 18446744073709551616 := by omega
         simp [hp, hh, hov, core.result.Result.Insts.CoreOpsTry.branch,
-          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+          core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
           absResult, absArithError, Bind.bind, Except.bind, throw,
           throwThe, MonadExceptOf.throw]
       rename_i v1
@@ -137,7 +137,7 @@ theorem inactivity_penalty_equiv (p : Spec.Preset)
   cases hc1 : effective_balance.checked_mul inactivity_score <;> simp only [hc1] at h1
   · have hov : ¬ effective_balance.val * inactivity_score.val < 18446744073709551616 := by omega
     simp [hp, hov, core.result.Result.Insts.CoreOpsTry.branch,
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         absResult, absArithError, Bind.bind, Except.bind, throw,
         throwThe, MonadExceptOf.throw]
   rename_i num
@@ -148,7 +148,7 @@ theorem inactivity_penalty_equiv (p : Spec.Preset)
   cases hc2 : bias.checked_mul quotient <;> simp only [hc2] at h2
   · have hov : ¬ bias.val * quotient.val < 18446744073709551616 := by omega
     simp [hp, hov, hfit1, core.result.Result.Insts.CoreOpsTry.branch,
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, throw,
         throwThe, MonadExceptOf.throw]
   rename_i den
@@ -157,11 +157,11 @@ theorem inactivity_penalty_equiv (p : Spec.Preset)
   have h3 := U64.checked_div_bv_spec num den
   cases hc3 : num.checked_div den <;> simp only [hc3] at h3
   · simp [hp, ← h1.2.1, ← h2.2.1, hnum, h3, hc3, core.result.Result.Insts.CoreOpsTry.branch,
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, throw,
         throwThe, MonadExceptOf.throw]
   · simp [hp, ← h1.2.1, ← h2.2.1, hnum, hden, h3.1, h3.2.1, hc3, core.result.Result.Insts.CoreOpsTry.branch,
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, 
         ]
 
@@ -178,7 +178,7 @@ theorem result_bind {S T : Type} (m : Result (core.result.Result S safe_arith.Ar
       match cf with
       | core.ops.control_flow.ControlFlow.Continue v => K v
       | core.ops.control_flow.ControlFlow.Break residual =>
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual T
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual T
           (core.convert.FromSame safe_arith.ArithError) residual) ⦃ P ⦄ := by
   obtain ⟨r, hr, hq⟩ := spec_imp_exists hm
   rw [hr]
@@ -186,7 +186,7 @@ theorem result_bind {S T : Type} (m : Result (core.result.Result S safe_arith.Ar
   | Ok s => simpa [core.result.Result.Insts.CoreOpsTry.branch] using hok s hq
   | Err e =>
     simp [core.result.Result.Insts.CoreOpsTry.branch,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       core.convert.FromSame.from]
     exact herr e hq
 
@@ -241,7 +241,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
   cases rS with
   | Err e =>
     simp only [core.result.Result.Insts.CoreOpsTry.branch, bind_tc_ok,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       core.convert.FromSame.from]
     exact ⟨_, rfl, by rw [← hS]; rfl⟩
   | Ok x =>
@@ -249,7 +249,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
   cases rT with
   | Err e =>
     simp only [core.result.Result.Insts.CoreOpsTry.branch, bind_tc_ok,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       core.convert.FromSame.from]
     exact ⟨_, rfl, by rw [← hS, ← hT]; rfl⟩
   | Ok x =>
@@ -257,7 +257,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
   cases rH with
   | Err e =>
     simp only [core.result.Result.Insts.CoreOpsTry.branch, bind_tc_ok,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       core.convert.FromSame.from]
     exact ⟨_, rfl, by rw [← hS, ← hT, ← hH]; rfl⟩
   | Ok x =>
@@ -265,7 +265,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
   cases rI with
   | Err e =>
     simp only [core.result.Result.Insts.CoreOpsTry.branch, bind_tc_ok,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       core.convert.FromSame.from]
     exact ⟨_, rfl, by rw [← hS, ← hT, ← hH, ← hI]; rfl⟩
   | Ok inactivity =>
@@ -286,7 +286,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
   | Err e =>
     obtain ⟨rfl, hov⟩ := h4.2 e rfl
     simp only [bind_tc_ok,
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         core.convert.FromSame.from]
     refine ⟨_, rfl, ?_⟩
     simp [absResult, absArithError, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
@@ -302,7 +302,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
     obtain ⟨rfl, hov⟩ := h5.2 e rfl
     simp only [hv4] at hov
     simp only [bind_tc_ok,
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         core.convert.FromSame.from]
     refine ⟨_, rfl, ?_⟩
     simp [absResult, absArithError, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
@@ -318,7 +318,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
   | Err e =>
     obtain ⟨rfl, hov⟩ := h6.2 e rfl
     simp only [bind_tc_ok,
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         core.convert.FromSame.from]
     refine ⟨_, rfl, ?_⟩
     simp [absResult, absArithError, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
@@ -334,7 +334,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
     obtain ⟨rfl, hov⟩ := h7.2 e rfl
     simp only [hv6] at hov
     simp only [bind_tc_ok,
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         core.convert.FromSame.from]
     refine ⟨_, rfl, ?_⟩
     simp [absResult, absArithError, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
@@ -351,7 +351,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
     obtain ⟨rfl, hov⟩ := h8.2 e rfl
     simp only [hv7] at hov
     simp only [bind_tc_ok,
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         core.convert.FromSame.from]
     refine ⟨_, rfl, ?_⟩
     simp [absResult, absArithError, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,
@@ -368,7 +368,7 @@ theorem new_balance_after_rewards_equiv (p : Spec.Preset)
     obtain ⟨rfl, hov⟩ := h9.2 e rfl
     simp only [hv5] at hov
     simp only [bind_tc_ok,
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         core.convert.FromSame.from]
     refine ⟨_, rfl, ?_⟩
     simp [absResult, absArithError, List.foldlM_cons, List.foldlM_nil, Spec.uint64Add,

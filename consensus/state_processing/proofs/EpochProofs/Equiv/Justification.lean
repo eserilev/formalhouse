@@ -84,7 +84,7 @@ theorem finalize_step_equiv (enabled : Bool) (source_epoch offset current_epoch 
           Except.pure]
   · refine ⟨.Err .Overflow, ?_, ?_⟩
     · simp [h1, core.result.Result.Insts.CoreOpsTry.branch,
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual]
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual]
     · simp [Spec.lhFinalizeStep, h2, absResult, absArithError, Bind.bind, Except.bind]
 
 /-- Splits the goals on `t` where `t` occurs. -/
@@ -106,19 +106,19 @@ theorem weigh_justification_equiv (current_epoch old_previous_justified_epoch
     rw [show (2#u64 : U64).val = 2 from rfl] at hts
   swap
   · simp [ht, core.result.Result.Insts.CoreOpsTry.branch,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       Spec.lhWeighJustification, hts, absResult, absArithError, Bind.bind, Except.bind]
   rcases safe_mul_cases previous_target_balance 3#u64 with ⟨px, hp, hps⟩ | ⟨hp, hps⟩ <;>
     rw [show (3#u64 : U64).val = 3 from rfl] at hps
   swap
   · simp [ht, hp, core.result.Result.Insts.CoreOpsTry.branch,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       Spec.lhWeighJustification, hts, hps, absResult, absArithError, Bind.bind, Except.bind]
   rcases safe_mul_cases current_target_balance 3#u64 with ⟨cx, hc, hcs⟩ | ⟨hc, hcs⟩ <;>
     rw [show (3#u64 : U64).val = 3 from rfl] at hcs
   swap
   · simp [ht, hp, hc, core.result.Result.Insts.CoreOpsTry.branch,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       Spec.lhWeighJustification, hts, hps, hcs, absResult, absArithError, Bind.bind, Except.bind]
   rcases safe_add_cases old_previous_justified_epoch 3#u64 with ⟨a3, ha3, hs3⟩ | ⟨ha3, hs3⟩ <;>
   rcases safe_add_cases old_previous_justified_epoch 2#u64 with ⟨a2, ha2, hs2⟩ | ⟨ha2, hs2⟩ <;>
@@ -127,7 +127,7 @@ theorem weigh_justification_equiv (current_epoch old_previous_justified_epoch
   simp only [show (3#u64 : U64).val = 3 from rfl, show (2#u64 : U64).val = 2 from rfl,
     show (1#u64 : U64).val = 1 from rfl] at hs3 hs2 hu2 hu1 <;>
   simp [ht, hp, hc, ha3, ha2, hb2, hb1, finalize_step, core.result.Result.Insts.CoreOpsTry.branch,
-    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+    core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
     Spec.lhWeighJustification, Spec.lhFinalizeStep, hts, hps, hcs, hs3, hs2, hu2, hu1,
     Bind.bind, Except.bind, Pure.pure, Except.pure, absJustificationBits,
     absJustificationOutcome, absResult, absArithError, absNewFinalized]

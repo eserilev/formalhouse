@@ -1,3 +1,4 @@
+import CacheProofs.AeneasCompat
 import CacheProofs.Generated
 import CacheProofs.Spec.ExitCache
 
@@ -25,7 +26,7 @@ theorem record_exit_spec (m c e : U64) :
       simp only [hc] at h
       simp [recordStep, absRecord, core.option.Option.ok_or, lift,
         core.result.Result.Insts.CoreOpsTry.branch,
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual]
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual]
       simp [U64.max_eq] at h
       omega
     | some v =>

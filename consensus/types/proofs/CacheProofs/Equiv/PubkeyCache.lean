@@ -1,3 +1,4 @@
+import CacheProofs.AeneasCompat
 import CacheProofs.Generated
 import CacheProofs.Spec.PubkeyCache
 

@@ -44,7 +44,7 @@ theorem new_inactivity_score_equiv (p : Spec.Preset) (score bias recovery_rate :
         match cf1 with
         | core.ops.control_flow.ControlFlow.Continue val1 => ok (core.result.Result.Ok val1)
         | core.ops.control_flow.ControlFlow.Break residual =>
-          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual U64
+          core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual U64
             (core.convert.FromSame safe_arith.ArithError) residual) ⦃ r =>
         absResult (·.val) r =
           .ok (if v.val > recovery_rate.val then v.val - recovery_rate.val else v.val - v.val) ⦄ := by
@@ -91,7 +91,7 @@ theorem new_inactivity_score_equiv (p : Spec.Preset) (score bias recovery_rate :
   · cases hc : score.checked_add bias <;> simp only [hc] at ha
     · have hov : ¬ score.val + bias.val < 18446744073709551616 := by omega
       simp [hov, core.result.Result.Insts.CoreOpsTry.branch,
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         absResult, absArithError]
       rfl
     · have hfit : score.val + bias.val < 18446744073709551616 := by omega
@@ -100,7 +100,7 @@ theorem new_inactivity_score_equiv (p : Spec.Preset) (score bias recovery_rate :
   · cases hc : score.checked_add bias <;> simp only [hc] at ha
     · have hov : ¬ score.val + bias.val < 18446744073709551616 := by omega
       simp [hov, core.result.Result.Insts.CoreOpsTry.branch,
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
         absResult, absArithError]
       rfl
     · rename_i raised

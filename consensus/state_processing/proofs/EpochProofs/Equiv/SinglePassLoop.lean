@@ -134,7 +134,7 @@ theorem single_pass_rows_loop_spec {R E : Type} (inst : LhRegistryRows R E)
           rfl
       · rw [happ]
         simp only [bind_tc_ok, uncurry_apply_pair, core.result.Result.Insts.CoreOpsTry.branch,
-          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+          core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
           core.convert.FromSame.from, spec_ok]
         show Spec.passM step a0 V = .error (absArithError e)
         have hsplit : V = V.take i.val ++ (V[i.val] :: V.drop (i.val + 1)) := by

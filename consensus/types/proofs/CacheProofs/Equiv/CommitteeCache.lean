@@ -1,3 +1,4 @@
+import CacheProofs.AeneasCompat
 import CacheProofs.Generated
 import CacheProofs.Spec.CommitteeCache
 
@@ -33,8 +34,8 @@ abbrev RResult := core.result.Result
       ok (.Break (.Err e)) := rfl
 
 @[simp] theorem from_residual_err {T E : Type} (e : E) :
-    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual T
-      (core.convert.FromSame E) (.Err e) = ok (.Err e) := rfl
+    core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual T
+      (core.convert.FromSame E) (.Err e) = ok (.Err e) := from_residual_same e
 
 theorem safe_add_eq (x y : Usize) :
     ∃ r, Usize.Insts.Safe_arithSafeArithUsize.safe_add x y = ok r ∧
@@ -42,6 +43,7 @@ theorem safe_add_eq (x y : Usize) :
        | .Ok z => z.val = x.val + y.val ∧ x.val + y.val ≤ Usize.max
        | .Err e => e = .Overflow ∧ Usize.max < x.val + y.val) := by
   unfold Usize.Insts.Safe_arithSafeArithUsize.safe_add
+  simp only [lift, bind_tc_ok, core.option.Option.ok_or]
   have hs := Usize.checked_add_bv_spec x y
   cases hc : Usize.checked_add x y with
   | none => simp only [hc] at hs; exact ⟨_, rfl, rfl, hs⟩
@@ -53,6 +55,7 @@ theorem safe_mul_eq (x y : Usize) :
        | .Ok z => z.val = x.val * y.val ∧ x.val * y.val ≤ Usize.max
        | .Err e => e = .Overflow ∧ Usize.max < x.val * y.val) := by
   unfold Usize.Insts.Safe_arithSafeArithUsize.safe_mul
+  simp only [lift, bind_tc_ok, core.option.Option.ok_or]
   have hs := Usize.checked_mul_bv_spec x y
   cases hc : Usize.checked_mul x y with
   | none => simp only [hc] at hs; exact ⟨_, rfl, rfl, hs⟩
@@ -64,6 +67,7 @@ theorem safe_sub_eq (x y : Usize) :
        | .Ok z => z.val = x.val - y.val ∧ y.val ≤ x.val
        | .Err e => e = .Overflow ∧ x.val < y.val) := by
   unfold Usize.Insts.Safe_arithSafeArithUsize.safe_sub
+  simp only [lift, bind_tc_ok, core.option.Option.ok_or]
   have hs := Usize.checked_sub_bv_spec x y
   cases hc : Usize.checked_sub x y with
   | none => simp only [hc] at hs; exact ⟨_, rfl, rfl, hs⟩

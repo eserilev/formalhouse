@@ -99,7 +99,7 @@ theorem safe_div_abs (a b : U64) :
 `SpecM` value that the spec side binds first. -/
 macro "abs_err" h:ident : tactic =>
   `(tactic| (rw [← $h:ident]; simp only [WP.spec_ok, bind_tc_ok,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       core.convert.FromSame.from]; rfl))
 
 /-- The `Ok` branch of a `?`: the spec side binds the same value. -/
@@ -161,7 +161,7 @@ theorem epoch_vector_index_rem (epoch length : U64) :
       match cf with
       | core.ops.control_flow.ControlFlow.Continue v => ok (core.result.Result.Ok (some v))
       | core.ops.control_flow.ControlFlow.Break residual =>
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
           (Option U64) (core.convert.FromSame safe_arith.ArithError) residual) ⦃ r =>
         absResult (Option.map (·.val)) r = (do
           pure (some (← Spec.uint64Mod epoch.val length.val)) : Spec.SpecM (Option Nat)) ⦄ := by

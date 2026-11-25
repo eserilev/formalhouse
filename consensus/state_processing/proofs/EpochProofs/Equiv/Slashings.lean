@@ -52,7 +52,7 @@ theorem slashings_context_equiv (p : Spec.Preset) (slashings : List Spec.Gwei)
   cases hc1 : sum_slashings.checked_mul multiplier <;> simp only [hc1] at h1
   · have hov : ¬ sum_slashings.val * multiplier.val < 18446744073709551616 := by omega
     simp [hov, core.result.Result.Insts.CoreOpsTry.branch,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       absResult, absArithError, Bind.bind, Except.bind, throw, throwThe,
       MonadExceptOf.throw]
   rename_i scaled
@@ -71,7 +71,7 @@ theorem slashings_context_equiv (p : Spec.Preset) (slashings : List Spec.Gwei)
   have hd := U64.checked_div_bv_spec total_active_balance increment
   cases hcd : total_active_balance.checked_div increment <;> simp only [hcd] at hd
   · simp [hd, hca, hfit1, core.result.Result.Insts.CoreOpsTry.branch,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, throw, throwThe,
       MonadExceptOf.throw]
   rename_i increments
@@ -86,7 +86,7 @@ theorem slashings_context_equiv (p : Spec.Preset) (slashings : List Spec.Gwei)
       · exact absurd h hd.1
       · exact h
     simp [hlt, hd.1, hca, hcd2, hfit1, core.result.Result.Insts.CoreOpsTry.branch,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, throw, throwThe,
       MonadExceptOf.throw]
   · have hnlt : ¬ total_active_balance.val < increment.val := by
@@ -96,7 +96,7 @@ theorem slashings_context_equiv (p : Spec.Preset) (slashings : List Spec.Gwei)
       exact Nat.div_eq_of_lt h
     simp [hnlt, hd.1, hd.2.1, hd2.2.1, hm, hca, hcd2, hscaled, hfit1, ha.2.1,
       hhalf, core.result.Result.Insts.CoreOpsTry.branch,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, 
       ]
 
@@ -134,7 +134,7 @@ theorem new_balance_after_slashing_equiv (p : Spec.Preset) (validator : Spec.Val
   have hd := U64.checked_div_bv_spec effective_balance increment
   cases hcd : effective_balance.checked_div increment <;> simp only [hcd] at hd
   · simp [hs, ht', hd, core.result.Result.Insts.CoreOpsTry.branch,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       absResult, absArithError, Bind.bind, Except.bind, throw, throwThe,
       MonadExceptOf.throw]
   rename_i n
@@ -143,12 +143,12 @@ theorem new_balance_after_slashing_equiv (p : Spec.Preset) (validator : Spec.Val
   cases hcm : penalty_per_increment.checked_mul n <;> simp only [hcm] at hm
   · have hov : ¬ penalty_per_increment.val * n.val < 18446744073709551616 := by omega
     simp [hs, ht', hd.1, ← hd.2.1, hov, hcm, core.result.Result.Insts.CoreOpsTry.branch,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, throw, throwThe,
       MonadExceptOf.throw]
   · have hfit : penalty_per_increment.val * n.val < 18446744073709551616 := by omega
     simp [hs, ht', hd.1, ← hd.2.1, hfit, hcm, hm.2.1, u64_saturating_sub_val, core.result.Result.Insts.CoreOpsTry.branch,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       absResult, absArithError, Bind.bind, Except.bind, Pure.pure, Except.pure, 
       ]
 

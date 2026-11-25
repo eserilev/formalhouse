@@ -480,13 +480,13 @@ theorem apply_deposit_writes_spec [EpochProofs.Spec.PresetCfg] {S D E : Type} (i
         exact hpost2
       | Err e =>
         simp only [uncurry_apply_pair, bind_tc_ok,
-          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+          core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
           core.convert.FromSame.from, spec_ok]
         exact hpost2
   | Err e =>
     obtain ⟨e', he'⟩ := hpost
     simp only [core.result.Result.Insts.CoreOpsTry.branch, bind_tc_ok,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       core.convert.FromSame.from]
     refine ⟨e', ?_⟩
     unfold Spec.depositWritesSpec

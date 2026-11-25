@@ -115,7 +115,7 @@ theorem is_eligible_equiv (lr : ValidatorRow) (r : Spec.Row) (hm : RowMatches lr
     obtain ⟨he, hov⟩ := hA.2 e rfl
     subst he
     simp [hov, Spec.uint64Add, Spec.UINT64_SIZE, core.result.Result.Insts.CoreOpsTry.branch,
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual,
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual,
       core.convert.FromSame.from, absResult, absArithError]
     rfl
   | Ok v =>

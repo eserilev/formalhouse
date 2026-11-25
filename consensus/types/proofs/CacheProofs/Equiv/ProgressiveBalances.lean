@@ -1,3 +1,4 @@
+import CacheProofs.AeneasCompat
 import CacheProofs.Generated
 import CacheProofs.Spec.ProgressiveBalances
 
@@ -245,19 +246,19 @@ def unroll3 (step : Slice Bal → Usize → Result (core.result.Result Unit KErr
         ok (core.result.Result.Ok (), totals3)
       | core.ops.control_flow.ControlFlow.Break residual =>
         let r3 ←
-          core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+          core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
             Unit (core.convert.FromSame KErr) residual
         let totals3 := to_slice_mut_back2 s5
         ok (r3, totals3)
     | core.ops.control_flow.ControlFlow.Break residual =>
       let r2 ←
-        core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+        core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
           Unit (core.convert.FromSame KErr) residual
       let totals2 := to_slice_mut_back1 s3
       ok (r2, totals2)
   | core.ops.control_flow.ControlFlow.Break residual =>
     let r1 ←
-      core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+      core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
         Unit (core.convert.FromSame KErr) residual
     let totals1 := to_slice_mut_back s1
     ok (r1, totals1)
