@@ -432,8 +432,8 @@ theorem update_effective_balance_out_of_bounds (ebs : alloc.vec.Vec U64) (total 
 /-- A call `update_effective_balance(i, eb, active)` as `single_pass.rs` makes it. -/
 abbrev Call := Usize × U64 × Bool
 
-/-- The `single_pass.rs` glue: it calls `update_effective_balance` for each call in order and
-stops at the first error (`?`). `none` is an error. -/
+/-- The untranslated code of `single_pass.rs`: it calls `update_effective_balance` for each call in
+order and stops at the first error (`?`). `none` is an error. -/
 def lhRun (s : alloc.vec.Vec U64 × U64) : List Call → Result (Option (alloc.vec.Vec U64 × U64))
   | [] => ok (some s)
   | (i, eb, active) :: cs => do
@@ -456,8 +456,8 @@ def ValidCalls (act : Nat → Bool) : List Nat → List Call → Prop
 def modelRun (l : List Nat) (cs : List Call) : List Nat :=
   cs.foldl (fun l c => updateList l c.1.val c.2.1.val) l
 
-/-- Preservation over a whole call sequence: the glue does not fail, and the total stays the sum
-of the active effective balances. -/
+/-- Preservation over a whole call sequence: the untranslated code does not fail, and the total
+stays the sum of the active effective balances. -/
 theorem lhRun_spec (act : Nat → Bool) (cs : List Call) :
     ∀ (ebs : alloc.vec.Vec U64) (total : U64),
       total.val = activeSum act (ebs.val.map (·.val)) →
@@ -570,7 +570,7 @@ theorem floor_total_active_balance_spec (total inc : U64) :
     exact ⟨inc, rfl, by omega⟩
 
 /-- Read agreement for the total: if the cache holds the effective balances of `vs` and the
-coherent total for `epoch`, the floored total equals the spec `get_total_active_balance`. -/
+correct total for `epoch`, the floored total equals the spec `get_total_active_balance`. -/
 theorem total_active_balance_equiv (cfg : Config) (vs : List Validator) (epoch : Nat)
     (ebs : List Nat) (total inc : U64)
     (hinc : inc.val = cfg.EFFECTIVE_BALANCE_INCREMENT)
@@ -602,7 +602,7 @@ theorem single_pass_total_active_balance (cfg : Config) (vs : List Validator) (e
 
 /-! ### `BeaconState::compute_total_active_balance_slow` -/
 
-/-- The loop of `compute_total_active_balance_slow` (glue, by hand): `safe_add_assign` over the
+/-- The loop of `compute_total_active_balance_slow` (written by hand): `safe_add_assign` over the
 active validators. `none` is an overflow. -/
 def lhSlowSum (epoch : Nat) : Nat → List Validator → Option Nat
   | acc, [] => some acc

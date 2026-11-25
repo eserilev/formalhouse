@@ -3,7 +3,7 @@ import EpochProofs.Trusted.Consolidations
 import EpochProofs.Equiv.ListWrites
 
 /-!
-# Lighthouse pending consolidations glue equals the reference
+# Lighthouse pending consolidations code equals the reference
 
 `process_on_table_spec` relates `process_on_table` in `pending_consolidations.rs` to the spec
 `process_pending_consolidations`. It assumes `ConsolidationStateContract` and that the table

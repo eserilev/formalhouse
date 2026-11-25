@@ -8,7 +8,7 @@ import EpochProofs.Sanity.Invariants.LighthouseOrder
 `justification` is `process_justification_and_finalization` of `altair.rs` with
 `weigh_justification_and_finalization.rs`: the reads of the epochs, the bits and the balances,
 the translated `weigh_justification`, and the checkpoint and bit writes. The reads and the writes
-are untranslated glue (`JustificationGlue`), each with the fact that links it to the spec
+are untranslated code (`JustificationGlue`), each with the fact that links it to the spec
 (`JustificationLinks`). `justification_spec` shows that it returns the state of the model
 `lhJustificationAndFinalization`.
 -/
@@ -83,7 +83,7 @@ structure JustificationGlue (σ : Type) where
 variable {σ : Type}
 
 /-- `process_justification_and_finalization`, as the call of the translated
-`weigh_justification` joined by the glue `G`. `none`: the Rust returns an error. -/
+`weigh_justification` joined by the untranslated code `G`. `none`: the Rust returns an error. -/
 def justification (G : JustificationGlue σ) (st : σ) : Result (Option σ) :=
   if G.early st then ok (some st) else do
   let r ← weigh_justification (G.currentEpoch st) (G.previousJustifiedEpoch st)
@@ -95,8 +95,8 @@ def justification (G : JustificationGlue σ) (st : σ) : Result (Option σ) :=
 
 variable [Spec.PresetCfg]
 
-/-- The trusted facts about the glue `G` at the state `st`: each read is the spec value, and the
-writes are the spec writes (`lhJustificationWrite`). The balances are cache reads. -/
+/-- The trusted facts about the untranslated code `G` at the state `st`: each read is the spec
+value, and the writes are the spec writes (`lhJustificationWrite`). The balances are cache reads. -/
 structure JustificationLinks (G : JustificationGlue σ) (view : σ → Spec.BeaconState) (st : σ) :
     Prop where
   early : ∀ cur, Spec.get_current_epoch Spec.P (view st) = .ok cur →

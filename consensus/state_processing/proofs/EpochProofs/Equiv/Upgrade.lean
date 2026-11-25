@@ -14,9 +14,9 @@ The values that the Fulu and Gloas upgrades compute go through translated functi
   current and the next epoch (`initialize_ptc_window_lh`).
 
 The loops over the epochs in `upgrade/fulu.rs` and `upgrade/gloas.rs`, and the field copies, are
-glue: each loop concatenates the results in epoch order, after one empty epoch for the PTC
-window. The onboarding of builders stays glue too. A review of it against the spec found no
-difference: it keeps the spec's checks in the same order, and it appends each new builder,
+untranslated code: each loop concatenates the results in epoch order, after one empty epoch for the
+PTC window. The onboarding of builders stays untranslated too. A review of it against the spec
+found no difference: it keeps the spec's checks in the same order, and it appends each new builder,
 which `add_builder_to_registry` does too, because a new builder has `withdrawable_epoch =
 FAR_FUTURE_EPOCH` and so no index is free for reuse. Lighthouse runs the onboarding before
 `initialize_ptc_window`, and the spec runs it after. The order does not matter: the onboarding

@@ -8,11 +8,13 @@ import EpochProofs.Sanity.Invariants.LighthouseFuluOrder
 import EpochProofs.Sanity.RewardsAndPenalties
 
 /-!
-# The headline theorems that do not use Etheorem
+# The theorems about the pyspec transcription
 
-The part of `Headline.lean` that needs only the pyspec transcription: the step lemmas from the
-run bundles, the cache read definitions, `ptc_committees_from_cache`, and the
-`*_agrees_pyspec` theorems. `Headline.lean` has the notation.
+- `lighthouse_model_gloas_epoch_agrees_pyspec` and `lighthouse_model_fulu_epoch_agrees_pyspec`: the
+  Lean model of Lighthouse's epoch and the transcription give the same state, or both fail.
+- `ptc_committees_from_cache`: the committees that the PTC window step reads from a committee cache
+  are the spec committees.
+- `GloasCacheReadsCorrect`: what it means that the other cache reads give the spec values.
 -/
 
 namespace EpochProofs.Formalhouse
@@ -27,7 +29,7 @@ variable {oracle : Spec.Oracle} {fuluOracle : Spec.FuluOracle}
   {blockConfig : Spec.FuluBlockConfig}
   {upgradeConfig : Spec.UpgradeConfig} {fuluStart : Spec.FuluState} {s : Spec.BeaconState}
 
-/-! ## From the bundles to the step lemmas -/
+/-! ## Facts about an epoch input of a run -/
 
 /-- The reachable-state invariants at a Gloas epoch input
 (`fulu_then_gloas_reachable_invariants`). -/

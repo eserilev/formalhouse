@@ -7,7 +7,7 @@ import EpochProofs.Sanity.Invariants.PubkeysUnique
 The pending deposits model reads a deposit's validator as the spec does:
 `s.validators[(s.validators.map (·.pubkey)).idxOf d.pubkey]?`, and `d.pubkey ∈ pubkeys`
 before a top-up. Lighthouse reads `state.pubkey_cache().get(&deposit.pubkey)`.
-`pubkey_cache_deposit_lookup` shows that the two agree on a coherent cache when the pubkeys
+`pubkey_cache_deposit_lookup` shows that the two agree on a correct cache when the pubkeys
 are unique (`PubkeysUnique`, a reachable-state invariant).
 
 Trusted: `rpds::HashTrieMap` obeys `IndexMapLaws`, and the cache at the start of the epoch

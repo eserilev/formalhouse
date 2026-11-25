@@ -15,7 +15,7 @@ Main theorems:
 - `get_attestation_duties_equiv`: `get_attestation_duties` agrees with `get_committee_assignment`.
 
 `IsShuffling` states that the cached shuffling is the spec shuffling. The `lh*` definitions
-model the glue in `committee_cache.rs`. They are written by hand.
+model the untranslated code in `committee_cache.rs`. They are written by hand.
 -/
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result types

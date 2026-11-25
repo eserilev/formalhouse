@@ -1,9 +1,7 @@
 import EpochProofs.HeadlineSpec
 
 /-!
-# The headline theorems that do not use Etheorem, on mainnet and minimal
-
-The part of `HeadlinePresets.lean` that needs only the pyspec transcription.
+# The theorems about the pyspec transcription, on mainnet and minimal
 -/
 
 namespace EpochProofs.Formalhouse

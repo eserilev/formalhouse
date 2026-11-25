@@ -13,31 +13,15 @@ import EpochProofs.Compose.Epoch
 import EpochProofs.Compose.Fulu
 
 /-!
-# The assumptions of the headline theorems
+# The assumptions of the main theorems
 
-Every hypothesis of the theorems in `Headline.lean` is one of the bundles below, with each field
-written out. The bundles follow the groups of the README's "What is trusted".
-
-- The preset, `Etheorem.PresetMatchesEtheorem` (`Fulu.PresetMatchesEtheorem`): the preset
-  `Spec.P` has the values of Etheorem's preset that the epoch reads.
-- The run, `GloasEpochRun` (`FuluEpochRun`): the state is an epoch input of a run from a start
-  state with the genesis invariants, with the supply bounds of the run.
-- The chain, `GloasChainAssumptions` (`FuluChainAssumptions`): the pyspec preconditions, the
-  hash-output facts of the spec selections, the physical limits, and reachable-state facts not
-  yet carried to the epoch (README, "Assumptions about the chain").
-- Etheorem, `Etheorem.GloasEtheoremDivergenceAssumptions` (Fulu:
-  `Fulu.FuluEtheoremBridgeConditions`): what the bridge to Etheorem needs beyond the pyspec.
-- The oracle, `Etheorem.GloasOracleMatchesEtheorem` (`Fulu.FuluOracleMatchesEtheorem`): the spec
-  `Oracle` is Etheorem's SHA-256, `hash_tree_root` and BLS, and SHA-256 returns 32 bytes.
-- The caches, `GloasCacheProvenance`, and its variants `GloasCacheProvenanceUpkeep` and
-  `GloasCacheProvenanceAtInput`: where each cache that the Gloas epoch reads came from.
-- The Rust glue, `GloasRustGlueFacts` (`FuluRustGlueFacts`): the Rust state views as the epoch
-  input, and the glue facts of the composed Rust hold.
-
-The preset, Etheorem and oracle bundles are in `Assumptions/Etheorem.lean`. The step proofs of
-`Etheorem/` read them, and they must not import the Aeneas code that the bundles here need. The
-bundles here are about the transcription's state (`Spec.BeaconState`) and live in
-`EpochProofs.Formalhouse`.
+- The run, `GloasEpochRun` and `FuluEpochRun`: the state is an input of `process_epoch` on a chain
+  from a start state with the facts of a genesis state. The total stake stays below its bounds.
+- The chain, `GloasChainAssumptions` and `FuluChainAssumptions`: what the epoch needs to succeed.
+- The caches, `GloasCacheProvenance` and its variants: where each cache that the Gloas epoch reads
+  came from. The Fulu model reads the spec values, so the Fulu theorems take no cache facts.
+- The untranslated Rust, `GloasRustGlueFacts` and `FuluRustGlueFacts`: what the code that Aeneas
+  does not translate does.
 -/
 
 namespace EpochProofs.Formalhouse
@@ -118,11 +102,11 @@ structure GloasChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop 
   candidate. -/
   syncCandidate : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →
     Spec.get_active_validator_indices t (t.slot / Spec.P.SLOTS_PER_EPOCH + 1) ≠ []
-  /-- Pyspec precondition (F4): an unslashed validator is active two epochs ahead, a proposer
+  /-- Pyspec precondition: an unslashed validator is active two epochs ahead, a proposer
   candidate. -/
   proposerCandidate : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →
     Spec.unslashedActive t (t.slot / Spec.P.SLOTS_PER_EPOCH + 2) ≠ []
-  /-- Pyspec precondition (F12): at least `SLOTS_PER_EPOCH` validators are active two epochs
+  /-- Pyspec precondition: at least `SLOTS_PER_EPOCH` validators are active two epochs
   ahead. With fewer, the first slot of that epoch has an empty PTC and `compute_ptc`
   asserts. -/
   enoughActiveForPtc : ∀ t, Spec.epochToCommittees Spec.P o s = .ok t →
@@ -142,7 +126,7 @@ structure GloasChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop 
     slot / Spec.P.SLOTS_PER_EPOCH = t.slot / Spec.P.SLOTS_PER_EPOCH + 2 → ∀ l,
     Spec.ptcIndices Spec.P o t (slot / Spec.P.SLOTS_PER_EPOCH) slot = .ok l →
       ∀ seed, Spec.SelFin Spec.P o t l seed Spec.P.PTC_SIZE false
-  /-- Physical limits (`PhysicalLimits`): inactivity scores below `2^22` (F5), the effective
+  /-- Physical limits (`PhysicalLimits`): inactivity scores below `2^22`, the effective
   balance sum, funds, exit queue and validator count bounds, and the participation bound. -/
   physicalLimits : Spec.PhysicalLimits s
   /-- Physical limit: the slot is `8192` below `2^64`. The pyspec `get_block_root` raises
@@ -158,15 +142,15 @@ structure GloasChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop 
 variable [Spec.FuluCfg]
 
 /-- The assumptions about the chain at a Fulu epoch input, beyond the run. `t` ranges over the
-one state that the spec epoch passes to its committee steps (`epochToCommitteesFulu`). Fulu has
-no F4 and no F12. -/
+one state that the spec epoch passes to its committee steps (`epochToCommitteesFulu`). In Fulu, a
+slashed proposer candidate counts, and there is no PTC. -/
 structure FuluChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop where
   /-- Pyspec precondition: a validator is active at the next epoch, a sync committee
   candidate. -/
   syncCandidate : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t →
     Spec.get_active_validator_indices t (t.slot / Spec.P.SLOTS_PER_EPOCH + 1) ≠ []
-  /-- Pyspec precondition: a validator is active two epochs ahead, a proposer candidate. Unlike
-  Gloas F4, a slashed validator counts. -/
+  /-- Pyspec precondition: a validator is active two epochs ahead, a proposer candidate. A
+  slashed validator counts. -/
   proposerCandidate : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t →
     Spec.get_active_validator_indices t (t.slot / Spec.P.SLOTS_PER_EPOCH + 2) ≠ []
   /-- Hash output: the sync committee selection ends within `2^64` passes. -/
@@ -178,7 +162,7 @@ structure FuluChainAssumptions (o : Spec.Oracle) (s : Spec.BeaconState) : Prop w
   proposerSelectionEnds : ∀ t, Spec.epochToCommitteesFulu Spec.P Spec.FC o s = .ok t → ∀ seed,
     Spec.SelFin Spec.P o t
       (Spec.get_active_validator_indices t (t.slot / Spec.P.SLOTS_PER_EPOCH + 2)) seed 1 true
-  /-- Physical limits (F5 and the supply, funds, exit and validator count bounds). -/
+  /-- Physical limits: the inactivity scores, supply, funds, exits and validator count. -/
   physicalLimits : Spec.PhysicalLimits s
   /-- Physical limit: the slot is `8192` below `2^64`. -/
   slotFarFromOverflow : s.slot + 8192 < 2 ^ 64
@@ -208,7 +192,7 @@ structure GloasCacheProvenance {M : Type} (progressiveCache : CacheProofs.PB.LhC
     (pubkeyMapOps : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
     (s : Spec.BeaconState) : Prop where
   /-- The progressive balances cache (`LhCache`, the `Inner` of Lighthouse's
-  `ProgressiveBalancesCache`) is coherent with the epoch input at its current epoch. -/
+  `ProgressiveBalancesCache`) is correct for the epoch input at its current epoch. -/
   progressive : CacheProofs.PB.Coherent Spec.P.EFFECTIVE_BALANCE_INCREMENT
     (pbState s (s.slot / Spec.P.SLOTS_PER_EPOCH)) progressiveCache
   /-- The epoch cache total was built at a state `b` of the same epoch that agrees with the
@@ -231,14 +215,14 @@ structure GloasCacheProvenance {M : Type} (progressiveCache : CacheProofs.PB.LhC
         ok (some (pubkeyMap, len))
 
 /-- `GloasCacheProvenance` with the progressive balances cache kept up to date since a state of
-the epoch, instead of coherent at the input. -/
+the epoch, instead of correct at the input. -/
 structure GloasCacheProvenanceUpkeep {M : Type} (progressiveCache : CacheProofs.PB.LhCache)
     (totalActiveBalance : U64)
     (pubkeyMapOps : types.state.pubkey_index.IndexMap M Spec.BLSPubkey) (pubkeyMap : M)
     (s : Spec.BeaconState) : Prop where
-  /-- The progressive balances cache was coherent at a state `start` of the epoch (after a fresh
-  build, or after the epoch transition), and every write since ran its cache hook (`CacheUpkeep`,
-  U1 to U4 in `Trusted/CacheUpkeep.lean`). -/
+  /-- The progressive balances cache was correct at a state `start` of the epoch (after a fresh
+  build, or after the epoch transition), and every write since ran its cache update
+  (`CacheUpkeep`). -/
   progressive : ∃ (start : CacheProofs.Spec.BeaconState) (cache0 : CacheProofs.PB.LhCache),
     CacheProofs.PB.Coherent Spec.P.EFFECTIVE_BALANCE_INCREMENT start cache0 ∧
     CacheUpkeep Spec.P.EFFECTIVE_BALANCE_INCREMENT start
@@ -272,42 +256,39 @@ structure GloasCacheProvenanceAtInput {M : Type} (progressiveCache : CacheProofs
     (CacheProofs.EpochCache.activeAt (s.validators.map ecValidator)
       (s.slot / Spec.P.SLOTS_PER_EPOCH))
     (s.validators.map (·.effective_balance))
-  /-- The pubkey cache is coherent with the pubkeys of the input. -/
+  /-- The pubkey cache is correct for the pubkeys of the input. -/
   pubkeyCache : ∃ view : M → Spec.BLSPubkey → Option Usize,
     CacheProofs.IndexMapLaws pubkeyMapOps view ∧
     ∃ len : Usize, CacheProofs.Coherent view pubkeyMap len (s.validators.map (·.pubkey))
 
 end Caches
 
-/-! ## The Rust glue -/
+/-! ## The untranslated Rust -/
 
 section Glue
 
 variable [Spec.PresetCfg]
 
-/-- The Rust state `st` views as the epoch input `s`, and the glue facts of the composed Rust
-hold (`Compose.EpochLinks`: the contracts of `Trusted/`, the fields each wrapper borrows, the
-values passed to the translated code). One field of the glue is a state fact, not a fact about
-the Rust: `SinglePassLinks.depositRoom`, that the new validators of the epoch fit under the
-`2^40` limit of Lighthouse's validator list. It is the Lighthouse counterpart of
-`GloasEtheoremDivergenceAssumptions.depositRoom`, stated at the state after justification. -/
+/-- The Rust state `st` holds the epoch input `s`, and the untranslated Rust does what the proofs
+assume (`Compose.EpochLinks`). One field is a fact about the state: `SinglePassLinks.depositRoom`,
+the new validators of the epoch fit under the `2^40` limit of Lighthouse's validator list. -/
 structure GloasRustGlueFacts {σ E : Type} (G : Compose.EpochGlue σ E) (o : Spec.Oracle)
     (view : σ → Spec.BeaconState) (st : σ) (s : Spec.BeaconState) : Prop where
-  /-- The Rust state views as the epoch input. -/
+  /-- The Rust state holds the epoch input. -/
   viewEq : view st = s
-  /-- The glue facts. -/
+  /-- What the proofs assume about the untranslated Rust. -/
   glue : Compose.EpochLinks G o view st
 
 variable [Spec.FuluCfg]
 
-/-- The Rust state `st` views as the epoch input `s`, and the glue facts of the composed Rust
-Fulu epoch hold (`Compose.EpochLinksFulu`). As for Gloas, the glue contains one state fact,
-`SinglePassLinks.depositRoom`. -/
+/-- The Rust state `st` holds the epoch input `s`, and the untranslated Rust of the Fulu epoch does
+what the proofs assume (`Compose.EpochLinksFulu`). As for Gloas, `SinglePassLinks.depositRoom` is a
+fact about the state. -/
 structure FuluRustGlueFacts {σ E : Type} (G : Compose.EpochGlueFulu σ E) (o : Spec.Oracle)
     (view : σ → Spec.BeaconState) (st : σ) (s : Spec.BeaconState) : Prop where
-  /-- The Rust state views as the epoch input. -/
+  /-- The Rust state holds the epoch input. -/
   viewEq : view st = s
-  /-- The glue facts. -/
+  /-- What the proofs assume about the untranslated Rust. -/
   glue : Compose.EpochLinksFulu G o view st
 
 end Glue

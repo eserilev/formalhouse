@@ -24,7 +24,7 @@ The differences:
 
 The pyspec preconditions of the Fulu committee steps are weaker than the Gloas ones
 (`FuluCommitteeStepPreconds`): some validator is active at `current + 2`, slashed or not, and the PTC
-needs nothing, because Fulu has no PTC. So Fulu has no counterpart of F12: a Fulu chain with
+needs nothing, because Fulu has no PTC. So Fulu has no minimum number of active validators: a Fulu chain with
 fewer than `SLOTS_PER_EPOCH` active validators does not halt at the epoch boundary.
 -/
 
@@ -180,7 +180,7 @@ structure FuluCommitteeStepFacts [PresetCfg] (o : Oracle) (s : BeaconState) : Pr
 - `syncActive`: some validator is active at the next epoch (`i % active_validator_count` divides
   by zero otherwise).
 - `proposers`: some validator is active at `current + 2` (`compute_proposer_index` asserts
-  `len(indices) > 0`). Unlike Gloas F4, a slashed active validator counts.
+  `len(indices) > 0`). A slashed active validator counts.
 - `selSync`, `selProp`: each selection accepts its candidates within `2^64` passes.
   This depends on the hash values. A candidate with effective balance `0` still passes when its
   random value is `0`, so the loop ends with probability 1. -/

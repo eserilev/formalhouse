@@ -2,7 +2,7 @@ import EpochProofs.Equiv.PendingConsolidations
 import EpochProofs.Sanity.ConsolidationTable
 
 /-!
-# The contracts of the pending consolidations glue
+# The contracts of the pending consolidations code
 
 `process_on_table` in `pending_consolidations.rs` is generic over the `ConsolidationState`
 trait. Aeneas translates it, but not `StateConsolidations` in `single_pass.rs`, which reads and
@@ -22,7 +22,7 @@ terms:
 `BTreeSet` of the source and target indices, iterated. A Rust `BTreeSet` iterates its members in
 increasing order, each once. The `as usize` cast keeps the value, because `usize` has 64 bits.
 
-These two statements are the only facts the proofs trust about this glue.
+These two statements are the only facts the proofs trust about this code.
 -/
 
 namespace EpochProofs

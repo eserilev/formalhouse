@@ -7,9 +7,9 @@ import EpochProofs.Spec.EpochRest
 
 `resets.rs` and `historical_summaries_update.rs` run the eth1, slashings and randao resets and
 the historical summaries update with the checks in `tail_updates.rs`. Each `lh*` function here is
-that glue on mainnet: the checks are the models of `Equiv/TailUpdates.lean`, and the writes are
-the list writes of the glue. The participation rotation is plain glue with the same writes as
-the spec, so it has no model of its own.
+that untranslated code on mainnet: the checks are the models of `Equiv/TailUpdates.lean`, and the
+writes are the list writes of that code. The participation rotation is plain Rust code with the same
+writes as the spec, so it has no model of its own.
 
 The eth1 reset of Lighthouse reads the slot, not the epoch:
 `(slot + 1) % SLOTS_PER_ETH1_VOTING_PERIOD == 0`. It equals the spec test

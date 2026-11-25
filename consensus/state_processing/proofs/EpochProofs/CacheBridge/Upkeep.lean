@@ -1,11 +1,11 @@
 import EpochProofs.Trusted.CacheUpkeep
 
 /-!
-# The progressive balances cache stays coherent inside an epoch
+# The progressive balances cache stays correct inside an epoch
 
 `PBStep.coherent` proves each hook of `Trusted/CacheUpkeep.lean` correct from the Aeneas-checked
-update functions (#64). `PBTrace.coherent` chains them. `lighthouse_model_gloas_epoch_eq_etheorem_upkeep` (`Headline.lean`) uses them to ask for a coherent cache at
-a state `start` of the epoch, not at the epoch input.
+update functions (#64). `PBTrace.coherent` chains them. A theorem that uses them asks for a correct
+cache at a state `start` of the epoch, not at the epoch input.
 -/
 
 namespace EpochProofs.CacheBridge
@@ -38,7 +38,7 @@ theorem PBTrace.coherent {incr : Nat} {x y : CacheProofs.Spec.BeaconState × LhC
   | refl => exact hc
   | step hs _ ih => exact ih (hs.coherent hc)
 
-/-- The upkeep fact moves a coherent cache from `start` to `finish`. -/
+/-- The upkeep fact moves a correct cache from `start` to `finish`. -/
 theorem coherent_of_upkeep {incr : Nat} {start finish : CacheProofs.Spec.BeaconState}
     {c0 c : LhCache} (hc0 : Coherent incr start c0) (hup : CacheUpkeep incr start finish c0 c) :
     Coherent incr finish c :=

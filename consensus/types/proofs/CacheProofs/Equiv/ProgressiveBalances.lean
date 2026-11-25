@@ -3,21 +3,21 @@ import CacheProofs.Generated
 import CacheProofs.Spec.ProgressiveBalances
 
 /-!
-# `ProgressiveBalancesCache` is coherent with the spec
+# `ProgressiveBalancesCache` matches the spec
 
 For each epoch and flag, the cache holds the raw sum of `effective_balance` over the unslashed
 validators that are active in that epoch and have the flag (`flagSum`). `Balance::get` applies
 the `EFFECTIVE_BALANCE_INCREMENT` floor. `Coherent` states this for both epochs.
 
-- Pure function lemmas (`*_ok`): each function in `../src/state/{balance,participation_totals}.rs` returns `Ok`
-  and changes the raw totals as stated.
+- Pure function lemmas (`*_ok`): each function in `../src/state/{balance,participation_totals}.rs`
+  returns `Ok` and changes the raw totals as stated.
 - `spec_total_eq`: `get_total_balance(get_unslashed_participating_indices(...))` is
   `max EFFECTIVE_BALANCE_INCREMENT flagSum`.
 - Build: `build_coherent`. Events: `attestation_coherent`, `slashing_coherent`,
   `effective_balance_change_coherent`, `epoch_transition_coherent`, `registry_change_coherent`,
   `add_validator_coherent`. Reads: `read_current_eq_spec`, `read_previous_eq_spec`.
 
-Each `lh*` definition models Rust glue that Aeneas does not translate. It is written by hand.
+Each `lh*` definition models Rust code that Aeneas does not translate. It is written by hand.
 -/
 
 namespace CacheProofs.PB
@@ -672,7 +672,7 @@ theorem wOf_eb (v : Spec.Validator) (p e f b : Nat) :
   simp [wOf, contrib, Spec.is_active_validator]
 
 
-/-! ## The cache and coherence -/
+/-! ## The cache and its correctness -/
 
 noncomputable section
 
@@ -683,7 +683,8 @@ structure LhCache where
   previous_epoch_cache : Array Bal 3#usize
   current_epoch_cache : Array Bal 3#usize
 
-/-- The errors that the glue returns. `totals` wraps the `From` impl into `BeaconStateError`. -/
+/-- The errors that the untranslated code returns. `totals` wraps the `From` impl into
+`BeaconStateError`. -/
 inductive LhError where
   | totals (e : KErr)
   | arith
@@ -731,7 +732,7 @@ theorem flagSum_add_flag (vs : List Spec.Validator) (ps : List Nat) (e f g j : N
   rw [wOf_add_flag v p e f g hnew hactive] at h
   omega
 
-/-- The attestation hook keeps the cache coherent. The flag was not set, and the validator is
+/-- The attestation hook keeps the cache correct. The flag was not set, and the validator is
 active in the target epoch. -/
 theorem attestation_coherent (incr : Nat) (s s' : Spec.BeaconState) (c : LhCache)
     (e j : Nat) (f : Usize) (is_slashed : Bool) (eb : U64) (v : Spec.Validator) (p : Nat)
@@ -858,7 +859,7 @@ theorem flagSum_slash (vs : List Spec.Validator) (ps : List Nat) (e g j : Nat)
   · omega
   · intro hf; simp only [hf, if_true] at hle; exact hle
 
-/-- The slashing hook keeps the cache coherent. It never fails. The validator was not slashed,
+/-- The slashing hook keeps the cache correct. It never fails. The validator was not slashed,
 and each flag that it holds in an epoch implies that it is active in that epoch. -/
 theorem slashing_coherent (incr : Nat) (s s' : Spec.BeaconState) (c : LhCache) (j : Nat)
     (pflags cflags : U8) (eb : U64) (v : Spec.Validator)
@@ -907,7 +908,7 @@ def lhOnEffectiveBalanceChange (c : LhCache) (is_slashed : Bool) (cflags : U8) (
   | .Err e => ok (.Err (.totals e))
   | .Ok _ => ok (.Ok { c with current_epoch_cache := t })
 
-/-- The effective balance hook keeps the current epoch cache coherent. It does not change the
+/-- The effective balance hook keeps the current epoch cache correct. It does not change the
 previous epoch cache, which the epoch transition then drops (see `epoch_transition_coherent`). -/
 theorem effective_balance_change_coherent (incr : Nat) (s s' : Spec.BeaconState) (c : LhCache)
     (j : Nat) (is_slashed : Bool) (cflags : U8) (o n : U64) (v : Spec.Validator)
@@ -999,7 +1000,7 @@ def lhOnEpochTransition (c : LhCache) (incr : U64) :
               previous_epoch_cache := c.current_epoch_cache
               current_epoch_cache := fresh })
 
-/-- The epoch transition gives a coherent cache for the next epoch. It needs only the current
+/-- The epoch transition gives a correct cache for the next epoch. It needs only the current
 epoch cache. So the previous epoch cache, which the effective balance hook does not update, does
 not matter here. -/
 theorem epoch_transition_coherent (incr : U64) (s : Spec.BeaconState) (c : LhCache)
@@ -1046,7 +1047,7 @@ theorem flagSum_sameView (vs vs' : List Spec.Validator) (ps : List Nat) (e f : N
         simp [wOf, contrib, h0.1, h0.2.1, h0.2.2]
 
 /-- A change to the validators that keeps each `effective_balance`, `slashed` flag, and activity
-in the previous and current epochs keeps the cache coherent. `initiate_validator_exit` and the
+in the previous and current epochs keeps the cache correct. `initiate_validator_exit` and the
 activation in `process_registry_updates` set epochs after the current epoch, so they are such
 changes. -/
 theorem registry_change_coherent (incr : Nat) (s : Spec.BeaconState) (c : LhCache)
@@ -1063,7 +1064,7 @@ theorem registry_change_coherent (incr : Nat) (s : Spec.BeaconState) (c : LhCach
     rw [hc2]; apply tri_congr; intro g _
     exact (flagSum_sameView _ _ _ _ _ hprev).symm
 
-/-- A new validator with empty participation in both epochs keeps the cache coherent. This is
+/-- A new validator with empty participation in both epochs keeps the cache correct. This is
 `add_validator_to_registry`. -/
 theorem add_validator_coherent (incr : Nat) (s : Spec.BeaconState) (c : LhCache)
     (v : Spec.Validator) (hc : Coherent incr s c)
@@ -1277,7 +1278,7 @@ theorem lhNewTotals_ok (incr : U64) :
     ∃ t, lhNewTotals incr = ok t ∧ ab t.val = tri (fun _ => 0) incr.val :=
   ⟨_, by simp [lhNewTotals, Balance.zero]; rfl, by simp [ab, tri]⟩
 
-/-- The build gives a coherent cache, and it does not fail when each total fits in a `u64`. -/
+/-- The build gives a correct cache, and it does not fail when each total fits in a `u64`. -/
 theorem build_coherent (incr : U64) (s : LhState)
     (hcl : s.current_epoch_participation.length = s.validators.length)
     (hpl : s.previous_epoch_participation.length = s.validators.length)

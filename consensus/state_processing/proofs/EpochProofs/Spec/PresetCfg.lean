@@ -3,8 +3,7 @@ import EpochProofs.Spec.Types
 /-!
 # The preset as a parameter
 
-The capstones were stated for `Preset.mainnet`. `PresetVar` holds every preset value where
-minimal differs from mainnet. `Preset.ofVar v` takes the mainnet value for every other field.
+`PresetVar` holds every preset value where minimal differs from mainnet. `Preset.ofVar v` takes the mainnet value for every other field.
 The proofs take the preset from the class `PresetCfg`, and the facts they need about the
 varying values from the class `PresetCfg.Ok`. Both presets are instances of `Preset.ofVar`
 by `rfl`.

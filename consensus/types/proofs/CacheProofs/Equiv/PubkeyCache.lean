@@ -147,7 +147,7 @@ theorem update_coherent {inst : state.pubkey_index.IndexMap M K} {view : M → K
   have := insertAll_coherent laws _ m len _ m' len' hc h
   rwa [List.take_append_drop] at this
 
-/-- With unique pubkeys, a get on a coherent cache is the spec lookup:
+/-- With unique pubkeys, a get on a correct cache is the spec lookup:
 `validator_pubkeys.index(pubkey)` for a validator, and `None` for any other pubkey. -/
 theorem get_coherent_of_nodup {inst : state.pubkey_index.IndexMap M K}
     {view : M → K → Option Usize} (laws : IndexMapLaws inst view) {m : M} {len : Usize}

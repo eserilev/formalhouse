@@ -2,7 +2,7 @@ import EpochProofs.Sanity.Invariants.ForkUpgrade
 import EpochProofs.Generated
 
 /-!
-# The contract of the builder onboarding glue
+# The contract of the builder onboarding code
 
 `onboard` in `upgrade/builder_onboarding.rs` is generic over the `Onboarding` trait. Aeneas
 translates it, but not `StateOnboarding` in `upgrade/gloas.rs`, which reads the state, the
@@ -24,7 +24,7 @@ and `pending` is the set of pubkeys with a valid kept deposit:
   does.
 - `clone` copies a deposit.
 
-This is the only statement the proofs trust about this glue.
+This is the only statement the proofs trust about this code.
 -/
 
 namespace EpochProofs

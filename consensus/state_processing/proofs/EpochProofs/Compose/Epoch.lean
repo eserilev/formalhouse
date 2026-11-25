@@ -8,8 +8,8 @@ import EpochProofs.Compose.Tail
 
 `epoch` is Lighthouse's Gloas `process_epoch` (`altair.rs` with `process_epoch_single_pass`) as
 one Lean function: the calls of the translated functions of `Generated.lean`, in Lighthouse's
-order, joined by the untranslated glue (`EpochGlue`). `epoch_spec` shows that, under the trusted
-facts about the glue (`EpochLinks`), `epoch` returns `Ok` with the state of the model
+order, joined by the untranslated code (`EpochGlue`). `epoch_spec` shows that, under the trusted
+facts about the untranslated code (`EpochLinks`), `epoch` returns `Ok` with the state of the model
 `process_epoch_lighthouse` whenever the model returns `ok`.
 
 The cache builds at the start of `process_epoch` and `process_epoch_single_pass`, and the cache
@@ -34,7 +34,7 @@ structure EpochGlue (σ E : Type) where
 variable {σ E : Type}
 
 /-- Lighthouse's Gloas `process_epoch`, as the calls of the translated functions joined by the
-glue `G`: justification and finalization, the single pass (the loop, the deposits, the
+untranslated code `G`: justification and finalization, the single pass (the loop, the deposits, the
 consolidations, the builder payments), the proposer lookahead, the PTC window, then the resets,
 the historical summaries, the participation rotation and the sync committee update. `none`: the
 Rust returns an error. -/
@@ -58,8 +58,8 @@ def epoch (G : EpochGlue σ E) (st : σ) : Result (Option σ) := do
 
 variable [Spec.PresetCfg]
 
-/-- The trusted facts about the glue `G` with input `st`. The facts about the reads of the single
-pass and N1 are stated at the states where the Rust makes these reads. -/
+/-- The trusted facts about the untranslated code `G` with input `st`. The facts about the reads of
+the single pass and the shuffle sizes are stated at the states where the Rust makes these reads. -/
 structure EpochLinks (G : EpochGlue σ E) (o : Spec.Oracle) (view : σ → Spec.BeaconState)
     (st : σ) : Prop where
   justification : JustificationLinks G.justification view st
@@ -71,7 +71,7 @@ structure EpochLinks (G : EpochGlue σ E) (o : Spec.Oracle) (view : σ → Spec.
   proposerIndices : GloasProposerIndices G.lookahead view
   ptc : PtcLinks G.lookahead G.ptc o view
   tail : TailLinks G.tail o view
-  /-- N1, at the three shuffles of the epoch. -/
+  /-- At most `2^24` validators enter each of the three shuffles of the epoch. -/
   lookaheadN1 : ∀ st1 st2, EpochProofs.Compose.justification G.justification st = ok (some st1) →
     EpochProofs.Compose.singlePass G.singlePass G.payments st1 = ok (some st2) → LookaheadN1 G.lookahead st2
   ptcN1 : ∀ st1 st2 st3, EpochProofs.Compose.justification G.justification st = ok (some st1) →

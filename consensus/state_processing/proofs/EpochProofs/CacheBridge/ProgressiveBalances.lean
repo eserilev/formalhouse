@@ -6,13 +6,13 @@ import EpochProofs.Spec.JustificationLighthouse
 /-!
 # Bridge: the progressive balances cache and the epoch spec
 
-`CacheProofs.PB` proves that a coherent `ProgressiveBalancesCache` returns, for each flag, the
+`CacheProofs.PB` proves that a correct `ProgressiveBalancesCache` returns, for each flag, the
 spec total `get_total_balance(state, get_unslashed_participating_indices(state, flag, epoch))`.
 That spec is the model of `consensus/types/proofs`. This file proves that the same total in the
 epoch spec (`EpochProofs.Spec`) is equal, on the state that `pbState` maps.
 
 So the value that Lighthouse reads from the cache is the value that the epoch model computes.
-The only fact left about the cache is that it is coherent with the state (`Coherent`), which
+The only fact left about the cache is that it is correct for the state (`Coherent`), which
 `CacheProofs.PB.build_coherent` and the update theorems give.
 -/
 
@@ -210,7 +210,7 @@ theorem previous_epoch_bridge (p : EpochProofs.Spec.Preset) (s : EpochProofs.Spe
 open Aeneas Aeneas.Std Result in
 open CacheProofs.PB (LhCache PreviousCoherent CurrentCoherent total_flag_balance_ok
   lhPreviousEpochFlagAttestingBalance lhCurrentEpochFlagAttestingBalance) in
-/-- The previous epoch total that Lighthouse reads from a coherent progressive balances cache
+/-- The previous epoch total that Lighthouse reads from a correct progressive balances cache
 equals the epoch spec total `get_total_balance(state, get_unslashed_participating_indices(state,
 f, get_previous_epoch(state)))`, after the genesis epoch. -/
 theorem lh_previous_flag_balance_eq (p : EpochProofs.Spec.Preset)
@@ -237,7 +237,7 @@ theorem lh_previous_flag_balance_eq (p : EpochProofs.Spec.Preset)
 open Aeneas Aeneas.Std Result in
 open CacheProofs.PB (LhCache PreviousCoherent CurrentCoherent total_flag_balance_ok
   lhPreviousEpochFlagAttestingBalance lhCurrentEpochFlagAttestingBalance) in
-/-- The current epoch total that Lighthouse reads from a coherent progressive balances cache
+/-- The current epoch total that Lighthouse reads from a correct progressive balances cache
 equals the epoch spec total for `get_current_epoch(state)`. -/
 theorem lh_current_flag_balance_eq (p : EpochProofs.Spec.Preset)
     (s : EpochProofs.Spec.BeaconState) (f : Usize) (hf : f.val < 3) (cur prev : Nat)

@@ -1,10 +1,10 @@
 import EpochProofs.HeadlineSpec
 
 /-!
-# The hypotheses of the headline theorems can hold together
+# The assumptions of the main theorems hold together for an example
 
-The part of `NonVacuity.lean` that does not use Etheorem: the reference witness states and the
-facts about them. `NonVacuity.lean` has the explanation.
+A theorem with assumptions that cannot hold together proves nothing. This file gives a Gloas state
+and a Fulu state on the minimal preset, and proves that the state assumptions hold there.
 -/
 
 namespace EpochProofs.Spec
@@ -209,7 +209,7 @@ theorem witnessState_reachableInvariants : ReachableInvariants witnessState := b
   · unfold WithdrawableValid; decide +kernel
 
 /-- The Gloas witness. At `witnessState`, for every oracle that accepts the eight keys: the
-spec-state facts of the Gloas chain bundle, the start-state facts and the reachable-state facts
+spec-state facts of the Gloas chain assumptions, the start-state facts and the reachable-state facts
 hold together, the epoch reaches its committee steps, and the spec `process_epoch` returns `ok`. -/
 theorem gloas_spec_witness (o : Oracle)
     (hk : ∀ v ∈ witnessState.validators, o.bls_KeyValidate v.pubkey = true) :
@@ -277,7 +277,7 @@ theorem witnessStateFulu_fuluVectors : witnessStateFulu.FuluVectorLengths P :=
 theorem witnessStateFulu_atEpochBoundary : AtEpochBoundary witnessStateFulu := witnessState_atEpochBoundary
 
 /-- The Fulu witness: at `witnessStateFulu`, for every oracle that accepts the eight keys, the
-spec-state facts of the Fulu chain bundle, the start-state facts and the reachable-state facts hold
+spec-state facts of the Fulu chain assumptions, the start-state facts and the reachable-state facts hold
 together, the epoch reaches its committee steps, and the Fulu spec `process_epoch` returns `ok`. -/
 theorem fulu_spec_witness (o : Oracle)
     (hk : ∀ v ∈ witnessStateFulu.validators, o.bls_KeyValidate v.pubkey = true) :

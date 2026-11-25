@@ -588,9 +588,9 @@ structure CommFacts [PresetCfg] (o : Oracle) (s : BeaconState) : Prop where
 
 - `syncActive`: some validator is active at the next epoch (the sync committee selection asserts
   `total > 0`).
-- `proposers` (F4): some active validator at `current + 2` is not slashed (the proposer
+- `proposers`: some active validator at `current + 2` is not slashed (the proposer
   selection asserts `total > 0`).
-- `ptc32` (F12): at least `SLOTS_PER_EPOCH` validators are active at `current + 2`. With fewer,
+- `ptc32`: at least `SLOTS_PER_EPOCH` validators are active at `current + 2`. With fewer,
   the first slot of that epoch has no committee members, and `compute_ptc` asserts `total > 0`.
 - `selSync`, `selProp`, `selPtc`: each selection accepts its candidates within `2^64`
   passes, so the `Uint64` counter does not overflow. This depends on the hash values. With

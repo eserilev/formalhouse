@@ -1,7 +1,7 @@
 import EpochProofs.Sanity.Invariants.TotalityCommittees
 import EpochProofs.Sanity.Invariants.TotalityRows
 
-/-! # Bounds for the glue error sites of `single_pass.rs`
+/-! # Bounds for the error sites outside the translated code of `single_pass.rs`
 
 Each theorem here proves the condition that rules out one group of `?` sites in
 `single_pass.rs`. The link from the Rust expression to the formula is listed in

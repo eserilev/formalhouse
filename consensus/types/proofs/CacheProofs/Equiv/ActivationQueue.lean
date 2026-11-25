@@ -2,7 +2,7 @@ import CacheProofs.Generated
 import CacheProofs.Spec.ActivationQueue
 
 /-!
-# `ActivationQueue` is coherent with the spec
+# `ActivationQueue` matches the spec
 
 Lighthouse keeps a speculative activation queue in the `EpochCache`. Two places build it:
 

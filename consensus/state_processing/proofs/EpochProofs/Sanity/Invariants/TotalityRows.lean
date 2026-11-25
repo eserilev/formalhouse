@@ -18,7 +18,7 @@ Error sources and why they do not fire:
   `2048 * 2023907` Gwei because the total active balance is at least `10^9`, and the
   participating increments are at most `2^57 / 10^9` (`PhysicalLimits.supply`). The inactivity
   penalty `effective_balance * inactivity_score` stays below `2^64` for the same reason as
-  the scores (F5).
+  the scores.
 - Registry: `compute_exit_epoch_and_update_churn`. An ejected validator has at most
   `EJECTION_BALANCE` and the exit churn is at least `MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA`, so
   each exit adds one epoch at most. `PhysicalLimits.churn` and `PhysicalLimits.count` keep the earliest
@@ -701,7 +701,7 @@ theorem regSlash_total [PresetCfg] [PresetCfg.Ok] [PresetCfg.Bounds] (s3 : Beaco
 deposits need. Each one is a time or supply bound; the pyspec raises without them too.
 
 - `scores`: inactivity scores grow by 4 per epoch of leak, so `2^22` is about one million epochs
-  of leak. With a score near `2^23`, `effective_balance * inactivity_score` overflows (F5).
+  of leak. With a score near `2^23`, `effective_balance * inactivity_score` overflows.
 - `supply`: the effective balances sum to less than `2^57` Gwei (about 144M ETH).
 - `funds`: the balances, the pending deposits and `deposit_balance_to_consume` sum to less than
   `2^61` Gwei. `deposit_balance_to_consume` is at most the amount of a pending deposit that did

@@ -8,7 +8,8 @@ import EpochProofs.Sanity.BuilderPendingPayments
 The main theorem is `builder_pending_payments_equiv`. For every well-formed input, the
 Lighthouse code returns `ok`, and its result maps to the reference result.
 
-`lighthouseBuilderPendingPayments` models the glue in `single_pass.rs`. It is written by hand.
+`lighthouseBuilderPendingPayments` models the untranslated code in `single_pass.rs`. It is written
+by hand.
 -/
 
 namespace EpochProofs
@@ -313,7 +314,7 @@ theorem map_newWithdrawals (payments : List LhPayment) (n : Nat) (quorum : U64) 
   simp [newWithdrawals, ← List.map_take, List.filter_map, Function.comp_def, absPayment]
   rfl
 
-/-- Models the glue in `single_pass.rs`. Not generated.
+/-- Models the untranslated code in `single_pass.rs`. Not generated.
 
 Lighthouse reads the threshold from `ChainSpec`. Both presets set it to 6/10. -/
 def lighthouseBuilderPendingPayments (total_active_balance slots_per_epoch : U64) (spe : Usize)

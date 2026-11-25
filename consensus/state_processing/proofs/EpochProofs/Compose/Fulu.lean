@@ -258,7 +258,7 @@ structure EpochGlueFulu (σ E : Type) where
 
 omit [Spec.PresetCfg] [Spec.FuluCfg] in
 /-- Lighthouse's Fulu `process_epoch`, as the calls of the translated functions joined by the
-glue `G`: justification and finalization, the single pass (the loop, the deposits, the
+untranslated code `G`: justification and finalization, the single pass (the loop, the deposits, the
 consolidations), the proposer lookahead, then the resets, the historical summaries, the
 participation rotation and the sync committee update. `none`: the Rust returns an error. -/
 def epochFulu (G : EpochGlueFulu σ E) (st : σ) : Result (Option σ) := do
@@ -275,7 +275,7 @@ def epochFulu (G : EpochGlueFulu σ E) (st : σ) : Result (Option σ) := do
   | none => ok none
   | some st3 => tail G.tail st3
 
-/-- The trusted facts about the glue `G` with input `st`, as `EpochLinks`. -/
+/-- The trusted facts about the untranslated code `G` with input `st`, as `EpochLinks`. -/
 structure EpochLinksFulu (G : EpochGlueFulu σ E) (o : Spec.Oracle)
     (view : σ → Spec.BeaconState) (st : σ) : Prop where
   justification : JustificationLinks G.justification view st
@@ -287,11 +287,11 @@ structure EpochLinksFulu (G : EpochGlueFulu σ E) (o : Spec.Oracle)
   lookahead : LookaheadLinks G.lookahead o view
   proposerIndices : FuluProposerIndices G.lookahead view
   tail : TailLinks G.tail o view
-  /-- N1, and the end of the Electra proposer loops, at the lookahead input. -/
+  /-- At most `2^24` proposer candidates enter the shuffle, and each Electra proposer loop ends. -/
   lookaheadN1 : ∀ st1 st2, EpochProofs.Compose.justification G.justification st = ok (some st1) →
     singlePassCore G.singlePass st1 = ok (some st2) →
     LookaheadN1 G.lookahead st2 ∧ LookaheadFin G.lookahead o view st2
-  /-- N1 at the sync committee update. -/
+  /-- At most `2^24` sync committee candidates enter the shuffle. -/
   syncN1 : ∀ st1 st2 st3 st5, EpochProofs.Compose.justification G.justification st = ok (some st1) →
     singlePassCore G.singlePass st1 = ok (some st2) →
     EpochProofs.Compose.lookahead G.lookahead st2 = ok (some st3) →

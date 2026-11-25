@@ -12,9 +12,9 @@ import EpochProofs.Sanity.Invariants.LighthouseTailSpecNF
 `singlePass` is `process_epoch_single_pass` of `single_pass.rs` up to the builder payments, as one
 Lean function: the translated `step_context`, `single_pass_rows`, `apply_deposit_writes`,
 `process_on_table`, `update_effective_balances_at` and `apply_builder_pending_payments`, joined by
-the untranslated glue (`SinglePassGlue`, `PaymentsGlue`): the trait implementations over the
+the untranslated code (`SinglePassGlue`, `PaymentsGlue`): the trait implementations over the
 milhouse lists, the borrows of the state by each wrapper, and the values read from the state and
-the spec. `singlePass_spec` shows that, under the trusted facts about the glue
+the spec. `singlePass_spec` shows that, under the trusted facts about the untranslated code
 (`SinglePassLinks`, `PaymentsLinks`), it returns the state of the model `lhSinglePass`, the
 single pass of `process_epoch_lighthouse`. `singlePassCore` stops before the builder payments; the
 Fulu epoch uses it (`Compose/Fulu.lean`).
@@ -370,7 +370,7 @@ def payments (P : PaymentsGlue σ E) (st st4 : σ) : Result (Option σ) := do
   | .Ok _ => ok (some (P.paymentsReturn st4 sp))
 
 /-- The Gloas `process_epoch_single_pass` up to the builder payments, as the calls of the
-translated functions in `Generated.lean` joined by the glue. `none`: the Rust returns an
+translated functions in `Generated.lean` joined by the untranslated code. `none`: the Rust returns an
 error. -/
 def singlePass (G : SinglePassGlue σ E) (P : PaymentsGlue σ E) (st : σ) : Result (Option σ) := do
   let r ← singlePassCore G st
@@ -380,10 +380,10 @@ def singlePass (G : SinglePassGlue σ E) (P : PaymentsGlue σ E) (st : σ) : Res
 
 variable [Spec.PresetCfg]
 
-/-- The trusted facts about the glue `G` at the input `st` of the single pass, with `view` the
-spec state that a Rust state holds. The contracts are those of `Trusted/`. The borrow facts say
-which fields of the state each wrapper holds. The read facts say that the values passed to the
-translated code are the spec values. `planTab` is the total that the deposit plan uses: the
+/-- The trusted facts about the untranslated code `G` at the input `st` of the single pass, with
+`view` the spec state that a Rust state holds. The contracts are those of `Trusted/`. The borrow
+facts say which fields of the state each wrapper holds. The read facts say that the values passed
+to the translated code are the spec values. `planTab` is the total that the deposit plan uses: the
 total active balance in Gloas, `fuluTab` in Fulu. -/
 structure SinglePassLinks (G : SinglePassGlue σ E) (o : Spec.Oracle)
     (view : σ → Spec.BeaconState) (st : σ) (planTab : Spec.Gwei → Spec.Gwei) : Prop where
@@ -422,7 +422,7 @@ structure SinglePassLinks (G : SinglePassGlue σ E) (o : Spec.Oracle)
     (G.depositPlan st).dbtc.val = plan.deposit_balance_to_consume ∧
     (G.depositPlan st).postponed.map G.absDep = plan.postponed ∧
     (G.depositPlan st).news.val.map G.absDep = plan.new_validator_deposits
-  /-- A state fact, not a glue fact: the new validators of the epoch fit under
+  /-- A state fact, not a fact about the Rust: the new validators of the epoch fit under
   `VALIDATOR_REGISTRY_LIMIT = 2^40`, where the milhouse validator list fails and the spec does
   not. It holds on every real chain (the registry is far below `2^40`). -/
   depositRoom : ∀ tab cur plan, Spec.get_total_active_balance Spec.P (view st) = .ok tab →
@@ -432,7 +432,8 @@ structure SinglePassLinks (G : SinglePassGlue σ E) (o : Spec.Oracle)
   /-- `usize` has 64 bits. -/
   usize64 : Usize.max = U64.max
 
-/-- The trusted facts about the payments glue `P`, with `st` the input of the single pass. -/
+/-- The trusted facts about the untranslated payments code `P`, with `st` the input of the single
+pass. -/
 structure PaymentsLinks (P : PaymentsGlue σ E) (view : σ → Spec.BeaconState) (st : σ) : Prop where
   paymentContract : PaymentWritesContract P.payments P.wview P.pview
   /-- `StateBuilderPayments` holds the two builder lists of the state, and writes only them. -/

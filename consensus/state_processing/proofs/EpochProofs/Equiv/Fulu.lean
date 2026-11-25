@@ -11,7 +11,7 @@ the Fulu constants and the Fulu candidates:
 - `exit_churn_limit_capped`: `registry_update::exit_churn_limit` returns the activation churn of
   any preset. `exit_churn_limit_fulu` and `activation_churn_limit_fulu` take the Fulu constants:
   the result is `get_activation_exit_churn_limit`. `activation_churn_limit_gloas` takes the Gloas
-  constants of the pending deposits glue: the result is `get_activation_churn_limit`.
+  constants of the pending deposits code: the result is `get_activation_churn_limit`.
 - `next_proposer_lookahead_spec_fulu`: `epoch_committees::next_proposer_lookahead` on all the
   active validators returns Fulu `process_proposer_lookahead`, if each Electra proposer loop
   ends before its last pass (`ProposerFin`).

@@ -9,7 +9,7 @@ import EpochProofs.Sanity.Invariants.LighthouseOrder
 `lookahead` is `process_proposer_lookahead` of `single_pass.rs`: the translated
 `next_proposer_lookahead` and the `Vector::new` write. `ptcWindow` is `process_ptc_window`: the
 translated `ptc_for_epoch` and `shift_window`. The reads, the hash, the effective balance source,
-the committees from the committee cache and the writes are untranslated glue
+the committees from the committee cache and the writes are untranslated code
 (`LookaheadGlue`, `PtcGlue`), each with the fact that links it to the spec (`LookaheadLinks`,
 `PtcLinks`). `lookahead_spec` and `ptcWindow_spec` show that they return the states of the
 models. The Fulu lookahead (`lookahead_spec_fulu`) differs only in the proposer candidates.
@@ -104,7 +104,7 @@ structure PtcGlue (σ E : Type) where
 variable {σ E : Type}
 
 /-- `process_proposer_lookahead`, as the call of the translated `next_proposer_lookahead`
-joined by the glue `L`. `none`: the Rust returns an error. -/
+joined by the untranslated code `L`. `none`: the Rust returns an error. -/
 def lookahead (L : LookaheadGlue σ) (st : σ) : Result (Option σ) := do
   let r ← per_epoch_processing.epoch_committees.next_proposer_lookahead L.hash
     L.effectiveBalances st (L.lookahead st) (L.proposerIndices st) L.proposerDomain (L.epoch st)
@@ -114,7 +114,7 @@ def lookahead (L : LookaheadGlue σ) (st : σ) : Result (Option σ) := do
   | .Ok look => ok (L.writeLookahead st look)
 
 /-- `process_ptc_window`, as the calls of the translated `ptc_for_epoch` and `shift_window`
-joined by the glue. `none`: the Rust returns an error. -/
+joined by the untranslated code. `none`: the Rust returns an error. -/
 def ptcWindow (L : LookaheadGlue σ) (G : PtcGlue σ E) (st : σ) : Result (Option σ) := do
   let r ← per_epoch_processing.epoch_committees.ptc_for_epoch L.hash L.effectiveBalances st
     (G.committees st) G.ptcDomain (L.epoch st) (L.mix st) (L.startSlot st) G.ptcSize
@@ -128,18 +128,18 @@ def ptcWindow (L : LookaheadGlue σ) (G : PtcGlue σ E) (st : σ) : Result (Opti
   | .Err _ => ok none
   | .Ok _ => ok (some (G.windowReturn st w))
 
-/-- N1 at the lookahead input: the proposer candidates fit in the shuffle. -/
+/-- At the lookahead input, at most `2^24` proposer candidates enter the shuffle. -/
 def LookaheadN1 (L : LookaheadGlue σ) (st : σ) : Prop :=
   (L.proposerIndices st).val.length ≤ 2 ^ 24
 
-/-- N1 at the PTC window input: each slot's committees fit in the selection. -/
+/-- At the PTC window input, at most `2^24` validators of each slot enter the selection. -/
 def PtcN1 (G : PtcGlue σ E) (st : σ) : Prop :=
   ∀ k (hk : k < (G.committees st).val.length), ((G.committees st).val[k]).val.length ≤ 2 ^ 24
 
 variable [Spec.PresetCfg]
 
-/-- The trusted facts about the glue `L`. The reads read the state they are given and the write
-writes the spec value, so each fact holds for every state `t`. -/
+/-- The trusted facts about the untranslated code `L`. The reads read the state they are given and
+the write writes the spec value, so each fact holds for every state `t`. -/
 structure LookaheadLinks (L : LookaheadGlue σ) (o : Spec.Oracle)
     (view : σ → Spec.BeaconState) : Prop where
   /-- `Sha256Hash` computes SHA-256, and the state gives its effective balances. -/
@@ -148,15 +148,15 @@ structure LookaheadLinks (L : LookaheadGlue σ) (o : Spec.Oracle)
     ((view t).validators.map (·.effective_balance))
   lookahead : ∀ t, (L.lookahead t).val.map (·.val) = (view t).proposer_lookahead
   proposerDomain : u8s L.proposerDomain.val = Spec.DOMAIN_BEACON_PROPOSER.toList
-  /-- L2: the lookahead epoch. -/
+  /-- The lookahead epoch is the current epoch plus `MIN_SEED_LOOKAHEAD` plus one. -/
   epoch : ∀ t ce, Spec.get_current_epoch Spec.P (view t) = .ok ce →
     (L.epoch t).val = ce + Spec.P.MIN_SEED_LOOKAHEAD + 1
-  /-- L4: `get_seed_mix`. -/
+  /-- `get_seed_mix` reads the mix that the spec `get_seed` reads. -/
   mix : ∀ t, SeedMixLink Spec.P (view t) (L.epoch t).val (L.mix t)
   startSlot : ∀ t n, Spec.compute_start_slot_at_epoch Spec.P (L.epoch t).val = .ok n →
     (L.startSlot t).val = n
   constants : ∀ t, SelectionConstantsMatch Spec.P (L.constants t)
-  /-- L5: `Vector::new` accepts a lookahead of the vector length. -/
+  /-- `Vector::new` accepts a lookahead of the vector length. -/
   writeLookahead : ∀ t v,
     v.val.length = (Spec.P.MIN_SEED_LOOKAHEAD + 1) * Spec.P.SLOTS_PER_EPOCH →
     ∃ t', L.writeLookahead t v = some t' ∧
@@ -169,7 +169,7 @@ def GloasProposerIndices (L : LookaheadGlue σ) (view : σ → Spec.BeaconState)
       (fun index => do pure !(← Spec.listGet (view t).validators index).slashed) = .ok l →
     (L.proposerIndices t).val.map (·.val) = l
 
-/-- The trusted facts about the glue `G`. -/
+/-- The trusted facts about the untranslated code `G`. -/
 structure PtcLinks (L : LookaheadGlue σ) (G : PtcGlue σ E) (o : Spec.Oracle)
     (view : σ → Spec.BeaconState) : Prop where
   /-- The committees from the committee cache built for the lookahead epoch. The cache is built

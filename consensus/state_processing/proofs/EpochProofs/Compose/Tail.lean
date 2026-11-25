@@ -10,7 +10,7 @@ import EpochProofs.Sanity.Invariants.LighthouseOrder
 (`resets.rs`), the historical summaries update, the participation rotation and the sync
 committee update. The checks and indices are the translated functions of `tail_updates.rs`, and
 the next sync committee indices are the translated `next_sync_committee_indices`. The reads and
-the writes are untranslated glue (`TailGlue`), each with the fact that links it to the spec
+the writes are untranslated code (`TailGlue`), each with the fact that links it to the spec
 (`TailLinks`). `tail_spec` shows that `tail` returns the state of the model `lhTailOrder`.
 -/
 
@@ -116,7 +116,7 @@ structure TailGlue (σ : Type) where
 variable {σ : Type}
 
 /-- The resets, the historical summaries update and the participation rotation, as the calls of
-the translated functions joined by the glue `G`. `none`: the Rust returns an error. -/
+the translated functions joined by the untranslated code `G`. `none`: the Rust returns an error. -/
 def resets (G : TailGlue σ) (st : σ) : Result (Option σ) := do
   let r ← per_epoch_processing.tail_updates.eth1_data_votes_reset_due (G.slot st) G.eth1Period
   match r with
@@ -154,7 +154,7 @@ def resets (G : TailGlue σ) (st : σ) : Result (Option σ) := do
   | some st => ok (some (G.rotate st))
 
 /-- `process_sync_committee_updates`, as the call of the translated
-`next_sync_committee_indices` joined by the glue `G`. -/
+`next_sync_committee_indices` joined by the untranslated code `G`. -/
 def syncUpdate (G : TailGlue σ) (st : σ) : Result (Option σ) := do
   match G.syncDue st with
   | none => ok none
@@ -177,15 +177,15 @@ def tail (G : TailGlue σ) (st : σ) : Result (Option σ) := do
   | none => ok none
   | some st5 => syncUpdate G st5
 
-/-- N1 at the sync committee update: the active validators of the next epoch fit in the
+/-- At the sync committee update, at most `2^24` active validators of the next epoch enter the
 shuffle. -/
 def SyncN1 (G : TailGlue σ) (st : σ) : Prop :=
   ∀ st', G.writeCurrentSync st = some st' → (G.syncIndices st').val.length ≤ 2 ^ 24
 
 variable [Spec.PresetCfg]
 
-/-- The trusted facts about the glue `G`. Each read reads the state it is given and each write
-writes the spec value, so each fact holds for every state `t`. -/
+/-- The trusted facts about the untranslated code `G`. Each read reads the state it is given and
+each write writes the spec value, so each fact holds for every state `t`. -/
 structure TailLinks (G : TailGlue σ) (o : Spec.Oracle) (view : σ → Spec.BeaconState) : Prop where
   slot : ∀ t, (G.slot t).val = (view t).slot
   eth1Period : G.eth1Period.val = Spec.LH_SLOTS_PER_ETH1_VOTING_PERIOD
@@ -198,7 +198,7 @@ structure TailLinks (G : TailGlue σ) (o : Spec.Oracle) (view : σ → Spec.Beac
   copyMix : ∀ t source target mix l, Spec.listGet (view t).randao_mixes source.val = .ok mix →
     Spec.listSet (view t).randao_mixes target.val mix = .ok l →
     ∃ t', G.copyMix t source target = some t' ∧ view t' = { view t with randao_mixes := l }
-  /-- L1. -/
+  /-- `state.next_epoch()` is the spec next epoch. -/
   nextEpoch : ∀ t n, Spec.uint64Add ((view t).slot / Spec.P.SLOTS_PER_EPOCH) 1 = .ok n →
     ∃ v, G.nextEpoch t = some v ∧ v.val = n
   slotsPerHistoricalRoot : G.slotsPerHistoricalRoot.val = Spec.P.SLOTS_PER_HISTORICAL_ROOT

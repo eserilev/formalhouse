@@ -5,7 +5,7 @@ import EpochProofs.Equiv.BalanceWeightedSelection
 
 `compute_balance_weighted_selection_spec` gives "spec ok → Rust `Ok`, same value". With an
 empty candidate list the spec fails its `assert total > 0`. This file shows that Lighthouse
-fails there too, with `EmptyIndices`. A proposer lookahead with every candidate slashed (F4)
+fails there too, with `EmptyIndices`. A proposer lookahead with every candidate slashed
 takes this path in both.
 -/
 

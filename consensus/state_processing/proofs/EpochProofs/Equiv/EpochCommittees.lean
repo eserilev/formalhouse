@@ -13,8 +13,8 @@ import EpochProofs.Sanity.PtcIndices
 - `compute_proposer_indices_spec` and `next_proposer_lookahead_spec`: the proposer lookahead.
 - `ptc_for_epoch_spec`: the PTCs that `process_ptc_window` appends.
 
-The glue in `single_pass.rs` and `sync_committee_updates.rs` passes the inputs. Each theorem
-takes the glue facts as hypotheses:
+The untranslated code in `single_pass.rs` and `sync_committee_updates.rs` passes the inputs. Each
+theorem takes the facts about the untranslated code as hypotheses:
 
 - `SeedMixLink`: `get_seed_mix` reads the RANDAO mix that `get_seed` reads.
 - the index lists: the active (and unslashed) validators, or the committees of each slot that
