@@ -9,8 +9,8 @@ import EpochProofs.EthLib.Oracle
 Gloas and Fulu read different churn limits. `specPendingDeposits` is the reference step with the
 churn limit as a parameter, and the reference steps of both forks are equal to it.
 
-`hroom` names a difference. The registry and the pending deposits together are at most
-`VALIDATOR_REGISTRY_LIMIT`. On Fulu, EthLib fails when it appends to a full registry, and the
+`hroom` names a difference. The registry has room for the deposits that one epoch reads, at most
+`MAX_PENDING_DEPOSITS_PER_EPOCH`. On Fulu, EthLib fails when it appends to a full registry, and the
 reference appends. On Gloas, EthLib fails when a registry position does not fit in 64 bits.
 -/
 
@@ -332,22 +332,26 @@ theorem pass_pending_deposits_same (hdiv : DivisorsNonzero preset config)
     (hstop : ∀ d, stop d = decide (finalizedSlot < d.slot)) :
     ∀ (l : List PendingDeposit) (st : BeaconState preset fork) (processed : UInt64) (count : Nat)
       (postponed : Array PendingDeposit),
-      st.validators.data.size + l.length ≤ preset.VALIDATOR_REGISTRY_LIMIT.toNat →
+      st.validators.data.size + min l.length (preset.MAX_PENDING_DEPOSITS_PER_EPOCH.toNat - count) ≤
+        preset.VALIDATOR_REGISTRY_LIMIT.toNat →
       SameOutcome (fun pass (acc : DepositLoop) => ∃ read,
           acc = (pass.1.processed.toNat, count + read,
             readList toSpecPendingDeposit pass.1.postponed, pass.1.churnReached,
             toSpecState pass.1.state) ∧
-          pass.1.rest = l.drop read ∧ pass.1.state.pendingDeposits = st.pendingDeposits)
+          pass.1.rest = l.drop read ∧ pass.1.state.pendingDeposits = st.pendingDeposits ∧
+          pass.1.state.RegistryWithinLimit)
         (passPendingDeposits config checks stop next available st processed count postponed l)
         (forIn (l.map toSpecPendingDeposit)
           (processed.toNat, count, readList toSpecPendingDeposit postponed, false, toSpecState st)
           (depositStep (toSpecPreset preset config) next.toNat available.toNat finalizedSlot.toNat
             (Spec.apply_pending_deposit (toSpecPreset preset config) o)))
-  | [], st, processed, count, postponed, _ => .returned ⟨0, rfl, rfl, rfl⟩
+  | [], st, processed, count, postponed, hroom =>
+    .returned ⟨0, rfl, rfl, rfl, Nat.le_trans (Nat.le_add_right _ _) hroom⟩
   | deposit :: rest, st, processed, count, postponed, hroom => by
     have ih := pass_pending_deposits_same hdiv electra beforeHeze ho stop next available
       finalizedSlot hstop rest
     rw [List.length_cons] at hroom
+    have hregistry : st.RegistryWithinLimit := Nat.le_trans (Nat.le_add_right _ _) hroom
     simp only [List.map_cons, List.forIn_cons]
     rw [passPendingDeposits, hstop]
     generalize hloop : depositStep (toSpecPreset preset config) next.toNat available.toNat
@@ -358,17 +362,17 @@ theorem pass_pending_deposits_same (hdiv : DivisorsNonzero preset config)
     · have hslot' : (toSpecPendingDeposit deposit).slot > finalizedSlot.toNat :=
         UInt64.lt_iff_toNat_lt.mp hslot
       simp only [hslot, hslot', decide_true, Bool.true_or, ite_true, pure_eq_ok, bind_ok]
-      exact .returned ⟨0, rfl, rfl, rfl⟩
+      exact .returned ⟨0, rfl, rfl, rfl, hregistry⟩
     have hslot' : ¬(toSpecPendingDeposit deposit).slot > finalizedSlot.toNat := fun h =>
       hslot (UInt64.lt_iff_toNat_lt.mpr h)
     by_cases hcount : preset.MAX_PENDING_DEPOSITS_PER_EPOCH.toNat ≤ count
     · simp only [hslot, hslot', hcount, decide_true, decide_false, Bool.or_true, ite_true,
         ite_false, spec_preset, pure_eq_ok, bind_ok]
-      exact .returned ⟨0, rfl, rfl, rfl⟩
+      exact .returned ⟨0, rfl, rfl, rfl, hregistry⟩
     simp only [hslot, hslot', hcount, decide_false, Bool.or_false, Bool.false_eq_true, ite_false,
       spec_preset]
     obtain ⟨⟨exited, withdrawn⟩, hstatus, hspec⟩ := deposit_status_same (st := st)
-      (Nat.lt_of_le_of_lt (by omega) preset.VALIDATOR_REGISTRY_LIMIT.toNat_lt) next deposit
+      (registry_lt hregistry) next deposit
       available.toNat (Spec.apply_pending_deposit (toSpecPreset preset config) o) processed.toNat
       count (readList toSpecPendingDeposit postponed) false
     rw [hspec, hstatus]
@@ -387,7 +391,7 @@ theorem pass_pending_deposits_same (hdiv : DivisorsNonzero preset config)
         by_cases hlimit : available < total
         · have hlimit' : total.toNat > available.toNat := UInt64.lt_iff_toNat_lt.mp hlimit
           simp only [hlimit, hlimit', decide_true, ite_true, pure_eq_ok, bind_ok]
-          exact .returned ⟨0, rfl, rfl, rfl⟩
+          exact .returned ⟨0, rfl, rfl, rfl, hregistry⟩
         · have hlimit' : ¬total.toNat > available.toNat := fun h =>
             hlimit (UInt64.lt_iff_toNat_lt.mpr h)
           have hagain : Spec.uint64Add processed.toNat (toSpecPendingDeposit deposit).amount =
@@ -398,32 +402,35 @@ theorem pass_pending_deposits_same (hdiv : DivisorsNonzero preset config)
           rintro st' _ ⟨rfl, hsize, hpending⟩ -
           simp only [pure_eq_ok, bind_ok]
           refine .bind_pure (ih st' total (count + 1) postponed (by omega)) ?_
-          rintro pass _ ⟨read, rfl, hrest, hpending'⟩
+          rintro pass _ ⟨read, rfl, hrest, hpending', hlimit'⟩
           exact ⟨read + 1, by rw [Nat.add_assoc, Nat.add_comm 1], hrest,
-            hpending'.trans hpending⟩
+            hpending'.trans hpending, hlimit'⟩
       · simp only [Bool.false_eq_true, ite_false, ite_true, pure_eq_ok, bind_ok]
         have hpush : readList toSpecPendingDeposit postponed ++ [toSpecPendingDeposit deposit] =
             readList toSpecPendingDeposit (postponed.push deposit) := by simp [readList]
         rw [hpush]
         refine .bind_pure (ih st processed (count + 1) (postponed.push deposit) (by omega)) ?_
-        rintro pass _ ⟨read, rfl, hrest, hpending'⟩
-        exact ⟨read + 1, by rw [Nat.add_assoc, Nat.add_comm 1], hrest, hpending'⟩
+        rintro pass _ ⟨read, rfl, hrest, hpending', hlimit'⟩
+        exact ⟨read + 1, by rw [Nat.add_assoc, Nat.add_comm 1], hrest, hpending', hlimit'⟩
     · simp only [ite_true, bind_assoc]
       refine .bind happly ?_
       rintro st' _ ⟨rfl, hsize, hpending⟩ -
       simp only [pure_eq_ok, bind_ok]
       refine .bind_pure (ih st' processed (count + 1) postponed (by omega)) ?_
-      rintro pass _ ⟨read, rfl, hrest, hpending'⟩
-      exact ⟨read + 1, by rw [Nat.add_assoc, Nat.add_comm 1], hrest, hpending'.trans hpending⟩
+      rintro pass _ ⟨read, rfl, hrest, hpending', hlimit'⟩
+      exact ⟨read + 1, by rw [Nat.add_assoc, Nat.add_comm 1], hrest,
+        hpending'.trans hpending, hlimit'⟩
 
 theorem pending_deposits_same (hdiv : DivisorsNonzero preset config) (fulu : .fusaka ≤ fork)
     (electra : .pectra ≤ fork) (beforeHeze : fork < .hegota) {checks : SignatureChecks}
     {o : Spec.Oracle} (ho : OracleMatches preset checks o) {s : BeaconState preset fork}
-    (hroom : s.validators.data.size + (s.pendingDeposits electra).data.size ≤
-      preset.VALIDATOR_REGISTRY_LIMIT.toNat)
+    (hroom : s.validators.data.size +
+      min (s.pendingDeposits electra).data.size preset.MAX_PENDING_DEPOSITS_PER_EPOCH.toNat ≤
+        preset.VALIDATOR_REGISTRY_LIMIT.toNat)
     {churnLimit : Spec.SpecM Nat} {churn : UInt64}
     (hchurn : depositChurnLimit config s = .ok churn) (hspec : churnLimit = .ok churn.toNat) :
-    SameOutcome SameState (processPendingDeposits config checks s electra)
+    SameOutcome (fun st acc => acc = toSpecState st ∧ st.RegistryWithinLimit)
+      (processPendingDeposits config checks s electra)
       (specPendingDeposits (toSpecPreset preset config) churnLimit
         (Spec.apply_pending_deposit (toSpecPreset preset config) o) (toSpecState s)) := by
   unfold processPendingDeposits specPendingDeposits
@@ -446,7 +453,7 @@ theorem pending_deposits_same (hdiv : DivisorsNonzero preset config) (fulu : .fu
       rw [bridgeDepositsPending, dite_eq_right]
       exact fun h => Nat.not_lt_of_le fulu h.2
     rw [depositWaits, hbridge, Bool.false_and, Bool.false_or]
-  · rintro ⟨pass, hpass⟩ _ ⟨read, rfl, hrest, hpending⟩ -
+  · rintro ⟨pass, hpass⟩ _ ⟨read, rfl, hrest, hpending, hregistry⟩ -
     simp only at hrest hpending ⊢
     have hqueue : (toSpecState pass.state).pending_deposits.drop (0 + read) ++
         readList toSpecPendingDeposit pass.postponed =
@@ -456,11 +463,11 @@ theorem pending_deposits_same (hdiv : DivisorsNonzero preset config) (fulu : .fu
     refine .ite Iff.rfl (fun _ => ?_) (fun _ => ?_)
     · refine .bind (subChecked_same available pass.processed).liftArith.liftAccessor ?_
       rintro carried _ rfl -
-      refine .returned ?_
-      rw [SameState, hqueue]
+      refine .returned ⟨?_, hregistry⟩
+      rw [hqueue]
       simp [toSpecState, fieldOr, electra]
-    · refine .returned ?_
-      rw [SameState, hqueue]
+    · refine .returned ⟨?_, hregistry⟩
+      rw [hqueue]
       simp [toSpecState, fieldOr, electra]
 
 end EpochProofs.EthLib

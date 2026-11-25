@@ -93,7 +93,9 @@ theorem passPendingConsolidations_same (next : UInt64) :
 
 theorem pending_consolidations_same (hdiv : DivisorsNonzero preset config)
     (electra : .pectra ≤ fork) (s : BeaconState preset fork) :
-    SameOutcome SameState (processPendingConsolidations s electra)
+    SameOutcome (fun st acc => acc = toSpecState st ∧ ∃ balances consolidations,
+        st = { s with balances := balances, pendingConsolidations := consolidations })
+      (processPendingConsolidations s electra)
       (Spec.process_pending_consolidations (toSpecPreset preset config) (toSpecState s)) := by
   unfold processPendingConsolidations Spec.process_pending_consolidations
   rw [get_current_epoch_eq hdiv.slots]
@@ -104,10 +106,10 @@ theorem pending_consolidations_same (hdiv : DivisorsNonzero preset config)
   refine .bind (passPendingConsolidations_same next (s.pendingConsolidations electra).data.toList
     s 0) ?_
   rintro ⟨s', read⟩ _ ⟨rfl, b, hb⟩ -
-  refine .returned ?_
   simp only at hb
   subst hb
-  rw [SameState, toSpecState_with_pending_consolidations _ electra]
+  refine .returned ⟨?_, _, _, rfl⟩
+  rw [toSpecState_with_pending_consolidations _ electra]
   simp only [toSpecState_pending_consolidations _ electra]
   simp [readList, List.map_drop]
 

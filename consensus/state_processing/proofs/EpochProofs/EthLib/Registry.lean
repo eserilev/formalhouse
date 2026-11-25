@@ -71,6 +71,8 @@ structure RegistryKept (s st : BeaconState preset fork) : Prop where
   slot : st.slot = s.slot
   size : st.validators.data.size = s.validators.data.size
   total : getTotalActiveBalance st = getTotalActiveBalance s
+  pendingDeposits : st.pendingDeposits = s.pendingDeposits
+  historicalSummaries : st.historicalSummaries = s.historicalSummaries
 
 theorem RegistryKept.epoch {s st : BeaconState preset fork} (h : RegistryKept s st) :
     getCurrentEpoch st = getCurrentEpoch s := by
@@ -97,7 +99,7 @@ theorem write_validator {s st : BeaconState preset fork} (h : RegistryKept s st)
   refine ⟨_, hi, rfl, ?_, ?_, ?_, rfl⟩
   · rw [BeaconState.setValidatorAt, dite_eq_left hi]
     rfl
-  · refine ⟨h.slot, ?_, ?_⟩
+  · refine ⟨h.slot, ?_, ?_, h.pendingDeposits, h.historicalSummaries⟩
     · simpa [RootedForkList.set] using h.size
     · rw [← h.total]
       refine total_active_balance_congr rfl ?_
@@ -138,7 +140,8 @@ theorem initiate_exit_same (hdiv : DivisorsNonzero preset config) (electra : .pe
   rintro withdrawable _ rfl -
   have hkept : RegistryKept s st₁ := by
     subst hst₁
-    exact ⟨h.slot, h.size, (total_active_balance_congr rfl rfl).trans h.total⟩
+    exact ⟨h.slot, h.size, (total_active_balance_congr rfl rfl).trans h.total, h.pendingDeposits,
+      h.historicalSummaries⟩
   have hv₁ : st₁.validators.data[index.toNat]? = some v := by
     subst hst₁
     exact hv
@@ -180,7 +183,7 @@ theorem registry_updates_same (hdiv : DivisorsNonzero preset config) (electra : 
     | ok a => rw [h] at hactivation; cases hactivation; rfl
   rw [bind_pure]
   refine SameOutcome.forIn_range (R := fun _ st acc => acc = toSpecState st ∧ RegistryKept s st) _
-    ⟨rfl, rfl, rfl, rfl⟩ ?_
+    ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩ ?_
   rintro i st _ hi ⟨rfl, h⟩
   have hi' : i < st.validators.data.size := by rw [h.size]; exact hi
   obtain ⟨v, hv⟩ : ∃ v, st.validators.data[i]? = some v := ⟨_, Array.getElem?_eq_getElem hi'⟩

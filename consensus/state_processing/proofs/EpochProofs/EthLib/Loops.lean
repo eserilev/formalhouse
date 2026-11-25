@@ -110,4 +110,30 @@ theorem mapM_length {ε α β : Type} {f : α → Except ε β} :
         cases h
         simp [mapM_length hl]
 
+/-- A `mapM` over a vector, and a `mapM` over a list. -/
+theorem SameOutcome.vectorMapM {ε α α' β β' : Type} {n : Nat} {f : α → Except ε β}
+    {g : α' → Spec.SpecM β'} (readArg : α → α') (read : β → β') (v : Vector α n)
+    (h : ∀ a ∈ v.toList, SameOutcome (fun b b' => b' = read b) (f a) (g (readArg a))) :
+    SameOutcome (fun bs bs' => bs' = bs.toList.map read) (v.mapM f)
+      ((v.toList.map readArg).mapM g) := by
+  have hlist := SameOutcome.mapM readArg read v.toList h
+  have harray : Vector.toArray <$> v.mapM f = List.toArray <$> v.toList.mapM f := by
+    rw [Vector.toArray_mapM, Array.mapM_eq_mapM_toList]
+    rfl
+  generalize v.mapM f = x at harray ⊢
+  generalize v.toList.mapM f = y at hlist harray
+  generalize (v.toList.map readArg).mapM g = z at hlist ⊢
+  cases hlist with
+  | failed =>
+    cases x with
+    | ok a => cases harray
+    | error e => exact .failed
+  | @returned bs _ hbs =>
+    cases x with
+    | error e => cases harray
+    | ok a =>
+      have harray' : a.toArray = bs.toArray := Except.ok.inj harray
+      refine .returned ?_
+      rw [hbs, Vector.toList, harray']
+
 end EpochProofs.EthLib

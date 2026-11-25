@@ -141,6 +141,43 @@ theorem uint64Mod_eq {a b : UInt64} (hb : b ≠ 0) :
   have hb' : b.toNat ≠ 0 := fun h => hb (UInt64.toNat_inj.mp h)
   simp [Spec.uint64Mod, hb', UInt64.toNat_mod, Pure.pure, Except.pure]
 
+theorem uint64Div_nat {a b : Nat} (hb : b ≠ 0) : Spec.uint64Div a b = .ok (a / b) :=
+  ite_eq_right hb
+
+theorem uint64Add_fits {a b : Nat} (h : a + b < 2 ^ 64) : Spec.uint64Add a b = .ok (a + b) :=
+  ite_eq_left h
+
+theorem uint64Add_overflows {a b : Nat} (h : ¬a + b < 2 ^ 64) :
+    Spec.uint64Add a b = .error .overflow :=
+  ite_eq_right h
+
+theorem uint64Mul_fits {a b : Nat} (h : a * b < 2 ^ 64) : Spec.uint64Mul a b = .ok (a * b) :=
+  ite_eq_left h
+
+theorem uint64Mul_overflows {a b : Nat} (h : ¬a * b < 2 ^ 64) :
+    Spec.uint64Mul a b = .error .overflow :=
+  ite_eq_right h
+
+theorem toNat_of_addChecked {a b c : UInt64}
+    (h : _root_.EthLib.Consensus.liftArith (addChecked a b) = .ok c) :
+    c.toNat = a.toNat + b.toNat := by
+  obtain ⟨n, hn, rfl⟩ := (addChecked_same a b).liftArith.returns h
+  by_cases hfits : a.toNat + b.toNat < 2 ^ 64
+  · rw [uint64Add_fits hfits] at hn
+    exact (Except.ok.inj hn).symm
+  · rw [uint64Add_overflows hfits] at hn
+    cases hn
+
+theorem toNat_of_mulChecked {a b c : UInt64}
+    (h : _root_.EthLib.Consensus.liftArith (mulChecked a b) = .ok c) :
+    c.toNat = a.toNat * b.toNat := by
+  obtain ⟨n, hn, rfl⟩ := (mulChecked_same a b).liftArith.returns h
+  by_cases hfits : a.toNat * b.toNat < 2 ^ 64
+  · rw [uint64Mul_fits hfits] at hn
+    exact (Except.ok.inj hn).symm
+  · rw [uint64Mul_overflows hfits] at hn
+    cases hn
+
 theorem toNat_min (a b : UInt64) : (min a b).toNat = min a.toNat b.toNat := by
   rw [UInt64.min_def]
   split <;> rename_i h <;> rw [UInt64.le_iff_toNat_le] at h <;> omega
