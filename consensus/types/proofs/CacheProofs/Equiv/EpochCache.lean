@@ -1,3 +1,4 @@
+import CacheProofs.AeneasCompat
 import Mathlib.Data.Nat.Sqrt
 import Mathlib.Tactic
 import CacheProofs.Generated
@@ -18,7 +19,7 @@ open CacheProofs.Spec CacheProofs.Spec.EpochCache
 
 theorem iter_eq_sqrt (n : Nat) (hn : 1 ≤ n) : Nat.sqrt.iter n n = Nat.sqrt n := by
   apply Nat.eq_sqrt.mpr
-  refine ⟨Nat.sqrt.iter_sq_le n n, Nat.sqrt.lt_iter_succ_sq n n ?_⟩
+  refine ⟨IntegerSqrt.iter_sq_le n n, IntegerSqrt.lt_iter_succ_sq n n ?_⟩
   nlinarith
 
 theorem uint64_max_sqrt : Nat.sqrt (2 ^ 64 - 1) = 4294967295 := by
@@ -147,6 +148,7 @@ theorem integer_sqrt_loop_spec (n x y : U64) (hn : 1 ≤ n.val) (hn' : n.val ≤
       simp only [this, dif_neg, not_false_eq_true]
   · exact ⟨hx, hy, hb, rfl⟩
 
+/-- The translated square root is the square root. It never fails. -/
 theorem integer_sqrt_spec (n : U64) :
     ∃ r, state.base_rewards.integer_sqrt n = ok r ∧ r.val = Nat.sqrt n.val := by
   unfold state.base_rewards.integer_sqrt
@@ -172,7 +174,7 @@ theorem integer_sqrt_spec (n : U64) :
       unfold state.base_rewards.integer_sqrt_loop.body
       have : ¬ y < n := by
         intro h; have : y.val < n.val := h; omega
-      simp only [this, if_false]
+      simp only [this, if_false, bind_ok]
       exact ⟨n, rfl, by rw [h0]; rfl⟩
     · obtain ⟨r, hr, hrv⟩ := integer_sqrt_loop_spec n n y hpos hn' hpos
         (by rw [hyv, hsat, Nat.div_self hpos]) (fun _ => by rw [hyv, hsat])
@@ -374,9 +376,9 @@ theorem update_effective_balance_spec (ebs : alloc.vec.Vec U64) (total : U64) (i
     rw [if_neg hne]
     generalize hd : alloc.vec.Vec.deref_mut ebs = p
     obtain ⟨sl, back⟩ := p
-    have hs : sl.val = ebs.val := by simp [alloc.vec.Vec.deref_mut] at hd; rw [← hd.1]
+    have hs : sl.val = ebs.val := by simp [alloc.vec.Vec.deref_mut] at hd; rw [← hd.1]; rfl
     have hback : ∀ t : Slice U64, (back t).val = t.val := by
-      simp [alloc.vec.Vec.deref_mut] at hd; intro t; rw [← hd.2]
+      simp [alloc.vec.Vec.deref_mut] at hd; intro t; rw [← hd.2]; rfl
     have hget2 : sl.val[i.val]? = some ebs.val[i.val] := by
       rw [hs]; exact List.getElem?_eq_getElem hlt
     have hnew : ((back (sl.set_opt i (some eb))).val).map (·.val) =
@@ -420,9 +422,9 @@ theorem update_effective_balance_out_of_bounds (ebs : alloc.vec.Vec U64) (total 
   rw [if_neg hne]
   generalize hd : alloc.vec.Vec.deref_mut ebs = p
   obtain ⟨sl, back⟩ := p
-  have hs : sl.val = ebs.val := by simp [alloc.vec.Vec.deref_mut] at hd; rw [← hd.1]
+  have hs : sl.val = ebs.val := by simp [alloc.vec.Vec.deref_mut] at hd; rw [← hd.1]; rfl
   have hback : ∀ t : Slice U64, (back t).val = t.val := by
-    simp [alloc.vec.Vec.deref_mut] at hd; intro t; rw [← hd.2]
+    simp [alloc.vec.Vec.deref_mut] at hd; intro t; rw [← hd.2]; rfl
   have hget2 : sl.val[i.val]? = none := by rw [hs]; exact List.getElem?_eq_none (by omega)
   simp [lift, core.slice.Slice.get_mut, core.slice.index.Usize.get_mut, hget2]
   rw [hback, Slice.set_opt_val_eq]
@@ -431,15 +433,16 @@ theorem update_effective_balance_out_of_bounds (ebs : alloc.vec.Vec U64) (total 
 /-- A call `update_effective_balance(i, eb, active)` as `single_pass.rs` makes it. -/
 abbrev Call := Usize × U64 × Bool
 
-/-- The `single_pass.rs` glue: it calls `update_effective_balance` for each call in order and
-stops at the first error (`?`). `none` is an error. -/
-def lhRun (s : alloc.vec.Vec U64 × U64) : List Call → Result (Option (alloc.vec.Vec U64 × U64))
+/-- The untranslated code of `single_pass.rs`: it calls `update_effective_balance` for each call in
+order and stops at the first error (`?`). `none` is an error. -/
+def lighthouseRun (s : alloc.vec.Vec U64 × U64) : List Call →
+    Result (Option (alloc.vec.Vec U64 × U64))
   | [] => ok (some s)
   | (i, eb, active) :: cs => do
     let (r, ebs', total') ←
       state.total_active_balance.update_effective_balance s.1 s.2 i eb active
     match r with
-    | .Ok true => lhRun (ebs', total') cs
+    | .Ok true => lighthouseRun (ebs', total') cs
     | _ => ok none
 
 /-- The calls are valid for `act`: each index is at most the current length, each flag equals
@@ -455,13 +458,13 @@ def ValidCalls (act : Nat → Bool) : List Nat → List Call → Prop
 def modelRun (l : List Nat) (cs : List Call) : List Nat :=
   cs.foldl (fun l c => updateList l c.1.val c.2.1.val) l
 
-/-- Preservation over a whole call sequence: the glue does not fail, and the total stays the sum
-of the active effective balances. -/
-theorem lhRun_spec (act : Nat → Bool) (cs : List Call) :
+/-- Preservation over a whole call sequence: the untranslated code does not fail, and the total
+stays the sum of the active effective balances. -/
+theorem lighthouseRun_spec (act : Nat → Bool) (cs : List Call) :
     ∀ (ebs : alloc.vec.Vec U64) (total : U64),
       total.val = activeSum act (ebs.val.map (·.val)) →
       ValidCalls act (ebs.val.map (·.val)) cs →
-      ∃ ebs' total', lhRun (ebs, total) cs = ok (some (ebs', total')) ∧
+      ∃ ebs' total', lighthouseRun (ebs, total) cs = ok (some (ebs', total')) ∧
         ebs'.val.map (·.val) = modelRun (ebs.val.map (·.val)) cs ∧
         total'.val = activeSum act (ebs'.val.map (·.val)) := by
   induction cs with
@@ -478,15 +481,16 @@ theorem lhRun_spec (act : Nat → Bool) (cs : List Call) :
     rw [← hmap1] at hrest
     obtain ⟨ebs2, total2, hrun2, hmap2, hinv2⟩ := ih ebs1 total1 hinv1 hrest
     refine ⟨ebs2, total2, ?_, ?_, hinv2⟩
-    · simp only [lhRun, hrun, bind_tc_ok]; exact hrun2
+    · simp only [lighthouseRun, hrun, bind_tc_ok]; exact hrun2
     · rw [hmap2, hmap1]; rfl
 
 /-- Build: `PreEpochCache::new_for_next_epoch` starts from an empty vector and a zero total. -/
-theorem lhRun_build (act : Nat → Bool) (cs : List Call) (ValidCalls_cs : ValidCalls act [] cs) :
-    ∃ ebs' total', lhRun (alloc.vec.Vec.new U64, 0#u64) cs = ok (some (ebs', total')) ∧
+theorem lighthouseRun_build (act : Nat → Bool) (cs : List Call)
+    (ValidCalls_cs : ValidCalls act [] cs) :
+    ∃ ebs' total', lighthouseRun (alloc.vec.Vec.new U64, 0#u64) cs = ok (some (ebs', total')) ∧
       ebs'.val.map (·.val) = modelRun [] cs ∧
       total'.val = activeSum act (ebs'.val.map (·.val)) :=
-  lhRun_spec act cs (alloc.vec.Vec.new U64) 0#u64 (by simp [activeSum, activeSumFrom])
+  lighthouseRun_spec act cs (alloc.vec.Vec.new U64) 0#u64 (by simp [activeSum, activeSumFrom])
     (by simpa using ValidCalls_cs)
 
 /-! ### The spec total active balance -/
@@ -556,6 +560,7 @@ theorem get_total_active_balance_eq (cfg : Config) (vs : List Validator) (epoch 
   rw [sumUint64, sumUint64_eq bs 0 (by rw [hsum]; simpa [activeSum] using h)]
   simp [hsum, activeSum]
 
+/-- The translated floor is the maximum of the increment and the total. It never fails. -/
 theorem floor_total_active_balance_spec (total inc : U64) :
     ∃ r, state.total_active_balance.floor_total_active_balance total inc = ok r ∧
       r.val = max inc.val total.val := by
@@ -569,7 +574,7 @@ theorem floor_total_active_balance_spec (total inc : U64) :
     exact ⟨inc, rfl, by omega⟩
 
 /-- Read agreement for the total: if the cache holds the effective balances of `vs` and the
-coherent total for `epoch`, the floored total equals the spec `get_total_active_balance`. -/
+correct total for `epoch`, the floored total equals the spec `get_total_active_balance`. -/
 theorem total_active_balance_equiv (cfg : Config) (vs : List Validator) (epoch : Nat)
     (ebs : List Nat) (total inc : U64)
     (hinc : inc.val = cfg.EFFECTIVE_BALANCE_INCREMENT)
@@ -590,36 +595,36 @@ theorem single_pass_total_active_balance (cfg : Config) (vs : List Validator) (e
     (cs : List Call) (inc : U64) (hinc : inc.val = cfg.EFFECTIVE_BALANCE_INCREMENT)
     (hvalid : ValidCalls (activeAt vs epoch) [] cs)
     (hfinal : modelRun [] cs = vs.map (·.effective_balance)) :
-    ∃ ebs total, lhRun (alloc.vec.Vec.new U64, 0#u64) cs = ok (some (ebs, total)) ∧
+    ∃ ebs total, lighthouseRun (alloc.vec.Vec.new U64, 0#u64) cs = ok (some (ebs, total)) ∧
       ebs.val.map (·.val) = vs.map (·.effective_balance) ∧
       ∃ r, state.total_active_balance.floor_total_active_balance total inc = ok r ∧
         get_total_active_balance cfg ⟨vs, epoch⟩ = .ok r.val := by
-  obtain ⟨ebs, total, hrun, hmap, hinv⟩ := lhRun_build (activeAt vs epoch) cs hvalid
+  obtain ⟨ebs, total, hrun, hmap, hinv⟩ := lighthouseRun_build (activeAt vs epoch) cs hvalid
   rw [hfinal] at hmap
   refine ⟨ebs, total, hrun, hmap, ?_⟩
   exact total_active_balance_equiv cfg vs epoch _ total inc hinc hmap hinv
 
 /-! ### `BeaconState::compute_total_active_balance_slow` -/
 
-/-- The loop of `compute_total_active_balance_slow` (glue, by hand): `safe_add_assign` over the
+/-- The loop of `compute_total_active_balance_slow` (written by hand): `safe_add_assign` over the
 active validators. `none` is an overflow. -/
-def lhSlowSum (epoch : Nat) : Nat → List Validator → Option Nat
+def lighthouseSlowSum (epoch : Nat) : Nat → List Validator → Option Nat
   | acc, [] => some acc
   | acc, v :: vs =>
     if is_active_validator v epoch then
       if acc + v.effective_balance ≤ 18446744073709551615 then
-        lhSlowSum epoch (acc + v.effective_balance) vs
+        lighthouseSlowSum epoch (acc + v.effective_balance) vs
       else none
-    else lhSlowSum epoch acc vs
+    else lighthouseSlowSum epoch acc vs
 
-theorem lhSlowSum_eq (W : List Validator) (epoch : Nat) :
+theorem lighthouseSlowSum_eq (W : List Validator) (epoch : Nat) :
     ∀ (l : List Validator) (k acc : Nat), W.drop k = l →
       acc + activeSumFrom (activeAt W epoch) k (l.map (·.effective_balance)) < 2 ^ 64 →
-      lhSlowSum epoch acc l =
+      lighthouseSlowSum epoch acc l =
         some (acc + activeSumFrom (activeAt W epoch) k (l.map (·.effective_balance))) := by
   intro l
   induction l with
-  | nil => intro k acc _ _; simp [lhSlowSum, activeSumFrom]
+  | nil => intro k acc _ _; simp [lighthouseSlowSum, activeSumFrom]
   | cons v t ih =>
     intro k acc hk hlt
     have hget : W[k]? = some v := by
@@ -631,11 +636,11 @@ theorem lhSlowSum_eq (W : List Validator) (epoch : Nat) :
     by_cases ha : is_active_validator v epoch
     · simp only [ha, if_true] at hlt ⊢
       have hfit : acc + v.effective_balance ≤ 18446744073709551615 := by omega
-      simp only [lhSlowSum, ha, if_true, hfit]
+      simp only [lighthouseSlowSum, ha, if_true, hfit]
       rw [ih (k + 1) _ hk' (by omega)]
       congr 1; omega
     · simp only [ha, Bool.false_eq_true, if_false] at hlt ⊢
-      simp only [lhSlowSum, ha, Bool.false_eq_true, if_false]
+      simp only [lighthouseSlowSum, ha, Bool.false_eq_true, if_false]
       rw [ih (k + 1) _ hk' (by omega)]
       congr 1; omega
 
@@ -644,10 +649,10 @@ the slow loop does not overflow, and the floored result equals `get_total_active
 theorem compute_total_active_balance_slow_equiv (cfg : Config) (vs : List Validator)
     (epoch : Nat) (inc : U64) (hinc : inc.val = cfg.EFFECTIVE_BALANCE_INCREMENT)
     (h : activeSum (activeAt vs epoch) (vs.map (·.effective_balance)) < 2 ^ 64) :
-    ∃ total : U64, lhSlowSum epoch 0 vs = some total.val ∧
+    ∃ total : U64, lighthouseSlowSum epoch 0 vs = some total.val ∧
       ∃ r, state.total_active_balance.floor_total_active_balance total inc = ok r ∧
         get_total_active_balance cfg ⟨vs, epoch⟩ = .ok r.val := by
-  have hs := lhSlowSum_eq vs epoch vs 0 0 rfl (by simpa [activeSum] using h)
+  have hs := lighthouseSlowSum_eq vs epoch vs 0 0 rfl (by simpa [activeSum] using h)
   let total : U64 := ⟨BitVec.ofNat _ (activeSum (activeAt vs epoch) (vs.map (·.effective_balance)))⟩
   have htv : total.val = activeSum (activeAt vs epoch) (vs.map (·.effective_balance)) := by
     simp only [total, UScalar.val, BitVec.toNat_ofNat]
@@ -771,6 +776,7 @@ theorem base_rewards_loop_spec (inc factor bpe : U64) (phase0 : Bool) (sq brpi m
         saturating_add_val k 1#u64 (by simp [u64_max_val]; omega)
       simp only [hle, if_true, core.option.Option.is_none, Option.isNone_none, hc, bind_tc_ok,
         hw1, lift]
+      apply (spec_ok _).mpr
       refine ⟨⟨rfl, by rw [hsat]; omega, ?_⟩, by rw [hsat]; omega⟩
       rw [hw1v, hsat, List.map_append, hw, List.range_succ, List.map_append]
       simp [hcv]
@@ -784,7 +790,11 @@ theorem base_rewards_loop_spec (inc factor bpe : U64) (phase0 : Bool) (sq brpi m
 
 /-- The total after the floor, its square root and the altair base reward per increment. -/
 def flooredTotal (inc total : Nat) : Nat := max inc total
+
+/-- The square root of the total after the floor. -/
 def sqrtTotal (inc total : Nat) : Nat := Nat.sqrt (flooredTotal inc total)
+
+/-- The Altair base reward for each increment. -/
 def perIncrement (inc factor total : Nat) : Nat := inc * factor / sqrtTotal inc total
 
 /-- Build: `base_rewards` (the body of `PreEpochCache::into_epoch_cache`) returns one entry for
@@ -844,7 +854,7 @@ theorem get_effective_balance_spec (ebs : Slice U64) (index : Usize) :
         | none => .Err .ValidatorIndexOutOfBounds) := by
   unfold state.base_rewards.get_effective_balance
   rw [slice_get]
-  cases ebs.val[index.val]? <;> rfl
+  cases ebs.val[index.val]? <;> simp
 
 theorem get_base_reward_spec (ebs table : Slice U64) (inc : U64) (index : Usize)
     (hindex : index.val < ebs.val.length) (hinc : inc.val ≠ 0)
@@ -954,9 +964,9 @@ theorem get_base_reward_equiv (cfg : Config) (vs : List Validator) (epoch : Nat)
     rw [hr]; exact Option.some.inj this
   refine ⟨r, ?_, ?_⟩
   · rw [get_base_reward_spec ebs (alloc.vec.Vec.deref tbl) inc index hindex (by omega)
-      (by simp only [alloc.vec.Vec.deref, hebv, ← heth_def]; omega)
+      (by simp only [alloc.vec.Vec.deref, Slice.from_val, hebv, ← heth_def]; omega)
       (by rw [hebv, ← heth_def]; omega)]
-    simp only [alloc.vec.Vec.deref, hebv, ← heth_def, hr]
+    simp only [alloc.vec.Vec.deref, Slice.from_val, hebv, ← heth_def, hr]
   · have hT : 1 ≤ max inc.val total.val := by omega
     have hT64 : max inc.val total.val < 2 ^ 64 := by
       have := inc.hBounds; have := total.hBounds; simp at *; omega

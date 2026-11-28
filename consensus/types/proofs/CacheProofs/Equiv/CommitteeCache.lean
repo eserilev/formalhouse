@@ -1,3 +1,4 @@
+import CacheProofs.AeneasCompat
 import CacheProofs.Generated
 import CacheProofs.Spec.CommitteeCache
 
@@ -13,15 +14,18 @@ Main theorems:
   stores invert the shuffling.
 - `get_attestation_duties_equiv`: `get_attestation_duties` agrees with `get_committee_assignment`.
 
-`IsShuffling` states that the cached shuffling is the spec shuffling. The `lh*` definitions
-model the glue in `committee_cache.rs`. They are written by hand.
+`MatchesSpecShuffling` states that the cached shuffling is the spec shuffling. The `lh*` definitions
+model the untranslated code in `committee_cache.rs`. They are written by hand.
 -/
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result types
 
 namespace CacheProofs.CommitteeCache
 
+/-- The Rust `ArithError`. -/
 abbrev ArithError := safe_arith.ArithError
+
+/-- The Rust `Result`. -/
 abbrev RResult := core.result.Result
 
 @[simp] theorem branch_ok {T E : Type} (v : T) :
@@ -33,8 +37,8 @@ abbrev RResult := core.result.Result
       ok (.Break (.Err e)) := rfl
 
 @[simp] theorem from_residual_err {T E : Type} (e : E) :
-    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual T
-      (core.convert.FromSame E) (.Err e) = ok (.Err e) := rfl
+    core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual T
+      (core.convert.FromSame E) (.Err e) = ok (.Err e) := from_residual_same e
 
 theorem safe_add_eq (x y : Usize) :
     ∃ r, Usize.Insts.Safe_arithSafeArithUsize.safe_add x y = ok r ∧
@@ -42,6 +46,7 @@ theorem safe_add_eq (x y : Usize) :
        | .Ok z => z.val = x.val + y.val ∧ x.val + y.val ≤ Usize.max
        | .Err e => e = .Overflow ∧ Usize.max < x.val + y.val) := by
   unfold Usize.Insts.Safe_arithSafeArithUsize.safe_add
+  simp only [lift, bind_tc_ok, core.option.Option.ok_or]
   have hs := Usize.checked_add_bv_spec x y
   cases hc : Usize.checked_add x y with
   | none => simp only [hc] at hs; exact ⟨_, rfl, rfl, hs⟩
@@ -53,6 +58,7 @@ theorem safe_mul_eq (x y : Usize) :
        | .Ok z => z.val = x.val * y.val ∧ x.val * y.val ≤ Usize.max
        | .Err e => e = .Overflow ∧ Usize.max < x.val * y.val) := by
   unfold Usize.Insts.Safe_arithSafeArithUsize.safe_mul
+  simp only [lift, bind_tc_ok, core.option.Option.ok_or]
   have hs := Usize.checked_mul_bv_spec x y
   cases hc : Usize.checked_mul x y with
   | none => simp only [hc] at hs; exact ⟨_, rfl, rfl, hs⟩
@@ -64,6 +70,7 @@ theorem safe_sub_eq (x y : Usize) :
        | .Ok z => z.val = x.val - y.val ∧ y.val ≤ x.val
        | .Err e => e = .Overflow ∧ x.val < y.val) := by
   unfold Usize.Insts.Safe_arithSafeArithUsize.safe_sub
+  simp only [lift, bind_tc_ok, core.option.Option.ok_or]
   have hs := Usize.checked_sub_bv_spec x y
   cases hc : Usize.checked_sub x y with
   | none => simp only [hc] at hs; exact ⟨_, rfl, rfl, hs⟩
@@ -75,6 +82,7 @@ theorem safe_div_eq (x y : Usize) :
        | .Ok z => z.val = x.val / y.val ∧ y.val ≠ 0
        | .Err e => e = .DivisionByZero ∧ y.val = 0) := by
   unfold Usize.Insts.Safe_arithSafeArithUsize.safe_div
+  simp only [lift, bind_tc_ok, core.option.Option.ok_or]
   have hs := Usize.checked_div_bv_spec x y
   cases hc : Usize.checked_div x y with
   | none => simp only [hc] at hs; exact ⟨_, rfl, rfl, hs⟩
@@ -86,6 +94,7 @@ theorem safe_rem_eq (x y : Usize) :
        | .Ok z => z.val = x.val % y.val ∧ y.val ≠ 0
        | .Err e => e = .DivisionByZero ∧ y.val = 0) := by
   unfold Usize.Insts.Safe_arithSafeArithUsize.safe_rem
+  simp only [lift, bind_tc_ok, core.option.Option.ok_or]
   have hs := Usize.checked_rem_bv_spec x y
   cases hc : Usize.checked_rem x y with
   | none => simp only [hc] at hs; exact ⟨_, rfl, rfl, hs⟩
@@ -96,29 +105,32 @@ namespace Spec
 export CacheProofs.Spec.CommitteeCache (Preset get_committee_count_per_slot uint64Div uint64Mul uint64Mod)
 end Spec
 
-def absArithError : ArithError → CacheProofs.Spec.SpecError
+/-- The spec error of a Rust `ArithError`. -/
+def arithErrorToSpec : ArithError → CacheProofs.Spec.SpecError
   | .Overflow => .overflow
   | .DivisionByZero => .divisionByZero
 
-def absResult {α β : Type} (f : α → β) : RResult α ArithError → CacheProofs.Spec.SpecM β
+/-- A Rust `Result`, read as a spec result. `f` reads the value. -/
+def resultToSpec {α β : Type} (f : α → β) : RResult α ArithError → CacheProofs.Spec.SpecM β
   | .Ok x => .ok (f x)
-  | .Err e => .error (absArithError e)
+  | .Err e => .error (arithErrorToSpec e)
 
 open state.committee_assignment in
+/-- The translated committee count is the spec count, with the same errors. -/
 theorem committee_count_per_slot_equiv (p : Spec.Preset)
     (active_count spe max_cps target : Usize)
     (hspe : spe.val = p.SLOTS_PER_EPOCH) (hmax : max_cps.val = p.MAX_COMMITTEES_PER_SLOT)
     (htarget : target.val = p.TARGET_COMMITTEE_SIZE) :
     committee_count_per_slot active_count spe max_cps target ⦃ r =>
-      absResult (·.val) r = Spec.get_committee_count_per_slot p active_count.val ⦄ := by
+      resultToSpec (·.val) r = Spec.get_committee_count_per_slot p active_count.val ⦄ := by
   unfold committee_count_per_slot
   obtain ⟨r1, h1, hr1⟩ := safe_div_eq active_count spe
   rw [h1]
   cases r1 with
   | Err e =>
     obtain ⟨rfl, h0⟩ := hr1
-    simp [Spec.get_committee_count_per_slot, Spec.uint64Div, ← hspe, h0, absResult,
-      absArithError]; rfl
+    simp [Spec.get_committee_count_per_slot, Spec.uint64Div, ← hspe, h0, resultToSpec,
+      arithErrorToSpec]; rfl
   | Ok a =>
     obtain ⟨ha, h0⟩ := hr1
     obtain ⟨r2, h2, hr2⟩ := safe_div_eq a target
@@ -127,11 +139,11 @@ theorem committee_count_per_slot_equiv (p : Spec.Preset)
     | Err e =>
       obtain ⟨rfl, h0'⟩ := hr2
       simp [Spec.get_committee_count_per_slot, Spec.uint64Div, ← hspe, ← htarget, h0, h0',
-        absResult, absArithError]; rfl
+        resultToSpec, arithErrorToSpec]; rfl
     | Ok b =>
       obtain ⟨hb, h0'⟩ := hr2
       simp [Spec.get_committee_count_per_slot, Spec.uint64Div, ← hspe, ← htarget, h0, h0',
-        absResult, hb, ha, hmax]; rfl
+        resultToSpec, hb, ha, hmax]; rfl
 
 
 open state.committee_assignment
@@ -221,7 +233,7 @@ theorem committee_range_in_epoch_ok (c k n : Usize) (hk : k.val < c.val)
           cases r5 with
           | Err e => exact absurd hr5.2 (by scalar_tac)
           | Ok e =>
-            refine ⟨s, e, rfl, ?_, ?_⟩
+            refine ⟨s, e, by simp only [bind_tc_ok, branch_ok], ?_, ?_⟩
             · rw [hr2.1, hr1.1]
             · rw [hr5.1, hr4.1, hk1]
 
@@ -241,7 +253,7 @@ def shuffledAt (p : Preset) (sha256 : List Nat → List Nat) (indices : List Nat
 
 /-- `shuffling` is the spec shuffling of `indices`: entry `i` is
 `indices[compute_shuffled_index(i, len(indices), seed)]`. -/
-def IsShuffling (p : Spec.Preset) (sha256 : List Nat → List Nat) (indices seed : List Nat)
+def MatchesSpecShuffling (p : Spec.Preset) (sha256 : List Nat → List Nat) (indices seed : List Nat)
     (shuffling : List Nat) : Prop :=
   shuffling.length = indices.length ∧
     ∀ i, i < indices.length → shuffledAt p sha256 indices seed i = .ok (shuffling.getD i 0)
@@ -267,7 +279,8 @@ theorem range'_map_getD (l : List Nat) (s k : Nat) (h : s + k ≤ l.length) :
 open CacheProofs.Spec.CommitteeCache in
 /-- If `shuffling` is the spec shuffling, `compute_committee` is the slice `[start, end)`. -/
 theorem compute_committee_slice (p : Preset) (sha256 : List Nat → List Nat)
-    (indices seed shuffling : List Nat) (hshuf : IsShuffling p sha256 indices seed shuffling)
+    (indices seed shuffling : List Nat)
+    (hshuf : MatchesSpecShuffling p sha256 indices seed shuffling)
     (index count : Nat) (hindex : index < count)
     (hcount : count < CacheProofs.Spec.UINT64_SIZE)
     (hfit : indices.length * count < CacheProofs.Spec.UINT64_SIZE) :
@@ -299,12 +312,12 @@ theorem compute_committee_slice (p : Preset) (sha256 : List Nat → List Nat)
 
 
 /-- Rust `slice.get(start..end)`. -/
-def lhSliceGet {α : Type} (l : List α) (start «end» : Nat) : Option (List α) :=
+def lighthouseSliceGet {α : Type} (l : List α) (start «end» : Nat) : Option (List α) :=
   if start ≤ «end» ∧ «end» ≤ l.length then some ((l.drop start).take («end» - start)) else none
 
 /-- `CommitteeCache::get_beacon_committee`, modeled by hand. `slot` is `slot.as_usize()`.
 `slot.epoch(slots_per_epoch)` is `slot / slots_per_epoch`. -/
-def lhGetBeaconCommittee (initialized_epoch : Option Nat) (shuffling : Slice Usize)
+def lighthouseGetBeaconCommittee (initialized_epoch : Option Nat) (shuffling : Slice Usize)
     (committees_per_slot slots_per_epoch slot index : Usize) : Result (Option (List Usize)) :=
   if initialized_epoch = none ∨ initialized_epoch ≠ some (slot.val / slots_per_epoch.val)
       ∨ committees_per_slot.val ≤ index.val then
@@ -320,14 +333,15 @@ def lhGetBeaconCommittee (initialized_epoch : Option Nat) (shuffling : Slice Usi
       | .Ok count =>
         let r ← committee_range_in_epoch count committee_index (Slice.len shuffling)
         match r with
-        | .Ok (some (start, «end»)) => ok (lhSliceGet shuffling.val start.val «end».val)
+        | .Ok (some (start, «end»)) => ok (lighthouseSliceGet shuffling.val start.val «end».val)
         | _ => ok none
 
 open CacheProofs.Spec.CommitteeCache in
 /-- If `shuffling` is the spec shuffling, `get_beacon_committee` is the slice of committee
 `slot % SLOTS_PER_EPOCH * committees_per_slot + index`. -/
 theorem get_beacon_committee_slice (p : Preset) (sha256 : List Nat → List Nat)
-    (indices seed shuffling : List Nat) (hshuf : IsShuffling p sha256 indices seed shuffling)
+    (indices seed shuffling : List Nat)
+    (hshuf : MatchesSpecShuffling p sha256 indices seed shuffling)
     (committees_per_slot slot index : Nat)
     (hcps : get_committee_count_per_slot p indices.length = .ok committees_per_slot)
     (hspe0 : 0 < p.SLOTS_PER_EPOCH) (hindex : index < committees_per_slot)
@@ -364,14 +378,15 @@ theorem get_beacon_committee_slice (p : Preset) (sha256 : List Nat → List Nat)
 open CacheProofs.Spec.CommitteeCache in
 theorem get_beacon_committee_equiv (p : Preset) (sha256 : List Nat → List Nat)
     (indices seed : List Nat) (shuffling : Slice Usize)
-    (hshuf : IsShuffling p sha256 indices seed (shuffling.val.map (·.val)))
+    (hshuf : MatchesSpecShuffling p sha256 indices seed (shuffling.val.map (·.val)))
     (committees_per_slot slots_per_epoch slot index : Usize)
     (hcps : get_committee_count_per_slot p indices.length = .ok committees_per_slot.val)
     (hspe : slots_per_epoch.val = p.SLOTS_PER_EPOCH) (hspe0 : 0 < slots_per_epoch.val)
     (hindex : index.val < committees_per_slot.val) (hn : 0 < indices.length)
     (hfit : indices.length * (committees_per_slot.val * slots_per_epoch.val) ≤ Usize.max) :
     ∃ committee,
-      lhGetBeaconCommittee (some (slot.val / slots_per_epoch.val)) shuffling committees_per_slot
+      lighthouseGetBeaconCommittee (some (slot.val / slots_per_epoch.val)) shuffling
+        committees_per_slot
         slots_per_epoch slot index = ok (some committee) ∧
       get_beacon_committee p sha256 indices seed slot.val index.val =
         .ok (committee.map (·.val)) := by
@@ -404,7 +419,8 @@ theorem get_beacon_committee_equiv (p : Preset) (sha256 : List Nat → List Nat)
     rw [hs, he]; exact Nat.div_le_div_right (Nat.mul_le_mul_left _ (Nat.le_succ _))
   refine ⟨(shuffling.val.drop s.val).take (e.val - s.val), ?_, ?_⟩
   · have hidx' : ¬ committees_per_slot.val ≤ index.val := by omega
-    simp only [lhGetBeaconCommittee, hidx', hci, hc, hr, bind_tc_ok, lhSliceGet, hse, hlen, hend]
+    simp only [lighthouseGetBeaconCommittee, hidx', hci, hc, hr, bind_tc_ok, lighthouseSliceGet,
+      hse, hlen, hend]
     simp
   · have h64 := usize_max_lt
     rw [get_beacon_committee_slice p sha256 indices seed _ hshuf _ _ _ hcps (hspe ▸ hspe0)
@@ -420,7 +436,7 @@ def posOf (l : List Nat) (v : Nat) : Nat := if v ∈ l then l.idxOf v + 1 else 0
 
 /-- `CommitteeCache::shuffled_position` on the encoded positions. `NonZeroUsize::new(p)` is
 `None` if and only if `p = 0`, and `p.get() - 1` is `p - 1`. -/
-def lhShuffledPosition (positions : List Usize) (v : Nat) : Option Nat :=
+def lighthouseShuffledPosition (positions : List Usize) (v : Nat) : Option Nat :=
   match positions[v]? with
   | none => none
   | some p => if p.val = 0 then none else some (p.val - 1)
@@ -494,16 +510,18 @@ theorem shuffling_positions_loop_spec (shuffling : Slice Usize) (vc : Nat)
       have hgetu : (alloc.vec.Vec.deref_mut u).1[shuffling.val[j.val]]? =
           some u.val[shuffling.val[j.val].val] := by
         simp only [alloc.vec.Vec.deref_mut, Slice.getElem?_Usize_eq]
-        rw [List.getElem?_eq_getElem (by omega)]
+        rw [List.getElem?_eq_getElem (show _ < u.slice.val.length by change _ < u.val.length; omega)]
+        rfl
       simp only [hlt', if_true, core.slice.Slice.get,
         core.slice.index.Usize.get, Slice.getElem?_Usize_eq, List.getElem?_eq_getElem hjl,
         bind_tc_ok, lift, alloc.vec.Vec.deref_mut, core.slice.Slice.get_mut,
         core.slice.index.Usize.get_mut]
-      simp only [Std.uncurry_apply_pair]
-      rw [List.getElem?_eq_getElem (by omega)]
+      rw [List.getElem?_eq_getElem (show _ < u.slice.val.length by change _ < u.val.length; omega)]
       apply (spec_ok _).mpr
       refine ⟨⟨by simp [hsat]; omega, ?_⟩, by simp [hsat]; omega⟩
-      simp only [Slice.set_opt_val_eq, set_opt_some, List.map_set, hsat, hu]
+      have hus : u.slice.val = u.val := rfl
+      change List.map _ (Slice.set_opt u.slice _ _).val = _
+      simp only [hus, Slice.set_opt_val_eq, set_opt_some, List.map_set, hsat, hu]
       have hjl' : j.val < (shuffling.val.map (·.val)).length := by simpa using hjl
       have hnm := not_mem_take_of_nodup _ hnodup j.val hjl'
       rw [← List.map_take] at hnm
@@ -528,12 +546,12 @@ theorem shuffling_positions_loop_spec (shuffling : Slice Usize) (vc : Nat)
   · exact ⟨hi, hpos⟩
 
 
-theorem lhShuffledPosition_of_map (positions : List Usize) (vc : Nat) (L : List Nat)
+theorem lighthouseShuffledPosition_of_map (positions : List Usize) (vc : Nat) (L : List Nat)
     (hrange : ∀ x ∈ L, x < vc)
     (h : positions.map (·.val) = (List.range vc).map (posOf L)) (v : Nat) :
-    lhShuffledPosition positions v = if v ∈ L then some (L.idxOf v) else none := by
+    lighthouseShuffledPosition positions v = if v ∈ L then some (L.idxOf v) else none := by
   have hlen : positions.length = vc := by simpa using congrArg List.length h
-  unfold lhShuffledPosition
+  unfold lighthouseShuffledPosition
   by_cases hv : v < vc
   · rw [List.getElem?_eq_getElem (by omega)]
     have hval : positions[v].val = posOf L v := by
@@ -553,25 +571,25 @@ theorem shuffling_positions_spec (shuffling : Slice Usize) (validator_count : Us
     (hrange : ∀ x ∈ shuffling.val, x.val < validator_count.val) :
     shuffling_positions shuffling validator_count ⦃ r =>
       ∃ positions, r = .Ok positions ∧ positions.val.length = validator_count.val ∧
-        ∀ v, lhShuffledPosition positions.val v =
+        ∀ v, lighthouseShuffledPosition positions.val v =
           if v ∈ shuffling.val.map (·.val) then some ((shuffling.val.map (·.val)).idxOf v)
           else none ⦄ := by
   unfold shuffling_positions
   step with alloc.vec.from_elem_spec as ⟨pos0, hpos0, hlen0⟩
   step with shuffling_positions_loop_spec shuffling validator_count.val hnodup hrange
-    as ⟨pos1, oor, hoor, hpos1⟩
+    as ⟨pr, hoor, hpos1⟩
   · simp only [hpos0, List.map_replicate]
     apply List.ext_getElem <;> simp [posOf]
-  rcases oor with _ | v
-  swap
-  · simp at hoor
+  obtain ⟨pos1, oor⟩ := pr
+  dsimp only at hoor hpos1
+  subst hoor
   have hmap : ∀ x ∈ shuffling.val.map (·.val), x < validator_count.val := by
     intro x hx
     simp only [List.mem_map] at hx
     obtain ⟨y, hy, rfl⟩ := hx
     exact hrange y hy
   exact (spec_ok _).mpr ⟨pos1, rfl, by simpa using congrArg List.length hpos1,
-    lhShuffledPosition_of_map _ _ _ hmap hpos1⟩
+    lighthouseShuffledPosition_of_map _ _ _ hmap hpos1⟩
 
 
 /-! ## Attestation duties -/
@@ -619,7 +637,7 @@ theorem attestation_duty_loop_spec (pos c n nth : Usize) (k0 : Nat) (hk0 : k0 < 
     have hjmax : j.val < Usize.max := by scalar_tac
     have hsat := usize_saturating_add_one j hjmax
     obtain ⟨s, e, hr, hs, he⟩ := committee_range_in_epoch_ok c j n hjc hfit
-    simp only [hjc, if_true, hr, bind_tc_ok, Std.uncurry_apply_pair]
+    simp only [hjc, if_true, hr, bind_tc_ok]
     by_cases hin' : InCommittee n.val c.val j.val pos.val
     · have hjk := inCommittee_unique _ _ _ _ _ hin' hin
       have h1 : s ≤ pos := by unfold InCommittee at hin'; scalar_tac
@@ -628,31 +646,23 @@ theorem attestation_duty_loop_spec (pos c n nth : Usize) (k0 : Nat) (hk0 : k0 < 
       apply (spec_ok _).mpr
       exact ⟨j, s, e, rfl, hjk, by rw [hs, hjk], by rw [he, hjk]⟩
     · have hjk : j.val ≠ k0 := fun h => hin' (h ▸ hin)
-      have hnext : (ok (ControlFlow.cont (core.num.Usize.saturating_add j 1#usize)) :
-          Result (ControlFlow Usize (RResult (Option (Usize × Usize × Usize)) ArithError))) ⦃ r =>
-          match r with
-          | ControlFlow.done y => ∃ k s e : Usize, y = .Ok (some (k, s, e)) ∧ k.val = k0 ∧
-              s.val = n.val * k0 / c.val ∧ e.val = n.val * (k0 + 1) / c.val
-          | ControlFlow.cont x' => x'.val ≤ k0 ∧ c.val - x'.val < c.val - j.val ⦄ := by
-        apply (spec_ok _).mpr
+      have hnext : (core.num.Usize.saturating_add j 1#usize).val ≤ k0 ∧
+          c.val - (core.num.Usize.saturating_add j 1#usize).val < c.val - j.val := by
         simp only [hsat]
         omega
       by_cases h1 : s ≤ pos
       · have h2 : ¬ e > pos := by
           intro h2; apply hin'; unfold InCommittee; rw [← hs, ← he]; scalar_tac
         simp only [h1, h2, if_true, if_false, lift, bind_tc_ok]
-        exact hnext
+        exact (spec_ok _).mpr hnext
       · simp only [h1, if_false, lift, bind_tc_ok]
-        exact hnext
+        exact (spec_ok _).mpr hnext
   · exact hnth
 
 
 theorem spec_exists {α : Type} {x : Result α} {p : α → Prop} (h : x ⦃ v => p v ⦄) :
-    ∃ v, x = ok v ∧ p v := by
-  cases x with
-  | ok v => exact ⟨v, rfl, (spec_ok v).mp h⟩
-  | fail e => exact ((spec_fail e).mp h).elim
-  | div => exact (spec_div.mp h).elim
+    ∃ v, x = ok v ∧ p v :=
+  spec_imp_exists h
 
 theorem attestation_duty_spec (pos c n : Usize) (hc : 0 < c.val) (hpos : pos.val < n.val)
     (hfit : n.val * c.val ≤ Usize.max) :
@@ -664,7 +674,7 @@ theorem attestation_duty_spec (pos c n : Usize) (hc : 0 < c.val) (hpos : pos.val
     (attestation_duty_loop_spec pos c n 0#usize k0 hk0 hin (by simp) hfit)
   subst hr
   unfold attestation_duty
-  simp only [hloop, bind_tc_ok, branch_ok, Std.uncurry_apply_pair]
+  simp only [hloop, bind_tc_ok, branch_ok]
   obtain ⟨r1, h1, hr1⟩ := safe_sub_eq pos s
   rw [h1]
   have hsle : s.val ≤ pos.val := by rw [hs]; exact hin.1
@@ -678,19 +688,19 @@ theorem attestation_duty_spec (pos c n : Usize) (hc : 0 < c.val) (hpos : pos.val
     cases r2 with
     | Err _ => omega
     | Ok cl =>
-      refine ⟨k, cp, cl, rfl, by omega, hk ▸ hin, ?_, ?_⟩
+      refine ⟨k, cp, cl, by simp only [bind_tc_ok, branch_ok], by omega, hk ▸ hin, ?_, ?_⟩
       · rw [hr1.1, hs, hk]
       · rw [hr2.1, he, hs, hk]
 
 
 /-- A `for` loop that returns the first match, in the `Except` monad. -/
 theorem forIn_search {ε α β : Type} (l : List α)
-    (f : α → MProd (Option β) PUnit → Except ε (ForInStep (MProd (Option β) PUnit)))
+    (f : α → Option β × PUnit → Except ε (ForInStep (Option β × PUnit)))
     (P : α → Option β)
     (hf : ∀ x ∈ l, ∀ r, f x r = .ok (match P x with
-      | some b => .done ⟨some b, PUnit.unit⟩
-      | none => .yield ⟨none, PUnit.unit⟩)) :
-    forIn l ⟨none, PUnit.unit⟩ f = .ok ⟨l.findSome? P, PUnit.unit⟩ := by
+      | some b => .done (some b, PUnit.unit)
+      | none => .yield (none, PUnit.unit))) :
+    forIn l (none, PUnit.unit) f = .ok (l.findSome? P, PUnit.unit) := by
   induction l with
   | nil => rfl
   | cons a l ih =>
@@ -739,7 +749,7 @@ def committeeSlice (p : Preset) (n committees_per_slot : Nat) (L : List Nat) (sl
 
 open CacheProofs.Spec.CommitteeCache in
 theorem get_committee_assignment_search (p : Preset) (sha256 : List Nat → List Nat)
-    (indices seed L : List Nat) (hshuf : IsShuffling p sha256 indices seed L)
+    (indices seed L : List Nat) (hshuf : MatchesSpecShuffling p sha256 indices seed L)
     (committees_per_slot : Nat)
     (hcps : get_committee_count_per_slot p indices.length = .ok committees_per_slot)
     (hspe0 : 0 < p.SLOTS_PER_EPOCH) (hn : 0 < indices.length)
@@ -925,7 +935,7 @@ theorem get_committee_count_per_slot_pos (p : Preset) (n x : Nat)
   by_cases h1 : p.SLOTS_PER_EPOCH = 0
   · simp [h1] at h; cases h
   · by_cases h2 : p.TARGET_COMMITTEE_SIZE = 0
-    · simp [h1, h2] at h; cases h
+    · simp [h1, h2] at h
     · simp [h1, h2] at h
       cases h
       exact Nat.le_max_left _ _
@@ -934,7 +944,7 @@ theorem get_committee_count_per_slot_pos (p : Preset) (n x : Nat)
 `self.shuffled_position(validator_index)`. `convert_to_slot_and_index` gives
 `(epoch * slots_per_epoch + nth / committees_per_slot, nth % committees_per_slot)`. The result is
 `(slot, index, committee_position, committee_len, committees_at_slot)`. -/
-def lhGetAttestationDuties (position : Option Usize) (shuffling_len committees_per_slot
+def lighthouseGetAttestationDuties (position : Option Usize) (shuffling_len committees_per_slot
     slots_per_epoch : Usize) (epoch : Nat) :
     Result (RResult (Option (Nat × Nat × Nat × Nat × Nat)) ArithError) :=
   match position with
@@ -955,7 +965,7 @@ def lhGetAttestationDuties (position : Option Usize) (shuffling_len committees_p
 open CacheProofs.Spec.CommitteeCache in
 theorem get_attestation_duties_equiv (p : Preset) (sha256 : List Nat → List Nat)
     (indices seed : List Nat) (shuffling : Slice Usize)
-    (hshuf : IsShuffling p sha256 indices seed (shuffling.val.map (·.val)))
+    (hshuf : MatchesSpecShuffling p sha256 indices seed (shuffling.val.map (·.val)))
     (hnodup : (shuffling.val.map (·.val)).Nodup)
     (committees_per_slot slots_per_epoch : Usize)
     (hcps : get_committee_count_per_slot p indices.length = .ok committees_per_slot.val)
@@ -969,7 +979,7 @@ theorem get_attestation_duties_equiv (p : Preset) (sha256 : List Nat → List Na
     (hposition : position.map (·.val) =
       if v ∈ shuffling.val.map (·.val) then some ((shuffling.val.map (·.val)).idxOf v)
       else none) :
-    ∃ duty, lhGetAttestationDuties position (Slice.len shuffling) committees_per_slot
+    ∃ duty, lighthouseGetAttestationDuties position (Slice.len shuffling) committees_per_slot
         slots_per_epoch epoch = ok (.Ok duty) ∧
       match duty with
       | none => get_committee_assignment p sha256 indices seed current_epoch epoch v = .ok none
@@ -1013,7 +1023,7 @@ theorem get_attestation_duties_equiv (p : Preset) (sha256 : List Nat → List Na
       committeeSlice p L.length committees_per_slot.val L
         (epoch * p.SLOTS_PER_EPOCH + k.val / committees_per_slot.val)
         (k.val % committees_per_slot.val), ?_, ?_, ?_⟩
-    · simp only [lhGetAttestationDuties, hc, hduty, bind_tc_ok]
+    · simp only [lighthouseGetAttestationDuties, hc, hduty, bind_tc_ok]
     · rw [hsearch]
       show Except.ok (match List.findSome? (assignmentAt p L.length committees_per_slot.val L v)
         _ with | none => none | some a => a) = _
@@ -1048,8 +1058,8 @@ theorem shuffled_position_inverse (shuffling : Slice Usize) (validator_count : U
     ∃ positions, shuffling_positions shuffling validator_count = ok (.Ok positions) ∧
       positions.val.length = validator_count.val ∧
       (∀ i (h : i < shuffling.val.length),
-        lhShuffledPosition positions.val shuffling.val[i].val = some i) ∧
-      (∀ v, v ∉ shuffling.val.map (·.val) → lhShuffledPosition positions.val v = none) := by
+        lighthouseShuffledPosition positions.val shuffling.val[i].val = some i) ∧
+      (∀ v, v ∉ shuffling.val.map (·.val) → lighthouseShuffledPosition positions.val v = none) := by
   obtain ⟨r, hr, positions, rfl, hlen, hpos⟩ :=
     spec_exists (shuffling_positions_spec shuffling validator_count hnodup hrange)
   refine ⟨positions, hr, hlen, ?_, ?_⟩

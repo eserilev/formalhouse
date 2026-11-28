@@ -11,8 +11,8 @@ on:
 
 env:
   # One toolchain for all proofs. `verify` fails if a lakefile.toml pins a different rev.
-  CHARON_REV: fea3fc68d445181cf4ce094855a43a17192a2b12
-  AENEAS_REV: 453b09f98f2b593c0544a8ad654b77e2a3bc621a
+  CHARON_REV: 695be3d6292e988eedd8afcb7a709146a0ff4f01
+  AENEAS_REV: fb44cb400eb6bfe7dce97422ebe8fa748b7e4f9b
 
 jobs:
   changes:
@@ -32,7 +32,7 @@ jobs:
             jq -r '.[] | "\(.name):\n" + ([("  - " + .proofs + "/**")]
                     + (.sources | map("  - " + .)) | join("\n"))' .github/proofs.json
             # A change to the registry or to this workflow re-verifies everything.
-            printf '_all:\n  - .github/proofs.json\n  - .github/workflows/proofs.yml\n'
+            printf '_all:\n  - .github/proofs.json\n  - .github/workflows/proofs.yml\n  - .github/charon-array-index.patch\n'
             echo FILTERS_EOF
           } >> "$GITHUB_OUTPUT"
 
@@ -83,7 +83,7 @@ jobs:
             ~/verif/charon/charon/target/release/charon-driver
             ~/verif/aeneas/src/_build/default/main.exe
             ~/.rustup/toolchains
-          key: verif-tools-${{ runner.os }}-${{ env.CHARON_REV }}-${{ env.AENEAS_REV }}
+          key: verif-tools-${{ runner.os }}-${{ env.CHARON_REV }}-${{ env.AENEAS_REV }}-${{ hashFiles('.github/charon-array-index.patch') }}
 
       - name: Build Charon and Aeneas
         if: steps.cache.outputs.cache-hit != 'true'
@@ -92,6 +92,10 @@ jobs:
           mkdir -p ~/verif && cd ~/verif
           git clone https://github.com/AeneasVerif/charon
           git -C charon checkout "$CHARON_REV"
+          git -C charon submodule update --init --recursive
+          # A dependency can implement `Index` for its own array type. Without this patch, Charon
+          # then leaves array reads in a form that Aeneas rejects.
+          git -C charon apply "$GITHUB_WORKSPACE/.github/charon-array-index.patch"
           (cd charon/charon && cargo build --release)
           git clone https://github.com/AeneasVerif/aeneas
           git -C aeneas checkout "$AENEAS_REV"
@@ -105,6 +109,9 @@ jobs:
           opam install -y --switch=aeneas --assume-depexts \
             calendar core_unix domainslib easy_logging menhir ocamlformat.0.27.0 ocamlgraph odoc \
             ppx_deriving ppx_deriving_yojson progress unionFind visitors yojson zarith
+          # The opam repository has no version that is new enough for Aeneas.
+          opam pin add -y --switch=aeneas ppx_deriving_hash \
+            https://github.com/sim642/ppx_deriving_hash/releases/download/0.1.5/ppx_deriving_hash-0.1.5.tbz
           (cd ~/verif/aeneas/src && opam exec --switch=aeneas -- dune build)
 
   verify:
@@ -141,9 +148,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ matrix.proofs }}/.lake
-          key: lake-${{ runner.os }}-${{ matrix.name }}-${{ hashFiles(format('{0}/lakefile.toml', matrix.proofs), format('{0}/lean-toolchain', matrix.proofs), format('{0}/etheorem/**', matrix.proofs)) }}-${{ hashFiles(format('{0}/**/*.lean', matrix.proofs)) }}
+          key: lake-${{ runner.os }}-${{ matrix.name }}-${{ hashFiles(format('{0}/lakefile.toml', matrix.proofs), format('{0}/lean-toolchain', matrix.proofs), format('{0}/lake-manifest.json', matrix.proofs)) }}-${{ hashFiles(format('{0}/**/*.lean', matrix.proofs)) }}
           restore-keys: |
-            lake-${{ runner.os }}-${{ matrix.name }}-${{ hashFiles(format('{0}/lakefile.toml', matrix.proofs), format('{0}/lean-toolchain', matrix.proofs), format('{0}/etheorem/**', matrix.proofs)) }}-
+            lake-${{ runner.os }}-${{ matrix.name }}-${{ hashFiles(format('{0}/lakefile.toml', matrix.proofs), format('{0}/lean-toolchain', matrix.proofs), format('{0}/lake-manifest.json', matrix.proofs)) }}-
 
       - name: Build the proofs
         working-directory: ${{ matrix.proofs }}
@@ -154,7 +161,6 @@ jobs:
           lake exe cache get
           # A project can name a script that prepares its dependencies (see proofs.json).
           if [ -n "$SETUP" ]; then
-            sudo apt-get update -qq && sudo apt-get install -y -qq nasm libssl-dev pkg-config
             "./$SETUP"
           fi
           lake build 2>&1 | tee build.log
@@ -213,7 +219,7 @@ jobs:
             ~/verif/charon/charon/target/release/charon-driver
             ~/verif/aeneas/src/_build/default/main.exe
             ~/.rustup/toolchains
-          key: verif-tools-${{ runner.os }}-${{ env.CHARON_REV }}-${{ env.AENEAS_REV }}
+          key: verif-tools-${{ runner.os }}-${{ env.CHARON_REV }}-${{ env.AENEAS_REV }}-${{ hashFiles('.github/charon-array-index.patch') }}
 
       # Re-derive the model from the Rust: this is what ties the theorem to current source.
       - name: Regenerate and diff
@@ -235,6 +241,9 @@ jobs:
           ~/verif/aeneas/src/_build/default/main.exe -backend lean "$RUNNER_TEMP/pure.llbc" \
             -dest "$RUNNER_TEMP/regen"
           # The generated file is namespaced/renamed on the way in; compare the definitions.
+          # A few functions need the Aeneas `do` notation, which the lakefile turns off. The line
+          # that turns it on is not Aeneas output.
           diff <(sed -n '/^namespace/,$p' "$RUNNER_TEMP/regen/Pure.lean") \
-               <(sed -n '/^namespace/,$p' "$PROOFS/$GENERATED") \
+               <(sed -n '/^namespace/,$p' "$PROOFS/$GENERATED" \
+                   | grep -vxF 'set_option Aeneas.customDoElab true in') \
             || { echo "::error::$GENERATED is stale -- regenerate it (see $PROOFS/README.md)"; exit 1; }

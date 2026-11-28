@@ -1,15 +1,15 @@
-import EpochProofs.Sanity.Invariants.ForkUpgrade
+import EpochProofs.Invariants.ForkUpgrade
 import EpochProofs.Generated
 
 /-!
-# The contract of the builder onboarding glue
+# The contract of the builder onboarding code
 
 `onboard` in `upgrade/builder_onboarding.rs` is generic over the `Onboarding` trait. Aeneas
 translates it, but not `StateOnboarding` in `upgrade/gloas.rs`, which reads the state, the
-pubkey cache and the signature cache, and keeps two hash tables. `OnboardingContract` says what
-each trait method does, in spec terms. `pubkeys` is the list of validator pubkeys, `absDep` and
-`absB` give the spec value of a deposit and of a builder, `table` is the builder pubkey table
-and `pending` is the set of pubkeys with a valid kept deposit:
+pubkey cache and the signature cache, and keeps two hash tables. `OnboardingMatchesSpec` says what
+each trait method does, in spec terms. `pubkeys` is the list of validator pubkeys, `depositToSpec`
+and `builderToSpec` give the spec value of a deposit and of a builder, `table` is the builder
+pubkey table and `pending` is the set of pubkeys with a valid kept deposit:
 
 - `is_validator` says whether the deposit pubkey is a validator pubkey. It does not change the
   tables. The pubkey cache it can update is not part of the spec state.
@@ -24,14 +24,15 @@ and `pending` is the set of pubkeys with a valid kept deposit:
   does.
 - `clone` copies a deposit.
 
-This is the only statement the proofs trust about this glue.
+This is the only statement the proofs trust about this code.
 -/
 
 namespace EpochProofs
 
 open Aeneas Aeneas.Std Aeneas.Std.WP Result state_processing
 
-abbrev LhOnboarding (S D B E : Type) := upgrade.builder_onboarding.Onboarding S D B E
+/-- The Rust trait `Onboarding`. -/
+abbrev LighthouseOnboarding (S D B E : Type) := upgrade.builder_onboarding.Onboarding S D B E
 
 /-- The builder that `add_builder_to_registry` adds for a deposit. -/
 def onboardedBuilder (p : Spec.Preset) (d : Spec.PendingDeposit) : Spec.Builder where
@@ -43,33 +44,38 @@ def onboardedBuilder (p : Spec.Preset) (d : Spec.PendingDeposit) : Spec.Builder 
   withdrawable_epoch := Spec.FAR_FUTURE_EPOCH
 
 /-- Trusted: what the `Onboarding` implementation in `upgrade/gloas.rs` does. -/
-structure OnboardingContract {S D B E : Type} (inst : LhOnboarding S D B E)
-    (cloneInst : core.clone.Clone D) (p : Spec.Preset) (o : Spec.Oracle)
-    (pubkeys : List Spec.BLSPubkey) (absDep : D → Spec.PendingDeposit) (absB : B → Spec.Builder)
+structure OnboardingMatchesSpec {S D B E : Type} (implementation : LighthouseOnboarding S D B E)
+    (cloneInst : core.clone.Clone D) (p : Spec.Preset) (oracle : Spec.Oracle)
+    (pubkeys : List Spec.BLSPubkey) (depositToSpec : D → Spec.PendingDeposit)
+    (builderToSpec : B → Spec.Builder)
     (table : S → List (Spec.BLSPubkey × Nat)) (pending : S → List Spec.BLSPubkey) : Prop where
-  clone : ∀ (d : D), ∃ d', cloneInst.clone d = ok d' ∧ absDep d' = absDep d
-  is_validator : ∀ (s : S) (d : D), ∃ s', inst.is_validator s d =
-      ok (.Ok (decide ((absDep d).pubkey ∈ pubkeys)), s') ∧
+  clone : ∀ (d : D), ∃ d', cloneInst.clone d = ok d' ∧ depositToSpec d' = depositToSpec d
+  is_validator : ∀ (s : S) (d : D), ∃ s', implementation.is_validator s d =
+      ok (.Ok (decide ((depositToSpec d).pubkey ∈ pubkeys)), s') ∧
     table s' = table s ∧ pending s' = pending s
-  is_builder_credential : ∀ (s : S) (d : D), inst.is_builder_credential s d =
-    ok (Spec.is_builder_withdrawal_credential (absDep d).withdrawal_credentials)
-  is_valid_signature : ∀ (s : S) (d : D), inst.is_valid_signature s d =
-    ok (Spec.is_valid_deposit_signature p o (absDep d).pubkey (absDep d).withdrawal_credentials
-      (absDep d).amount (absDep d).signature)
-  new_builder : ∀ (s : S) (d : D), ∃ b, inst.new_builder s d = ok (.Ok b) ∧
-    absB b = onboardedBuilder p (absDep d)
+  is_builder_credential : ∀ (s : S) (d : D), implementation.is_builder_credential s d =
+    ok (Spec.is_builder_withdrawal_credential (depositToSpec d).withdrawal_credentials)
+  is_valid_signature : ∀ (s : S) (d : D), implementation.is_valid_signature s d =
+    ok (Spec.is_valid_deposit_signature p oracle (depositToSpec d).pubkey
+      (depositToSpec d).withdrawal_credentials
+      (depositToSpec d).amount (depositToSpec d).signature)
+  new_builder : ∀ (s : S) (d : D), ∃ b, implementation.new_builder s d = ok (.Ok b) ∧
+    builderToSpec b = onboardedBuilder p (depositToSpec d)
   top_up : ∀ (s : S) (b : B) (d : D),
-    (∀ v, Spec.uint64Add (absB b).balance (absDep d).amount = .ok v →
-      ∃ b', inst.top_up s b d = ok (.Ok (), b') ∧ absB b' = { absB b with balance := v }) ∧
-    (∀ e, Spec.uint64Add (absB b).balance (absDep d).amount = .error e →
-      ∃ e' b', inst.top_up s b d = ok (.Err e', b'))
-  builder_index : ∀ (s : S) (d : D), ∃ r : Option U64, inst.builder_index s d = ok r ∧
-    r.map (·.val) = (table s).lookup (absDep d).pubkey
-  add_builder_index : ∀ (s : S) (d : D) (i : U64), ∃ s', inst.add_builder_index s d i = ok s' ∧
-    table s' = ((absDep d).pubkey, i.val) :: table s ∧ pending s' = pending s
-  is_pending_validator : ∀ (s : S) (d : D), inst.is_pending_validator s d =
-    ok (decide ((absDep d).pubkey ∈ pending s))
-  add_pending_validator : ∀ (s : S) (d : D), ∃ s', inst.add_pending_validator s d = ok s' ∧
-    table s' = table s ∧ pending s' = (absDep d).pubkey :: pending s
+    (∀ v, Spec.uint64Add (builderToSpec b).balance (depositToSpec d).amount = .ok v →
+      ∃ b', implementation.top_up s b d = ok (.Ok (), b') ∧ builderToSpec b' =
+        { builderToSpec b with balance := v }) ∧
+    (∀ e, Spec.uint64Add (builderToSpec b).balance (depositToSpec d).amount = .error e →
+      ∃ e' b', implementation.top_up s b d = ok (.Err e', b'))
+  builder_index : ∀ (s : S) (d : D), ∃ r : Option U64, implementation.builder_index s d = ok r ∧
+    r.map (·.val) = (table s).lookup (depositToSpec d).pubkey
+  add_builder_index : ∀ (s : S) (d : D) (i : U64), ∃ s', implementation.add_builder_index s d i =
+    ok s' ∧
+    table s' = ((depositToSpec d).pubkey, i.val) :: table s ∧ pending s' = pending s
+  is_pending_validator : ∀ (s : S) (d : D), implementation.is_pending_validator s d =
+    ok (decide ((depositToSpec d).pubkey ∈ pending s))
+  add_pending_validator : ∀ (s : S) (d : D), ∃ s', implementation.add_pending_validator s d =
+    ok s' ∧
+    table s' = table s ∧ pending s' = (depositToSpec d).pubkey :: pending s
 
 end EpochProofs

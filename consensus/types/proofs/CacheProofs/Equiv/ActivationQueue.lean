@@ -2,7 +2,7 @@ import CacheProofs.Generated
 import CacheProofs.Spec.ActivationQueue
 
 /-!
-# `ActivationQueue` is coherent with the spec
+# `ActivationQueue` matches the spec
 
 Lighthouse keeps a speculative activation queue in the `EpochCache`. Two places build it:
 
@@ -15,7 +15,7 @@ Lighthouse keeps a speculative activation queue in the `EpochCache`. Two places 
 `process_registry_updates` at the end of epoch `E` reads the queue with
 `get_validators_eligible_for_activation(finalized_epoch, churn_limit)`.
 
-The queue is a `BTreeSet<(Epoch, usize)>`. Here it is a list of keys. `lhInsert` models
+The queue is a `BTreeSet<(Epoch, usize)>`. Here it is a list of keys. `lighthouseInsert` models
 `BTreeSet::insert` and the list order models the iteration order.
 
 `vb` is the validator list that the builder sees. `vr` is the validator list at the read, after
@@ -38,6 +38,7 @@ def couldBeAt (epoch : Nat) (validator : Validator) : Bool :=
   decide (validator.activation_epoch = FAR_FUTURE_EPOCH)
     && decide (validator.activation_eligibility_epoch < epoch)
 
+/-- The translated check is `couldBeAt`. It never fails. -/
 theorem could_be_eligible_for_activation_at_equiv (validator : Validator)
     (activation_eligibility_epoch activation_epoch epoch far_future_epoch : U64)
     (helig : activation_eligibility_epoch.val = validator.activation_eligibility_epoch)
@@ -55,6 +56,7 @@ theorem could_be_eligible_for_activation_at_equiv (validator : Validator)
   · have h' : ¬ activation_epoch = far_future_epoch := fun e => h (he.mp e)
     simp [h', h]
 
+/-- The translated check is the spec check. It never fails. -/
 theorem is_eligible_for_activation_equiv (validator : Validator)
     (activation_eligibility_epoch activation_epoch finalized_epoch far_future_epoch : U64)
     (helig : activation_eligibility_epoch.val = validator.activation_eligibility_epoch)
@@ -99,6 +101,7 @@ abbrev Key := Nat × Nat
 /-- Strict tuple order. -/
 def keyLt (a b : Key) : Prop := a.1 < b.1 ∨ (a.1 = b.1 ∧ a.2 < b.2)
 
+/-- The queue key of a validator: its activation eligibility epoch and its index. -/
 def key (p : Validator × Nat) : Key := (p.1.activation_eligibility_epoch, p.2)
 
 theorem tupleLe_iff (a b : Key) : tupleLe a b = true ↔ keyLt a b ∨ a = b := by
@@ -196,20 +199,21 @@ theorem nodup_keys (l : List (Validator × Nat))
 /-! ## The Lighthouse model -/
 
 /-- `BTreeSet::insert` on the sorted list model. -/
-def lhInsert (x : Key) : List Key → List Key
+def lighthouseInsert (x : Key) : List Key → List Key
   | [] => [x]
-  | y :: ys => if x = y then y :: ys else if tupleLe x y then x :: y :: ys else y :: lhInsert x ys
+  | y :: ys => if x = y then y :: ys else if tupleLe x y then x :: y :: ys else y ::
+      lighthouseInsert x ys
 
 /-- `add_if_could_be_eligible_for_activation`. -/
-def lhAdd (epoch : Nat) (q : List Key) (p : Validator × Nat) : List Key :=
-  if couldBeAt epoch p.1 then lhInsert (key p) q else q
+def lighthouseAdd (epoch : Nat) (q : List Key) (p : Validator × Nat) : List Key :=
+  if couldBeAt epoch p.1 then lighthouseInsert (key p) q else q
 
 /-- The queue that `initialize_epoch_cache` and single-pass build, with `epoch = next_epoch`. -/
-def lhBuild (epoch : Nat) (validators : List Validator) : List Key :=
-  validators.zipIdx.foldl (lhAdd epoch) []
+def lighthouseBuild (epoch : Nat) (validators : List Validator) : List Key :=
+  validators.zipIdx.foldl (lighthouseAdd epoch) []
 
 /-- `get_validators_eligible_for_activation`, before `collect`. -/
-def lhSelect (q : List Key) (finalized_epoch churn_limit : Nat) : List Nat :=
+def lighthouseSelect (q : List Key) (finalized_epoch churn_limit : Nat) : List Nat :=
   ((q.filter fun x => decide (x.1 ≤ finalized_epoch)).map (·.2)).take churn_limit
 
 /-- The summary: the keys of the validators with `could_be_eligible_for_activation_at(epoch)`,
@@ -217,23 +221,23 @@ in tuple order. -/
 def queueSummary (epoch : Nat) (validators : List Validator) : List Key :=
   ((validators.zipIdx.filter fun p => couldBeAt epoch p.1).map key).mergeSort tupleLe
 
-theorem mem_lhInsert (x y : Key) : ∀ q, y ∈ lhInsert x q ↔ y = x ∨ y ∈ q
-  | [] => by simp [lhInsert]
+theorem mem_lighthouseInsert (x y : Key) : ∀ q, y ∈ lighthouseInsert x q ↔ y = x ∨ y ∈ q
+  | [] => by simp [lighthouseInsert]
   | z :: zs => by
-    unfold lhInsert
+    unfold lighthouseInsert
     by_cases hxz : x = z
     · subst hxz; simp
     · simp only [hxz, if_false]
       split
       · simp
-      · simp only [List.mem_cons, mem_lhInsert x y zs]
+      · simp only [List.mem_cons, mem_lighthouseInsert x y zs]
         tauto
 
-theorem lhInsert_sorted (x : Key) : ∀ q : List Key, q.Pairwise keyLt →
-    (lhInsert x q).Pairwise keyLt
-  | [], _ => by simp [lhInsert]
+theorem lighthouseInsert_sorted (x : Key) : ∀ q : List Key, q.Pairwise keyLt →
+    (lighthouseInsert x q).Pairwise keyLt
+  | [], _ => by simp [lighthouseInsert]
   | z :: zs, h => by
-    unfold lhInsert
+    unfold lighthouseInsert
     rw [List.pairwise_cons] at h
     by_cases hxz : x = z
     · simp only [hxz, if_true]; exact List.pairwise_cons.mpr h
@@ -255,30 +259,30 @@ theorem lhInsert_sorted (x : Key) : ∀ q : List Key, q.Pairwise keyLt →
           · exact absurd e hxz
           · exact absurd ((tupleLe_iff x z).mpr (Or.inl e)) hle
           · exact e
-        refine List.pairwise_cons.mpr ⟨?_, lhInsert_sorted x zs h.2⟩
+        refine List.pairwise_cons.mpr ⟨?_, lighthouseInsert_sorted x zs h.2⟩
         intro w hw
-        rcases (mem_lhInsert x w zs).mp hw with e | hw
+        rcases (mem_lighthouseInsert x w zs).mp hw with e | hw
         · exact e ▸ hlt
         · exact h.1 w hw
 
-theorem foldl_lhAdd (epoch : Nat) :
+theorem foldl_lighthouseAdd (epoch : Nat) :
     ∀ (l : List (Validator × Nat)) (q : List Key), q.Pairwise keyLt →
-      (l.foldl (lhAdd epoch) q).Pairwise keyLt ∧
-      ∀ x, x ∈ l.foldl (lhAdd epoch) q ↔
+      (l.foldl (lighthouseAdd epoch) q).Pairwise keyLt ∧
+      ∀ x, x ∈ l.foldl (lighthouseAdd epoch) q ↔
         x ∈ q ∨ ∃ p ∈ l, couldBeAt epoch p.1 = true ∧ x = key p
   | [], q, h => ⟨h, fun x => by simp⟩
   | p :: l, q, h => by
-    have hq : (lhAdd epoch q p).Pairwise keyLt := by
-      unfold lhAdd; split
-      · exact lhInsert_sorted _ q h
+    have hq : (lighthouseAdd epoch q p).Pairwise keyLt := by
+      unfold lighthouseAdd; split
+      · exact lighthouseInsert_sorted _ q h
       · exact h
-    obtain ⟨h1, h2⟩ := foldl_lhAdd epoch l (lhAdd epoch q p) hq
+    obtain ⟨h1, h2⟩ := foldl_lighthouseAdd epoch l (lighthouseAdd epoch q p) hq
     refine ⟨h1, fun x => ?_⟩
     rw [List.foldl_cons, h2 x]
-    unfold lhAdd
+    unfold lighthouseAdd
     split
     · rename_i hc
-      rw [mem_lhInsert]
+      rw [mem_lighthouseInsert]
       constructor
       · rintro ((e | hx) | ⟨p', hp', hc', e⟩)
         · exact Or.inr ⟨p, by simp, hc, e⟩
@@ -300,15 +304,15 @@ theorem foldl_lhAdd (epoch : Nat) :
           · subst e'; exact absurd hc' hc
           · exact Or.inr ⟨p', hp', hc', e⟩
 
-theorem lhBuild_sorted (epoch : Nat) (validators : List Validator) :
-    (lhBuild epoch validators).Pairwise keyLt :=
-  (foldl_lhAdd epoch validators.zipIdx [] List.Pairwise.nil).1
+theorem lighthouseBuild_sorted (epoch : Nat) (validators : List Validator) :
+    (lighthouseBuild epoch validators).Pairwise keyLt :=
+  (foldl_lighthouseAdd epoch validators.zipIdx [] List.Pairwise.nil).1
 
-theorem mem_lhBuild (epoch : Nat) (validators : List Validator) (x : Key) :
-    x ∈ lhBuild epoch validators ↔
+theorem mem_lighthouseBuild (epoch : Nat) (validators : List Validator) (x : Key) :
+    x ∈ lighthouseBuild epoch validators ↔
       ∃ i v, validators[i]? = some v ∧ couldBeAt epoch v = true ∧
         x = (v.activation_eligibility_epoch, i) := by
-  rw [lhBuild, (foldl_lhAdd epoch validators.zipIdx [] List.Pairwise.nil).2 x]
+  rw [lighthouseBuild, (foldl_lighthouseAdd epoch validators.zipIdx [] List.Pairwise.nil).2 x]
   constructor
   · rintro (hx | ⟨p, hp, hc, e⟩)
     · simp at hx
@@ -327,12 +331,12 @@ theorem queueSummary_sorted (epoch : Nat) (validators : List Validator) :
 
 /-- Build: both builders give the keys `(activation_eligibility_epoch, index)` of the validators
 with `could_be_eligible_for_activation_at(epoch)`, in tuple order. -/
-theorem lhBuild_eq_queueSummary (epoch : Nat) (validators : List Validator) :
-    lhBuild epoch validators = queueSummary epoch validators := by
-  apply eq_of_sorted_of_mem_iff (lhBuild_sorted epoch validators)
+theorem lighthouseBuild_eq_queueSummary (epoch : Nat) (validators : List Validator) :
+    lighthouseBuild epoch validators = queueSummary epoch validators := by
+  apply eq_of_sorted_of_mem_iff (lighthouseBuild_sorted epoch validators)
     (queueSummary_sorted epoch validators)
   intro x
-  rw [mem_lhBuild, queueSummary, List.mem_mergeSort]
+  rw [mem_lighthouseBuild, queueSummary, List.mem_mergeSort]
   simp only [List.mem_map, List.mem_filter]
   constructor
   · rintro ⟨i, v, hv, hc, e⟩
@@ -343,7 +347,7 @@ theorem lhBuild_eq_queueSummary (epoch : Nat) (validators : List Validator) :
 /-! ## Read agreement (phase0 to Deneb) -/
 
 /-- What can change between the build and the read. -/
-structure Frame (finalized_epoch : Nat) (vb vr : List Validator) : Prop where
+structure QueueInputsUnchanged (finalized_epoch : Nat) (vb vr : List Validator) : Prop where
   /-- Validators are only appended. -/
   length_le : vb.length ≤ vr.length
   /-- No activation epoch changes. -/
@@ -362,7 +366,7 @@ structure Frame (finalized_epoch : Nat) (vb vr : List Validator) : Prop where
 /-- The cache works: every validator that the spec finds eligible at the read is in the queue,
 with the same key. -/
 theorem over_approximation (epoch finalized_epoch : Nat) (vb vr : List Validator)
-    (hframe : Frame finalized_epoch vb vr) (hfin : finalized_epoch < epoch) (i : Nat)
+    (hframe : QueueInputsUnchanged finalized_epoch vb vr) (hfin : finalized_epoch < epoch) (i : Nat)
     (r : Validator) (hr : vr[i]? = some r)
     (hel : is_eligible_for_activation finalized_epoch r = true) :
     ∃ b, vb[i]? = some b ∧ couldBeAt epoch b = true ∧
@@ -381,10 +385,11 @@ theorem over_approximation (epoch finalized_epoch : Nat) (vb vr : List Validator
 
 /-- Read agreement, phase0 to Deneb: the Lighthouse selection equals the spec dequeued list,
 in the same order. -/
-theorem lhSelect_eq_dequeued (epoch finalized_epoch churn_limit : Nat) (vb vr : List Validator)
-    (hframe : Frame finalized_epoch vb vr) (hfin : finalized_epoch < epoch)
+theorem lighthouseSelect_eq_dequeued (epoch finalized_epoch churn_limit : Nat)
+    (vb vr : List Validator)
+    (hframe : QueueInputsUnchanged finalized_epoch vb vr) (hfin : finalized_epoch < epoch)
     (hepoch : epoch ≤ FAR_FUTURE_EPOCH) :
-    lhSelect (lhBuild epoch vb) finalized_epoch churn_limit =
+    lighthouseSelect (lighthouseBuild epoch vb) finalized_epoch churn_limit =
       dequeued finalized_epoch churn_limit vr := by
   let le' : Validator × Nat → Validator × Nat → Bool := fun a b => tupleLe (key a) (key b)
   let eligible := vr.zipIdx.filter fun p => is_eligible_for_activation finalized_epoch p.1
@@ -396,11 +401,11 @@ theorem lhSelect_eq_dequeued (epoch finalized_epoch churn_limit : Nat) (vb vr : 
           (fun a b => tupleLe_total (key a) (key b)) eligible)
     · exact ((List.mergeSort_perm eligible le').map key).nodup_iff.mpr
         (nodup_keys _ ((zipIdx_pairwise vr 0).filter _))
-  have hfilter : (lhBuild epoch vb).filter (fun x => decide (x.1 ≤ finalized_epoch)) =
+  have hfilter : (lighthouseBuild epoch vb).filter (fun x => decide (x.1 ≤ finalized_epoch)) =
       sorted.map key := by
-    apply eq_of_sorted_of_mem_iff ((lhBuild_sorted epoch vb).filter _) hsorted
+    apply eq_of_sorted_of_mem_iff ((lighthouseBuild_sorted epoch vb).filter _) hsorted
     intro x
-    rw [List.mem_filter, mem_lhBuild, List.mem_map]
+    rw [List.mem_filter, mem_lighthouseBuild, List.mem_map]
     simp only [sorted, List.mem_mergeSort, eligible, List.mem_filter, decide_eq_true_eq]
     constructor
     · rintro ⟨⟨i, b, hb, hc, e⟩, hx⟩
@@ -427,17 +432,17 @@ theorem lhSelect_eq_dequeued (epoch finalized_epoch churn_limit : Nat) (vb vr : 
       refine ⟨⟨p.2, b, hb, hc, by simp [key, he]⟩, ?_⟩
       simp only [key]
       nomega
-  rw [lhSelect, hfilter, dequeued, activation_queue, List.map_map]
+  rw [lighthouseSelect, hfilter, dequeued, activation_queue, List.map_map]
   rfl
 
 /-- Single-pass applies the selection with `BTreeSet::contains`. So a validator activates in
 Lighthouse if and only if the spec dequeues it. -/
-theorem mem_lhSelect_iff (epoch finalized_epoch churn_limit : Nat) (vb vr : List Validator)
-    (hframe : Frame finalized_epoch vb vr) (hfin : finalized_epoch < epoch)
+theorem mem_lighthouseSelect_iff (epoch finalized_epoch churn_limit : Nat) (vb vr : List Validator)
+    (hframe : QueueInputsUnchanged finalized_epoch vb vr) (hfin : finalized_epoch < epoch)
     (hepoch : epoch ≤ FAR_FUTURE_EPOCH) (i : Nat) :
-    i ∈ lhSelect (lhBuild epoch vb) finalized_epoch churn_limit ↔
+    i ∈ lighthouseSelect (lighthouseBuild epoch vb) finalized_epoch churn_limit ↔
       i ∈ dequeued finalized_epoch churn_limit vr := by
-  rw [lhSelect_eq_dequeued epoch finalized_epoch churn_limit vb vr hframe hfin hepoch]
+  rw [lighthouseSelect_eq_dequeued epoch finalized_epoch churn_limit vb vr hframe hfin hepoch]
 
 /-! ## The frame at the read -/
 
@@ -543,7 +548,7 @@ theorem process_finalizations_lt (bits : List Bool) (old_previous_justified_epoc
 /-- `process_single_registry_update_post_electra` (`single_pass.rs`). It does not read the queue.
 `is_eligible_for_activation_queue` and `is_active_at` are the `Validator` methods. The activation
 check is the `is_eligible_for_activation` pure function. -/
-def lhRegistryUpdatePostElectra (MIN_ACTIVATION_BALANCE EJECTION_BALANCE : Gwei)
+def lighthouseRegistryUpdatePostElectra (MIN_ACTIVATION_BALANCE EJECTION_BALANCE : Gwei)
     (current_epoch activation_epoch finalized_epoch : Epoch) (validator : Validator) :
     SpecM (Validator × Bool) := do
   let validator ←
@@ -559,15 +564,15 @@ def lhRegistryUpdatePostElectra (MIN_ACTIVATION_BALANCE EJECTION_BALANCE : Gwei)
 
 /-- Read agreement, Electra: Lighthouse uses three `if`s, the spec uses `if`/`elif`. They give
 the same validator and the same ejection decision. -/
-theorem lhRegistryUpdatePostElectra_eq (MIN_ACTIVATION_BALANCE EJECTION_BALANCE : Gwei)
+theorem lighthouseRegistryUpdatePostElectra_eq (MIN_ACTIVATION_BALANCE EJECTION_BALANCE : Gwei)
     (current_epoch activation_epoch finalized_epoch : Epoch) (validator : Validator)
     (hfin : finalized_epoch ≤ current_epoch) (hcur : current_epoch < FAR_FUTURE_EPOCH)
     (hbal : EJECTION_BALANCE < MIN_ACTIVATION_BALANCE) :
-    lhRegistryUpdatePostElectra MIN_ACTIVATION_BALANCE EJECTION_BALANCE current_epoch
+    lighthouseRegistryUpdatePostElectra MIN_ACTIVATION_BALANCE EJECTION_BALANCE current_epoch
         activation_epoch finalized_epoch validator =
       process_registry_update_electra MIN_ACTIVATION_BALANCE EJECTION_BALANCE current_epoch
         activation_epoch finalized_epoch validator := by
-  unfold lhRegistryUpdatePostElectra process_registry_update_electra
+  unfold lighthouseRegistryUpdatePostElectra process_registry_update_electra
   have hfar : FAR_FUTURE_EPOCH = 18446744073709551615 := rfl
   by_cases hq : is_eligible_for_activation_queue_electra MIN_ACTIVATION_BALANCE validator = true
   · simp only [hq, if_true]

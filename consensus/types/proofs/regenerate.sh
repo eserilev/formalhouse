@@ -31,5 +31,16 @@ trap 'rm -rf "$out"' EXIT
 
 # Aeneas names the output after the llbc file.
 "$AENEAS" -backend lean "$out/pure.llbc" -dest "$out"
-mv "$out/Pure.lean" "$proofs_dir/CacheProofs/Generated.lean"
+
+# The lakefile turns off the Aeneas `do` notation. `Buf.new` does not compile with the standard
+# `do`, so turn the Aeneas notation on for this function only.
+buf_new='/-- [swap_or_not_shuffle::shuffle_list::{swap_or_not_shuffle::shuffle_list::Buf}::new]:'
+if [ "$(grep -cFx -- "$buf_new" "$out/Pure.lean")" != 1 ]; then
+  echo "error: expected the function Buf.new one time in the Aeneas output" >&2
+  exit 1
+fi
+awk -v line="$buf_new" '$0 == line { print "set_option Aeneas.customDoElab true in" } { print }' \
+  "$out/Pure.lean" > "$out/Pure.patched.lean"
+
+mv "$out/Pure.patched.lean" "$proofs_dir/CacheProofs/Generated.lean"
 echo "wrote $proofs_dir/CacheProofs/Generated.lean"

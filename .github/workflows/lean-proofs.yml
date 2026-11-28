@@ -22,7 +22,7 @@ env:
   LIB: ${{ inputs.lib }}
   # Charon is pinned to the commit this Aeneas revision expects. Aeneas itself is pinned in
   # lakefile.toml, which is the single source of truth and is read below.
-  CHARON_REV: fea3fc68d445181cf4ce094855a43a17192a2b12
+  CHARON_REV: 695be3d6292e988eedd8afcb7a709146a0ff4f01
 
 jobs:
   proofs:
@@ -92,7 +92,7 @@ jobs:
             ~/verif/charon/charon/target/release/charon-driver
             ~/verif/aeneas/src/_build/default/main.exe
             ~/.rustup/toolchains
-          key: verif-tools-${{ runner.os }}-${{ env.CHARON_REV }}-${{ env.AENEAS_REV }}
+          key: verif-tools-${{ runner.os }}-${{ env.CHARON_REV }}-${{ env.AENEAS_REV }}-${{ hashFiles('.github/charon-array-index.patch') }}
 
       - name: Build Charon and Aeneas
         if: steps.tools.outputs.cache-hit != 'true'
@@ -101,6 +101,10 @@ jobs:
           mkdir -p ~/verif && cd ~/verif
           git clone https://github.com/AeneasVerif/charon
           git -C charon checkout "$CHARON_REV"
+          git -C charon submodule update --init --recursive
+          # A dependency can implement `Index` for its own array type. Without this patch, Charon
+          # then leaves array reads in a form that Aeneas rejects.
+          git -C charon apply "$GITHUB_WORKSPACE/.github/charon-array-index.patch"
           (cd charon/charon && cargo build --release)
           git clone https://github.com/AeneasVerif/aeneas
           git -C aeneas checkout "$AENEAS_REV"
@@ -113,6 +117,9 @@ jobs:
           opam install -y --switch=aeneas --assume-depexts \
             calendar core_unix domainslib easy_logging menhir ocamlformat.0.27.0 ocamlgraph odoc \
             ppx_deriving ppx_deriving_yojson progress unionFind visitors yojson zarith
+          # The opam repository has no version that is new enough for Aeneas.
+          opam pin add -y --switch=aeneas ppx_deriving_hash \
+            https://github.com/sim642/ppx_deriving_hash/releases/download/0.1.5/ppx_deriving_hash-0.1.5.tbz
           (cd ~/verif/aeneas/src && opam exec --switch=aeneas -- dune build)
 
       # Re-derive the model from the Rust. This is what ties the theorems to the current source.

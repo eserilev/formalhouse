@@ -40,6 +40,9 @@
       "consensus/swap_or_not_shuffle/src/compute_shuffled_index_with.rs",
       "consensus/swap_or_not_shuffle/src/shuffle_hash.rs",
       "consensus/types/src/validator/deposit_balance.rs",
+      "consensus/types/src/builder/builder_pending_payment.rs",
+      "consensus/types/src/builder/builder_pending_withdrawal.rs",
+      "consensus/types/src/core/consts.rs",
       "consensus/types/proofs/**"
     ],
     "setup": "setup.sh"

@@ -8,17 +8,14 @@ defaultTargets = ["EpochProofs"]
 [[require]]
 name = "aeneas"
 git = "https://github.com/AeneasVerif/aeneas"
-rev = "453b09f98f2b593c0544a8ad654b77e2a3bc621a"
+rev = "fb44cb400eb6bfe7dce97422ebe8fa748b7e4f9b"
 subDir = "backends/lean"
 
-# Etheorem: an executable Lean spec of the consensus specs that passes the EF vectors.
-# `EpochProofs/Etheorem/` proves our reference equal to it. Pinned to the fork branch
-# `formalhouse-pin-beta4`, which builds on our Lean version and carries the patches in README.md.
+# EthLib: the Lean spec of the consensus layer that the epoch proofs compare Lighthouse with.
 [[require]]
-name = "EthCLSpecs"
-git = "https://github.com/eserilev/etheorem"
-rev = "b2882a3a7113d094905848e27cc6137a92a5e4c6"
-subDir = "packages/EthCLSpecs"
+name = "EthLib"
+git = "https://github.com/ethereum/EthLib"
+rev = "e73a0744c23bf728eb0df48ff856222735a80b15"
 
 # The BeaconState cache proofs in `consensus/types/proofs`. The epoch proofs import them to
 # replace the cache facts that the epoch theorems take as hypotheses.
@@ -29,11 +26,8 @@ path = "../../types/proofs"
 # The loop proofs need more than the default budget.
 [leanOptions]
 maxHeartbeats = 1000000
-
-# The fork-replay commands (`fork_family`, `forkproof`): a proof written once and elaborated for
-# each fork. Its own library, so other proof folders and packages can depend on it.
-[[lean_lib]]
-name = "ForkReplay"
+# Use the standard `do`, as the proofs expect.
+weak.Aeneas.customDoElab = false
 
 [[lean_lib]]
 name = "EpochProofs"
